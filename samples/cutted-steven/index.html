@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cutted Review</title>
+  <style>
+*{box-sizing:border-box}body{margin:0;background:#050505;color:#f4f4f4;font:14px/1.45 Arial,sans-serif}
+header{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;gap:16px;align-items:center;padding:18px 22px;background:#050505;border-bottom:1px solid #202020}
+h1{margin:0;font-size:22px}header p{margin:3px 0 0;color:#9a9a9a}main{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;padding:18px}
+.card{background:#111;border:1px solid #272727;border-radius:8px;overflow:hidden}.card.liked{border-color:#24d17e}.card.discarded{opacity:.42}
+.media{aspect-ratio:16/9;background:#000}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block}.placeholder{display:grid;place-items:center;height:100%;color:#777}
+.body{padding:14px}.top{display:flex;gap:10px;align-items:center}.top span{color:#888}.top strong{font-size:15px}.peak{color:#fff;font-size:16px}
+p{color:#bebebe}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}
+details{border-top:1px solid #242424;margin-top:12px;padding-top:10px}summary{cursor:pointer;color:#ddd}.actions{display:flex;gap:8px;margin-top:12px}
+button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 12px;cursor:pointer}button[data-action=discard]{background:#242424;color:#ddd}
+</style>
+</head>
+<body>
+  <header>
+    <div><h1>Cutted</h1><p>steven-interview.mp4</p></div>
+    <button id="export">Exportar selecionados</button>
+  </header>
+  <main>
+    <article class="card" data-rank="1">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-001.jpg" src="clips/clip-001.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#01</span><strong>and I thought this would be the best avenue to</strong></div>
+        <p class="peak">and I thought this would be the best avenue to do it,</p>
+        <p>Usable candidate; review the cut before exporting.</p>
+        <dl><dt>Score</dt><dd>4.53</dd><dt>Inicio</dt><dd>2.9s</dd><dt>Fim</dt><dd>26.7s</dd></dl>
+        <details><summary>Transcript</summary><p>I have a job lined up with Teach for America. I haven&#x27;t graduated yet, but they did give me an offer, and I plan to teach economics in the Rio Grande Valley. I&#x27;ve always wanted to be a teacher at some point, and I thought this would be the best avenue to do it, because economics is very applicable to life. And seeing how it can apply in their lives,</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="2">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-002.jpg" src="clips/clip-002.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#02</span><strong>and think about how am I going to pay for</strong></div>
+        <p class="peak">and think about how am I going to pay for college and things like that.</p>
+        <p>Usable candidate; review the cut before exporting.</p>
+        <dl><dt>Score</dt><dd>4.66</dd><dt>Inicio</dt><dd>35.0s</dd><dt>Fim</dt><dd>55.8s</dd></dl>
+        <details><summary>Transcript</summary><p>So if I can incorporate that into my lesson plans, then it&#x27;ll help them learn to budget and think about how am I going to pay for college and things like that. I also want to do consumer finance or personal finance. So working with people and helping them manage their retirement thunder, planning for their kids&#x27; college,</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article></main>
+  <script>
+const state = JSON.parse(localStorage.getItem("cutted-state") || "{}");
+function save(){ localStorage.setItem("cutted-state", JSON.stringify(state)); }
+function paint(card){ const r=card.dataset.rank; card.classList.toggle("liked",state[r]==="liked"); card.classList.toggle("discarded",state[r]==="discarded"); }
+document.querySelectorAll(".card").forEach(card => {
+  paint(card);
+  card.querySelectorAll("button[data-action]").forEach(btn => btn.addEventListener("click", () => {
+    state[card.dataset.rank] = btn.dataset.action === "like" ? "liked" : "discarded";
+    save(); paint(card);
+  }));
+});
+document.getElementById("export").addEventListener("click", async () => {
+  const data = await fetch("moments.json").then(r => r.json());
+  data.selected = data.moments.filter(m => state[String(m.rank)] === "liked");
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "selected-clips.json"; a.click();
+});
+</script>
+</body>
+</html>

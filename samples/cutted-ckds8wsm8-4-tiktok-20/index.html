@@ -1,0 +1,1388 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cutted Review</title>
+  <style>
+*{box-sizing:border-box}body{margin:0;background:#050505;color:#f4f4f4;font:14px/1.45 Arial,sans-serif}
+header{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;gap:16px;align-items:center;padding:18px 22px;background:#050505;border-bottom:1px solid #202020}.header-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+h1{margin:0;font-size:22px}header p{margin:3px 0 0;color:#9a9a9a}.tabs{position:sticky;top:75px;z-index:3;display:flex;gap:8px;padding:10px 22px;background:#060606;border-bottom:1px solid #1f1f1f}.tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 12px}.tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}.config{position:sticky;top:126px;z-index:2;display:flex;justify-content:space-between;gap:14px;align-items:center;padding:12px 22px;background:#080808;border-bottom:1px solid #202020}.config strong{display:block;font-size:13px}.config span{color:#9a9a9a;font-size:12px}.segments{display:flex;gap:6px;flex-wrap:wrap}.segments button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.segments button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}main{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;padding:18px;align-items:start}
+.card{background:#111;border:1px solid #272727;border-radius:8px;overflow:hidden}.card.liked{border-color:#24d17e}.card.discarded{opacity:.42}
+.media{aspect-ratio:16/9;background:#000;max-height:58vh;transition:aspect-ratio .2s ease}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block}.placeholder{display:grid;place-items:center;height:100%;color:#777}
+body[data-format=tiktok] .media,body[data-format=shorts] .media,body[data-format=instagram] .media{aspect-ratio:9/16}body[data-format=facebook] .media{aspect-ratio:4/5}body[data-format=youtube] .media{aspect-ratio:16/9}
+.body{padding:14px}.top{display:flex;gap:10px;align-items:center}.top span{color:#888}.top strong{font-size:15px}.peak{color:#fff;font-size:16px}
+p{color:#bebebe}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}
+.timeline-editor{padding:10px 14px 12px;background:#090909;border-top:1px solid #1e1e1e;border-bottom:1px solid #222}.timeline-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.timeline-head output{color:#f4f4f4;text-align:right}.timeline{position:relative;height:34px;margin-top:8px}.timeline-track{position:absolute;left:0;right:0;top:14px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:#f4f4f4;border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:34px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{display:flex;justify-content:space-between;color:#aaa;font-size:12px}
+.format-editor{display:block;padding:12px 14px;background:#090909;border-bottom:1px solid #222}.format-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.format-head output{color:#f4f4f4;text-align:right}.platform-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.platform-tags button{background:#191919;color:#ddd;border:1px solid #333}.platform-tags button.active{background:#24d17e;color:#04130b;border-color:#24d17e}.caption-stage{display:none;margin:18px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.caption-stage p{margin:4px 0 0}.caption-summary{margin-top:12px;color:#aaa}.caption-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:14px;align-items:start}.caption-item{border:1px solid #2a2a2a;border-radius:8px;background:#0a0a0a;overflow:hidden}.caption-preview{display:flex;justify-content:center;background:#000}.caption-preview video{width:100%;max-height:64vh;object-fit:cover;background:#000}.caption-item[data-platform=tiktok] video,.caption-item[data-platform=shorts] video,.caption-item[data-platform=instagram] video{aspect-ratio:9/16}.caption-item[data-platform=facebook] video{aspect-ratio:4/5}.caption-item[data-platform=youtube] video{aspect-ratio:16/9}.caption-item-body{padding:12px}.caption-item strong{display:block}.caption-item span{display:inline-flex;margin:8px 8px 0 0;padding:4px 8px;border-radius:999px;background:#242424;color:#ddd;font-size:12px}.caption-item dl{margin-top:10px}
+body[data-tab=captions] main,body[data-tab=captions] .config,body[data-tab=captions] .final-stage{display:none}body[data-tab=captions] .caption-stage{display:block}
+body[data-tab=final] main,body[data-tab=final] .config,body[data-tab=final] .caption-stage{display:none}body[data-tab=final] .final-stage{display:block}.final-stage{display:none;margin:18px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.final-panel{display:grid;grid-template-columns:120px 140px minmax(260px,1fr);gap:12px;margin-top:14px;align-items:end}.final-panel label{display:grid;gap:6px;color:#aaa}.final-panel select,.final-panel input{width:100%;background:#050505;color:#f4f4f4;border:1px solid #333;border-radius:6px;padding:9px}.final-panel code{display:block;min-height:40px;padding:10px;border:1px solid #303030;border-radius:6px;background:#050505;color:#ddd;white-space:normal;overflow-wrap:anywhere}
+details{border-top:1px solid #242424;margin-top:12px;padding-top:10px}summary{cursor:pointer;color:#ddd}.actions{display:flex;gap:8px;margin-top:12px}
+button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 12px;cursor:pointer}#reset-ui,button[data-action=discard]{background:#242424;color:#ddd}
+button[data-action=reset-trim]{background:#191919;color:#ddd;border:1px solid #333}
+@media(max-width:640px){.tabs{top:94px;overflow:auto}.config{top:144px;align-items:flex-start;flex-direction:column}.segments button{font-size:12px;padding:7px 9px}main{grid-template-columns:1fr;padding:12px}.final-panel{grid-template-columns:1fr}}
+</style>
+</head>
+<body data-format="tiktok" data-tab="edit">
+  <header>
+    <div><h1>Cutted</h1><p>COMO USAR INTELIGÊNCIA ARTIFICIAL PRA NÃO FICAR PRA TRÁS! | Além da Ciência #18</p></div>
+    <div class="header-actions">
+      <button id="reset-ui">Zerar interface</button>
+      <button id="export">Exportar selecionados</button>
+    </div>
+  </header>
+  <nav class="tabs" aria-label="Fluxo">
+    <button data-tab="edit" class="active">1. Cortes e formatos</button>
+    <button data-tab="captions">2. Legendas</button>
+    <button data-tab="final">3. Final</button>
+  </nav>
+  <section class="config" aria-label="Configuracao de formato">
+    <div>
+      <strong>Formato</strong>
+      <span data-format-hint>TikTok/Reels/Shorts · 9:16</span>
+    </div>
+    <div class="segments" role="group" aria-label="Formato do preview">
+      <button data-format="tiktok" class="active">TikTok</button>
+      <button data-format="shorts">Shorts</button>
+      <button data-format="youtube">YouTube</button>
+      <button data-format="instagram">Instagram</button>
+      <button data-format="facebook">Facebook</button>
+    </div>
+  </section>
+  <section class="caption-stage">
+    <div class="stage-head">
+      <div>
+        <strong>Legendas</strong>
+        <p>Fila gerada a partir dos cortes, trims e plataformas marcadas.</p>
+      </div>
+      <button id="export-captions">Preparar legenda</button>
+    </div>
+    <div class="caption-summary" data-caption-summary>Nenhum corte marcado ainda.</div>
+    <div class="caption-list" data-caption-list></div>
+  </section>
+  <section class="final-stage">
+    <div class="stage-head">
+      <div>
+        <strong>Final</strong>
+        <p data-final-summary>Prepare a fila de legenda antes de renderizar.</p>
+      </div>
+      <button id="copy-caption-command">Copiar comando</button>
+    </div>
+    <div class="final-panel">
+      <label>Linhas
+        <select data-caption-lines>
+          <option value="2" selected>2 linhas</option>
+          <option value="1">1 linha</option>
+          <option value="3">3 linhas</option>
+        </select>
+      </label>
+      <label>Largura
+        <input data-caption-width type="number" min="18" max="42" value="28">
+      </label>
+      <code data-caption-command>python cutted.py caption-selected "caption-queue.json" --out "captioned-clips" --base-dir "." --chars-per-line 28 --max-lines 2</code>
+    </div>
+  </section>
+  <main>
+    <article class="card" data-rank="1" data-start="165.080" data-end="208.459" data-duration="43.379">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-001.jpg" src="clips/clip-001.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 165.1s - 208.5s (43.4s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="43.4" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="43.4" step="0.1" value="43.4">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#01</span><strong>agora porque o negócio é o seguinte, né</strong></div>
+        <p class="peak">agora porque o negócio é o seguinte, né?</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.82</dd><dt>Inicio</dt><dd>165.1s</dd><dt>Fim</dt><dd>208.5s</dd></dl>
+        <details><summary>Transcript</summary><p>né? Você tem que colocar aquele óculos de imersão, né? É muito pesado, ainda não tá algo tão confortável, você precisa se adaptar muito para usar, mas ainda tem usos assim, nichos específicos, funciona bem. &gt;&gt; Tem, tem. Mas então, porque eu acho que agora porque o negócio é o seguinte, né? Todo mundo falava assim: &quot;Ah, o metaverso&quot;. Aí todo mundo ainda falava: &quot;Não, mas o Marcos Queberg ainda tá investindo bilhões&quot;. &gt;&gt; Só que agora ele cortou, né? &gt;&gt; Cortou muito. Cortou muito. &gt;&gt; Agora ele pegou e distribuiu a galera da da do metaverso em outras áreas, né? Em outras áreas. E principalmente agora em em ai que não tem como, né? Então assim, ai continua sendo foco. &gt;&gt; Será que agora então acabou mesmo ou não? &gt;&gt; Não, eu não acredito que volta. &gt;&gt; Eu acho que volta. Eu acho que volta. É basicamente, ó, para para pensar,</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="2" data-start="918.199" data-end="976.540" data-duration="58.341">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-002.jpg" src="clips/clip-002.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 918.2s - 976.5s (58.3s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="58.3" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="58.3" step="0.1" value="58.3">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#02</span><strong>para para não deixar? Porque, por</strong></div>
+        <p class="peak">para para não deixar? Porque, por</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.45</dd><dt>Inicio</dt><dd>918.2s</dd><dt>Fim</dt><dd>976.5s</dd></dl>
+        <details><summary>Transcript</summary><p>para para não deixar? Porque, por exemplo, a porque foi na época da pandemia ali, né? &gt;&gt; Pandemia. Isso aí. A gente fundou o PKXD um pouquinho depois que eu tinha fundado Play Kids. Play Kids foi um dos maiores aplicativos infantis do mundo. Então eu já tinha muito a consciência de segurança, de não ter chat, de não ter impacto de publicidade para não ter até o fato assim da criança, porque por exemplo, meu filho, meu filho mais velho, ele joga muito &gt;&gt; Roblox, &gt;&gt; não, né? O mais novo joga Roblox, o mais velho gostava de jogar o Fortnite. &gt;&gt; Fortnite, sim. &gt;&gt; E aí você vai lá, compra roupinha, compra não sei o quê, compra não sei o quê. E o Fortnite ele fazia as festas. &gt;&gt; Sim. fazia os encontros, aí não sei quem cantava lá dentro, aí todo mundo. E aí chega um momento que ele falava assim: &quot;Cara, para que que eu vou sair de casa &gt;&gt; se tudo tá aqui?&quot; Aí eu falo assim, você que participou, né, obviamente de tudo isso, você qual como que era essa preocupação da criançada não ficar, porque aquilo ali pode ser muito mais legal do que a vida real. Ué, &gt;&gt; não, geralmente é, mas é legal. Por quê?</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="3" data-start="2759.119" data-end="2821.660" data-duration="62.541">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-003.jpg" src="clips/clip-003.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 2759.1s - 2821.7s (62.5s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="62.5" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="62.5" step="0.1" value="62.5">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#03</span><strong>&gt;&gt; É, porque como ela ela pega padrão, né</strong></div>
+        <p class="peak">&gt;&gt; É, porque como ela ela pega padrão, né?</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.7</dd><dt>Inicio</dt><dd>2759.1s</dd><dt>Fim</dt><dd>2821.7s</dd></dl>
+        <details><summary>Transcript</summary><p>clareza do planejamento. O foco tem que ser aí, né, &gt;&gt; para resolver. E daí quando a gente não tem a clareza do que a gente tem que fazer, todo mundo fica só batendo palma pro que tá dando certo. E da galera fica assim focada, não, ó, isso aqui tá dando certo. Vamos tentar escalar, vamos fazer mais. Como a gente acelera isso? E muitas vezes o grande ganho da tua empresa é: &quot;Pô, isso aqui eu tô tendo perda, vamos matar, vamos resolver, deixa olhar isso. Ah, o que tá dando certo continuar lá. Você precisar de ajuda, você me avisa.&quot; É isso, entendeu? Já tá dando certo mesmo. Vamos mexer, né? &gt;&gt; Exato. E daí você traz essa clareza. E a IA para isso hoje em dia, p ajuda muito. &gt;&gt; Ela é muito boa para isso, né? &gt;&gt; Nossa, cara, né? &gt;&gt; Todas, todas. &gt;&gt; É, porque como ela ela pega padrão, né? Pra galera entender, né? Às vezes existe um negócio no quando você mexe com dados, né? que tem o padrão que a gente consegue ver, mas existe um negócio que são os padrões escondidos. E a Iá, ela é muito boa para pegar padrões escondidos, porque ela consegue relacionar, sei lá, às vezes o lucro do cara, porque uma coisa, tem coisas no negócio que é direto, né? Exato, &gt;&gt; né? O cara vende mais, ganha mais. Show</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="4" data-start="2979.400" data-end="3024.380" data-duration="44.980">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-004.jpg" src="clips/clip-004.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 2979.4s - 3024.4s (45.0s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="45.0" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="45.0" step="0.1" value="45.0">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#04</span><strong>&gt;&gt; É porque a gente foi desde criança, né</strong></div>
+        <p class="peak">&gt;&gt; É porque a gente foi desde criança, né?</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.76</dd><dt>Inicio</dt><dd>2979.4s</dd><dt>Fim</dt><dd>3024.4s</dd></dl>
+        <details><summary>Transcript</summary><p>inteligência artificial, pô, te ajuda para tudo isso, entendeu? que à vezes é uma coisa, ela ela vai um negócio contrainttuitivo. &gt;&gt; Contra, exato. Contraintuitivo. &gt;&gt; E você, o ser humano não, a gente só faz as coisas intuitivamente. &gt;&gt; É porque a gente foi desde criança, né? A gente foi &gt;&gt; condicionado a padrões a a seguir, ó, coisas legais que eu uso. A IA hoje, a IA também eu pego, jogo lá minha agenda, da ela tem a localização, tem as coisas. Eu comecei a usar IA para me ajudar a organizar melhor a cadência do meu dia de eventos baseado em principalmente como eu venho para São Paulo e fico um pouco tempo. &gt;&gt; Ah, é que você tá fazendo muito evento, né? Você tem usado ela para ajudar a programar ali, né? &gt;&gt; Muito evento, Sérgio. Tudo, cara. Porque assim, eh, hoje mesmo, hoje eu tinha uma</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="5" data-start="3021.880" data-end="3086.380" data-duration="64.500">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-005.jpg" src="clips/clip-005.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 3021.9s - 3086.4s (64.5s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="64.5" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="64.5" step="0.1" value="64.5">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#05</span><strong>&gt;&gt; porque a gente acha que é só, né? É</strong></div>
+        <p class="peak">&gt;&gt; porque a gente acha que é só, né? É</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.56</dd><dt>Inicio</dt><dd>3021.9s</dd><dt>Fim</dt><dd>3086.4s</dd></dl>
+        <details><summary>Transcript</summary><p>aqui para gravar com você em Alpaville, tenho que voltar porque eu tenho jantar em São Paulo, tal. Cara, eu viro para ela, falo: &quot;Ó, pega meus eventos baseando na localização, tal, reorganiza meu dia de uma forma que fique mais efetivo.&quot; Cara, ela pega e manda, daí eu saio mandando para as pessoas, olha, a gente vai pegar e ajustar a reunião agora. Eu tenho muito mais produtividade. &gt;&gt; Sim. &gt;&gt; E e acompanhamento por causa disso. Outra coisa que é legal, organização, eu como moro no exterior, organização de vo. &gt;&gt; Tá, &gt;&gt; nossa, a gente sempre muitas vezes, né? Eu sempre sou habituado, ah, vou para Campinas ou pr ou para São Paulo, tal. É isso, cara. Às vezes descer no Rio pode ser melhor &gt;&gt; descer no Rio, descer em Porto Alegre, fazer uma conexão um pouco menor no Panamá. Então assim, o conjunto de dados, informação que ela tem, ela acaba auxiliando a gente a tomar cada vez melhores decisões. Óbvio que, de novo, você sempre tem que racionalizar e ver se é aquilo que você quer ou não. &gt;&gt; Ah, não, mas ela te dá a sugestão, né? E às vezes é esse negócio, né? Essa essa coisa do contrainttuitivo dela, isso aí é demais, cara. &gt;&gt; É &gt;&gt; porque a gente acha que é só, né? É sempre assim que a gente quer, né?</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="6" data-start="3079.160" data-end="3125.660" data-duration="46.500">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-006.jpg" src="clips/clip-006.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 3079.2s - 3125.7s (46.5s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="46.5" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="46.5" step="0.1" value="46.5">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#06</span><strong>&gt;&gt; porque a gente acha que é só, né? É</strong></div>
+        <p class="peak">&gt;&gt; porque a gente acha que é só, né? É</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.99</dd><dt>Inicio</dt><dd>3079.2s</dd><dt>Fim</dt><dd>3125.7s</dd></dl>
+        <details><summary>Transcript</summary><p>&gt;&gt; porque a gente acha que é só, né? É sempre assim que a gente quer, né? gráfica tá sempre crescendo. Às vezes não, às vezes uma coisa que que desce aqui ela melhora, outra coisa lá na frente e isso vai, né? &gt;&gt; A mesma coisa dos exames lá. Eh, hoje com a qualidade que ela tem e a quantidade que teve a a quebra de padrão de proteína, não foi de proteína que ela achou? &gt;&gt; O alfa, o alfa fod os caras ganharam o prêmio nobel de química. &gt;&gt; De química por causa disso. Então assim, são quantos? &gt;&gt; 50 anos. &gt;&gt; Então 50. &gt;&gt; E você viu o que que o cara fez agora que ele fez sexta-feira? Não vi. Ele vai colocar 2.1 bilhões de dólares só em coisa porque tem uma lista de coisas que não tá resolvida. E o cara da Porque ele é da do Google, né? Do Google, &gt;&gt; então do do Deep Mind, né?</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="7" data-start="3682.359" data-end="3747.660" data-duration="65.301">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-007.jpg" src="clips/clip-007.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 3682.4s - 3747.7s (65.3s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="65.3" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="65.3" step="0.1" value="65.3">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#07</span><strong>&gt;&gt; Porque tem isso também, né? Tem isso</strong></div>
+        <p class="peak">&gt;&gt; Porque tem isso também, né? Tem isso,</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.41</dd><dt>Inicio</dt><dd>3682.4s</dd><dt>Fim</dt><dd>3747.7s</dd></dl>
+        <details><summary>Transcript</summary><p>&gt;&gt; Porque tem isso também, né? Tem isso, né, que a galera começa a fazer tudo e tal e você recebe muito disso, &gt;&gt; muito, muito, muito, &gt;&gt; porque hoje, tipo, o cara, muitas vezes você pode ter recebido ideia, &gt;&gt; mas hoje é o cara pode chegar com alguma coisa, né? &gt;&gt; Exato. É, daí tem os os dois mundos. Eu eu fico pensando assim, sempre quando eu olho o meu Instagram, eu olho e falo assim: &quot;Nossa, tem gente pior, imagina o que o Primo Rico, o Thiago Nigro não recebe, então imagina o que o Verini não recebe, né?&quot; Então assim, cara, eu eu sou investidor anjo e tal, mas o meu menor, né? O volume menor. Mas cara, eu recebia todos os dias um monte de ideia. Hoje em dia era ideia, hoje era &gt;&gt; ideia. Hoje o cara já pode dar fazer um negocinho. &gt;&gt; Tem uns preguiçosos que continuam me mandando ideia. Daí eu pego e falo assim: &quot;Olha, daí é bom que eu boto ele para responder as minhas DMs também, né? Então ele pega e fala assim: &quot;Ó, nossa, eu tenho uma ideia milionária, uma nova rede social, tal&quot;. Da daí eu respondo assim: &quot;Ó, para primeiro, que bom, sua ideia deve ser magnífica&quot;. Hoje em dia você consegue fazer coisas muito mais rápidas para testar o MVP, o conceito, não sei o quê. Quer saber mais? clica no</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="8" data-start="4673.040" data-end="4717.780" data-duration="44.740">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-008.jpg" src="clips/clip-008.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 4673.0s - 4717.8s (44.7s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="44.7" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="44.7" step="0.1" value="44.7">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#08</span><strong>entendeu? E hoje não, porque é é questão</strong></div>
+        <p class="peak">entendeu? E hoje não, porque é é questão</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.89</dd><dt>Inicio</dt><dd>4673.0s</dd><dt>Fim</dt><dd>4717.8s</dd></dl>
+        <details><summary>Transcript</summary><p>&gt;&gt; Eu só não fiquei mais porque eu acho que daí eu ia receber da minha esposa a separação, né? Daí daí o Claudinho ia tá vestido de noivo. Ainda bem que ele não fez essa imagem. Imagina se o Claudinho tá vestido de noivo. Pior que tá ouvindo aí agora, vai fazer, ó. &gt;&gt; Vamos ver que que ele vai me mandar amanhã. &gt;&gt; Não, cara, mas tem isso é isso é verdade mesmo, assim, obviamente, né? Não tem não tem muito atalho, né? Uhum. &gt;&gt; Mas hoje tá muito mais fácil, &gt;&gt; muito mais &gt;&gt; muito mais fácil. E outra coisa, né? Porque antes de você programar e tal, até você ver o resultado daquele negócio funcionar, te dava um desânimo, entendeu? E hoje não, porque é é questão pessoal de minutos você tem um resultado. Aí você não gostou, ah, não gostei da cor, não gostei disso, pô, eu quero essa tabela assim, eu quero esse</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="9" data-start="4703.960" data-end="4764.860" data-duration="60.900">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-009.jpg" src="clips/clip-009.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 4704.0s - 4764.9s (60.9s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="60.9" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="60.9" step="0.1" value="60.9">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#09</span><strong>entendeu? E hoje não, porque é é questão</strong></div>
+        <p class="peak">entendeu? E hoje não, porque é é questão</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.74</dd><dt>Inicio</dt><dd>4704.0s</dd><dt>Fim</dt><dd>4764.9s</dd></dl>
+        <details><summary>Transcript</summary><p>entendeu? E hoje não, porque é é questão pessoal de minutos você tem um resultado. Aí você não gostou, ah, não gostei da cor, não gostei disso, pô, eu quero essa tabela assim, eu quero esse gráfico ao contrário, pô, relaciona isso com aquilo. É mais 2 minutos. E ele faz, vai te entregando. &gt;&gt; E isso eu acho que é legal porque vai te incentivando a a ficar ali. É. tentando melhorar e tentando buscar. &gt;&gt; Isso é gostoso. Mas daí esse é o comportamento daquelas pessoas críticas, que é o que eu acredito que vai gerar resultado e não o que ele manda e você aceita de primeira. O que o Sérgio falou é: &quot;Cara, se preocupa com os detalhes, lê o que ele produziu, analisar o gráfico, vê se aquilo tá fazendo sentido, que tem muitas vezes, ele gera um monte de gráfico, você vai olhar, falar: &quot;Cara, não faz sentido nenhum&quot;. Daí eu, é, &gt;&gt; não sei se eu tô fazendo certo, mas eu mando assim: &quot;Pô, você é burro, eu te pedi para fazer isso, isso aqui, esse gráfico não faz menor sentido por causa disso, eu explico, né? Por causa disso, disso, disso, pro meu modelo de negócio, o que é mais importante ver essa correlação. Se tiver algo que você queira me sugerir, me sugere, daí eu mando. Daí ele vem bem assertipo, daí refaz o cravo. &gt;&gt; Isso aí que você falou, né? Fal. Ah,</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="10" data-start="4816.560" data-end="4865.739" data-duration="49.179">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-010.jpg" src="clips/clip-010.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 4816.6s - 4865.7s (49.2s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="49.2" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="49.2" step="0.1" value="49.2">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#10</span><strong>&gt;&gt; cara? Isso é muito doido, porque hoje em</strong></div>
+        <p class="peak">&gt;&gt; cara? Isso é muito doido, porque hoje em</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.49</dd><dt>Inicio</dt><dd>4816.6s</dd><dt>Fim</dt><dd>4865.7s</dd></dl>
+        <details><summary>Transcript</summary><p>&gt;&gt; como que é isso aí, &gt;&gt; cara? Isso é muito doido, porque hoje em dia, que que a gente não olha direito e não presta atenção, tá todo mundo usando muito pouco. Então, a qualidade e o resultado tá concentrado no quê? Naquelas empresas que estão melhor preparadas. &gt;&gt; Isso aí pode criar um viés. &gt;&gt; Pode criar um viés, &gt;&gt; pode, né? criar um viés que a gente tem que tomar um pouco de cuidado. E mais do que isso, olha o que que acontece, como é maluco. E daí até eu fiz aquela minha palestra no no gramado Summit e depois eu fiz ela de novo aqui na no MMA, que é o Mobile Market Association, tal, mas o que que acontece hoje em dia? Todo mundo ainda tá com a cabeça de usar AI para otimizar o máximo dos processos. Essas empresas que estão sobressaindo perante as outras, o que que eles estão fazendo?</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="11" data-start="4964.760" data-end="5010.380" data-duration="45.620">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-011.jpg" src="clips/clip-011.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 4964.8s - 5010.4s (45.6s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="45.6" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="45.6" step="0.1" value="45.6">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#11</span><strong>&gt;&gt; mas você aconselha, né? Porque é isso</strong></div>
+        <p class="peak">&gt;&gt; mas você aconselha, né? Porque é isso</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.88</dd><dt>Inicio</dt><dd>4964.8s</dd><dt>Fim</dt><dd>5010.4s</dd></dl>
+        <details><summary>Transcript</summary><p>se você for parar para pensar, cara, não é nenhuma engenharia de foguete. Isso acontece em qualquer grande revolução. E a gente tá passando mais uma que é IA. &gt;&gt; Não é isso mesmo? &gt;&gt; Então mas é muito, é muito maluco. É muito maluco. E eu, e eu converso com empresa grande, viu? E tem tanta gente fazendo cagada. Nossa, eu ten tanta gente errando por aí, &gt;&gt; mas você aconselha, né? Porque é isso daí eu aconselho, daí a gente traz para perto, a gente mostra. Eh, exemplo, inovação. Inovação que antigamente era um tabu em um monte de empresa, hoje com EAI é muito mais fácil de inovar. Só que daí você amarra a inovação com planejamento estratégico. Por quê? Se você permitir que todo mundo faça tudo, você vai não fazer nada e vai se perder, vai desviar o caminho. Daí o planejamento garante que você daí, &gt;&gt; Exato, que é o que a gente ajuda lá, é o</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="12" data-start="6021.599" data-end="6069.500" data-duration="47.901">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-012.jpg" src="clips/clip-012.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 6021.6s - 6069.5s (47.9s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="47.9" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="47.9" step="0.1" value="47.9">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#12</span><strong>artificial, né? Porque é uma coisa</strong></div>
+        <p class="peak">artificial, né? Porque é uma coisa</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.74</dd><dt>Inicio</dt><dd>6021.6s</dd><dt>Fim</dt><dd>6069.5s</dd></dl>
+        <details><summary>Transcript</summary><p>gente vai entender. Você &gt;&gt; acha porque é que você a sorte sua é que você não tá aqui, né? &gt;&gt; Ah, uma sorte gigantesca. Porque &gt;&gt; não foi sorte, foi escolha. Essa já te falei. Você você tem escolha também. Você tem escolha também. Escolha. A sorte que eu digo assim no do momento que elas vão viver, porque nesse momento é nós vamos ter eleição esse ano, né? Eu sempre falo pra galera que tem que perguntar pro cara sobre as terras raras. Porque o Brasil é a segunda maior reserva do mundo, entendeu? E a chance pode passar na nossa frente, a gente não aproveitar de novo, igual a gente já aproveitou, vai ficar ou vai ficar na mão de poucas pessoas. Esse é o mais triste. &gt;&gt; É, então, mas é a hora da gente ter esse negócio aqui, né, de alguma coisa o político tem que falar e tem que ter um plano hoje para isso aqui, pras terras raras. E outra coisa, pra inteligência artificial, né? Porque é uma coisa</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="13" data-start="6093.040" data-end="6144.340" data-duration="51.300">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-013.jpg" src="clips/clip-013.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 6093.0s - 6144.3s (51.3s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="51.3" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="51.3" step="0.1" value="51.3">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#13</span><strong>&gt;&gt; Porque sabe por quê, né? Porque eles</strong></div>
+        <p class="peak">&gt;&gt; Porque sabe por quê, né? Porque eles</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.45</dd><dt>Inicio</dt><dd>6093.0s</dd><dt>Fim</dt><dd>6144.3s</dd></dl>
+        <details><summary>Transcript</summary><p>&gt;&gt; que vai mudar a vida de muita gente. &gt;&gt; Porque sabe por quê, né? Porque eles fizeram um levantamento na China e é quase 30 milhões de pessoas vão ter um problema. &gt;&gt; Olha que legal. Isso eu não tinha visto. Esse dado aí ó, viu? De novo legal estratégico. Eles conseguem a gente o problema todo, S é &gt;&gt; é que aqui nós não temos, né? Então aí como que você faz? Como que você faz para ter um planejamento estratégico? Sendo que &gt;&gt; esse Porque o planejamento estratégico tem que ser uma janela. Exato. &gt;&gt; Né? E tipo, a China vai &gt;&gt; a gente desse para cim assim para as empresas que que eu sempre falo? Eh, cinco e a gente desce para dois anos. &gt;&gt; Ah, tá. Dentro da empresa. &gt;&gt; Mas acontece dentro das empresas, por exemplo, de mudar a liderança &gt;&gt; no meio. &gt;&gt; Sim. Mas aí o planejamento estratégico garante a continuidade das coisas. &gt;&gt; Ah, mas como que faz para garantir isso?</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="14" data-start="6268.520" data-end="6313.820" data-duration="45.300">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-014.jpg" src="clips/clip-014.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 6268.5s - 6313.8s (45.3s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="45.3" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="45.3" step="0.1" value="45.3">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#14</span><strong>Por quê? Porque é uma janela de 4 anos</strong></div>
+        <p class="peak">Por quê? Porque é uma janela de 4 anos</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.66</dd><dt>Inicio</dt><dd>6268.5s</dd><dt>Fim</dt><dd>6313.8s</dd></dl>
+        <details><summary>Transcript</summary><p>agentes que você pode trazer para essa cara, tá muito legal ess agentes que você pode trazer para pedir conteúdo e ficar discutindo. Então, a clareza, ele te traz mais clareza. Então, o planejamento que você falou da China é Brasil, que que eu acredito no Brasil que tem alguns problemas. Primeiro, independente daí, eu não tô falando de esquerda ou de direito aqui, de política, tá? Mas independente do lado, ninguém consegue ver um longo prazo. &gt;&gt; Exato. É, para mim esse é o principal problema. &gt;&gt; Daí, independente do lado, ninguém olha o Brasil olha primeiro o próprio umbigo. Por quê? Porque é uma janela de 4 anos só. E eles parecem assim, cara, que que eu posso tirar melhor disso daqui? &gt;&gt; E se entrar um outro que é do outro lado, ele vai entrar não para continuar alguma coisa, vai entrar para destruir a</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="15" data-start="6298.920" data-end="6342.860" data-duration="43.940">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-015.jpg" src="clips/clip-015.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 6298.9s - 6342.9s (43.9s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="43.9" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="43.9" step="0.1" value="43.9">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#15</span><strong>Por quê? Porque é uma janela de 4 anos</strong></div>
+        <p class="peak">Por quê? Porque é uma janela de 4 anos</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.61</dd><dt>Inicio</dt><dd>6298.9s</dd><dt>Fim</dt><dd>6342.9s</dd></dl>
+        <details><summary>Transcript</summary><p>Por quê? Porque é uma janela de 4 anos só. E eles parecem assim, cara, que que eu posso tirar melhor disso daqui? &gt;&gt; E se entrar um outro que é do outro lado, ele vai entrar não para continuar alguma coisa, vai entrar para destruir a outra coisa. Exato. Para poder é para poder daí então o nosso ciclo é &gt;&gt; autodestrutivo quase. &gt;&gt; Então o que que eu falo é de novo, o Brasil é um país com muita possibilidade. Tanto é que a gente tem empresas gigantescas aqui, cara. Ó, pega o Nubank, iFood, próprio Mercado Livre, Magazine Luía, Petrobras, Itaú. Cara, a gente tem um monte de coisa. A gente tem um monte de empreendedor animal, animal, animal. Cara, ó, hoje eu atendo mais 150 empresas. É incrível a quantidade de material humano que a gente tem.</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="16" data-start="6403.760" data-end="6448.420" data-duration="44.660">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-016.jpg" src="clips/clip-016.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 6403.8s - 6448.4s (44.7s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="44.7" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="44.7" step="0.1" value="44.7">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#16</span><strong>&gt;&gt; porque a Apple ela tá mudando agora, né</strong></div>
+        <p class="peak">&gt;&gt; porque a Apple ela tá mudando agora, né?</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>13.03</dd><dt>Inicio</dt><dd>6403.8s</dd><dt>Fim</dt><dd>6448.4s</dd></dl>
+        <details><summary>Transcript</summary><p>&gt;&gt; porque a Apple ela tá mudando agora, né? Uhum. &gt;&gt; E esse cara que entrou, porque a época teve o Steve Jobs, um cara da inovação. Sim. &gt;&gt; Aí vem o Tim Cook, que não é de inovação. &gt;&gt; Não, mas o Team Cook, ele conseguiu fazer um trabalho fantástico, assim, ó, eu sou, ó, eu sou Appleom maníaco pr caramba, &gt;&gt; né? A Apple mudou minha vida. E eu até brinco, se eu um dia eu fosse ter coragem de fazer uma tatuagem na minha vida, ia ser da Apple, &gt;&gt; ia ser bem provável que possa fazer a Apple, porque a Apple foi por causa ela que eu tô sentado aqui, por causa do desbloqueio do iPhone, que eu tive possibilidade de ter todas minhas empresas, tal. Que que aconteceu com o Tincook? O Took, ele é um excelente cara de comércio internacional, de exterior. Pode ver em todas as crises, enquanto todo mundo sofria com abastecimento de</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="17" data-start="6577.280" data-end="6621.540" data-duration="44.260">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-017.jpg" src="clips/clip-017.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 6577.3s - 6621.5s (44.3s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="44.3" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="44.3" step="0.1" value="44.3">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#17</span><strong>&gt;&gt; porque ele é um cara bom, né? Obviamente</strong></div>
+        <p class="peak">&gt;&gt; porque ele é um cara bom, né? Obviamente</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.71</dd><dt>Inicio</dt><dd>6577.3s</dd><dt>Fim</dt><dd>6621.5s</dd></dl>
+        <details><summary>Transcript</summary><p>garantindo, &gt;&gt; porque ele é um cara bom, né? Obviamente &gt;&gt; super. E e de novo e ele tem um trânsito, ó. Pode ver. A gente já viu o Elon Musk tendo stress com China e com não sei o quê. A gente já viu o pessoal da NV já falando que não tinha chip, não sei o quê. A gente já viu a própria Samsung mesmo tando lá na cara &gt;&gt; ele uma boa, né? &gt;&gt; A Apple sempre transitando bem. Então assim, o Tin Cook tem esse asset, mas hoje se mear eu como Apple fan, cara, eu quero que troque mesmo. Eu tô louco pra Apple trazer alguma coisa diferente. Pode ser um óculos, pode ser um telefone, pode ser software, ela pode acertar a Siri, entendeu? &gt;&gt; Acertar a Siri, né? direitinho nas &gt;&gt; e exato. E daí tem algumas coisas que</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="18" data-start="6751.480" data-end="6795.940" data-duration="44.460">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-018.jpg" src="clips/clip-018.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 6751.5s - 6795.9s (44.5s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="44.5" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="44.5" step="0.1" value="44.5">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#18</span><strong>dinheiro nelas porque daí eu retorno</strong></div>
+        <p class="peak">dinheiro nelas porque daí eu retorno.</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.54</dd><dt>Inicio</dt><dd>6751.5s</dd><dt>Fim</dt><dd>6795.9s</dd></dl>
+        <details><summary>Transcript</summary><p>mundo que é investidor, ele quer saber o retorno, né? Eu quero saber, não quero saber o R, quanto que vai acontecer, tal. &gt;&gt; Eh, hoje eu vou te dizer o que eu fiz e é onde eu coloquei meu dinheiro, que foi na Mas negócios, porque eu acredito de fato que a educação corporativa hoje te dá clareza para as coisas vai gerar muito resultado. E como eu vou fazer isso? ajudando as boas empresas que eu vejo que tem uma boa governança, um bom planejamento, tudo colocando meu dinheiro nelas porque daí eu retorno. &gt;&gt; Então ali é você vem, exemplo, bora falar mais sobre esse satélite, Sérgio. Eu tenho certeza que eu te ajudo não só organizar, fazer um planejamento para que a gente coloque ele em órbita de verdade. Em</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="19" data-start="6870.159" data-end="6936.619" data-duration="66.460">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-019.jpg" src="clips/clip-019.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 6870.2s - 6936.6s (66.5s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="66.5" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="66.5" step="0.1" value="66.5">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#19</span><strong>&gt;&gt; Teve porque teve dinheiro a roda, mas o</strong></div>
+        <p class="peak">&gt;&gt; Teve porque teve dinheiro a roda, mas o</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.5</dd><dt>Inicio</dt><dd>6870.2s</dd><dt>Fim</dt><dd>6936.6s</dd></dl>
+        <details><summary>Transcript</summary><p>não acreditavam, depois foi pro mobile e agora a gente tá tendo novamente com a IIA. Então, sem &gt;&gt; Mas você acha que ela fica aberta quanto tempo essa janela ainda? Eu acho que a tecnologia não tá tão madura ainda, tá? O que a gente vê hoje de novo, eu acho que é 5 a 10%. Então, os próximos 12, 18 meses, ela vai ficar e daí quem bebeu da fonte, quem chega primeiro bebe água limpa. Então, quem conseguir se posicionar bem agora os dois anos para que ela chega num nível de maturidade que quando a gente olhar vão ter empresas assim muito à frente e a gente vai começar, putz, agora, nossa, perdi o time, &gt;&gt; perdi o time, entendeu? Sabe aquele sentimento de público? Se eu tivesse começado antes, então eu acho que a próxima janela aí eu vai, os próximos dois anos são de extrema importância para quem quer se posicionar e quem quer realmente construir algo relevante nesse mercado. &gt;&gt; Entendi. E você acha que vai ter essa essa bolha aí, como que tá? Você acredita, né? Aquela história alguma hora tudo sempre tem, né, &gt;&gt; cara? Sempre tem. Que de novo são bolhas que eu chamo de correção que ajusteve, né? &gt;&gt; Teve porque teve dinheiro a roda, mas o</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="20" data-start="6915.360" data-end="6977.060" data-duration="61.700">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-020.jpg" src="clips/clip-020.mp4"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 6915.4s - 6977.1s (61.7s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="61.7" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="61.7" step="0.1" value="61.7">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#20</span><strong>&gt;&gt; Teve porque teve dinheiro a roda, mas o</strong></div>
+        <p class="peak">&gt;&gt; Teve porque teve dinheiro a roda, mas o</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.59</dd><dt>Inicio</dt><dd>6915.4s</dd><dt>Fim</dt><dd>6977.1s</dd></dl>
+        <details><summary>Transcript</summary><p>realmente construir algo relevante nesse mercado. &gt;&gt; Entendi. E você acha que vai ter essa essa bolha aí, como que tá? Você acredita, né? Aquela história alguma hora tudo sempre tem, né, &gt;&gt; cara? Sempre tem. Que de novo são bolhas que eu chamo de correção que ajusteve, né? &gt;&gt; Teve porque teve dinheiro a roda, mas o cenário também do mercado mudou. Naquela época todo mundo colocava dinheiro não esperando retorno, né? Hoje todo mundo espera retorno. Então assim, vai mudar, mas certamente a gente vai ter uma bolha. Daí o que que eu acredito que a gente vai ter de bolha é volume de ferramenta. Então, entendeu? A gente vai ter aquela a concentração em três, quatro ferramentas. A gente vai ter a concentração três, quatro tipos de tecnologia ou até mesmo tipo de processamento. Outra coisa que vem se conversando muito é sobre infraestrutura, né? Então, por isso até que o Elon tá indo pro espaço para tentar colocar processamento lá, né? &gt;&gt; Colocou quatro servidor piloto no espaço. &gt;&gt; No Ó, a NV já colocou, mas não trouxeram resultados ainda se é efetivo ou não. Então tá todo mundo ansioso, né? Falar que é piloto, né?</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article></main>
+  <script>window.CUTTED_DATA = {"moments": [{"rank": 1, "start": 165.08, "end": 208.459, "peak": 182.38, "score": 12.82, "title": "agora porque o negócio é o seguinte, né", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "né? Você tem que colocar aquele óculos de imersão, né? É muito pesado, ainda não tá algo tão confortável, você precisa se adaptar muito para usar, mas ainda tem usos assim, nichos específicos, funciona bem. >> Tem, tem. Mas então, porque eu acho que agora porque o negócio é o seguinte, né? Todo mundo falava assim: \"Ah, o metaverso\". Aí todo mundo ainda falava: \"Não, mas o Marcos Queberg ainda tá investindo bilhões\". >> Só que agora ele cortou, né? >> Cortou muito. Cortou muito. >> Agora ele pegou e distribuiu a galera da da do metaverso em outras áreas, né? Em outras áreas. E principalmente agora em em ai que não tem como, né? Então assim, ai continua sendo foco. >> Será que agora então acabou mesmo ou não? >> Não, eu não acredito que volta. >> Eu acho que volta. Eu acho que volta. É basicamente, ó, para para pensar,", "peak_text": "agora porque o negócio é o seguinte, né?", "clip_file": "clips/clip-001.mp4", "frame_file": "frames/clip-001.jpg", "caption_segments": []}, {"rank": 2, "start": 918.199, "end": 976.54, "peak": 920.92, "score": 12.45, "title": "para para não deixar? Porque, por", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "para para não deixar? Porque, por exemplo, a porque foi na época da pandemia ali, né? >> Pandemia. Isso aí. A gente fundou o PKXD um pouquinho depois que eu tinha fundado Play Kids. Play Kids foi um dos maiores aplicativos infantis do mundo. Então eu já tinha muito a consciência de segurança, de não ter chat, de não ter impacto de publicidade para não ter até o fato assim da criança, porque por exemplo, meu filho, meu filho mais velho, ele joga muito >> Roblox, >> não, né? O mais novo joga Roblox, o mais velho gostava de jogar o Fortnite. >> Fortnite, sim. >> E aí você vai lá, compra roupinha, compra não sei o quê, compra não sei o quê. E o Fortnite ele fazia as festas. >> Sim. fazia os encontros, aí não sei quem cantava lá dentro, aí todo mundo. E aí chega um momento que ele falava assim: \"Cara, para que que eu vou sair de casa >> se tudo tá aqui?\" Aí eu falo assim, você que participou, né, obviamente de tudo isso, você qual como que era essa preocupação da criançada não ficar, porque aquilo ali pode ser muito mais legal do que a vida real. Ué, >> não, geralmente é, mas é legal. Por quê?", "peak_text": "para para não deixar? Porque, por", "clip_file": "clips/clip-002.mp4", "frame_file": "frames/clip-002.jpg", "caption_segments": []}, {"rank": 3, "start": 2759.119, "end": 2821.6600000000003, "peak": 2796.5, "score": 12.7, "title": ">> É, porque como ela ela pega padrão, né", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "clareza do planejamento. O foco tem que ser aí, né, >> para resolver. E daí quando a gente não tem a clareza do que a gente tem que fazer, todo mundo fica só batendo palma pro que tá dando certo. E da galera fica assim focada, não, ó, isso aqui tá dando certo. Vamos tentar escalar, vamos fazer mais. Como a gente acelera isso? E muitas vezes o grande ganho da tua empresa é: \"Pô, isso aqui eu tô tendo perda, vamos matar, vamos resolver, deixa olhar isso. Ah, o que tá dando certo continuar lá. Você precisar de ajuda, você me avisa.\" É isso, entendeu? Já tá dando certo mesmo. Vamos mexer, né? >> Exato. E daí você traz essa clareza. E a IA para isso hoje em dia, p ajuda muito. >> Ela é muito boa para isso, né? >> Nossa, cara, né? >> Todas, todas. >> É, porque como ela ela pega padrão, né? Pra galera entender, né? Às vezes existe um negócio no quando você mexe com dados, né? que tem o padrão que a gente consegue ver, mas existe um negócio que são os padrões escondidos. E a Iá, ela é muito boa para pegar padrões escondidos, porque ela consegue relacionar, sei lá, às vezes o lucro do cara, porque uma coisa, tem coisas no negócio que é direto, né? Exato, >> né? O cara vende mais, ganha mais. Show", "peak_text": ">> É, porque como ela ela pega padrão, né?", "clip_file": "clips/clip-003.mp4", "frame_file": "frames/clip-003.jpg", "caption_segments": []}, {"rank": 4, "start": 2979.4, "end": 3024.38, "peak": 2993.7, "score": 12.76, "title": ">> É porque a gente foi desde criança, né", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "inteligência artificial, pô, te ajuda para tudo isso, entendeu? que à vezes é uma coisa, ela ela vai um negócio contrainttuitivo. >> Contra, exato. Contraintuitivo. >> E você, o ser humano não, a gente só faz as coisas intuitivamente. >> É porque a gente foi desde criança, né? A gente foi >> condicionado a padrões a a seguir, ó, coisas legais que eu uso. A IA hoje, a IA também eu pego, jogo lá minha agenda, da ela tem a localização, tem as coisas. Eu comecei a usar IA para me ajudar a organizar melhor a cadência do meu dia de eventos baseado em principalmente como eu venho para São Paulo e fico um pouco tempo. >> Ah, é que você tá fazendo muito evento, né? Você tem usado ela para ajudar a programar ali, né? >> Muito evento, Sérgio. Tudo, cara. Porque assim, eh, hoje mesmo, hoje eu tinha uma", "peak_text": ">> É porque a gente foi desde criança, né?", "clip_file": "clips/clip-004.mp4", "frame_file": "frames/clip-004.jpg", "caption_segments": []}, {"rank": 5, "start": 3021.88, "end": 3086.38, "peak": 3081.66, "score": 12.56, "title": ">> porque a gente acha que é só, né? É", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "aqui para gravar com você em Alpaville, tenho que voltar porque eu tenho jantar em São Paulo, tal. Cara, eu viro para ela, falo: \"Ó, pega meus eventos baseando na localização, tal, reorganiza meu dia de uma forma que fique mais efetivo.\" Cara, ela pega e manda, daí eu saio mandando para as pessoas, olha, a gente vai pegar e ajustar a reunião agora. Eu tenho muito mais produtividade. >> Sim. >> E e acompanhamento por causa disso. Outra coisa que é legal, organização, eu como moro no exterior, organização de vo. >> Tá, >> nossa, a gente sempre muitas vezes, né? Eu sempre sou habituado, ah, vou para Campinas ou pr ou para São Paulo, tal. É isso, cara. Às vezes descer no Rio pode ser melhor >> descer no Rio, descer em Porto Alegre, fazer uma conexão um pouco menor no Panamá. Então assim, o conjunto de dados, informação que ela tem, ela acaba auxiliando a gente a tomar cada vez melhores decisões. Óbvio que, de novo, você sempre tem que racionalizar e ver se é aquilo que você quer ou não. >> Ah, não, mas ela te dá a sugestão, né? E às vezes é esse negócio, né? Essa essa coisa do contrainttuitivo dela, isso aí é demais, cara. >> É >> porque a gente acha que é só, né? É sempre assim que a gente quer, né?", "peak_text": ">> porque a gente acha que é só, né? É", "clip_file": "clips/clip-005.mp4", "frame_file": "frames/clip-005.jpg", "caption_segments": []}, {"rank": 6, "start": 3079.16, "end": 3125.66, "peak": 3081.66, "score": 12.99, "title": ">> porque a gente acha que é só, né? É", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": ">> porque a gente acha que é só, né? É sempre assim que a gente quer, né? gráfica tá sempre crescendo. Às vezes não, às vezes uma coisa que que desce aqui ela melhora, outra coisa lá na frente e isso vai, né? >> A mesma coisa dos exames lá. Eh, hoje com a qualidade que ela tem e a quantidade que teve a a quebra de padrão de proteína, não foi de proteína que ela achou? >> O alfa, o alfa fod os caras ganharam o prêmio nobel de química. >> De química por causa disso. Então assim, são quantos? >> 50 anos. >> Então 50. >> E você viu o que que o cara fez agora que ele fez sexta-feira? Não vi. Ele vai colocar 2.1 bilhões de dólares só em coisa porque tem uma lista de coisas que não tá resolvida. E o cara da Porque ele é da do Google, né? Do Google, >> então do do Deep Mind, né?", "peak_text": ">> porque a gente acha que é só, né? É", "clip_file": "clips/clip-006.mp4", "frame_file": "frames/clip-006.jpg", "caption_segments": []}, {"rank": 7, "start": 3682.359, "end": 3747.66, "peak": 3685.72, "score": 12.41, "title": ">> Porque tem isso também, né? Tem isso", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": ">> Porque tem isso também, né? Tem isso, né, que a galera começa a fazer tudo e tal e você recebe muito disso, >> muito, muito, muito, >> porque hoje, tipo, o cara, muitas vezes você pode ter recebido ideia, >> mas hoje é o cara pode chegar com alguma coisa, né? >> Exato. É, daí tem os os dois mundos. Eu eu fico pensando assim, sempre quando eu olho o meu Instagram, eu olho e falo assim: \"Nossa, tem gente pior, imagina o que o Primo Rico, o Thiago Nigro não recebe, então imagina o que o Verini não recebe, né?\" Então assim, cara, eu eu sou investidor anjo e tal, mas o meu menor, né? O volume menor. Mas cara, eu recebia todos os dias um monte de ideia. Hoje em dia era ideia, hoje era >> ideia. Hoje o cara já pode dar fazer um negocinho. >> Tem uns preguiçosos que continuam me mandando ideia. Daí eu pego e falo assim: \"Olha, daí é bom que eu boto ele para responder as minhas DMs também, né? Então ele pega e fala assim: \"Ó, nossa, eu tenho uma ideia milionária, uma nova rede social, tal\". Da daí eu respondo assim: \"Ó, para primeiro, que bom, sua ideia deve ser magnífica\". Hoje em dia você consegue fazer coisas muito mais rápidas para testar o MVP, o conceito, não sei o quê. Quer saber mais? clica no", "peak_text": ">> Porque tem isso também, né? Tem isso,", "clip_file": "clips/clip-007.mp4", "frame_file": "frames/clip-007.jpg", "caption_segments": []}, {"rank": 8, "start": 4673.04, "end": 4717.78, "peak": 4707.32, "score": 12.89, "title": "entendeu? E hoje não, porque é é questão", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": ">> Eu só não fiquei mais porque eu acho que daí eu ia receber da minha esposa a separação, né? Daí daí o Claudinho ia tá vestido de noivo. Ainda bem que ele não fez essa imagem. Imagina se o Claudinho tá vestido de noivo. Pior que tá ouvindo aí agora, vai fazer, ó. >> Vamos ver que que ele vai me mandar amanhã. >> Não, cara, mas tem isso é isso é verdade mesmo, assim, obviamente, né? Não tem não tem muito atalho, né? Uhum. >> Mas hoje tá muito mais fácil, >> muito mais >> muito mais fácil. E outra coisa, né? Porque antes de você programar e tal, até você ver o resultado daquele negócio funcionar, te dava um desânimo, entendeu? E hoje não, porque é é questão pessoal de minutos você tem um resultado. Aí você não gostou, ah, não gostei da cor, não gostei disso, pô, eu quero essa tabela assim, eu quero esse", "peak_text": "entendeu? E hoje não, porque é é questão", "clip_file": "clips/clip-008.mp4", "frame_file": "frames/clip-008.jpg", "caption_segments": []}, {"rank": 9, "start": 4703.96, "end": 4764.86, "peak": 4707.32, "score": 12.74, "title": "entendeu? E hoje não, porque é é questão", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "entendeu? E hoje não, porque é é questão pessoal de minutos você tem um resultado. Aí você não gostou, ah, não gostei da cor, não gostei disso, pô, eu quero essa tabela assim, eu quero esse gráfico ao contrário, pô, relaciona isso com aquilo. É mais 2 minutos. E ele faz, vai te entregando. >> E isso eu acho que é legal porque vai te incentivando a a ficar ali. É. tentando melhorar e tentando buscar. >> Isso é gostoso. Mas daí esse é o comportamento daquelas pessoas críticas, que é o que eu acredito que vai gerar resultado e não o que ele manda e você aceita de primeira. O que o Sérgio falou é: \"Cara, se preocupa com os detalhes, lê o que ele produziu, analisar o gráfico, vê se aquilo tá fazendo sentido, que tem muitas vezes, ele gera um monte de gráfico, você vai olhar, falar: \"Cara, não faz sentido nenhum\". Daí eu, é, >> não sei se eu tô fazendo certo, mas eu mando assim: \"Pô, você é burro, eu te pedi para fazer isso, isso aqui, esse gráfico não faz menor sentido por causa disso, eu explico, né? Por causa disso, disso, disso, pro meu modelo de negócio, o que é mais importante ver essa correlação. Se tiver algo que você queira me sugerir, me sugere, daí eu mando. Daí ele vem bem assertipo, daí refaz o cravo. >> Isso aí que você falou, né? Fal. Ah,", "peak_text": "entendeu? E hoje não, porque é é questão", "clip_file": "clips/clip-009.mp4", "frame_file": "frames/clip-009.jpg", "caption_segments": []}, {"rank": 10, "start": 4816.56, "end": 4865.739, "peak": 4821.38, "score": 12.49, "title": ">> cara? Isso é muito doido, porque hoje em", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": ">> como que é isso aí, >> cara? Isso é muito doido, porque hoje em dia, que que a gente não olha direito e não presta atenção, tá todo mundo usando muito pouco. Então, a qualidade e o resultado tá concentrado no quê? Naquelas empresas que estão melhor preparadas. >> Isso aí pode criar um viés. >> Pode criar um viés, >> pode, né? criar um viés que a gente tem que tomar um pouco de cuidado. E mais do que isso, olha o que que acontece, como é maluco. E daí até eu fiz aquela minha palestra no no gramado Summit e depois eu fiz ela de novo aqui na no MMA, que é o Mobile Market Association, tal, mas o que que acontece hoje em dia? Todo mundo ainda tá com a cabeça de usar AI para otimizar o máximo dos processos. Essas empresas que estão sobressaindo perante as outras, o que que eles estão fazendo?", "peak_text": ">> cara? Isso é muito doido, porque hoje em", "clip_file": "clips/clip-010.mp4", "frame_file": "frames/clip-010.jpg", "caption_segments": []}, {"rank": 11, "start": 4964.76, "end": 5010.38, "peak": 4985.36, "score": 12.88, "title": ">> mas você aconselha, né? Porque é isso", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "se você for parar para pensar, cara, não é nenhuma engenharia de foguete. Isso acontece em qualquer grande revolução. E a gente tá passando mais uma que é IA. >> Não é isso mesmo? >> Então mas é muito, é muito maluco. É muito maluco. E eu, e eu converso com empresa grande, viu? E tem tanta gente fazendo cagada. Nossa, eu ten tanta gente errando por aí, >> mas você aconselha, né? Porque é isso daí eu aconselho, daí a gente traz para perto, a gente mostra. Eh, exemplo, inovação. Inovação que antigamente era um tabu em um monte de empresa, hoje com EAI é muito mais fácil de inovar. Só que daí você amarra a inovação com planejamento estratégico. Por quê? Se você permitir que todo mundo faça tudo, você vai não fazer nada e vai se perder, vai desviar o caminho. Daí o planejamento garante que você daí, >> Exato, que é o que a gente ajuda lá, é o", "peak_text": ">> mas você aconselha, né? Porque é isso", "clip_file": "clips/clip-011.mp4", "frame_file": "frames/clip-011.jpg", "caption_segments": []}, {"rank": 12, "start": 6021.599, "end": 6069.5, "peak": 6066.24, "score": 12.74, "title": "artificial, né? Porque é uma coisa", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "gente vai entender. Você >> acha porque é que você a sorte sua é que você não tá aqui, né? >> Ah, uma sorte gigantesca. Porque >> não foi sorte, foi escolha. Essa já te falei. Você você tem escolha também. Você tem escolha também. Escolha. A sorte que eu digo assim no do momento que elas vão viver, porque nesse momento é nós vamos ter eleição esse ano, né? Eu sempre falo pra galera que tem que perguntar pro cara sobre as terras raras. Porque o Brasil é a segunda maior reserva do mundo, entendeu? E a chance pode passar na nossa frente, a gente não aproveitar de novo, igual a gente já aproveitou, vai ficar ou vai ficar na mão de poucas pessoas. Esse é o mais triste. >> É, então, mas é a hora da gente ter esse negócio aqui, né, de alguma coisa o político tem que falar e tem que ter um plano hoje para isso aqui, pras terras raras. E outra coisa, pra inteligência artificial, né? Porque é uma coisa", "peak_text": "artificial, né? Porque é uma coisa", "clip_file": "clips/clip-012.mp4", "frame_file": "frames/clip-012.jpg", "caption_segments": []}, {"rank": 13, "start": 6093.04, "end": 6144.34, "peak": 6097.56, "score": 12.45, "title": ">> Porque sabe por quê, né? Porque eles", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": ">> que vai mudar a vida de muita gente. >> Porque sabe por quê, né? Porque eles fizeram um levantamento na China e é quase 30 milhões de pessoas vão ter um problema. >> Olha que legal. Isso eu não tinha visto. Esse dado aí ó, viu? De novo legal estratégico. Eles conseguem a gente o problema todo, S é >> é que aqui nós não temos, né? Então aí como que você faz? Como que você faz para ter um planejamento estratégico? Sendo que >> esse Porque o planejamento estratégico tem que ser uma janela. Exato. >> Né? E tipo, a China vai >> a gente desse para cim assim para as empresas que que eu sempre falo? Eh, cinco e a gente desce para dois anos. >> Ah, tá. Dentro da empresa. >> Mas acontece dentro das empresas, por exemplo, de mudar a liderança >> no meio. >> Sim. Mas aí o planejamento estratégico garante a continuidade das coisas. >> Ah, mas como que faz para garantir isso?", "peak_text": ">> Porque sabe por quê, né? Porque eles", "clip_file": "clips/clip-013.mp4", "frame_file": "frames/clip-013.jpg", "caption_segments": []}, {"rank": 14, "start": 6268.52, "end": 6313.82, "peak": 6301.5, "score": 12.66, "title": "Por quê? Porque é uma janela de 4 anos", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "agentes que você pode trazer para essa cara, tá muito legal ess agentes que você pode trazer para pedir conteúdo e ficar discutindo. Então, a clareza, ele te traz mais clareza. Então, o planejamento que você falou da China é Brasil, que que eu acredito no Brasil que tem alguns problemas. Primeiro, independente daí, eu não tô falando de esquerda ou de direito aqui, de política, tá? Mas independente do lado, ninguém consegue ver um longo prazo. >> Exato. É, para mim esse é o principal problema. >> Daí, independente do lado, ninguém olha o Brasil olha primeiro o próprio umbigo. Por quê? Porque é uma janela de 4 anos só. E eles parecem assim, cara, que que eu posso tirar melhor disso daqui? >> E se entrar um outro que é do outro lado, ele vai entrar não para continuar alguma coisa, vai entrar para destruir a", "peak_text": "Por quê? Porque é uma janela de 4 anos", "clip_file": "clips/clip-014.mp4", "frame_file": "frames/clip-014.jpg", "caption_segments": []}, {"rank": 15, "start": 6298.92, "end": 6342.86, "peak": 6301.5, "score": 12.61, "title": "Por quê? Porque é uma janela de 4 anos", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "Por quê? Porque é uma janela de 4 anos só. E eles parecem assim, cara, que que eu posso tirar melhor disso daqui? >> E se entrar um outro que é do outro lado, ele vai entrar não para continuar alguma coisa, vai entrar para destruir a outra coisa. Exato. Para poder é para poder daí então o nosso ciclo é >> autodestrutivo quase. >> Então o que que eu falo é de novo, o Brasil é um país com muita possibilidade. Tanto é que a gente tem empresas gigantescas aqui, cara. Ó, pega o Nubank, iFood, próprio Mercado Livre, Magazine Luía, Petrobras, Itaú. Cara, a gente tem um monte de coisa. A gente tem um monte de empreendedor animal, animal, animal. Cara, ó, hoje eu atendo mais 150 empresas. É incrível a quantidade de material humano que a gente tem.", "peak_text": "Por quê? Porque é uma janela de 4 anos", "clip_file": "clips/clip-015.mp4", "frame_file": "frames/clip-015.jpg", "caption_segments": []}, {"rank": 16, "start": 6403.76, "end": 6448.42, "peak": 6405.86, "score": 13.03, "title": ">> porque a Apple ela tá mudando agora, né", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": ">> porque a Apple ela tá mudando agora, né? Uhum. >> E esse cara que entrou, porque a época teve o Steve Jobs, um cara da inovação. Sim. >> Aí vem o Tim Cook, que não é de inovação. >> Não, mas o Team Cook, ele conseguiu fazer um trabalho fantástico, assim, ó, eu sou, ó, eu sou Appleom maníaco pr caramba, >> né? A Apple mudou minha vida. E eu até brinco, se eu um dia eu fosse ter coragem de fazer uma tatuagem na minha vida, ia ser da Apple, >> ia ser bem provável que possa fazer a Apple, porque a Apple foi por causa ela que eu tô sentado aqui, por causa do desbloqueio do iPhone, que eu tive possibilidade de ter todas minhas empresas, tal. Que que aconteceu com o Tincook? O Took, ele é um excelente cara de comércio internacional, de exterior. Pode ver em todas as crises, enquanto todo mundo sofria com abastecimento de", "peak_text": ">> porque a Apple ela tá mudando agora, né?", "clip_file": "clips/clip-016.mp4", "frame_file": "frames/clip-016.jpg", "caption_segments": []}, {"rank": 17, "start": 6577.28, "end": 6621.54, "peak": 6580.42, "score": 12.71, "title": ">> porque ele é um cara bom, né? Obviamente", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "garantindo, >> porque ele é um cara bom, né? Obviamente >> super. E e de novo e ele tem um trânsito, ó. Pode ver. A gente já viu o Elon Musk tendo stress com China e com não sei o quê. A gente já viu o pessoal da NV já falando que não tinha chip, não sei o quê. A gente já viu a própria Samsung mesmo tando lá na cara >> ele uma boa, né? >> A Apple sempre transitando bem. Então assim, o Tin Cook tem esse asset, mas hoje se mear eu como Apple fan, cara, eu quero que troque mesmo. Eu tô louco pra Apple trazer alguma coisa diferente. Pode ser um óculos, pode ser um telefone, pode ser software, ela pode acertar a Siri, entendeu? >> Acertar a Siri, né? direitinho nas >> e exato. E daí tem algumas coisas que", "peak_text": ">> porque ele é um cara bom, né? Obviamente", "clip_file": "clips/clip-017.mp4", "frame_file": "frames/clip-017.jpg", "caption_segments": []}, {"rank": 18, "start": 6751.48, "end": 6795.94, "peak": 6782.18, "score": 12.54, "title": "dinheiro nelas porque daí eu retorno", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "mundo que é investidor, ele quer saber o retorno, né? Eu quero saber, não quero saber o R, quanto que vai acontecer, tal. >> Eh, hoje eu vou te dizer o que eu fiz e é onde eu coloquei meu dinheiro, que foi na Mas negócios, porque eu acredito de fato que a educação corporativa hoje te dá clareza para as coisas vai gerar muito resultado. E como eu vou fazer isso? ajudando as boas empresas que eu vejo que tem uma boa governança, um bom planejamento, tudo colocando meu dinheiro nelas porque daí eu retorno. >> Então ali é você vem, exemplo, bora falar mais sobre esse satélite, Sérgio. Eu tenho certeza que eu te ajudo não só organizar, fazer um planejamento para que a gente coloque ele em órbita de verdade. Em", "peak_text": "dinheiro nelas porque daí eu retorno.", "clip_file": "clips/clip-018.mp4", "frame_file": "frames/clip-018.jpg", "caption_segments": []}, {"rank": 19, "start": 6870.159, "end": 6936.619, "peak": 6933.1, "score": 12.5, "title": ">> Teve porque teve dinheiro a roda, mas o", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "não acreditavam, depois foi pro mobile e agora a gente tá tendo novamente com a IIA. Então, sem >> Mas você acha que ela fica aberta quanto tempo essa janela ainda? Eu acho que a tecnologia não tá tão madura ainda, tá? O que a gente vê hoje de novo, eu acho que é 5 a 10%. Então, os próximos 12, 18 meses, ela vai ficar e daí quem bebeu da fonte, quem chega primeiro bebe água limpa. Então, quem conseguir se posicionar bem agora os dois anos para que ela chega num nível de maturidade que quando a gente olhar vão ter empresas assim muito à frente e a gente vai começar, putz, agora, nossa, perdi o time, >> perdi o time, entendeu? Sabe aquele sentimento de público? Se eu tivesse começado antes, então eu acho que a próxima janela aí eu vai, os próximos dois anos são de extrema importância para quem quer se posicionar e quem quer realmente construir algo relevante nesse mercado. >> Entendi. E você acha que vai ter essa essa bolha aí, como que tá? Você acredita, né? Aquela história alguma hora tudo sempre tem, né, >> cara? Sempre tem. Que de novo são bolhas que eu chamo de correção que ajusteve, né? >> Teve porque teve dinheiro a roda, mas o", "peak_text": ">> Teve porque teve dinheiro a roda, mas o", "clip_file": "clips/clip-019.mp4", "frame_file": "frames/clip-019.jpg", "caption_segments": []}, {"rank": 20, "start": 6915.36, "end": 6977.06, "peak": 6933.1, "score": 12.59, "title": ">> Teve porque teve dinheiro a roda, mas o", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "realmente construir algo relevante nesse mercado. >> Entendi. E você acha que vai ter essa essa bolha aí, como que tá? Você acredita, né? Aquela história alguma hora tudo sempre tem, né, >> cara? Sempre tem. Que de novo são bolhas que eu chamo de correção que ajusteve, né? >> Teve porque teve dinheiro a roda, mas o cenário também do mercado mudou. Naquela época todo mundo colocava dinheiro não esperando retorno, né? Hoje todo mundo espera retorno. Então assim, vai mudar, mas certamente a gente vai ter uma bolha. Daí o que que eu acredito que a gente vai ter de bolha é volume de ferramenta. Então, entendeu? A gente vai ter aquela a concentração em três, quatro ferramentas. A gente vai ter a concentração três, quatro tipos de tecnologia ou até mesmo tipo de processamento. Outra coisa que vem se conversando muito é sobre infraestrutura, né? Então, por isso até que o Elon tá indo pro espaço para tentar colocar processamento lá, né? >> Colocou quatro servidor piloto no espaço. >> No Ó, a NV já colocou, mas não trouxeram resultados ainda se é efetivo ou não. Então tá todo mundo ansioso, né? Falar que é piloto, né?", "peak_text": ">> Teve porque teve dinheiro a roda, mas o", "clip_file": "clips/clip-020.mp4", "frame_file": "frames/clip-020.jpg", "caption_segments": []}]}; window.CUTTED_SCRIPT = "C:\\Users\\edube\\.codex\\skills\\cutted\\scripts\\cutted.py";</script>
+  <script>
+if (new URLSearchParams(location.search).has("reset")) {
+  localStorage.removeItem("cutted-state");
+  localStorage.removeItem("cutted-format");
+  localStorage.removeItem("cutted-tab");
+  history.replaceState(null, "", location.pathname);
+}
+const state = JSON.parse(localStorage.getItem("cutted-state") || "{}");
+function save(){ localStorage.setItem("cutted-state", JSON.stringify(state)); }
+function cardState(rank){
+  const raw = state[rank];
+  if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [] };
+  return Object.assign({ status: null, trimStart: 0, trimEnd: 0, platforms: [] }, raw || {});
+}
+function setCardState(rank, patch){ state[rank] = Object.assign(cardState(rank), patch); save(); }
+function fixed(value){ return `${Number(value || 0).toFixed(1)}s`; }
+const formatMeta = {
+  tiktok: "TikTok · 9:16",
+  shorts: "YouTube Shorts · 9:16",
+  youtube: "YouTube · 16:9",
+  instagram: "Instagram Reels · 9:16",
+  facebook: "Facebook Feed · 4:5"
+};
+const platformMeta = {
+  tiktok: { label: "TikTok", width: 1080, height: 1920 },
+  shorts: { label: "Shorts", width: 1080, height: 1920 },
+  instagram: { label: "Instagram", width: 1080, height: 1920 },
+  facebook: { label: "Facebook", width: 1080, height: 1350 },
+  youtube: { label: "YouTube", width: 1920, height: 1080 }
+};
+function applyFormat(format){
+  const next = formatMeta[format] ? format : "tiktok";
+  document.body.dataset.format = next;
+  localStorage.setItem("cutted-format", next);
+  document.querySelector("[data-format-hint]").textContent = formatMeta[next];
+  document.querySelectorAll(".segments [data-format]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.format === next);
+  });
+  document.querySelectorAll(".card").forEach(updatePlatformUi);
+  renderCaptionQueue();
+}
+function applyTab(tab){
+  const next = ["edit", "captions", "final"].includes(tab) ? tab : "edit";
+  document.body.dataset.tab = next;
+  localStorage.setItem("cutted-tab", next);
+  document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.tab === next);
+  });
+  renderFinalStage();
+}
+function platformLabel(key){
+  return (platformMeta[key] || { label: key }).label;
+}
+function updatePlatformUi(card){
+  const current = cardState(card.dataset.rank);
+  const platforms = Array.isArray(current.platforms) ? current.platforms : [];
+  card.querySelectorAll("[data-platform]").forEach(btn => {
+    btn.classList.toggle("active", platforms.includes(btn.dataset.platform));
+  });
+  const fallback = document.body.dataset.format || "tiktok";
+  const summary = platforms.length
+    ? platforms.map(platformLabel).join(", ")
+    : (current.status === "liked" ? `Formato atual: ${platformLabel(fallback)}` : "Nenhum destino marcado");
+  card.querySelector("[data-platform-summary]").textContent = summary;
+}
+function paint(card){
+  const current = cardState(card.dataset.rank);
+  card.classList.toggle("liked",current.status==="liked");
+  card.classList.toggle("discarded",current.status==="discarded");
+}
+function trimValues(card){
+  const start = Number(card.dataset.start);
+  const end = Number(card.dataset.end);
+  const duration = Number(card.dataset.duration);
+  const current = cardState(card.dataset.rank);
+  const trimStart = Math.min(Number(current.trimStart || 0), Math.max(duration - 1, 0));
+  const trimEnd = Math.min(Number(current.trimEnd || 0), Math.max(duration - trimStart - 1, 0));
+  return { start, end, duration, trimStart, trimEnd, startPos: trimStart, endPos: duration - trimEnd, adjustedStart: start + trimStart, adjustedEnd: end - trimEnd };
+}
+function updateTrimUi(card){
+  const values = trimValues(card);
+  const startInput = card.querySelector("[data-trim=start]");
+  const endInput = card.querySelector("[data-trim=end]");
+  startInput.max = values.duration.toFixed(1);
+  endInput.max = values.duration.toFixed(1);
+  startInput.value = values.startPos;
+  endInput.value = values.endPos;
+  card.querySelector("[data-output=start]").textContent = fixed(values.trimStart);
+  card.querySelector("[data-output=end]").textContent = fixed(values.trimEnd);
+  card.querySelector("[data-trim-summary]").textContent = `Final: ${fixed(values.adjustedStart)} - ${fixed(values.adjustedEnd)} (${fixed(values.adjustedEnd - values.adjustedStart)})`;
+  const fill = card.querySelector("[data-trim-fill]");
+  fill.style.left = `${(values.startPos / values.duration) * 100}%`;
+  fill.style.right = `${100 - ((values.endPos / values.duration) * 100)}%`;
+}
+function seekPreview(card){
+  const video = card.querySelector("video");
+  if (!video) return;
+  const values = trimValues(card);
+  video.currentTime = values.trimStart;
+}
+function adjustedMoment(moment){
+  const current = cardState(String(moment.rank));
+  const trimStart = Number(current.trimStart || 0);
+  const trimEnd = Number(current.trimEnd || 0);
+  const platforms = Array.isArray(current.platforms) ? current.platforms : [];
+  return Object.assign({}, moment, {
+    status: current.status || null,
+    platforms,
+    trim_start_seconds: trimStart,
+    trim_end_seconds: trimEnd,
+    adjusted_start: Number((moment.start + trimStart).toFixed(3)),
+    adjusted_end: Number((moment.end - trimEnd).toFixed(3)),
+    adjusted_duration: Number((moment.end - trimEnd - moment.start - trimStart).toFixed(3))
+  });
+}
+function buildExportData(){
+  const data = Object.assign({}, window.CUTTED_DATA);
+  data.export_format = document.body.dataset.format || "tiktok";
+  const adjusted = data.moments.map(adjustedMoment);
+  data.moments = adjusted;
+  data.selected = adjusted.filter(m => m.status === "liked" || m.platforms.length > 0);
+  data.caption_queue = data.selected.flatMap(moment => captionPlatforms(moment, data.export_format).map(platform => ({
+    rank: moment.rank,
+    platform,
+    platform_label: platformLabel(platform),
+    width: platformMeta[platform]?.width || null,
+    height: platformMeta[platform]?.height || null,
+    publish_metadata: publishMetadata(platform, moment),
+    trim_start_seconds: moment.trim_start_seconds,
+    trim_end_seconds: moment.trim_end_seconds,
+    adjusted_start: moment.adjusted_start,
+    adjusted_end: moment.adjusted_end,
+    adjusted_duration: moment.adjusted_duration,
+    clip_file: moment.clip_file,
+    title: moment.title,
+    peak_text: moment.peak_text,
+    transcript: moment.transcript,
+    caption_segments: moment.caption_segments || []
+  })));
+  return data;
+}
+function captionPlatforms(moment, exportFormat){
+  if (Array.isArray(moment.platforms) && moment.platforms.length) return moment.platforms;
+  return moment.status === "liked" && platformMeta[exportFormat] ? [exportFormat] : [];
+}
+function publishMetadata(platform, moment){
+  const hashtags = suggestHashtags(platform, `${moment.title} ${moment.peak_text} ${moment.transcript}`);
+  return {
+    hashtags,
+    caption_hint: captionHint(platform, moment, hashtags),
+    strategy: platformStrategy(platform)
+  };
+}
+function suggestHashtags(platform, text){
+  const topicTags = extractTopicTags(text);
+  const topicalBoosts = inferTopicalBoosts(text);
+  const defaults = {
+    tiktok: ["IA", "InteligenciaArtificial", "Podcast"],
+    shorts: ["IA", "InteligenciaArtificial", "Shorts"],
+    youtube: ["IA", "InteligenciaArtificial", "Tecnologia"],
+    instagram: ["IA", "InteligenciaArtificial", "Reels"],
+    facebook: ["IA", "Tecnologia"]
+  };
+  const limits = { tiktok: 6, shorts: 4, youtube: 4, instagram: 5, facebook: 3 };
+  const merged = [...topicalBoosts, ...(defaults[platform] || []), ...topicTags];
+  return unique(merged).slice(0, limits[platform] || 4).map(tag => `#${tag}`);
+}
+function extractTopicTags(text){
+  const extraStopWords = [
+    "acho","ainda","agora","assim","cada","cara","certo","com","daqui","dele","dela","deles","dessa",
+    "desse","disso","dizer","esta","estao","falar","mas","meio","nao","nem","nessa","nesse",
+    "cortou","negocio","pela","pelo","qual","quando","que","quem","sabe","seguinte","tambem",
+    "tem","tipo","uma","volta","vou"
+  ];
+  const stop = new Set(["para","como","porque","entao","então","sobre","isso","essa","esse","aqui","gente","voce","você","video","clip","coisa","forma","mais","menos","muito","fala","falando"]);
+  extraStopWords.forEach(word => stop.add(word));
+  const normalized = String(text).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const words = normalized.match(/[a-zA-Z0-9]{3,}/g) || [];
+  const counts = new Map();
+  words.map(word => word.toLowerCase()).filter(word => !stop.has(word)).forEach(word => {
+    counts.set(word, (counts.get(word) || 0) + 1);
+  });
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
+    .slice(0, 4)
+    .map(([word]) => word.charAt(0).toUpperCase() + word.slice(1));
+}
+function inferTopicalBoosts(text){
+  const normalized = String(text).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const boosts = [];
+  if (/\bia\b|inteligencia artificial|artificial/.test(normalized)) boosts.push("IA", "InteligenciaArtificial");
+  if (/podcast|episodio|entrevista|conversa/.test(normalized)) boosts.push("Podcast");
+  if (/tecnologia|tech|futuro|ferramenta|automacao/.test(normalized)) boosts.push("Tecnologia");
+  if (/criador|conteudo|youtube|tiktok|instagram|reels|shorts/.test(normalized)) boosts.push("Criadores");
+  return boosts;
+}
+function unique(values){
+  const seen = new Set();
+  return values.filter(value => {
+    const clean = String(value).replace(/^#/, "").replace(/[^a-zA-Z0-9]/g, "");
+    const key = clean.toLowerCase();
+    if (!clean || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).map(value => String(value).replace(/^#/, "").replace(/[^a-zA-Z0-9]/g, ""));
+}
+function captionHint(platform, moment, hashtags){
+  const lead = moment.peak_text || moment.title || "Corte selecionado";
+  return `${lead}\n\n${hashtags.join(" ")}`;
+}
+function platformStrategy(platform){
+  return {
+    tiktok: "Usar poucos hashtags relevantes; validar tendencias no TikTok Creative Center antes de publicar.",
+    shorts: "Priorizar 3-4 hashtags relevantes; no YouTube, os primeiros hashtags da descricao sao os mais visiveis.",
+    youtube: "Usar hashtags como contexto, sem exagero; evitar excesso de hashtags.",
+    instagram: "Usar 3-5 hashtags especificos e relevantes; evitar blocos longos genericos.",
+    facebook: "Usar 1-3 hashtags pesquisaveis; legenda clara e nativa do feed importa mais que volume."
+  }[platform] || "Usar hashtags relevantes e especificos.";
+}
+function downloadJson(data, filename){
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+function renderCaptionQueue(){
+  const data = buildExportData();
+  const list = document.querySelector("[data-caption-list]");
+  const summary = document.querySelector("[data-caption-summary]");
+  if (!data.caption_queue.length) {
+    summary.textContent = "Nenhum corte marcado ainda.";
+    list.innerHTML = "";
+    return;
+  }
+  summary.textContent = `${data.caption_queue.length} saidas prontas para render e legenda.`;
+  list.innerHTML = data.caption_queue.map(item => captionItemHtml(item)).join("");
+  renderFinalStage();
+}
+function renderFinalStage(){
+  const queue = buildExportData().caption_queue || [];
+  const summary = document.querySelector("[data-final-summary]");
+  if (summary) {
+    summary.textContent = queue.length
+      ? `${queue.length} saidas podem ser renderizadas com legenda.`
+      : "Prepare a fila de legenda antes de renderizar.";
+  }
+  const command = document.querySelector("[data-caption-command]");
+  if (command) command.textContent = captionCommand();
+}
+function captionCommand(){
+  const chars = Number(document.querySelector("[data-caption-width]")?.value || 28);
+  const lines = Number(document.querySelector("[data-caption-lines]")?.value || 2);
+  const script = window.CUTTED_SCRIPT || "cutted.py";
+  return `python "${script}" caption-selected "caption-queue.json" --out "captioned-clips" --base-dir "." --chars-per-line ${chars} --max-lines ${lines}`;
+}
+function captionItemHtml(item){
+  return `
+    <article class="caption-item" data-platform="${escapeAttr(item.platform)}">
+      <div class="caption-preview"><video controls preload="metadata" src="${escapeAttr(item.clip_file || "")}"></video></div>
+      <div class="caption-item-body">
+        <strong>#${String(item.rank).padStart(2, "0")} ${escapeHtml(item.title || "")}</strong>
+        <span>${escapeHtml(item.platform_label)}</span><span>${item.width}x${item.height}</span><span>${fixed(item.adjusted_duration)}</span>
+        <p>${escapeHtml((item.publish_metadata?.hashtags || []).join(" "))}</p>
+        <dl><dt>Inicio</dt><dd>${fixed(item.adjusted_start)}</dd><dt>Fim</dt><dd>${fixed(item.adjusted_end)}</dd></dl>
+      </div>
+    </article>`;
+}
+function escapeHtml(value){
+  return String(value).replace(/[&<>"']/g, char => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[char]));
+}
+function escapeAttr(value){ return escapeHtml(value); }
+applyFormat(localStorage.getItem("cutted-format") || "tiktok");
+applyTab(localStorage.getItem("cutted-tab") || "edit");
+document.querySelectorAll(".segments [data-format]").forEach(btn => {
+  btn.addEventListener("click", () => applyFormat(btn.dataset.format));
+});
+document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
+  btn.addEventListener("click", () => { applyTab(btn.dataset.tab); renderCaptionQueue(); });
+});
+document.querySelectorAll(".card").forEach(card => {
+  paint(card);
+  updateTrimUi(card);
+  updatePlatformUi(card);
+  const video = card.querySelector("video");
+  if (video) {
+    video.addEventListener("play", () => {
+      const values = trimValues(card);
+      if (video.currentTime < values.trimStart || video.currentTime >= values.duration - values.trimEnd) {
+        video.currentTime = values.trimStart;
+      }
+    });
+    video.addEventListener("timeupdate", () => {
+      const values = trimValues(card);
+      if (video.currentTime >= values.duration - values.trimEnd) {
+        video.pause();
+        video.currentTime = values.trimStart;
+      }
+    });
+  }
+  card.querySelectorAll("[data-trim]").forEach(input => input.addEventListener("input", () => {
+    const current = cardState(card.dataset.rank);
+    const duration = Number(card.dataset.duration);
+    const startInput = card.querySelector("[data-trim=start]");
+    const endInput = card.querySelector("[data-trim=end]");
+    let startPos = Number(startInput.value);
+    let endPos = Number(endInput.value);
+    if (input.dataset.trim === "start") startPos = Math.min(startPos, endPos - 1);
+    if (input.dataset.trim === "end") endPos = Math.max(endPos, startPos + 1);
+    const patch = { trimStart: Math.max(startPos, 0), trimEnd: Math.max(duration - endPos, 0) };
+    setCardState(card.dataset.rank, Object.assign(current, patch));
+    updateTrimUi(card);
+    seekPreview(card);
+    renderCaptionQueue();
+  }));
+  card.querySelectorAll("[data-platform]").forEach(btn => btn.addEventListener("click", () => {
+    const current = cardState(card.dataset.rank);
+    const platforms = Array.isArray(current.platforms) ? current.platforms.slice() : [];
+    const existing = platforms.indexOf(btn.dataset.platform);
+    if (existing >= 0) platforms.splice(existing, 1);
+    else platforms.push(btn.dataset.platform);
+    setCardState(card.dataset.rank, { platforms });
+    updatePlatformUi(card);
+    renderCaptionQueue();
+  }));
+  card.querySelectorAll("button[data-action]").forEach(btn => btn.addEventListener("click", () => {
+    if (btn.dataset.action === "reset-trim") {
+      setCardState(card.dataset.rank, { trimStart: 0, trimEnd: 0 });
+      updateTrimUi(card);
+      seekPreview(card);
+      renderCaptionQueue();
+      return;
+    }
+    setCardState(card.dataset.rank, { status: btn.dataset.action === "like" ? "liked" : "discarded" });
+    paint(card);
+    updatePlatformUi(card);
+    renderCaptionQueue();
+  }));
+});
+document.getElementById("export").addEventListener("click", async () => {
+  downloadJson(buildExportData(), "selected-clips.json");
+});
+document.getElementById("reset-ui").addEventListener("click", () => {
+  if (!confirm("Zerar cortes, formatos e estado desta interface?")) return;
+  localStorage.removeItem("cutted-state");
+  localStorage.removeItem("cutted-format");
+  localStorage.removeItem("cutted-tab");
+  location.reload();
+});
+document.getElementById("export-captions").addEventListener("click", async () => {
+  downloadJson(buildExportData(), "caption-queue.json");
+  applyTab("final");
+});
+document.querySelectorAll("[data-caption-lines],[data-caption-width]").forEach(input => {
+  input.addEventListener("input", renderFinalStage);
+  input.addEventListener("change", renderFinalStage);
+});
+document.getElementById("copy-caption-command").addEventListener("click", async () => {
+  const button = document.getElementById("copy-caption-command");
+  const command = document.querySelector("[data-caption-command]");
+  const text = captionCommand();
+  try {
+    if (!navigator.clipboard) throw new Error("Clipboard unavailable");
+    await navigator.clipboard.writeText(text);
+    button.textContent = "Copiado";
+  } catch (error) {
+    selectElementText(command);
+    button.textContent = "Selecionado";
+  }
+  setTimeout(() => { button.textContent = "Copiar comando"; }, 1600);
+});
+function selectElementText(element){
+  if (!element || !window.getSelection || !document.createRange) return;
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+renderCaptionQueue();
+</script>
+</body>
+</html>

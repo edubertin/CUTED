@@ -1,0 +1,2066 @@
+{
+  "source": "PÉRICLES - Podpah #945",
+  "duration": 0.0,
+  "config": {
+    "clips": 15,
+    "min_duration": 30.0,
+    "max_duration": 70.0,
+    "target_duration": 42.0,
+    "smart_boundaries": true,
+    "lead_in": 1.0,
+    "tail_out": 1.5,
+    "preset": "tiktok"
+  },
+  "moments": [
+    {
+      "rank": 1,
+      "start": 358.319,
+      "end": 428.62,
+      "peak": 425.44,
+      "score": 12.28,
+      "title": ">> Vai pra natação. Por quê? Porque ela é",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": ">> Sim, sim, sim. Hoje é um dia muito especial. A gente sempre fala dele. Ele já veio uma vez, agora veio de novo. >> Você tá bem? >> Eu tô bem. Você? Por que que você tá fazendo assim, irmão? Tá pedindo para eu calmar? >> Eu tô pedindo para você calmar um pouco. >> Eu que tô há uns dois meses querendo que você se acalme um pouco. Você tá muito, >> tô a mais. Tá demais, [ __ ] >> Eu queria falar isso no programa, no início do programa do P. >> Qu vocês estão em casa, mano? Dá um like, se inscreve no canal aí, mano. Ô, de verdade, episódios. >> Bom, 10 milhões de inscritos. >> Boa. >> Antes de >> apresentar nosso convidado maravilhoso, eu preciso falar dos nossos patrocinadores aqui da casa. Começando por Philips, Mítico Jovem. >> Ah, >> Philips está com lançamento novinho, novidade nova, que é a Philips Boom Beit. Exatamente. >> Vem com alcinha também, tá? >> Exatamente. É um som potente de alta qualidade com Rais. Tá bom, né? Que fala só que tem 200 W, tem 200 W de fato. Graves, fortes e agudos nítidos, portátil e fácil de carregar, como o mítico jovem disse, ela é muito estilosa porque ela tem uma uma faixinha que dá para você colocar lá no corpo. >> É, eu vou pra natação, coloco ela aqui, ela vai embora comigo. >> Vai pra natação. Por quê? Porque ela é",
+      "peak_text": ">> Vai pra natação. Por quê? Porque ela é",
+      "clip_file": "clips/clip-001.mp4",
+      "frame_file": "frames/clip-001.jpg",
+      "caption_segments": [
+        {
+          "start": 359.319,
+          "end": 362.08000000000004,
+          "text": ">> Sim, sim, sim. Hoje é um dia muito"
+        },
+        {
+          "start": 360.68,
+          "end": 363.759,
+          "text": "especial. A gente sempre fala dele. Ele"
+        },
+        {
+          "start": 362.08,
+          "end": 364.4,
+          "text": "já veio uma vez, agora veio de novo."
+        },
+        {
+          "start": 363.759,
+          "end": 365.72,
+          "text": ">> Você tá bem?"
+        },
+        {
+          "start": 364.4,
+          "end": 367.039,
+          "text": ">> Eu tô bem. Você? Por que que você tá"
+        },
+        {
+          "start": 365.72,
+          "end": 367.44000000000005,
+          "text": "fazendo assim, irmão? Tá pedindo para eu"
+        },
+        {
+          "start": 367.039,
+          "end": 368.96,
+          "text": "calmar?"
+        },
+        {
+          "start": 367.44,
+          "end": 370.8,
+          "text": ">> Eu tô pedindo para você calmar um pouco."
+        },
+        {
+          "start": 368.96,
+          "end": 372.84,
+          "text": ">> Eu que tô há uns dois meses querendo que"
+        },
+        {
+          "start": 370.8,
+          "end": 374.96000000000004,
+          "text": "você se acalme um pouco. Você tá muito,"
+        },
+        {
+          "start": 372.84,
+          "end": 376.44,
+          "text": ">> tô a mais. Tá demais, [ __ ]"
+        },
+        {
+          "start": 374.96,
+          "end": 380.0,
+          "text": ">> Eu queria falar isso no programa, no"
+        },
+        {
+          "start": 376.44,
+          "end": 381.599,
+          "text": "início do programa do P."
+        },
+        {
+          "start": 380.0,
+          "end": 383.479,
+          "text": ">> Qu vocês estão em casa, mano? Dá um"
+        },
+        {
+          "start": 381.599,
+          "end": 384.4,
+          "text": "like, se inscreve no canal aí, mano. Ô,"
+        },
+        {
+          "start": 383.479,
+          "end": 385.88,
+          "text": "de verdade, episódios."
+        },
+        {
+          "start": 384.4,
+          "end": 386.479,
+          "text": ">> Bom, 10 milhões de inscritos."
+        },
+        {
+          "start": 385.88,
+          "end": 388.12,
+          "text": ">> Boa."
+        },
+        {
+          "start": 386.479,
+          "end": 389.75899999999996,
+          "text": ">> Antes de"
+        },
+        {
+          "start": 388.12,
+          "end": 391.12,
+          "text": ">> apresentar nosso convidado maravilhoso,"
+        },
+        {
+          "start": 389.759,
+          "end": 393.40000000000003,
+          "text": "eu preciso falar dos nossos"
+        },
+        {
+          "start": 391.12,
+          "end": 394.96,
+          "text": "patrocinadores aqui da casa. Começando"
+        },
+        {
+          "start": 393.4,
+          "end": 395.52,
+          "text": "por Philips, Mítico Jovem."
+        },
+        {
+          "start": 394.96,
+          "end": 398.15999999999997,
+          "text": ">> Ah,"
+        },
+        {
+          "start": 395.52,
+          "end": 401.479,
+          "text": ">> Philips está com lançamento novinho,"
+        },
+        {
+          "start": 398.16,
+          "end": 402.759,
+          "text": "novidade nova, que é a Philips Boom"
+        },
+        {
+          "start": 401.479,
+          "end": 403.84,
+          "text": "Beit. Exatamente."
+        },
+        {
+          "start": 402.759,
+          "end": 405.68,
+          "text": ">> Vem com alcinha também, tá?"
+        },
+        {
+          "start": 403.84,
+          "end": 409.039,
+          "text": ">> Exatamente. É um som potente de alta"
+        },
+        {
+          "start": 405.68,
+          "end": 411.88,
+          "text": "qualidade com Rais. Tá bom, né? Que fala"
+        },
+        {
+          "start": 409.039,
+          "end": 414.08,
+          "text": "só que tem 200 W, tem 200 W de fato."
+        },
+        {
+          "start": 411.88,
+          "end": 415.52,
+          "text": "Graves, fortes e agudos nítidos,"
+        },
+        {
+          "start": 414.08,
+          "end": 417.52,
+          "text": "portátil e fácil de carregar, como o"
+        },
+        {
+          "start": 415.52,
+          "end": 419.15999999999997,
+          "text": "mítico jovem disse, ela é muito estilosa"
+        },
+        {
+          "start": 417.52,
+          "end": 420.479,
+          "text": "porque ela tem uma uma faixinha que dá"
+        },
+        {
+          "start": 419.16,
+          "end": 422.52000000000004,
+          "text": "para você colocar lá no corpo."
+        },
+        {
+          "start": 420.479,
+          "end": 423.75899999999996,
+          "text": ">> É, eu vou pra natação, coloco ela aqui,"
+        },
+        {
+          "start": 422.52,
+          "end": 424.96,
+          "text": "ela vai embora comigo."
+        },
+        {
+          "start": 423.759,
+          "end": 427.12,
+          "text": ">> Vai pra natação. Por quê? Porque ela é"
+        }
+      ]
+    },
+    {
+      "rank": 2,
+      "start": 422.759,
+      "end": 468.21999999999997,
+      "peak": 425.44,
+      "score": 12.5,
+      "title": ">> Vai pra natação. Por quê? Porque ela é",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": ">> Vai pra natação. Por quê? Porque ela é resistente à água, jovem. >> Água e poeira. Tá bom. A qualidade do som tá absurda, mano. Você que gosta de um grave. Você que gosta de um gravezinho, aquele som gostosinho. >> E tem função kara o quê? >> Tem. >> Você que é metida a cantor? >> Eu? >> Aham. Plug plug o microfone. Seja feliz. Então conheça. Novo lançamento da Philips Bumbit e tenha um som de qualidade na sua casa, tá bom? E ó, falar de educação agora, falar de fã. Mítico jovem. >> Opa, >> ainda dá tempo de você se matricular para o na fã para esse semestre, tá bom? De verdade, parcerias com grandes empresas, incluindo o PODP. Você pode estagiar aqui no PP se você for um aluno fã, tá bom? Estágios exclusivos tem até",
+      "peak_text": ">> Vai pra natação. Por quê? Porque ela é",
+      "clip_file": "clips/clip-002.mp4",
+      "frame_file": "frames/clip-002.jpg",
+      "caption_segments": [
+        {
+          "start": 423.759,
+          "end": 427.12,
+          "text": ">> Vai pra natação. Por quê? Porque ela é"
+        },
+        {
+          "start": 424.96,
+          "end": 428.56,
+          "text": "resistente à água, jovem."
+        },
+        {
+          "start": 427.12,
+          "end": 430.599,
+          "text": ">> Água e poeira. Tá bom. A qualidade do"
+        },
+        {
+          "start": 428.56,
+          "end": 431.759,
+          "text": "som tá absurda, mano. Você que gosta de"
+        },
+        {
+          "start": 430.599,
+          "end": 433.71999999999997,
+          "text": "um grave. Você que gosta de um"
+        },
+        {
+          "start": 431.759,
+          "end": 435.039,
+          "text": "gravezinho, aquele som gostosinho."
+        },
+        {
+          "start": 433.72,
+          "end": 435.44000000000005,
+          "text": ">> E tem função kara o quê?"
+        },
+        {
+          "start": 435.039,
+          "end": 437.36,
+          "text": ">> Tem."
+        },
+        {
+          "start": 435.44,
+          "end": 437.84,
+          "text": ">> Você que é metida a cantor?"
+        },
+        {
+          "start": 437.36,
+          "end": 441.879,
+          "text": ">> Eu?"
+        },
+        {
+          "start": 437.84,
+          "end": 443.79999999999995,
+          "text": ">> Aham. Plug plug o microfone. Seja feliz."
+        },
+        {
+          "start": 441.879,
+          "end": 446.08000000000004,
+          "text": "Então conheça. Novo lançamento da"
+        },
+        {
+          "start": 443.8,
+          "end": 448.16,
+          "text": "Philips Bumbit e tenha um som de"
+        },
+        {
+          "start": 446.08,
+          "end": 451.08,
+          "text": "qualidade na sua casa, tá bom? E ó,"
+        },
+        {
+          "start": 448.16,
+          "end": 452.0,
+          "text": "falar de educação agora, falar de fã."
+        },
+        {
+          "start": 451.08,
+          "end": 452.44,
+          "text": "Mítico jovem."
+        },
+        {
+          "start": 452.0,
+          "end": 454.479,
+          "text": ">> Opa,"
+        },
+        {
+          "start": 452.44,
+          "end": 457.199,
+          "text": ">> ainda dá tempo de você se matricular"
+        },
+        {
+          "start": 454.479,
+          "end": 458.96,
+          "text": "para o na fã para esse semestre, tá bom?"
+        },
+        {
+          "start": 457.199,
+          "end": 460.8,
+          "text": "De verdade, parcerias com grandes"
+        },
+        {
+          "start": 458.96,
+          "end": 462.84,
+          "text": "empresas, incluindo o PODP. Você pode"
+        },
+        {
+          "start": 460.8,
+          "end": 465.28000000000003,
+          "text": "estagiar aqui no PP se você for um aluno"
+        },
+        {
+          "start": 462.84,
+          "end": 466.71999999999997,
+          "text": "fã, tá bom? Estágios exclusivos tem até"
+        }
+      ]
+    },
+    {
+      "rank": 3,
+      "start": 550.32,
+      "end": 594.779,
+      "peak": 588.86,
+      "score": 12.7,
+      "title": ">> Ah, por quê? Porque o mítico jovem ele",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": ">> sim, cara. Eu amo a lander. >> Ah, aí é vantagem com a fã de verdade. Tem condições imperdíveis para sair de Lander Zero. Eu quero falar para vocês, ó. Voucher de R$ 1.000 na moto ou em produtos, você escolhe. Você comprando uma moto, você vai ganhar um voucher de R$ 1.000 que você escolhe como gastar. Taxa zero e 4 anos de garantia. Tá bom? Deus do céu. >> E importantíssimo você acessar o site e conferir todas as condições e escolha a sua motinha, escolha a sua Yamarra, tá bom? Aproveita, segue as redes sociais deles aí porque o trabalho deles também é maravilhoso. >> Mítico jovem, fala >> o nosso patrocinador master é para você. >> Ah, por quê? Porque o mítico jovem ele sai desse país, ele compra Rizes. Não, eu eu tenho até eu vou até de mala, meu",
+      "peak_text": ">> Ah, por quê? Porque o mítico jovem ele",
+      "clip_file": "clips/clip-003.mp4",
+      "frame_file": "frames/clip-003.jpg",
+      "caption_segments": [
+        {
+          "start": 551.32,
+          "end": 554.839,
+          "text": ">> sim, cara. Eu amo a lander."
+        },
+        {
+          "start": 553.24,
+          "end": 557.399,
+          "text": ">> Ah,"
+        },
+        {
+          "start": 554.839,
+          "end": 559.24,
+          "text": "aí é vantagem com a fã de verdade. Tem"
+        },
+        {
+          "start": 557.399,
+          "end": 560.88,
+          "text": "condições imperdíveis para sair de"
+        },
+        {
+          "start": 559.24,
+          "end": 563.0790000000001,
+          "text": "Lander Zero. Eu quero falar para vocês,"
+        },
+        {
+          "start": 560.88,
+          "end": 564.68,
+          "text": "ó. Voucher de R$ 1.000 na moto ou em"
+        },
+        {
+          "start": 563.079,
+          "end": 565.76,
+          "text": "produtos, você escolhe. Você comprando"
+        },
+        {
+          "start": 564.68,
+          "end": 567.68,
+          "text": "uma moto, você vai ganhar um voucher de"
+        },
+        {
+          "start": 565.76,
+          "end": 571.64,
+          "text": "R$ 1.000 que você escolhe como gastar."
+        },
+        {
+          "start": 567.68,
+          "end": 572.1999999999999,
+          "text": "Taxa zero e 4 anos de garantia. Tá bom?"
+        },
+        {
+          "start": 571.64,
+          "end": 574.36,
+          "text": "Deus do céu."
+        },
+        {
+          "start": 572.2,
+          "end": 576.9590000000001,
+          "text": ">> E importantíssimo você acessar o site e"
+        },
+        {
+          "start": 574.36,
+          "end": 578.72,
+          "text": "conferir todas as condições e escolha a"
+        },
+        {
+          "start": 576.959,
+          "end": 580.079,
+          "text": "sua motinha, escolha a sua Yamarra, tá"
+        },
+        {
+          "start": 578.72,
+          "end": 581.64,
+          "text": "bom? Aproveita, segue as redes sociais"
+        },
+        {
+          "start": 580.079,
+          "end": 582.519,
+          "text": "deles aí porque o trabalho deles também"
+        },
+        {
+          "start": 581.64,
+          "end": 583.72,
+          "text": "é maravilhoso."
+        },
+        {
+          "start": 582.519,
+          "end": 586.5600000000001,
+          "text": ">> Mítico jovem, fala"
+        },
+        {
+          "start": 583.72,
+          "end": 588.0400000000001,
+          "text": ">> o nosso patrocinador master é para você."
+        },
+        {
+          "start": 586.56,
+          "end": 591.16,
+          "text": ">> Ah, por quê? Porque o mítico jovem ele"
+        },
+        {
+          "start": 588.04,
+          "end": 592.88,
+          "text": "sai desse país, ele compra Rizes. Não,"
+        },
+        {
+          "start": 591.16,
+          "end": 593.279,
+          "text": "eu eu tenho até eu vou até de mala, meu"
+        }
+      ]
+    },
+    {
+      "rank": 4,
+      "start": 585.56,
+      "end": 654.98,
+      "peak": 588.86,
+      "score": 12.17,
+      "title": ">> Ah, por quê? Porque o mítico jovem ele",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": ">> Ah, por quê? Porque o mítico jovem ele sai desse país, ele compra Rizes. Não, eu eu tenho até eu vou até de mala, meu irmão. >> De verdade, gente. >> Essa malinha aqui é Style, hein. >> Ó, R esse chocolate maravilhoso de pasta de amendoim com chocolate e que tava de ponta cabeça, me perdoa. Mas é isso. Toda vez que a gente viaja, a gente enche a mala disso aqui e despacha e meu Deus do céu. E volta cheio de chocolate para casa. Só que isso não precisa mais porque RES está no Brasil. Ah, meu Deus do céu. Então, muito obrigado. Tô com uma caixa igual o me mostrou ali. A gente ganhou aqui um monte de coisa. Você não viu que tem moletom aqui também? >> Tem moletom. >> Tem meia da R. >> Que isso? Obrigado, >> você que é gostosinho, tá? Se você nunca comeu um, come você ver. >> Então, não precisa mais você viajar para fora para comprar. Então, já compre o seu e, ó, escanei o Qcode e garanta sem precisar sair do sofá. Isso aqui é [ __ ] de gostoso. Desculpa, é muito bom mesmo. Desculizado. Agora tá no Brasil, tá no BR. Vamos que vamos, hein? >> Ou é muito gostoso e muito bonito esse laranjado também, né? Gostei. >> Obrigado, Rizes, de verdade, >> top, hein? Tô me sentindo gringo agora.",
+      "peak_text": ">> Ah, por quê? Porque o mítico jovem ele",
+      "clip_file": "clips/clip-004.mp4",
+      "frame_file": "frames/clip-004.jpg",
+      "caption_segments": [
+        {
+          "start": 586.56,
+          "end": 591.16,
+          "text": ">> Ah, por quê? Porque o mítico jovem ele"
+        },
+        {
+          "start": 588.04,
+          "end": 592.88,
+          "text": "sai desse país, ele compra Rizes. Não,"
+        },
+        {
+          "start": 591.16,
+          "end": 593.279,
+          "text": "eu eu tenho até eu vou até de mala, meu"
+        },
+        {
+          "start": 592.88,
+          "end": 593.959,
+          "text": "irmão."
+        },
+        {
+          "start": 593.279,
+          "end": 595.16,
+          "text": ">> De verdade, gente."
+        },
+        {
+          "start": 593.959,
+          "end": 597.64,
+          "text": ">> Essa malinha aqui é Style, hein."
+        },
+        {
+          "start": 595.16,
+          "end": 601.079,
+          "text": ">> Ó, R esse chocolate maravilhoso de pasta"
+        },
+        {
+          "start": 597.64,
+          "end": 602.92,
+          "text": "de amendoim com chocolate e que tava de"
+        },
+        {
+          "start": 601.079,
+          "end": 604.56,
+          "text": "ponta cabeça, me perdoa. Mas é isso."
+        },
+        {
+          "start": 602.92,
+          "end": 606.8389999999999,
+          "text": "Toda vez que a gente viaja, a gente"
+        },
+        {
+          "start": 604.56,
+          "end": 608.68,
+          "text": "enche a mala disso aqui e despacha e meu"
+        },
+        {
+          "start": 606.839,
+          "end": 611.24,
+          "text": "Deus do céu. E volta cheio de chocolate"
+        },
+        {
+          "start": 608.68,
+          "end": 614.16,
+          "text": "para casa. Só que isso não precisa mais"
+        },
+        {
+          "start": 611.24,
+          "end": 615.9590000000001,
+          "text": "porque RES está no Brasil. Ah, meu Deus"
+        },
+        {
+          "start": 614.16,
+          "end": 618.16,
+          "text": "do céu. Então, muito obrigado. Tô com"
+        },
+        {
+          "start": 615.959,
+          "end": 619.2399999999999,
+          "text": "uma caixa igual o me mostrou ali. A"
+        },
+        {
+          "start": 618.16,
+          "end": 620.64,
+          "text": "gente ganhou aqui um monte de coisa."
+        },
+        {
+          "start": 619.24,
+          "end": 620.92,
+          "text": "Você não viu que tem moletom aqui"
+        },
+        {
+          "start": 620.64,
+          "end": 621.8,
+          "text": "também?"
+        },
+        {
+          "start": 620.92,
+          "end": 623.4399999999999,
+          "text": ">> Tem moletom."
+        },
+        {
+          "start": 621.8,
+          "end": 624.7199999999999,
+          "text": ">> Tem meia da R."
+        },
+        {
+          "start": 623.44,
+          "end": 626.399,
+          "text": ">> Que isso? Obrigado,"
+        },
+        {
+          "start": 624.72,
+          "end": 627.36,
+          "text": ">> você que é gostosinho, tá? Se você nunca"
+        },
+        {
+          "start": 626.399,
+          "end": 629.04,
+          "text": "comeu um, come você ver."
+        },
+        {
+          "start": 627.36,
+          "end": 632.0,
+          "text": ">> Então, não precisa mais você viajar para"
+        },
+        {
+          "start": 629.04,
+          "end": 634.399,
+          "text": "fora para comprar. Então, já compre o"
+        },
+        {
+          "start": 632.0,
+          "end": 636.72,
+          "text": "seu e, ó, escanei o Qcode e garanta sem"
+        },
+        {
+          "start": 634.399,
+          "end": 638.88,
+          "text": "precisar sair do sofá. Isso aqui é"
+        },
+        {
+          "start": 636.72,
+          "end": 641.48,
+          "text": "[ __ ] de gostoso. Desculpa, é muito"
+        },
+        {
+          "start": 638.88,
+          "end": 643.32,
+          "text": "bom mesmo. Desculizado. Agora tá no"
+        },
+        {
+          "start": 641.48,
+          "end": 645.5600000000001,
+          "text": "Brasil, tá no BR. Vamos que vamos, hein?"
+        },
+        {
+          "start": 643.32,
+          "end": 647.72,
+          "text": ">> Ou é muito gostoso e muito bonito esse"
+        },
+        {
+          "start": 645.56,
+          "end": 649.4399999999999,
+          "text": "laranjado também, né? Gostei."
+        },
+        {
+          "start": 647.72,
+          "end": 651.0790000000001,
+          "text": ">> Obrigado, Rizes, de verdade,"
+        },
+        {
+          "start": 649.44,
+          "end": 653.48,
+          "text": ">> top, hein? Tô me sentindo gringo agora."
+        }
+      ]
+    },
+    {
+      "rank": 5,
+      "start": 976.399,
+      "end": 1028.78,
+      "peak": 997.22,
+      "score": 12.82,
+      "title": "levar o dinheiro para esse lugar, porque",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "poder ganhar um dinheiro e de também não tá na rua, tá fazendo cultura, sabe? tá podendo fazer um evento ali. Então eu acho que >> que isso abre eh espaço para outras outras empresas, outras outra galera, tipo um pode para pegar outras batalhas de outros estados e juntar. E a gente tá a fim de fazer. >> O que a gente quis fazer com isso é levar o dinheiro para esse lugar, porque a gente vende um da periferia, então a gente começa a conhecer um dinheiro desses patrocinadores que a gente fala: \"Nossa, diferente\". E a gente fala assim: \"Beleza, agora a gente tá com esses patrocinadores, então vamos pegar os nossos patrocinadores e levar pra batalha\". Isso aí. >> Então a chegamos. Então é isso que eu quero, sabe, peréx, mais dinheiro com a gente. É isso aí, pô. >> E que as marcas entendem que a batalha é um fenômeno que para eles chegarem. >> É, cara. Pô, isso é prosperidade. Isso é prosperidade. Porque você ganhar sozinho, não é? Quando você compartilha",
+      "peak_text": "levar o dinheiro para esse lugar, porque",
+      "clip_file": "clips/clip-005.mp4",
+      "frame_file": "frames/clip-005.jpg",
+      "caption_segments": [
+        {
+          "start": 977.399,
+          "end": 981.24,
+          "text": "poder ganhar um dinheiro e de também não"
+        },
+        {
+          "start": 979.319,
+          "end": 983.199,
+          "text": "tá na rua, tá fazendo cultura, sabe? tá"
+        },
+        {
+          "start": 981.24,
+          "end": 983.519,
+          "text": "podendo fazer um evento ali. Então eu"
+        },
+        {
+          "start": 983.199,
+          "end": 986.3599999999999,
+          "text": "acho que"
+        },
+        {
+          "start": 983.519,
+          "end": 988.279,
+          "text": ">> que isso abre eh espaço para outras"
+        },
+        {
+          "start": 986.36,
+          "end": 990.639,
+          "text": "outras empresas, outras outra galera,"
+        },
+        {
+          "start": 988.279,
+          "end": 992.759,
+          "text": "tipo um pode para pegar outras batalhas"
+        },
+        {
+          "start": 990.639,
+          "end": 993.24,
+          "text": "de outros estados e juntar. E a gente tá"
+        },
+        {
+          "start": 992.759,
+          "end": 995.0790000000001,
+          "text": "a fim de fazer."
+        },
+        {
+          "start": 993.24,
+          "end": 996.44,
+          "text": ">> O que a gente quis fazer com isso é"
+        },
+        {
+          "start": 995.079,
+          "end": 999.3599999999999,
+          "text": "levar o dinheiro para esse lugar, porque"
+        },
+        {
+          "start": 996.44,
+          "end": 1001.9200000000001,
+          "text": "a gente vende um da periferia, então a"
+        },
+        {
+          "start": 999.36,
+          "end": 1003.88,
+          "text": "gente começa a conhecer um dinheiro"
+        },
+        {
+          "start": 1001.92,
+          "end": 1005.88,
+          "text": "desses patrocinadores que a gente fala:"
+        },
+        {
+          "start": 1003.88,
+          "end": 1006.88,
+          "text": "\"Nossa, diferente\". E a gente fala"
+        },
+        {
+          "start": 1005.88,
+          "end": 1008.48,
+          "text": "assim: \"Beleza, agora a gente tá com"
+        },
+        {
+          "start": 1006.88,
+          "end": 1010.16,
+          "text": "esses patrocinadores, então vamos pegar"
+        },
+        {
+          "start": 1008.48,
+          "end": 1011.3190000000001,
+          "text": "os nossos patrocinadores e levar pra"
+        },
+        {
+          "start": 1010.16,
+          "end": 1013.48,
+          "text": "batalha\". Isso aí."
+        },
+        {
+          "start": 1011.319,
+          "end": 1015.079,
+          "text": ">> Então a chegamos. Então é isso que eu"
+        },
+        {
+          "start": 1013.48,
+          "end": 1016.36,
+          "text": "quero, sabe, peréx, mais dinheiro com a"
+        },
+        {
+          "start": 1015.079,
+          "end": 1018.279,
+          "text": "gente. É isso aí, pô."
+        },
+        {
+          "start": 1016.36,
+          "end": 1019.9590000000001,
+          "text": ">> E que as marcas entendem que a batalha é"
+        },
+        {
+          "start": 1018.279,
+          "end": 1022.24,
+          "text": "um fenômeno que para eles chegarem."
+        },
+        {
+          "start": 1019.959,
+          "end": 1023.6389999999999,
+          "text": ">> É, cara. Pô, isso é prosperidade. Isso é"
+        },
+        {
+          "start": 1022.24,
+          "end": 1025.6,
+          "text": "prosperidade. Porque você ganhar"
+        },
+        {
+          "start": 1023.639,
+          "end": 1027.28,
+          "text": "sozinho, não é? Quando você compartilha"
+        }
+      ]
+    },
+    {
+      "rank": 6,
+      "start": 1569.0,
+      "end": 1625.46,
+      "peak": 1621.8,
+      "score": 11.96,
+      "title": ">> Entendeu? porque precisaria de uma carga",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "com a música. >> Sempre é um berço muito musical, né? E sempre sai uns cantas maravil gente, revelou muita gente, >> acho que apresentou o instrumento para um monte de gente. >> Para um monte de gente. Além de apresentar o instrumento, apresentou uma saída. O os a igreja foi uma saída para muito, salvou muita gente. >> Mas você com essa idade, 14, 13 anos ali, você já sabia que seu futuro ia ser cantor, >> cara? Não, não. Eu, eu queria jogar vôlei. Eu joguei vôlei um tempão. Eu fui até onde o meu joelho deu e tá tudo bem. E, e, mas eu tenho eu tenho grandes amigos no vôlei. Grandes amigos. >> Você ficou frustrado quando não deu mais o vôlei? >> Não, não, não fiquei. >> Sério? >> Sério? >> O porque o samba já tava andando, rolando. >> Não, não porque tava rolando, mas eu eu tenho plena ciência >> que eu não iria muito mais longe. >> Entendi. >> Entendeu? porque precisaria de uma carga",
+      "peak_text": ">> Entendeu? porque precisaria de uma carga",
+      "clip_file": "clips/clip-006.mp4",
+      "frame_file": "frames/clip-006.jpg",
+      "caption_segments": [
+        {
+          "start": 1570.0,
+          "end": 1572.52,
+          "text": "com a música."
+        },
+        {
+          "start": 1570.52,
+          "end": 1575.2,
+          "text": ">> Sempre é um berço muito musical, né? E"
+        },
+        {
+          "start": 1572.52,
+          "end": 1576.559,
+          "text": "sempre sai uns cantas maravil gente,"
+        },
+        {
+          "start": 1575.2,
+          "end": 1578.0,
+          "text": "revelou muita gente,"
+        },
+        {
+          "start": 1576.559,
+          "end": 1578.84,
+          "text": ">> acho que apresentou o instrumento para"
+        },
+        {
+          "start": 1578.0,
+          "end": 1580.399,
+          "text": "um monte de gente."
+        },
+        {
+          "start": 1578.84,
+          "end": 1581.8799999999999,
+          "text": ">> Para um monte de gente. Além de"
+        },
+        {
+          "start": 1580.399,
+          "end": 1585.0,
+          "text": "apresentar o instrumento, apresentou uma"
+        },
+        {
+          "start": 1581.88,
+          "end": 1586.5590000000002,
+          "text": "saída. O os a igreja foi uma saída para"
+        },
+        {
+          "start": 1585.0,
+          "end": 1588.6,
+          "text": "muito, salvou muita gente."
+        },
+        {
+          "start": 1586.559,
+          "end": 1591.0,
+          "text": ">> Mas você com essa idade, 14, 13 anos"
+        },
+        {
+          "start": 1588.6,
+          "end": 1591.52,
+          "text": "ali, você já sabia que seu futuro ia ser"
+        },
+        {
+          "start": 1591.0,
+          "end": 1593.88,
+          "text": "cantor,"
+        },
+        {
+          "start": 1591.52,
+          "end": 1597.1589999999999,
+          "text": ">> cara? Não, não. Eu, eu queria jogar"
+        },
+        {
+          "start": 1593.88,
+          "end": 1600.3200000000002,
+          "text": "vôlei. Eu joguei vôlei um tempão. Eu fui"
+        },
+        {
+          "start": 1597.159,
+          "end": 1602.72,
+          "text": "até onde o meu joelho deu e tá tudo bem."
+        },
+        {
+          "start": 1600.32,
+          "end": 1604.72,
+          "text": "E, e, mas eu tenho eu tenho grandes"
+        },
+        {
+          "start": 1602.72,
+          "end": 1606.24,
+          "text": "amigos no vôlei. Grandes amigos."
+        },
+        {
+          "start": 1604.72,
+          "end": 1606.88,
+          "text": ">> Você ficou frustrado quando não deu mais"
+        },
+        {
+          "start": 1606.24,
+          "end": 1609.44,
+          "text": "o vôlei?"
+        },
+        {
+          "start": 1606.88,
+          "end": 1609.96,
+          "text": ">> Não, não, não fiquei."
+        },
+        {
+          "start": 1609.44,
+          "end": 1610.799,
+          "text": ">> Sério?"
+        },
+        {
+          "start": 1609.96,
+          "end": 1612.52,
+          "text": ">> Sério?"
+        },
+        {
+          "start": 1610.799,
+          "end": 1612.96,
+          "text": ">> O porque o samba já tava andando,"
+        },
+        {
+          "start": 1612.52,
+          "end": 1614.44,
+          "text": "rolando."
+        },
+        {
+          "start": 1612.96,
+          "end": 1616.52,
+          "text": ">> Não, não porque tava rolando, mas eu eu"
+        },
+        {
+          "start": 1614.44,
+          "end": 1619.159,
+          "text": "tenho plena ciência"
+        },
+        {
+          "start": 1616.52,
+          "end": 1619.6399999999999,
+          "text": ">> que eu não iria muito mais longe."
+        },
+        {
+          "start": 1619.159,
+          "end": 1621.96,
+          "text": ">> Entendi."
+        },
+        {
+          "start": 1619.64,
+          "end": 1623.96,
+          "text": ">> Entendeu? porque precisaria de uma carga"
+        }
+      ]
+    },
+    {
+      "rank": 7,
+      "start": 1937.36,
+      "end": 1981.98,
+      "peak": 1974.5,
+      "score": 12.31,
+      "title": ">> Quando que você começa a compor? Porque",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "responsabilidade, poxa, eu sou um filho mais velho, >> eu tenho que dar o exemplo. >> E os mais novos depois de você era muita diferença. >> Não, não, não, não. Um, dois anos. Um, dois anos. >> É isso que faz. Eu sou mais velho. Aí o outro com um ano a menos, >> dois, é um ano a menos. Fala: \"Ah, sai daí, >> sai daí, >> calma aí, F. >> Tá de brincadeira quando >> Mas sempre foi assim, sempre foi assim. E o o mais velho sempre, né, o pensamento é, poxa, se eu faltar, você que vai cuidar. >> Nessa época você já tava compondo? >> Não. >> Quando que você começa a compor? Porque também é um dom que a gente descobre, que você descobre, né? No caso.",
+      "peak_text": ">> Quando que você começa a compor? Porque",
+      "clip_file": "clips/clip-007.mp4",
+      "frame_file": "frames/clip-007.jpg",
+      "caption_segments": [
+        {
+          "start": 1938.36,
+          "end": 1942.1589999999999,
+          "text": "responsabilidade, poxa, eu sou um filho"
+        },
+        {
+          "start": 1940.84,
+          "end": 1944.639,
+          "text": "mais velho,"
+        },
+        {
+          "start": 1942.159,
+          "end": 1947.0800000000002,
+          "text": ">> eu tenho que dar o exemplo."
+        },
+        {
+          "start": 1944.639,
+          "end": 1947.84,
+          "text": ">> E os mais novos depois de você era muita"
+        },
+        {
+          "start": 1947.08,
+          "end": 1950.76,
+          "text": "diferença."
+        },
+        {
+          "start": 1947.84,
+          "end": 1951.32,
+          "text": ">> Não, não, não, não. Um, dois anos. Um,"
+        },
+        {
+          "start": 1950.76,
+          "end": 1952.919,
+          "text": "dois anos."
+        },
+        {
+          "start": 1951.32,
+          "end": 1954.519,
+          "text": ">> É isso que faz. Eu sou mais velho. Aí o"
+        },
+        {
+          "start": 1952.919,
+          "end": 1956.24,
+          "text": "outro com um ano a menos,"
+        },
+        {
+          "start": 1954.519,
+          "end": 1956.6,
+          "text": ">> dois, é um ano a menos. Fala: \"Ah, sai"
+        },
+        {
+          "start": 1956.24,
+          "end": 1958.08,
+          "text": "daí,"
+        },
+        {
+          "start": 1956.6,
+          "end": 1958.9599999999998,
+          "text": ">> sai daí,"
+        },
+        {
+          "start": 1958.08,
+          "end": 1960.799,
+          "text": ">> calma aí, F."
+        },
+        {
+          "start": 1958.96,
+          "end": 1961.08,
+          "text": ">> Tá de brincadeira"
+        },
+        {
+          "start": 1960.799,
+          "end": 1962.72,
+          "text": "quando"
+        },
+        {
+          "start": 1961.08,
+          "end": 1966.24,
+          "text": ">> Mas sempre foi assim, sempre foi assim."
+        },
+        {
+          "start": 1962.72,
+          "end": 1969.48,
+          "text": "E o o mais velho sempre, né, o"
+        },
+        {
+          "start": 1966.24,
+          "end": 1970.159,
+          "text": "pensamento é, poxa, se eu faltar, você"
+        },
+        {
+          "start": 1969.48,
+          "end": 1972.039,
+          "text": "que vai cuidar."
+        },
+        {
+          "start": 1970.159,
+          "end": 1972.8400000000001,
+          "text": ">> Nessa época você já tava compondo?"
+        },
+        {
+          "start": 1972.039,
+          "end": 1974.679,
+          "text": ">> Não."
+        },
+        {
+          "start": 1972.84,
+          "end": 1976.1589999999999,
+          "text": ">> Quando que você começa a compor? Porque"
+        },
+        {
+          "start": 1974.679,
+          "end": 1977.2,
+          "text": "também é um dom que a gente descobre,"
+        },
+        {
+          "start": 1976.159,
+          "end": 1980.48,
+          "text": "que você descobre, né? No caso."
+        }
+      ]
+    },
+    {
+      "rank": 8,
+      "start": 2392.319,
+      "end": 2444.22,
+      "peak": 2439.54,
+      "score": 12.19,
+      "title": "eu tenho eh porque eu é a música, né? A",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "mais fácil. >> Você sempre foi muito próximo ao rap, né, Mr. Catra? Eu agora você vai cantar no Detal com o Dexter. Dexter. >> Fala disso aí. >> Porque o Dexter tava aqui com a gente ontem, cara. >> Eu amo. Dexter. >> E aí, Titi? Tá firmeza? Fala, meu Deus. Ele é assim, ele é, ele é assim, >> ele é assim, ele é assim, >> [ __ ] É um cara, Dexter, eu te amo e você sabe muito bem. >> Amamos demais, cara. >> Poxa, ele é demais assim, a >> Domingo vai ter aniversário dele. >> É uma é um cara que ele se reinventou, né? Ele pegou >> meio limão e fez duas limonadas. >> Uma cachoeira de limonada, >> né? Isso tem relevância. E aí a gente vai cantar junto. Mas a proximidade que eu tenho eh porque eu é a música, né? A",
+      "peak_text": "eu tenho eh porque eu é a música, né? A",
+      "clip_file": "clips/clip-008.mp4",
+      "frame_file": "frames/clip-008.jpg",
+      "caption_segments": [
+        {
+          "start": 2393.319,
+          "end": 2395.16,
+          "text": "mais fácil."
+        },
+        {
+          "start": 2393.68,
+          "end": 2398.48,
+          "text": ">> Você sempre foi muito próximo ao rap,"
+        },
+        {
+          "start": 2395.16,
+          "end": 2400.48,
+          "text": "né, Mr. Catra? Eu agora você vai cantar"
+        },
+        {
+          "start": 2398.48,
+          "end": 2401.2,
+          "text": "no Detal com o Dexter. Dexter."
+        },
+        {
+          "start": 2400.48,
+          "end": 2402.599,
+          "text": ">> Fala disso aí."
+        },
+        {
+          "start": 2401.2,
+          "end": 2403.7599999999998,
+          "text": ">> Porque o Dexter tava aqui com a gente"
+        },
+        {
+          "start": 2402.599,
+          "end": 2405.96,
+          "text": "ontem, cara."
+        },
+        {
+          "start": 2403.76,
+          "end": 2408.48,
+          "text": ">> Eu amo. Dexter."
+        },
+        {
+          "start": 2405.96,
+          "end": 2410.119,
+          "text": ">> E aí, Titi? Tá firmeza? Fala, meu Deus."
+        },
+        {
+          "start": 2408.48,
+          "end": 2411.44,
+          "text": "Ele é assim, ele é, ele é assim,"
+        },
+        {
+          "start": 2410.119,
+          "end": 2413.8,
+          "text": ">> ele é assim, ele é assim,"
+        },
+        {
+          "start": 2411.44,
+          "end": 2415.079,
+          "text": ">> [ __ ] É um cara, Dexter, eu te amo e"
+        },
+        {
+          "start": 2413.8,
+          "end": 2416.8390000000004,
+          "text": "você sabe muito bem."
+        },
+        {
+          "start": 2415.079,
+          "end": 2419.119,
+          "text": ">> Amamos demais, cara."
+        },
+        {
+          "start": 2416.839,
+          "end": 2420.44,
+          "text": ">> Poxa, ele é demais assim, a"
+        },
+        {
+          "start": 2419.119,
+          "end": 2423.8,
+          "text": ">> Domingo vai ter aniversário dele."
+        },
+        {
+          "start": 2420.44,
+          "end": 2426.64,
+          "text": ">> É uma é um cara que ele se reinventou,"
+        },
+        {
+          "start": 2423.8,
+          "end": 2430.319,
+          "text": "né? Ele pegou"
+        },
+        {
+          "start": 2426.64,
+          "end": 2431.44,
+          "text": ">> meio limão e fez duas limonadas."
+        },
+        {
+          "start": 2430.319,
+          "end": 2434.8,
+          "text": ">> Uma cachoeira de limonada,"
+        },
+        {
+          "start": 2431.44,
+          "end": 2436.359,
+          "text": ">> né? Isso tem relevância. E aí a gente"
+        },
+        {
+          "start": 2434.8,
+          "end": 2440.0,
+          "text": "vai cantar junto. Mas a proximidade que"
+        },
+        {
+          "start": 2436.359,
+          "end": 2442.72,
+          "text": "eu tenho eh porque eu é a música, né? A"
+        }
+      ]
+    },
+    {
+      "rank": 9,
+      "start": 2771.52,
+      "end": 2816.7400000000002,
+      "peak": 2792.0,
+      "score": 12.53,
+      "title": "esquenta?\" É porque é muita risada",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": ">> Da hora, da hora, da hora. >> Vai corte. >> Porque a gente tem essa parada com o esquenta, sabe? O esquenta era uma novidade. Muita gente criticou, po apareceu >> muita gente e teve uma teve uma teve pessoas que falou assim: \"O pai é tipo esquenta na internet\". >> Mas aí aí a pessoa fala: \"Mas por que o esquenta?\" É porque é muita risada, muita gente feliz, com preconceito, óbvio, né, falando. Aí a gente contou isso pra pra Regina, né? E a gente falou assim, Regina, e a gente recebeu essa ofensa com um puto elogio, porque o esquenta pra gente é um fenômeno. >> É quando a gente viu junto a gente junto na hora a gente se olhou e falou: >> \"A gente é o esquenta, >> a gente é o esquenta [ __ ] é mó da hora aquela parada foi muito [ __ ] aquela",
+      "peak_text": "esquenta?\" É porque é muita risada,",
+      "clip_file": "clips/clip-009.mp4",
+      "frame_file": "frames/clip-009.jpg",
+      "caption_segments": [
+        {
+          "start": 2772.52,
+          "end": 2775.64,
+          "text": ">> Da hora, da hora, da hora."
+        },
+        {
+          "start": 2774.839,
+          "end": 2777.0789999999997,
+          "text": ">> Vai corte."
+        },
+        {
+          "start": 2775.64,
+          "end": 2778.8799999999997,
+          "text": ">> Porque a gente tem essa parada com o"
+        },
+        {
+          "start": 2777.079,
+          "end": 2780.88,
+          "text": "esquenta, sabe? O esquenta era uma"
+        },
+        {
+          "start": 2778.88,
+          "end": 2782.1600000000003,
+          "text": "novidade. Muita gente criticou, po"
+        },
+        {
+          "start": 2780.88,
+          "end": 2784.6800000000003,
+          "text": "apareceu"
+        },
+        {
+          "start": 2782.16,
+          "end": 2786.8799999999997,
+          "text": ">> muita gente e teve uma teve uma teve"
+        },
+        {
+          "start": 2784.68,
+          "end": 2788.319,
+          "text": "pessoas que falou assim: \"O pai é tipo"
+        },
+        {
+          "start": 2786.88,
+          "end": 2790.1600000000003,
+          "text": "esquenta na internet\"."
+        },
+        {
+          "start": 2788.319,
+          "end": 2791.92,
+          "text": ">> Mas aí aí a pessoa fala: \"Mas por que o"
+        },
+        {
+          "start": 2790.16,
+          "end": 2793.839,
+          "text": "esquenta?\" É porque é muita risada,"
+        },
+        {
+          "start": 2791.92,
+          "end": 2795.359,
+          "text": "muita gente feliz, com preconceito,"
+        },
+        {
+          "start": 2793.839,
+          "end": 2798.119,
+          "text": "óbvio, né, falando. Aí a gente contou"
+        },
+        {
+          "start": 2795.359,
+          "end": 2800.359,
+          "text": "isso pra pra Regina, né? E a gente falou"
+        },
+        {
+          "start": 2798.119,
+          "end": 2802.44,
+          "text": "assim, Regina, e a gente recebeu essa"
+        },
+        {
+          "start": 2800.359,
+          "end": 2805.04,
+          "text": "ofensa com um puto elogio, porque o"
+        },
+        {
+          "start": 2802.44,
+          "end": 2807.88,
+          "text": "esquenta pra gente é um fenômeno."
+        },
+        {
+          "start": 2805.04,
+          "end": 2809.119,
+          "text": ">> É quando a gente viu junto a gente junto"
+        },
+        {
+          "start": 2807.88,
+          "end": 2809.8,
+          "text": "na hora a gente se olhou e falou:"
+        },
+        {
+          "start": 2809.119,
+          "end": 2811.28,
+          "text": ">> \"A gente é o esquenta,"
+        },
+        {
+          "start": 2809.8,
+          "end": 2813.44,
+          "text": ">> a gente é o esquenta [ __ ] é mó da"
+        },
+        {
+          "start": 2811.28,
+          "end": 2815.2400000000002,
+          "text": "hora aquela parada foi muito [ __ ] aquela"
+        }
+      ]
+    },
+    {
+      "rank": 10,
+      "start": 2945.96,
+      "end": 2990.26,
+      "peak": 2963.78,
+      "score": 12.07,
+      "title": "isso? Muito louco aquilo, porque ah, a",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "para cima e para baixo, cultura de favela, tudo de favela, entendeu? Queria tá lá, [ __ ] Queria estar no meio lá naquela. >> Eu ficava com a inveja do DG, irmão. Falei: \"Caramba, DG tá aí todo dia, mano. Deixa eu em um\". Como que foi isso? Muito louco aquilo, porque ah, a gente fez a última apresentação do Exalta Samba lá no Esquenta, né, que foi o dia que o Lucas cantou lá, a gente cada um levou seus filhos e tudo mais, que foi impactante demais, foi lindo. E aí, >> mas o o convite era para você participar de um ou já era você fazer parte daquilo? Como que era isso? >> Não, o convite surgiu para eu fazer parte um dia.",
+      "peak_text": "isso? Muito louco aquilo, porque ah, a",
+      "clip_file": "clips/clip-010.mp4",
+      "frame_file": "frames/clip-010.jpg",
+      "caption_segments": [
+        {
+          "start": 2946.96,
+          "end": 2951.44,
+          "text": "para cima e para baixo, cultura de"
+        },
+        {
+          "start": 2948.68,
+          "end": 2953.839,
+          "text": "favela, tudo de favela, entendeu? Queria"
+        },
+        {
+          "start": 2951.44,
+          "end": 2954.319,
+          "text": "tá lá, [ __ ] Queria estar no meio lá"
+        },
+        {
+          "start": 2953.839,
+          "end": 2956.359,
+          "text": "naquela."
+        },
+        {
+          "start": 2954.319,
+          "end": 2958.0,
+          "text": ">> Eu ficava com a inveja do DG, irmão."
+        },
+        {
+          "start": 2956.359,
+          "end": 2960.52,
+          "text": "Falei: \"Caramba, DG tá aí todo dia,"
+        },
+        {
+          "start": 2958.0,
+          "end": 2964.28,
+          "text": "mano. Deixa eu em um\". Como que foi"
+        },
+        {
+          "start": 2960.52,
+          "end": 2967.04,
+          "text": "isso? Muito louco aquilo, porque ah, a"
+        },
+        {
+          "start": 2964.28,
+          "end": 2971.3590000000004,
+          "text": "gente fez a última apresentação do"
+        },
+        {
+          "start": 2967.04,
+          "end": 2973.16,
+          "text": "Exalta Samba lá no Esquenta, né, que foi"
+        },
+        {
+          "start": 2971.359,
+          "end": 2975.2799999999997,
+          "text": "o dia que o Lucas cantou lá, a gente"
+        },
+        {
+          "start": 2973.16,
+          "end": 2978.72,
+          "text": "cada um levou seus filhos e tudo mais,"
+        },
+        {
+          "start": 2975.28,
+          "end": 2978.88,
+          "text": "que foi impactante demais, foi lindo. E"
+        },
+        {
+          "start": 2978.72,
+          "end": 2981.0789999999997,
+          "text": "aí,"
+        },
+        {
+          "start": 2978.88,
+          "end": 2982.92,
+          "text": ">> mas o o convite era para você participar"
+        },
+        {
+          "start": 2981.079,
+          "end": 2983.8390000000004,
+          "text": "de um ou já era você fazer parte"
+        },
+        {
+          "start": 2982.92,
+          "end": 2986.079,
+          "text": "daquilo? Como que era isso?"
+        },
+        {
+          "start": 2983.839,
+          "end": 2987.599,
+          "text": ">> Não, o convite surgiu para eu fazer"
+        },
+        {
+          "start": 2986.079,
+          "end": 2988.76,
+          "text": "parte um dia."
+        }
+      ]
+    },
+    {
+      "rank": 11,
+      "start": 4031.039,
+      "end": 4076.46,
+      "peak": 4034.86,
+      "score": 11.92,
+      "title": "isso de de de ser válido isso? Porque o",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "isso de de de ser válido isso? Porque o artista, é muito importante isso que eu vou dizer, os artistas eles estão tomando mão dos seus trabalhos. O artista, ele não é só aquele que eh, de uma forma contemplativa vê seu trabalho crescer. Ele vê que hoje se ele não se ele não botar a mão na massa, não vai funcionar, >> não vai, >> entendeu? É isso, é o que vocês fazem, é o que a gente procura fazer. A gente tem que pôr a mão na massa, o artista tem que tomar diretriz do seu trabalho, né? E são vários os eh eh como é que eu vou dizer? Ah, foram várias as modalidades",
+      "peak_text": "isso de de de ser válido isso? Porque o",
+      "clip_file": "clips/clip-011.mp4",
+      "frame_file": "frames/clip-011.jpg",
+      "caption_segments": [
+        {
+          "start": 4032.039,
+          "end": 4037.6800000000003,
+          "text": "isso de de de ser válido isso? Porque o"
+        },
+        {
+          "start": 4035.92,
+          "end": 4040.119,
+          "text": "artista, é muito importante isso que eu"
+        },
+        {
+          "start": 4037.68,
+          "end": 4043.68,
+          "text": "vou dizer, os artistas eles estão"
+        },
+        {
+          "start": 4040.119,
+          "end": 4047.48,
+          "text": "tomando mão dos seus trabalhos. O"
+        },
+        {
+          "start": 4043.68,
+          "end": 4049.64,
+          "text": "artista, ele não é só aquele que eh, de"
+        },
+        {
+          "start": 4047.48,
+          "end": 4052.4,
+          "text": "uma forma contemplativa vê seu trabalho"
+        },
+        {
+          "start": 4049.64,
+          "end": 4054.5589999999997,
+          "text": "crescer. Ele vê que hoje se ele não se"
+        },
+        {
+          "start": 4052.4,
+          "end": 4055.1600000000003,
+          "text": "ele não botar a mão na massa, não vai"
+        },
+        {
+          "start": 4054.559,
+          "end": 4055.76,
+          "text": "funcionar,"
+        },
+        {
+          "start": 4055.16,
+          "end": 4058.52,
+          "text": ">> não vai,"
+        },
+        {
+          "start": 4055.76,
+          "end": 4060.039,
+          "text": ">> entendeu? É isso, é o que vocês fazem, é"
+        },
+        {
+          "start": 4058.52,
+          "end": 4061.44,
+          "text": "o que a gente procura fazer. A gente tem"
+        },
+        {
+          "start": 4060.039,
+          "end": 4064.92,
+          "text": "que pôr a mão na massa, o artista tem"
+        },
+        {
+          "start": 4061.44,
+          "end": 4069.279,
+          "text": "que tomar diretriz do seu trabalho, né?"
+        },
+        {
+          "start": 4064.92,
+          "end": 4072.319,
+          "text": "E são vários os eh eh como é que eu vou"
+        },
+        {
+          "start": 4069.279,
+          "end": 4074.96,
+          "text": "dizer? Ah, foram várias as modalidades"
+        }
+      ]
+    },
+    {
+      "rank": 12,
+      "start": 4096.319,
+      "end": 4141.62,
+      "peak": 4132.9,
+      "score": 12.1,
+      "title": "né? Porque é todo dia você busca e por",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "vencer quando passar do outro lado. Então isso me motiva a querer ser melhor, fazer sempre melhor. É isso. >> E isso te dá uma segurança como artista? O que eu quero dizer é assim, Pericles, porque como você tem a sua festa, o seu projeto e você toca essa parada, então você sabe quantas pessoas você atrai, você sabe o preço do seu ticket, você sabe. Então eu acho que como artista você tem um um entendimento de quem sou eu nesse ramo. É isso que você tá dizendo? >> Sim, sim. O artista entende o seu tamanho, mas é é não tem nada garantido, né? Porque é todo dia você busca e por exemplo patrocínios diferentes, parceiros diferentes, né? Eh, essa turnê",
+      "peak_text": "né? Porque é todo dia você busca e por",
+      "clip_file": "clips/clip-012.mp4",
+      "frame_file": "frames/clip-012.jpg",
+      "caption_segments": [
+        {
+          "start": 4097.319,
+          "end": 4102.359,
+          "text": "vencer quando passar do outro lado."
+        },
+        {
+          "start": 4099.279,
+          "end": 4104.1990000000005,
+          "text": "Então isso me motiva a querer ser"
+        },
+        {
+          "start": 4102.359,
+          "end": 4106.0,
+          "text": "melhor, fazer sempre melhor. É isso."
+        },
+        {
+          "start": 4104.199,
+          "end": 4107.639999999999,
+          "text": ">> E isso te dá uma segurança como artista?"
+        },
+        {
+          "start": 4106.0,
+          "end": 4110.12,
+          "text": "O que eu quero dizer é assim, Pericles,"
+        },
+        {
+          "start": 4107.64,
+          "end": 4112.04,
+          "text": "porque como você tem a sua festa, o seu"
+        },
+        {
+          "start": 4110.12,
+          "end": 4115.88,
+          "text": "projeto e você toca essa parada, então"
+        },
+        {
+          "start": 4112.04,
+          "end": 4118.08,
+          "text": "você sabe quantas pessoas você atrai,"
+        },
+        {
+          "start": 4115.88,
+          "end": 4119.719,
+          "text": "você sabe o preço do seu ticket, você"
+        },
+        {
+          "start": 4118.08,
+          "end": 4122.6,
+          "text": "sabe. Então eu acho que como artista"
+        },
+        {
+          "start": 4119.719,
+          "end": 4124.6,
+          "text": "você tem um um entendimento de quem sou"
+        },
+        {
+          "start": 4122.6,
+          "end": 4125.0,
+          "text": "eu nesse ramo. É isso que você tá"
+        },
+        {
+          "start": 4124.6,
+          "end": 4126.679,
+          "text": "dizendo?"
+        },
+        {
+          "start": 4125.0,
+          "end": 4130.64,
+          "text": ">> Sim, sim. O artista entende o seu"
+        },
+        {
+          "start": 4126.679,
+          "end": 4133.359,
+          "text": "tamanho, mas é é não tem nada garantido,"
+        },
+        {
+          "start": 4130.64,
+          "end": 4135.159000000001,
+          "text": "né? Porque é todo dia você busca e por"
+        },
+        {
+          "start": 4133.359,
+          "end": 4138.279,
+          "text": "exemplo patrocínios diferentes,"
+        },
+        {
+          "start": 4135.159,
+          "end": 4140.12,
+          "text": "parceiros diferentes, né? Eh, essa turnê"
+        }
+      ]
+    },
+    {
+      "rank": 13,
+      "start": 5078.119,
+      "end": 5122.9800000000005,
+      "peak": 5115.78,
+      "score": 12.16,
+      "title": ">> Começa por ela. Como que é isso? Porque",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "que eu tava deixando de querer buscar novidades, deixando de querer criar. >> A gente fica ruim de cabeça, >> né? A gente fica, fica mesmo, né? E a Maria trouxe vida para todos nós, não só para mim, né? Ela é a filhada do meu compadre Isaías. Pô, o Isaías é outro cara hoje que ele é padrinho da Maria. >> Ela alegrou a casa, trouxe um brilho. >> Alou, bicho. Ela trouxe brilho para todos nós, todas as famílias que se formaram. >> Por conta dela que você tá no mundo Bita. >> Por causa dela. Por causa dela. A gente tá no mundo B. >> Começa por ela. Como que é isso? Porque quando eu te vi eh no Mundo Bit ali",
+      "peak_text": ">> Começa por ela. Como que é isso? Porque",
+      "clip_file": "clips/clip-013.mp4",
+      "frame_file": "frames/clip-013.jpg",
+      "caption_segments": [
+        {
+          "start": 5079.119,
+          "end": 5083.88,
+          "text": "que eu tava deixando de querer buscar"
+        },
+        {
+          "start": 5080.84,
+          "end": 5085.0,
+          "text": "novidades, deixando de querer criar."
+        },
+        {
+          "start": 5083.88,
+          "end": 5088.1990000000005,
+          "text": ">> A gente fica ruim de cabeça,"
+        },
+        {
+          "start": 5085.0,
+          "end": 5090.639,
+          "text": ">> né? A gente fica, fica mesmo, né? E a"
+        },
+        {
+          "start": 5088.199,
+          "end": 5093.32,
+          "text": "Maria trouxe vida para todos nós, não só"
+        },
+        {
+          "start": 5090.639,
+          "end": 5095.28,
+          "text": "para mim, né? Ela é a filhada do meu"
+        },
+        {
+          "start": 5093.32,
+          "end": 5098.4,
+          "text": "compadre Isaías. Pô, o Isaías é outro"
+        },
+        {
+          "start": 5095.28,
+          "end": 5100.5199999999995,
+          "text": "cara hoje que ele é padrinho da Maria."
+        },
+        {
+          "start": 5098.4,
+          "end": 5102.32,
+          "text": ">> Ela alegrou a casa, trouxe um brilho."
+        },
+        {
+          "start": 5100.52,
+          "end": 5104.6,
+          "text": ">> Alou, bicho. Ela trouxe brilho para"
+        },
+        {
+          "start": 5102.32,
+          "end": 5105.199,
+          "text": "todos nós, todas as famílias que se"
+        },
+        {
+          "start": 5104.6,
+          "end": 5107.0,
+          "text": "formaram."
+        },
+        {
+          "start": 5105.199,
+          "end": 5108.239,
+          "text": ">> Por conta dela que você tá no mundo"
+        },
+        {
+          "start": 5107.0,
+          "end": 5111.36,
+          "text": "Bita."
+        },
+        {
+          "start": 5108.239,
+          "end": 5112.839999999999,
+          "text": ">> Por causa dela. Por causa dela. A gente"
+        },
+        {
+          "start": 5111.36,
+          "end": 5115.5199999999995,
+          "text": "tá no mundo B."
+        },
+        {
+          "start": 5112.84,
+          "end": 5118.719,
+          "text": ">> Começa por ela. Como que é isso? Porque"
+        },
+        {
+          "start": 5115.52,
+          "end": 5121.4800000000005,
+          "text": "quando eu te vi eh no Mundo Bit ali"
+        }
+      ]
+    },
+    {
+      "rank": 14,
+      "start": 5633.76,
+      "end": 5688.58,
+      "peak": 5666.48,
+      "score": 11.94,
+      "title": ">> muito louco, né? Porque música tem",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": ">> Ah, falta de [ __ ] >> Não é, velho? >> Nossa, faz falta. Vocês fazem falta. >> O o o bens a Deus regravou que faz falta. O Magrão ele, [ __ ] >> amassou. [ __ ] vocês vão ouvir >> uma música do Tiaguinho. >> Uma música do Tiaguinho, melhor eu i. >> É do homem, né? >> É dele e do Dan. Tem algumas que são dele que é uma patada, né? Feito para durar. É >> muito louco, né? Porque música tem endereço. O Tiaguinho é um ótimo intérprete, cantor, mas ele deve ter falado assim: \"Tá, mas esse aqui que eu escrevi é do Pis.\" >> É, ele tem isso. Ele manda para mim fala: \"Não, essa não vou cantar não, essa é você\". >> Que [ __ ] isso, né, mano? >> [ __ ] E a gente fez alguma uma outro dia juntos pelo WhatsApp e aí ele perguntou: \"Se vai gravar?\" Eu falei: \"Não, essa",
+      "peak_text": ">> muito louco, né? Porque música tem",
+      "clip_file": "clips/clip-014.mp4",
+      "frame_file": "frames/clip-014.jpg",
+      "caption_segments": [
+        {
+          "start": 5634.76,
+          "end": 5636.52,
+          "text": ">> Ah, falta de [ __ ]"
+        },
+        {
+          "start": 5635.84,
+          "end": 5638.0,
+          "text": ">> Não é, velho?"
+        },
+        {
+          "start": 5636.52,
+          "end": 5641.84,
+          "text": ">> Nossa, faz falta. Vocês fazem falta."
+        },
+        {
+          "start": 5638.0,
+          "end": 5645.0,
+          "text": ">> O o o bens a Deus regravou que faz"
+        },
+        {
+          "start": 5641.84,
+          "end": 5648.400000000001,
+          "text": "falta. O Magrão ele, [ __ ]"
+        },
+        {
+          "start": 5645.0,
+          "end": 5650.159,
+          "text": ">> amassou. [ __ ] vocês vão ouvir"
+        },
+        {
+          "start": 5648.4,
+          "end": 5653.799999999999,
+          "text": ">> uma música do Tiaguinho."
+        },
+        {
+          "start": 5650.159,
+          "end": 5653.799999999999,
+          "text": ">> Uma música do Tiaguinho,"
+        },
+        {
+          "start": 5653.84,
+          "end": 5657.400000000001,
+          "text": "melhor eu i."
+        },
+        {
+          "start": 5656.44,
+          "end": 5660.159,
+          "text": ">> É do homem, né?"
+        },
+        {
+          "start": 5657.4,
+          "end": 5663.239,
+          "text": ">> É dele e do Dan. Tem algumas que são"
+        },
+        {
+          "start": 5660.159,
+          "end": 5665.0,
+          "text": "dele que é uma patada, né? Feito para"
+        },
+        {
+          "start": 5663.239,
+          "end": 5666.32,
+          "text": "durar. É"
+        },
+        {
+          "start": 5665.0,
+          "end": 5667.96,
+          "text": ">> muito louco, né? Porque música tem"
+        },
+        {
+          "start": 5666.32,
+          "end": 5669.759999999999,
+          "text": "endereço. O Tiaguinho é um ótimo"
+        },
+        {
+          "start": 5667.96,
+          "end": 5671.44,
+          "text": "intérprete, cantor, mas ele deve ter"
+        },
+        {
+          "start": 5669.76,
+          "end": 5672.719,
+          "text": "falado assim: \"Tá, mas esse aqui que eu"
+        },
+        {
+          "start": 5671.44,
+          "end": 5674.799999999999,
+          "text": "escrevi é do Pis.\""
+        },
+        {
+          "start": 5672.719,
+          "end": 5675.84,
+          "text": ">> É, ele tem isso. Ele manda para mim"
+        },
+        {
+          "start": 5674.8,
+          "end": 5676.8,
+          "text": "fala: \"Não, essa não vou cantar não,"
+        },
+        {
+          "start": 5675.84,
+          "end": 5677.96,
+          "text": "essa é você\"."
+        },
+        {
+          "start": 5676.8,
+          "end": 5680.56,
+          "text": ">> Que [ __ ] isso, né, mano?"
+        },
+        {
+          "start": 5677.96,
+          "end": 5683.679,
+          "text": ">> [ __ ] E a gente fez alguma uma outro dia"
+        },
+        {
+          "start": 5680.56,
+          "end": 5684.96,
+          "text": "juntos pelo WhatsApp e aí ele perguntou:"
+        },
+        {
+          "start": 5683.679,
+          "end": 5687.08,
+          "text": "\"Se vai gravar?\" Eu falei: \"Não, essa"
+        }
+      ]
+    },
+    {
+      "rank": 15,
+      "start": 6865.04,
+      "end": 6911.699,
+      "peak": 6888.3,
+      "score": 12.28,
+      "title": "aniversário ainda, né? É isso, né? Tá",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "pro churrasqueiro. Ele é o ele é o mais [ __ ] do rolê. >> Ó, completamente emocionado, termina esse episódio. Espero que vocês tenham gostado. Se gostou, dá o like, se inscreva no canal, siga o Perériclis e todas as redes sociais vão estar aí na descrição. Vá o show de encerramento da turnê do pagode do Periclã lá no Rio de Janeiro. Que dia, meu irmão? >> 28 de setembro. >> 28 de setembro. No dia do nosso aniversário ainda, né? É isso, né? Tá maluco, [ __ ] Vamos embora então. É isso. >> Bora comemorar lá todo mundo. >> Nossa, meu Deus do céu. Faz tempo que eu não fico doido. Ó, espero que vocês tenham gostado. Dá o like, se inscreve no canal, siga o Peréricas redes sociais e agora pode ir pra visita na Love Funk com mau mau, certo? E é isso, Jovem. >> É isso mesmo. Tamamo junto. Tem última coisa para falar alguma coisa?",
+      "peak_text": "aniversário ainda, né? É isso, né? Tá",
+      "clip_file": "clips/clip-015.mp4",
+      "frame_file": "frames/clip-015.jpg",
+      "caption_segments": [
+        {
+          "start": 6866.04,
+          "end": 6868.84,
+          "text": "pro churrasqueiro. Ele é o ele é o mais"
+        },
+        {
+          "start": 6867.96,
+          "end": 6870.8,
+          "text": "[ __ ] do rolê."
+        },
+        {
+          "start": 6868.84,
+          "end": 6872.360000000001,
+          "text": ">> Ó, completamente emocionado, termina"
+        },
+        {
+          "start": 6870.8,
+          "end": 6873.679,
+          "text": "esse episódio. Espero que vocês tenham"
+        },
+        {
+          "start": 6872.36,
+          "end": 6875.799999999999,
+          "text": "gostado. Se gostou, dá o like, se"
+        },
+        {
+          "start": 6873.679,
+          "end": 6876.96,
+          "text": "inscreva no canal, siga o Perériclis e"
+        },
+        {
+          "start": 6875.8,
+          "end": 6879.719,
+          "text": "todas as redes sociais vão estar aí na"
+        },
+        {
+          "start": 6876.96,
+          "end": 6882.2390000000005,
+          "text": "descrição. Vá o show de encerramento da"
+        },
+        {
+          "start": 6879.719,
+          "end": 6883.599,
+          "text": "turnê do pagode do Periclã lá no Rio de"
+        },
+        {
+          "start": 6882.239,
+          "end": 6884.678999999999,
+          "text": "Janeiro. Que dia, meu irmão?"
+        },
+        {
+          "start": 6883.599,
+          "end": 6886.1990000000005,
+          "text": ">> 28 de setembro."
+        },
+        {
+          "start": 6884.679,
+          "end": 6888.8,
+          "text": ">> 28 de setembro. No dia do nosso"
+        },
+        {
+          "start": 6886.199,
+          "end": 6890.4,
+          "text": "aniversário ainda, né? É isso, né? Tá"
+        },
+        {
+          "start": 6888.8,
+          "end": 6890.599,
+          "text": "maluco, [ __ ] Vamos embora então. É"
+        },
+        {
+          "start": 6890.4,
+          "end": 6891.92,
+          "text": "isso."
+        },
+        {
+          "start": 6890.599,
+          "end": 6894.4800000000005,
+          "text": ">> Bora comemorar lá todo mundo."
+        },
+        {
+          "start": 6891.92,
+          "end": 6896.52,
+          "text": ">> Nossa, meu Deus do céu. Faz tempo que eu"
+        },
+        {
+          "start": 6894.48,
+          "end": 6898.32,
+          "text": "não fico doido. Ó, espero que vocês"
+        },
+        {
+          "start": 6896.52,
+          "end": 6900.96,
+          "text": "tenham gostado. Dá o like, se inscreve"
+        },
+        {
+          "start": 6898.32,
+          "end": 6903.48,
+          "text": "no canal, siga o Peréricas redes sociais"
+        },
+        {
+          "start": 6900.96,
+          "end": 6905.44,
+          "text": "e agora pode ir pra visita na Love Funk"
+        },
+        {
+          "start": 6903.48,
+          "end": 6907.4,
+          "text": "com mau mau, certo? E é isso, Jovem."
+        },
+        {
+          "start": 6905.44,
+          "end": 6908.759999999999,
+          "text": ">> É isso mesmo. Tamamo junto. Tem última"
+        },
+        {
+          "start": 6907.4,
+          "end": 6910.199,
+          "text": "coisa para falar alguma coisa?"
+        }
+      ]
+    }
+  ]
+}

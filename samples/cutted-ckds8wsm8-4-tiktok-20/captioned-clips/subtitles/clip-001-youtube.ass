@@ -1,0 +1,28 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,54,&H00FFFFFF,&H0000FFFF,&H00000000,&H99000000,-1,0,0,0,100,100,0,0,1,5,0,2,80,80,95,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:02.22,Default,,0,0,0,,né? Você tem que colocar\Naquele óculos de imersão, né? É
+Dialogue: 0,0:00:02.22,0:00:04.45,Default,,0,0,0,,muito pesado, ainda não tá\Nalgo tão confortável, você
+Dialogue: 0,0:00:04.45,0:00:06.68,Default,,0,0,0,,precisa se adaptar muito\Npara usar, mas ainda tem usos
+Dialogue: 0,0:00:06.68,0:00:08.90,Default,,0,0,0,,assim, nichos específicos,\Nfunciona bem. Tem, tem. Mas
+Dialogue: 0,0:00:08.90,0:00:11.12,Default,,0,0,0,,então, porque eu acho que\Nagora porque o negócio é o
+Dialogue: 0,0:00:11.12,0:00:13.35,Default,,0,0,0,,seguinte, né? Todo mundo\Nfalava assim: "Ah, o
+Dialogue: 0,0:00:13.35,0:00:15.58,Default,,0,0,0,,metaverso". Aí todo mundo\Nainda falava: "Não, mas o
+Dialogue: 0,0:00:15.58,0:00:17.80,Default,,0,0,0,,Marcos Queberg ainda tá\Ninvestindo bilhões". Só que
+Dialogue: 0,0:00:17.80,0:00:20.02,Default,,0,0,0,,agora ele cortou, né? Cortou\Nmuito. Cortou muito. Agora
+Dialogue: 0,0:00:20.02,0:00:22.25,Default,,0,0,0,,ele pegou e distribuiu a\Ngalera da da do metaverso em
+Dialogue: 0,0:00:22.25,0:00:24.48,Default,,0,0,0,,outras áreas, né? Em outras\Náreas. E principalmente
+Dialogue: 0,0:00:24.48,0:00:26.70,Default,,0,0,0,,agora em em ai que não tem\Ncomo, né? Então assim, ai
+Dialogue: 0,0:00:26.70,0:00:28.92,Default,,0,0,0,,continua sendo foco. Será\Nque agora então acabou mesmo
+Dialogue: 0,0:00:28.92,0:00:31.15,Default,,0,0,0,,ou não? Não, eu não acredito\Nque volta. Eu acho que
+Dialogue: 0,0:00:31.15,0:00:33.38,Default,,0,0,0,,volta. Eu acho que volta. É\Nbasicamente, ó, para para
+Dialogue: 0,0:00:33.38,0:00:35.60,Default,,0,0,0,,pensar,

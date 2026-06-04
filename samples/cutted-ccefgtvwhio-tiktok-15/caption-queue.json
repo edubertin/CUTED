@@ -1,0 +1,784 @@
+{
+  "caption_queue": [
+    {
+      "rank": 5,
+      "platform": "tiktok",
+      "platform_label": "TikTok",
+      "width": 1080,
+      "height": 1920,
+      "clip_file": "clips/clip-005.mp4",
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 11.081000000000003,
+      "adjusted_start": 976.399,
+      "adjusted_end": 1017.699,
+      "adjusted_duration": 41.3,
+      "title": "levar o dinheiro para esse lugar, porque",
+      "peak_text": "levar o dinheiro para esse lugar, porque",
+      "transcript": "poder ganhar um dinheiro e de também não tá na rua, tá fazendo cultura, sabe? tá podendo fazer um evento ali. Então eu acho que >> que isso abre eh espaço para outras outras empresas, outras outra galera, tipo um pode para pegar outras batalhas de outros estados e juntar. E a gente tá a fim de fazer. >> O que a gente quis fazer com isso é levar o dinheiro para esse lugar, porque a gente vende um da periferia, então a gente começa a conhecer um dinheiro desses patrocinadores que a gente fala: \"Nossa, diferente\". E a gente fala assim: \"Beleza, agora a gente tá com esses patrocinadores, então vamos pegar os nossos patrocinadores e levar pra batalha\". Isso aí. >> Então a chegamos. Então é isso que eu quero, sabe, peréx, mais dinheiro com a gente. É isso aí, pô. >> E que as marcas entendem que a batalha é um fenômeno que para eles chegarem. >> É, cara. Pô, isso é prosperidade. Isso é prosperidade. Porque você ganhar sozinho, não é? Quando você compartilha",
+      "caption_segments": [
+        {
+          "start": 977.399,
+          "end": 981.24,
+          "text": "poder ganhar um dinheiro e de também não"
+        },
+        {
+          "start": 979.319,
+          "end": 983.199,
+          "text": "tá na rua, tá fazendo cultura, sabe? tá"
+        },
+        {
+          "start": 981.24,
+          "end": 983.519,
+          "text": "podendo fazer um evento ali. Então eu"
+        },
+        {
+          "start": 983.199,
+          "end": 986.3599999999999,
+          "text": "acho que"
+        },
+        {
+          "start": 983.519,
+          "end": 988.279,
+          "text": ">> que isso abre eh espaço para outras"
+        },
+        {
+          "start": 986.36,
+          "end": 990.639,
+          "text": "outras empresas, outras outra galera,"
+        },
+        {
+          "start": 988.279,
+          "end": 992.759,
+          "text": "tipo um pode para pegar outras batalhas"
+        },
+        {
+          "start": 990.639,
+          "end": 993.24,
+          "text": "de outros estados e juntar. E a gente tá"
+        },
+        {
+          "start": 992.759,
+          "end": 995.0790000000001,
+          "text": "a fim de fazer."
+        },
+        {
+          "start": 993.24,
+          "end": 996.44,
+          "text": ">> O que a gente quis fazer com isso é"
+        },
+        {
+          "start": 995.079,
+          "end": 999.3599999999999,
+          "text": "levar o dinheiro para esse lugar, porque"
+        },
+        {
+          "start": 996.44,
+          "end": 1001.9200000000001,
+          "text": "a gente vende um da periferia, então a"
+        },
+        {
+          "start": 999.36,
+          "end": 1003.88,
+          "text": "gente começa a conhecer um dinheiro"
+        },
+        {
+          "start": 1001.92,
+          "end": 1005.88,
+          "text": "desses patrocinadores que a gente fala:"
+        },
+        {
+          "start": 1003.88,
+          "end": 1006.88,
+          "text": "\"Nossa, diferente\". E a gente fala"
+        },
+        {
+          "start": 1005.88,
+          "end": 1008.48,
+          "text": "assim: \"Beleza, agora a gente tá com"
+        },
+        {
+          "start": 1006.88,
+          "end": 1010.16,
+          "text": "esses patrocinadores, então vamos pegar"
+        },
+        {
+          "start": 1008.48,
+          "end": 1011.3190000000001,
+          "text": "os nossos patrocinadores e levar pra"
+        },
+        {
+          "start": 1010.16,
+          "end": 1013.48,
+          "text": "batalha\". Isso aí."
+        },
+        {
+          "start": 1011.319,
+          "end": 1015.079,
+          "text": ">> Então a chegamos. Então é isso que eu"
+        },
+        {
+          "start": 1013.48,
+          "end": 1016.36,
+          "text": "quero, sabe, peréx, mais dinheiro com a"
+        },
+        {
+          "start": 1015.079,
+          "end": 1018.279,
+          "text": "gente. É isso aí, pô."
+        },
+        {
+          "start": 1016.36,
+          "end": 1019.9590000000001,
+          "text": ">> E que as marcas entendem que a batalha é"
+        },
+        {
+          "start": 1018.279,
+          "end": 1022.24,
+          "text": "um fenômeno que para eles chegarem."
+        },
+        {
+          "start": 1019.959,
+          "end": 1023.6389999999999,
+          "text": ">> É, cara. Pô, isso é prosperidade. Isso é"
+        },
+        {
+          "start": 1022.24,
+          "end": 1025.6,
+          "text": "prosperidade. Porque você ganhar"
+        },
+        {
+          "start": 1023.639,
+          "end": 1027.28,
+          "text": "sozinho, não é? Quando você compartilha"
+        }
+      ],
+      "publish_metadata": {
+        "hashtags": []
+      }
+    },
+    {
+      "rank": 5,
+      "platform": "shorts",
+      "platform_label": "Shorts",
+      "width": 1080,
+      "height": 1920,
+      "clip_file": "clips/clip-005.mp4",
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 11.081000000000003,
+      "adjusted_start": 976.399,
+      "adjusted_end": 1017.699,
+      "adjusted_duration": 41.3,
+      "title": "levar o dinheiro para esse lugar, porque",
+      "peak_text": "levar o dinheiro para esse lugar, porque",
+      "transcript": "poder ganhar um dinheiro e de também não tá na rua, tá fazendo cultura, sabe? tá podendo fazer um evento ali. Então eu acho que >> que isso abre eh espaço para outras outras empresas, outras outra galera, tipo um pode para pegar outras batalhas de outros estados e juntar. E a gente tá a fim de fazer. >> O que a gente quis fazer com isso é levar o dinheiro para esse lugar, porque a gente vende um da periferia, então a gente começa a conhecer um dinheiro desses patrocinadores que a gente fala: \"Nossa, diferente\". E a gente fala assim: \"Beleza, agora a gente tá com esses patrocinadores, então vamos pegar os nossos patrocinadores e levar pra batalha\". Isso aí. >> Então a chegamos. Então é isso que eu quero, sabe, peréx, mais dinheiro com a gente. É isso aí, pô. >> E que as marcas entendem que a batalha é um fenômeno que para eles chegarem. >> É, cara. Pô, isso é prosperidade. Isso é prosperidade. Porque você ganhar sozinho, não é? Quando você compartilha",
+      "caption_segments": [
+        {
+          "start": 977.399,
+          "end": 981.24,
+          "text": "poder ganhar um dinheiro e de também não"
+        },
+        {
+          "start": 979.319,
+          "end": 983.199,
+          "text": "tá na rua, tá fazendo cultura, sabe? tá"
+        },
+        {
+          "start": 981.24,
+          "end": 983.519,
+          "text": "podendo fazer um evento ali. Então eu"
+        },
+        {
+          "start": 983.199,
+          "end": 986.3599999999999,
+          "text": "acho que"
+        },
+        {
+          "start": 983.519,
+          "end": 988.279,
+          "text": ">> que isso abre eh espaço para outras"
+        },
+        {
+          "start": 986.36,
+          "end": 990.639,
+          "text": "outras empresas, outras outra galera,"
+        },
+        {
+          "start": 988.279,
+          "end": 992.759,
+          "text": "tipo um pode para pegar outras batalhas"
+        },
+        {
+          "start": 990.639,
+          "end": 993.24,
+          "text": "de outros estados e juntar. E a gente tá"
+        },
+        {
+          "start": 992.759,
+          "end": 995.0790000000001,
+          "text": "a fim de fazer."
+        },
+        {
+          "start": 993.24,
+          "end": 996.44,
+          "text": ">> O que a gente quis fazer com isso é"
+        },
+        {
+          "start": 995.079,
+          "end": 999.3599999999999,
+          "text": "levar o dinheiro para esse lugar, porque"
+        },
+        {
+          "start": 996.44,
+          "end": 1001.9200000000001,
+          "text": "a gente vende um da periferia, então a"
+        },
+        {
+          "start": 999.36,
+          "end": 1003.88,
+          "text": "gente começa a conhecer um dinheiro"
+        },
+        {
+          "start": 1001.92,
+          "end": 1005.88,
+          "text": "desses patrocinadores que a gente fala:"
+        },
+        {
+          "start": 1003.88,
+          "end": 1006.88,
+          "text": "\"Nossa, diferente\". E a gente fala"
+        },
+        {
+          "start": 1005.88,
+          "end": 1008.48,
+          "text": "assim: \"Beleza, agora a gente tá com"
+        },
+        {
+          "start": 1006.88,
+          "end": 1010.16,
+          "text": "esses patrocinadores, então vamos pegar"
+        },
+        {
+          "start": 1008.48,
+          "end": 1011.3190000000001,
+          "text": "os nossos patrocinadores e levar pra"
+        },
+        {
+          "start": 1010.16,
+          "end": 1013.48,
+          "text": "batalha\". Isso aí."
+        },
+        {
+          "start": 1011.319,
+          "end": 1015.079,
+          "text": ">> Então a chegamos. Então é isso que eu"
+        },
+        {
+          "start": 1013.48,
+          "end": 1016.36,
+          "text": "quero, sabe, peréx, mais dinheiro com a"
+        },
+        {
+          "start": 1015.079,
+          "end": 1018.279,
+          "text": "gente. É isso aí, pô."
+        },
+        {
+          "start": 1016.36,
+          "end": 1019.9590000000001,
+          "text": ">> E que as marcas entendem que a batalha é"
+        },
+        {
+          "start": 1018.279,
+          "end": 1022.24,
+          "text": "um fenômeno que para eles chegarem."
+        },
+        {
+          "start": 1019.959,
+          "end": 1023.6389999999999,
+          "text": ">> É, cara. Pô, isso é prosperidade. Isso é"
+        },
+        {
+          "start": 1022.24,
+          "end": 1025.6,
+          "text": "prosperidade. Porque você ganhar"
+        },
+        {
+          "start": 1023.639,
+          "end": 1027.28,
+          "text": "sozinho, não é? Quando você compartilha"
+        }
+      ],
+      "publish_metadata": {
+        "hashtags": []
+      }
+    },
+    {
+      "rank": 5,
+      "platform": "instagram",
+      "platform_label": "Instagram",
+      "width": 1080,
+      "height": 1920,
+      "clip_file": "clips/clip-005.mp4",
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 11.081000000000003,
+      "adjusted_start": 976.399,
+      "adjusted_end": 1017.699,
+      "adjusted_duration": 41.3,
+      "title": "levar o dinheiro para esse lugar, porque",
+      "peak_text": "levar o dinheiro para esse lugar, porque",
+      "transcript": "poder ganhar um dinheiro e de também não tá na rua, tá fazendo cultura, sabe? tá podendo fazer um evento ali. Então eu acho que >> que isso abre eh espaço para outras outras empresas, outras outra galera, tipo um pode para pegar outras batalhas de outros estados e juntar. E a gente tá a fim de fazer. >> O que a gente quis fazer com isso é levar o dinheiro para esse lugar, porque a gente vende um da periferia, então a gente começa a conhecer um dinheiro desses patrocinadores que a gente fala: \"Nossa, diferente\". E a gente fala assim: \"Beleza, agora a gente tá com esses patrocinadores, então vamos pegar os nossos patrocinadores e levar pra batalha\". Isso aí. >> Então a chegamos. Então é isso que eu quero, sabe, peréx, mais dinheiro com a gente. É isso aí, pô. >> E que as marcas entendem que a batalha é um fenômeno que para eles chegarem. >> É, cara. Pô, isso é prosperidade. Isso é prosperidade. Porque você ganhar sozinho, não é? Quando você compartilha",
+      "caption_segments": [
+        {
+          "start": 977.399,
+          "end": 981.24,
+          "text": "poder ganhar um dinheiro e de também não"
+        },
+        {
+          "start": 979.319,
+          "end": 983.199,
+          "text": "tá na rua, tá fazendo cultura, sabe? tá"
+        },
+        {
+          "start": 981.24,
+          "end": 983.519,
+          "text": "podendo fazer um evento ali. Então eu"
+        },
+        {
+          "start": 983.199,
+          "end": 986.3599999999999,
+          "text": "acho que"
+        },
+        {
+          "start": 983.519,
+          "end": 988.279,
+          "text": ">> que isso abre eh espaço para outras"
+        },
+        {
+          "start": 986.36,
+          "end": 990.639,
+          "text": "outras empresas, outras outra galera,"
+        },
+        {
+          "start": 988.279,
+          "end": 992.759,
+          "text": "tipo um pode para pegar outras batalhas"
+        },
+        {
+          "start": 990.639,
+          "end": 993.24,
+          "text": "de outros estados e juntar. E a gente tá"
+        },
+        {
+          "start": 992.759,
+          "end": 995.0790000000001,
+          "text": "a fim de fazer."
+        },
+        {
+          "start": 993.24,
+          "end": 996.44,
+          "text": ">> O que a gente quis fazer com isso é"
+        },
+        {
+          "start": 995.079,
+          "end": 999.3599999999999,
+          "text": "levar o dinheiro para esse lugar, porque"
+        },
+        {
+          "start": 996.44,
+          "end": 1001.9200000000001,
+          "text": "a gente vende um da periferia, então a"
+        },
+        {
+          "start": 999.36,
+          "end": 1003.88,
+          "text": "gente começa a conhecer um dinheiro"
+        },
+        {
+          "start": 1001.92,
+          "end": 1005.88,
+          "text": "desses patrocinadores que a gente fala:"
+        },
+        {
+          "start": 1003.88,
+          "end": 1006.88,
+          "text": "\"Nossa, diferente\". E a gente fala"
+        },
+        {
+          "start": 1005.88,
+          "end": 1008.48,
+          "text": "assim: \"Beleza, agora a gente tá com"
+        },
+        {
+          "start": 1006.88,
+          "end": 1010.16,
+          "text": "esses patrocinadores, então vamos pegar"
+        },
+        {
+          "start": 1008.48,
+          "end": 1011.3190000000001,
+          "text": "os nossos patrocinadores e levar pra"
+        },
+        {
+          "start": 1010.16,
+          "end": 1013.48,
+          "text": "batalha\". Isso aí."
+        },
+        {
+          "start": 1011.319,
+          "end": 1015.079,
+          "text": ">> Então a chegamos. Então é isso que eu"
+        },
+        {
+          "start": 1013.48,
+          "end": 1016.36,
+          "text": "quero, sabe, peréx, mais dinheiro com a"
+        },
+        {
+          "start": 1015.079,
+          "end": 1018.279,
+          "text": "gente. É isso aí, pô."
+        },
+        {
+          "start": 1016.36,
+          "end": 1019.9590000000001,
+          "text": ">> E que as marcas entendem que a batalha é"
+        },
+        {
+          "start": 1018.279,
+          "end": 1022.24,
+          "text": "um fenômeno que para eles chegarem."
+        },
+        {
+          "start": 1019.959,
+          "end": 1023.6389999999999,
+          "text": ">> É, cara. Pô, isso é prosperidade. Isso é"
+        },
+        {
+          "start": 1022.24,
+          "end": 1025.6,
+          "text": "prosperidade. Porque você ganhar"
+        },
+        {
+          "start": 1023.639,
+          "end": 1027.28,
+          "text": "sozinho, não é? Quando você compartilha"
+        }
+      ],
+      "publish_metadata": {
+        "hashtags": []
+      }
+    },
+    {
+      "rank": 5,
+      "platform": "facebook",
+      "platform_label": "Facebook",
+      "width": 1080,
+      "height": 1350,
+      "clip_file": "clips/clip-005.mp4",
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 11.081000000000003,
+      "adjusted_start": 976.399,
+      "adjusted_end": 1017.699,
+      "adjusted_duration": 41.3,
+      "title": "levar o dinheiro para esse lugar, porque",
+      "peak_text": "levar o dinheiro para esse lugar, porque",
+      "transcript": "poder ganhar um dinheiro e de também não tá na rua, tá fazendo cultura, sabe? tá podendo fazer um evento ali. Então eu acho que >> que isso abre eh espaço para outras outras empresas, outras outra galera, tipo um pode para pegar outras batalhas de outros estados e juntar. E a gente tá a fim de fazer. >> O que a gente quis fazer com isso é levar o dinheiro para esse lugar, porque a gente vende um da periferia, então a gente começa a conhecer um dinheiro desses patrocinadores que a gente fala: \"Nossa, diferente\". E a gente fala assim: \"Beleza, agora a gente tá com esses patrocinadores, então vamos pegar os nossos patrocinadores e levar pra batalha\". Isso aí. >> Então a chegamos. Então é isso que eu quero, sabe, peréx, mais dinheiro com a gente. É isso aí, pô. >> E que as marcas entendem que a batalha é um fenômeno que para eles chegarem. >> É, cara. Pô, isso é prosperidade. Isso é prosperidade. Porque você ganhar sozinho, não é? Quando você compartilha",
+      "caption_segments": [
+        {
+          "start": 977.399,
+          "end": 981.24,
+          "text": "poder ganhar um dinheiro e de também não"
+        },
+        {
+          "start": 979.319,
+          "end": 983.199,
+          "text": "tá na rua, tá fazendo cultura, sabe? tá"
+        },
+        {
+          "start": 981.24,
+          "end": 983.519,
+          "text": "podendo fazer um evento ali. Então eu"
+        },
+        {
+          "start": 983.199,
+          "end": 986.3599999999999,
+          "text": "acho que"
+        },
+        {
+          "start": 983.519,
+          "end": 988.279,
+          "text": ">> que isso abre eh espaço para outras"
+        },
+        {
+          "start": 986.36,
+          "end": 990.639,
+          "text": "outras empresas, outras outra galera,"
+        },
+        {
+          "start": 988.279,
+          "end": 992.759,
+          "text": "tipo um pode para pegar outras batalhas"
+        },
+        {
+          "start": 990.639,
+          "end": 993.24,
+          "text": "de outros estados e juntar. E a gente tá"
+        },
+        {
+          "start": 992.759,
+          "end": 995.0790000000001,
+          "text": "a fim de fazer."
+        },
+        {
+          "start": 993.24,
+          "end": 996.44,
+          "text": ">> O que a gente quis fazer com isso é"
+        },
+        {
+          "start": 995.079,
+          "end": 999.3599999999999,
+          "text": "levar o dinheiro para esse lugar, porque"
+        },
+        {
+          "start": 996.44,
+          "end": 1001.9200000000001,
+          "text": "a gente vende um da periferia, então a"
+        },
+        {
+          "start": 999.36,
+          "end": 1003.88,
+          "text": "gente começa a conhecer um dinheiro"
+        },
+        {
+          "start": 1001.92,
+          "end": 1005.88,
+          "text": "desses patrocinadores que a gente fala:"
+        },
+        {
+          "start": 1003.88,
+          "end": 1006.88,
+          "text": "\"Nossa, diferente\". E a gente fala"
+        },
+        {
+          "start": 1005.88,
+          "end": 1008.48,
+          "text": "assim: \"Beleza, agora a gente tá com"
+        },
+        {
+          "start": 1006.88,
+          "end": 1010.16,
+          "text": "esses patrocinadores, então vamos pegar"
+        },
+        {
+          "start": 1008.48,
+          "end": 1011.3190000000001,
+          "text": "os nossos patrocinadores e levar pra"
+        },
+        {
+          "start": 1010.16,
+          "end": 1013.48,
+          "text": "batalha\". Isso aí."
+        },
+        {
+          "start": 1011.319,
+          "end": 1015.079,
+          "text": ">> Então a chegamos. Então é isso que eu"
+        },
+        {
+          "start": 1013.48,
+          "end": 1016.36,
+          "text": "quero, sabe, peréx, mais dinheiro com a"
+        },
+        {
+          "start": 1015.079,
+          "end": 1018.279,
+          "text": "gente. É isso aí, pô."
+        },
+        {
+          "start": 1016.36,
+          "end": 1019.9590000000001,
+          "text": ">> E que as marcas entendem que a batalha é"
+        },
+        {
+          "start": 1018.279,
+          "end": 1022.24,
+          "text": "um fenômeno que para eles chegarem."
+        },
+        {
+          "start": 1019.959,
+          "end": 1023.6389999999999,
+          "text": ">> É, cara. Pô, isso é prosperidade. Isso é"
+        },
+        {
+          "start": 1022.24,
+          "end": 1025.6,
+          "text": "prosperidade. Porque você ganhar"
+        },
+        {
+          "start": 1023.639,
+          "end": 1027.28,
+          "text": "sozinho, não é? Quando você compartilha"
+        }
+      ],
+      "publish_metadata": {
+        "hashtags": []
+      }
+    },
+    {
+      "rank": 5,
+      "platform": "youtube",
+      "platform_label": "YouTube",
+      "width": 1920,
+      "height": 1080,
+      "clip_file": "clips/clip-005.mp4",
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 11.081000000000003,
+      "adjusted_start": 976.399,
+      "adjusted_end": 1017.699,
+      "adjusted_duration": 41.3,
+      "title": "levar o dinheiro para esse lugar, porque",
+      "peak_text": "levar o dinheiro para esse lugar, porque",
+      "transcript": "poder ganhar um dinheiro e de também não tá na rua, tá fazendo cultura, sabe? tá podendo fazer um evento ali. Então eu acho que >> que isso abre eh espaço para outras outras empresas, outras outra galera, tipo um pode para pegar outras batalhas de outros estados e juntar. E a gente tá a fim de fazer. >> O que a gente quis fazer com isso é levar o dinheiro para esse lugar, porque a gente vende um da periferia, então a gente começa a conhecer um dinheiro desses patrocinadores que a gente fala: \"Nossa, diferente\". E a gente fala assim: \"Beleza, agora a gente tá com esses patrocinadores, então vamos pegar os nossos patrocinadores e levar pra batalha\". Isso aí. >> Então a chegamos. Então é isso que eu quero, sabe, peréx, mais dinheiro com a gente. É isso aí, pô. >> E que as marcas entendem que a batalha é um fenômeno que para eles chegarem. >> É, cara. Pô, isso é prosperidade. Isso é prosperidade. Porque você ganhar sozinho, não é? Quando você compartilha",
+      "caption_segments": [
+        {
+          "start": 977.399,
+          "end": 981.24,
+          "text": "poder ganhar um dinheiro e de também não"
+        },
+        {
+          "start": 979.319,
+          "end": 983.199,
+          "text": "tá na rua, tá fazendo cultura, sabe? tá"
+        },
+        {
+          "start": 981.24,
+          "end": 983.519,
+          "text": "podendo fazer um evento ali. Então eu"
+        },
+        {
+          "start": 983.199,
+          "end": 986.3599999999999,
+          "text": "acho que"
+        },
+        {
+          "start": 983.519,
+          "end": 988.279,
+          "text": ">> que isso abre eh espaço para outras"
+        },
+        {
+          "start": 986.36,
+          "end": 990.639,
+          "text": "outras empresas, outras outra galera,"
+        },
+        {
+          "start": 988.279,
+          "end": 992.759,
+          "text": "tipo um pode para pegar outras batalhas"
+        },
+        {
+          "start": 990.639,
+          "end": 993.24,
+          "text": "de outros estados e juntar. E a gente tá"
+        },
+        {
+          "start": 992.759,
+          "end": 995.0790000000001,
+          "text": "a fim de fazer."
+        },
+        {
+          "start": 993.24,
+          "end": 996.44,
+          "text": ">> O que a gente quis fazer com isso é"
+        },
+        {
+          "start": 995.079,
+          "end": 999.3599999999999,
+          "text": "levar o dinheiro para esse lugar, porque"
+        },
+        {
+          "start": 996.44,
+          "end": 1001.9200000000001,
+          "text": "a gente vende um da periferia, então a"
+        },
+        {
+          "start": 999.36,
+          "end": 1003.88,
+          "text": "gente começa a conhecer um dinheiro"
+        },
+        {
+          "start": 1001.92,
+          "end": 1005.88,
+          "text": "desses patrocinadores que a gente fala:"
+        },
+        {
+          "start": 1003.88,
+          "end": 1006.88,
+          "text": "\"Nossa, diferente\". E a gente fala"
+        },
+        {
+          "start": 1005.88,
+          "end": 1008.48,
+          "text": "assim: \"Beleza, agora a gente tá com"
+        },
+        {
+          "start": 1006.88,
+          "end": 1010.16,
+          "text": "esses patrocinadores, então vamos pegar"
+        },
+        {
+          "start": 1008.48,
+          "end": 1011.3190000000001,
+          "text": "os nossos patrocinadores e levar pra"
+        },
+        {
+          "start": 1010.16,
+          "end": 1013.48,
+          "text": "batalha\". Isso aí."
+        },
+        {
+          "start": 1011.319,
+          "end": 1015.079,
+          "text": ">> Então a chegamos. Então é isso que eu"
+        },
+        {
+          "start": 1013.48,
+          "end": 1016.36,
+          "text": "quero, sabe, peréx, mais dinheiro com a"
+        },
+        {
+          "start": 1015.079,
+          "end": 1018.279,
+          "text": "gente. É isso aí, pô."
+        },
+        {
+          "start": 1016.36,
+          "end": 1019.9590000000001,
+          "text": ">> E que as marcas entendem que a batalha é"
+        },
+        {
+          "start": 1018.279,
+          "end": 1022.24,
+          "text": "um fenômeno que para eles chegarem."
+        },
+        {
+          "start": 1019.959,
+          "end": 1023.6389999999999,
+          "text": ">> É, cara. Pô, isso é prosperidade. Isso é"
+        },
+        {
+          "start": 1022.24,
+          "end": 1025.6,
+          "text": "prosperidade. Porque você ganhar"
+        },
+        {
+          "start": 1023.639,
+          "end": 1027.28,
+          "text": "sozinho, não é? Quando você compartilha"
+        }
+      ],
+      "publish_metadata": {
+        "hashtags": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "source_caption_queue": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-yhjy0mzdwmg-tiktok-10\\caption-queue.json",
+  "captioned": [
+    {
+      "rank": 1,
+      "platform": "youtube",
+      "label": "YouTube",
+      "width": 1920,
+      "height": 1080,
+      "file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-yhjy0mzdwmg-tiktok-10\\captioned-clips\\clip-001-youtube-captioned.mp4",
+      "subtitle_file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-yhjy0mzdwmg-tiktok-10\\captioned-clips\\subtitles\\clip-001-youtube.ass",
+      "adjusted_start": 231.12,
+      "adjusted_end": 276.18,
+      "adjusted_duration": 45.06,
+      "publish_metadata": {
+        "hashtags": []
+      }
+    },
+    {
+      "rank": 3,
+      "platform": "youtube",
+      "label": "YouTube",
+      "width": 1920,
+      "height": 1080,
+      "file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-yhjy0mzdwmg-tiktok-10\\captioned-clips\\clip-003-youtube-captioned.mp4",
+      "subtitle_file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-yhjy0mzdwmg-tiktok-10\\captioned-clips\\subtitles\\clip-003-youtube.ass",
+      "adjusted_start": 504.24,
+      "adjusted_end": 536.94,
+      "adjusted_duration": 32.7,
+      "publish_metadata": {
+        "hashtags": []
+      }
+    }
+  ]
+}
