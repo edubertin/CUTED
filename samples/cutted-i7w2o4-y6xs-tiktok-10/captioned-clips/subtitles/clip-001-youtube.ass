@@ -1,0 +1,48 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,54,&H00FFFFFF,&H0000FFFF,&H00000000,&H99000000,-1,0,0,0,100,100,0,0,1,5,0,2,80,80,95,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:03.48,Default,,0,0,0,,não? E tem que e tem que ser\Ntem que tem
+Dialogue: 0,0:00:02.60,0:00:04.60,Default,,0,0,0,,que ser meio maluco, não dá.
+Dialogue: 0,0:00:03.48,0:00:06.04,Default,,0,0,0,,Tem que ter um parafuso a\Nmenos.
+Dialogue: 0,0:00:04.60,0:00:07.60,Default,,0,0,0,,Com certeza, cara. Não dá.
+Dialogue: 0,0:00:06.04,0:00:09.40,Default,,0,0,0,,Que que você acha? Nós temos\Num amigo
+Dialogue: 0,0:00:07.60,0:00:09.96,Default,,0,0,0,,que tá competindo hoje pela\Nprimeira
+Dialogue: 0,0:00:09.40,0:00:11.72,Default,,0,0,0,,vez.
+Dialogue: 0,0:00:09.96,0:00:13.16,Default,,0,0,0,,Começou a montar tem duas\Nsemanas. Faz
+Dialogue: 0,0:00:11.72,0:00:14.68,Default,,0,0,0,,duas semanas que ele monta
+Dialogue: 0,0:00:13.16,0:00:15.32,Default,,0,0,0,,no no boi ou no tambor?
+Dialogue: 0,0:00:14.68,0:00:17.56,Default,,0,0,0,,Noss dois.
+Dialogue: 0,0:00:15.32,0:00:19.04,Default,,0,0,0,,Não, no cavalo. No no touro\Nele já no
+Dialogue: 0,0:00:17.56,0:00:20.96,Default,,0,0,0,,cavalo já fazia um tempo.
+Dialogue: 0,0:00:19.04,0:00:23.48,Default,,0,0,0,,É, ele é ele tem muito\Nparafuso solto.
+Dialogue: 0,0:00:20.96,0:00:24.08,Default,,0,0,0,,No cavalo ele faz no cavalo\Nele faz 15
+Dialogue: 0,0:00:23.48,0:00:26.20,Default,,0,0,0,,alto o tempo.
+Dialogue: 0,0:00:24.08,0:00:27.36,Default,,0,0,0,,Muito vem para cá. OK, né?
+Dialogue: 0,0:00:26.20,0:00:31.80,Default,,0,0,0,,Não, 15 alto
+Dialogue: 0,0:00:27.36,0:00:33.36,Default,,0,0,0,,não. Eu acho o que é o nosso\Nrecordo.
+Dialogue: 0,0:00:31.80,0:00:33.72,Default,,0,0,0,,Recorde mundial. Tempo ser\N16 alto,
+Dialogue: 0,0:00:33.36,0:00:35.24,Default,,0,0,0,,então
+Dialogue: 0,0:00:33.72,0:00:36.68,Default,,0,0,0,,16 alto é um belo tempo.
+Dialogue: 0,0:00:35.24,0:00:37.60,Default,,0,0,0,,Ih, gatinha.
+Dialogue: 0,0:00:36.68,0:00:38.16,Default,,0,0,0,,Um bom tempo.
+Dialogue: 0,0:00:37.60,0:00:38.76,Default,,0,0,0,,É
+Dialogue: 0,0:00:38.16,0:00:41.28,Default,,0,0,0,,mais um.
+Dialogue: 0,0:00:38.76,0:00:43.00,Default,,0,0,0,,Ótimo tempo agora. Ótimo.\NÓtimo.
+Dialogue: 0,0:00:41.28,0:00:44.68,Default,,0,0,0,,Agora o touro é loucura.
+Dialogue: 0,0:00:43.00,0:00:46.64,Default,,0,0,0,,O touro é loucura. O touro é\Nloucura.
+Dialogue: 0,0:00:44.68,0:00:48.00,Default,,0,0,0,,Você já foi, já foi a sua\Nvez aí hoje?
+Dialogue: 0,0:00:46.64,0:00:49.56,Default,,0,0,0,,Não, a vai ser ainda.
+Dialogue: 0,0:00:48.00,0:00:50.64,Default,,0,0,0,,Que horas você tá mais, mais\Nmenos
+Dialogue: 0,0:00:49.56,0:00:51.96,Default,,0,0,0,,programado para você subir?
+Dialogue: 0,0:00:50.64,0:00:52.96,Default,,0,0,0,,Umas duas horas. Daqui umas\Nduas horas,
+Dialogue: 0,0:00:51.96,0:00:53.80,Default,,0,0,0,,né?
+Dialogue: 0,0:00:52.96,0:00:55.48,Default,,0,0,0,,Qual que é o seu número?

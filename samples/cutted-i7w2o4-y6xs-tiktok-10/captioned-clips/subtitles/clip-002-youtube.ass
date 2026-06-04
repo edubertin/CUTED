@@ -1,0 +1,41 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,54,&H00FFFFFF,&H0000FFFF,&H00000000,&H99000000,-1,0,0,0,100,100,0,0,1,5,0,2,80,80,95,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:04.20,Default,,0,0,0,,Você pode tocar então no\Ntambor,
+Dialogue: 0,0:00:02.24,0:00:06.04,Default,,0,0,0,,po tocar, pode segurar. Só\Nnão pode
+Dialogue: 0,0:00:04.20,0:00:07.76,Default,,0,0,0,,cair. Por exemplo, tem gente\Nque tem
+Dialogue: 0,0:00:06.04,0:00:10.12,Default,,0,0,0,,essa habilidade de cair\Nquase pegar lá
+Dialogue: 0,0:00:07.76,0:00:13.20,Default,,0,0,0,,do chão. Só não pode relar o\Ntambor 100%
+Dialogue: 0,0:00:10.12,0:00:14.96,Default,,0,0,0,,no chão, né? Mas ele pode\Nbalançar, pode
+Dialogue: 0,0:00:13.20,0:00:16.44,Default,,0,0,0,,pender, pode segurar.
+Dialogue: 0,0:00:14.96,0:00:17.88,Default,,0,0,0,,Você já ganhou muitos\Ntítulos?
+Dialogue: 0,0:00:16.44,0:00:19.80,Default,,0,0,0,,Ah, já ganhei bastante ao\Ndecorrer
+Dialogue: 0,0:00:17.88,0:00:21.44,Default,,0,0,0,,desses anos aí
+Dialogue: 0,0:00:19.80,0:00:22.68,Default,,0,0,0,,já ganhei.
+Dialogue: 0,0:00:21.44,0:00:23.84,Default,,0,0,0,,Vamos ver então.
+Dialogue: 0,0:00:22.68,0:00:25.16,Default,,0,0,0,,Já paguei alguns almoços.
+Dialogue: 0,0:00:23.84,0:00:26.80,Default,,0,0,0,,Vamos ver então quem vai\Npagar esse
+Dialogue: 0,0:00:25.16,0:00:27.12,Default,,0,0,0,,almoço hoje.
+Dialogue: 0,0:00:26.80,0:00:27.68,Default,,0,0,0,,Obrigado.
+Dialogue: 0,0:00:27.12,0:00:29.24,Default,,0,0,0,,Prazer, viu?
+Dialogue: 0,0:00:27.68,0:00:31.28,Default,,0,0,0,,Prazer.
+Dialogue: 0,0:00:29.24,0:00:36.04,Default,,0,0,0,,[ __ ] que pariu, cara. Ele\Ntá falando
+Dialogue: 0,0:00:31.28,0:00:37.44,Default,,0,0,0,,aqui, ó, que é meio ingrato,\Nporque
+Dialogue: 0,0:00:36.04,0:00:39.28,Default,,0,0,0,,é uma tentativa só.
+Dialogue: 0,0:00:37.44,0:00:41.72,Default,,0,0,0,,É, dentro de uma categoria,\Ngeralmente é
+Dialogue: 0,0:00:39.28,0:00:44.00,Default,,0,0,0,,uma tentativa só. Então ela\Nnão dá muito
+Dialogue: 0,0:00:41.72,0:00:46.00,Default,,0,0,0,,margem para erro, né? Então\Nvocê se
+Dialogue: 0,0:00:44.00,0:00:48.40,Default,,0,0,0,,prepara, você vem, vem com o\Ntrailer,
+Dialogue: 0,0:00:46.00,0:00:50.04,Default,,0,0,0,,caminhão, [ __ ] estrutura e\Nvocê vem ali
+Dialogue: 0,0:00:48.40,0:00:51.36,Default,,0,0,0,,para dar um tiro dentro de\Numa
+Dialogue: 0,0:00:50.04,0:00:53.80,Default,,0,0,0,,categoria.
+Dialogue: 0,0:00:51.36,0:00:56.36,Default,,0,0,0,,É um mais bonito que o\Noutro, hein?

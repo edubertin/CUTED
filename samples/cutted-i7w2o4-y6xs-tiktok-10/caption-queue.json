@@ -1,0 +1,2374 @@
+{
+  "source": "BALESTRIN MONTOU NUM TOURO ? O DONO DA GROWTH FICOU MALUCO !!!",
+  "duration": 0,
+  "config": {
+    "clips": 10,
+    "min_duration": 30,
+    "max_duration": 70,
+    "target_duration": 42,
+    "smart_boundaries": true,
+    "lead_in": 1,
+    "tail_out": 1.5,
+    "preset": "tiktok"
+  },
+  "moments": [
+    {
+      "rank": 1,
+      "start": 195.28,
+      "end": 252.26,
+      "peak": 197.52,
+      "score": 10.79,
+      "title": ">> não? E tem que e tem que ser tem",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": ">> não? E tem que e tem que ser tem que tem que ser meio maluco, não dá. >> Tem que ter um parafuso a menos. >> Com certeza, cara. Não dá. >> Que que você acha? Nós temos um amigo que tá competindo hoje pela primeira vez. >> Começou a montar tem duas semanas. Faz duas semanas que ele monta >> no no boi ou no tambor? >> Noss dois. >> Não, no cavalo. No no touro ele já no cavalo já fazia um tempo. >> É, ele é ele tem muito parafuso solto. >> No cavalo ele faz no cavalo ele faz 15 alto o tempo. >> Muito vem para cá. OK, né? >> Não, 15 alto >> não. Eu acho o que é o nosso recordo. Recorde mundial. Tempo ser 16 alto, então >> 16 alto é um belo tempo. >> Ih, gatinha. >> Um bom tempo. >> É >> mais um. >> Ótimo tempo agora. Ótimo. Ótimo. >> Agora o touro é loucura. >> O touro é loucura. O touro é loucura. >> Você já foi, já foi a sua vez aí hoje? >> Não, a vai ser ainda. >> Que horas você tá mais, mais menos programado para você subir? >> Umas duas horas. Daqui umas duas horas, né? >> Qual que é o seu número?",
+      "peak_text": ">> não? E tem que e tem que ser tem que tem",
+      "clip_file": "clips/clip-001.mp4",
+      "frame_file": "frames/clip-001.jpg",
+      "caption_segments": [
+        {
+          "start": 196.28,
+          "end": 198.76,
+          "text": ">> não? E tem que e tem que ser tem que tem"
+        },
+        {
+          "start": 197.879,
+          "end": 199.879,
+          "text": "que ser meio maluco, não dá."
+        },
+        {
+          "start": 198.76,
+          "end": 201.319,
+          "text": ">> Tem que ter um parafuso a menos."
+        },
+        {
+          "start": 199.879,
+          "end": 202.879,
+          "text": ">> Com certeza, cara. Não dá."
+        },
+        {
+          "start": 201.319,
+          "end": 204.67999999999998,
+          "text": ">> Que que você acha? Nós temos um amigo"
+        },
+        {
+          "start": 202.879,
+          "end": 205.239,
+          "text": "que tá competindo hoje pela primeira"
+        },
+        {
+          "start": 204.68,
+          "end": 207,
+          "text": "vez."
+        },
+        {
+          "start": 205.239,
+          "end": 208.439,
+          "text": ">> Começou a montar tem duas semanas. Faz"
+        },
+        {
+          "start": 207,
+          "end": 209.959,
+          "text": "duas semanas que ele monta"
+        },
+        {
+          "start": 208.439,
+          "end": 210.599,
+          "text": ">> no no boi ou no tambor?"
+        },
+        {
+          "start": 209.959,
+          "end": 212.84,
+          "text": ">> Noss dois."
+        },
+        {
+          "start": 210.599,
+          "end": 214.319,
+          "text": ">> Não, no cavalo. No no touro ele já no"
+        },
+        {
+          "start": 212.84,
+          "end": 216.239,
+          "text": "cavalo já fazia um tempo."
+        },
+        {
+          "start": 214.319,
+          "end": 218.76,
+          "text": ">> É, ele é ele tem muito parafuso solto."
+        },
+        {
+          "start": 216.239,
+          "end": 219.36,
+          "text": ">> No cavalo ele faz no cavalo ele faz 15"
+        },
+        {
+          "start": 218.76,
+          "end": 221.48,
+          "text": "alto o tempo."
+        },
+        {
+          "start": 219.36,
+          "end": 222.64000000000001,
+          "text": ">> Muito vem para cá. OK, né?"
+        },
+        {
+          "start": 221.48,
+          "end": 227.07999999999998,
+          "text": ">> Não, 15 alto"
+        },
+        {
+          "start": 222.64,
+          "end": 228.64,
+          "text": ">> não. Eu acho o que é o nosso recordo."
+        },
+        {
+          "start": 227.08,
+          "end": 229,
+          "text": "Recorde mundial. Tempo ser 16 alto,"
+        },
+        {
+          "start": 228.64,
+          "end": 230.51899999999998,
+          "text": "então"
+        },
+        {
+          "start": 229,
+          "end": 231.959,
+          "text": ">> 16 alto é um belo tempo."
+        },
+        {
+          "start": 230.519,
+          "end": 232.87900000000002,
+          "text": ">> Ih, gatinha."
+        },
+        {
+          "start": 231.959,
+          "end": 233.439,
+          "text": ">> Um bom tempo."
+        },
+        {
+          "start": 232.879,
+          "end": 234.04,
+          "text": ">> É"
+        },
+        {
+          "start": 233.439,
+          "end": 236.56,
+          "text": ">> mais um."
+        },
+        {
+          "start": 234.04,
+          "end": 238.28,
+          "text": ">> Ótimo tempo agora. Ótimo. Ótimo."
+        },
+        {
+          "start": 236.56,
+          "end": 239.959,
+          "text": ">> Agora o touro é loucura."
+        },
+        {
+          "start": 238.28,
+          "end": 241.92,
+          "text": ">> O touro é loucura. O touro é loucura."
+        },
+        {
+          "start": 239.959,
+          "end": 243.28,
+          "text": ">> Você já foi, já foi a sua vez aí hoje?"
+        },
+        {
+          "start": 241.92,
+          "end": 244.83999999999997,
+          "text": ">> Não, a vai ser ainda."
+        },
+        {
+          "start": 243.28,
+          "end": 245.92,
+          "text": ">> Que horas você tá mais, mais menos"
+        },
+        {
+          "start": 244.84,
+          "end": 247.239,
+          "text": "programado para você subir?"
+        },
+        {
+          "start": 245.92,
+          "end": 248.23899999999998,
+          "text": ">> Umas duas horas. Daqui umas duas horas,"
+        },
+        {
+          "start": 247.239,
+          "end": 249.079,
+          "text": "né?"
+        },
+        {
+          "start": 248.239,
+          "end": 250.76,
+          "text": ">> Qual que é o seu número?"
+        }
+      ]
+    },
+    {
+      "rank": 2,
+      "start": 306.639,
+      "end": 364.5,
+      "peak": 350.5,
+      "score": 11.83,
+      "title": "margem para erro, né? Então você se",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": ">> Você pode tocar então no tambor, >> po tocar, pode segurar. Só não pode cair. Por exemplo, tem gente que tem essa habilidade de cair quase pegar lá do chão. Só não pode relar o tambor 100% no chão, né? Mas ele pode balançar, pode pender, pode segurar. >> Você já ganhou muitos títulos? >> Ah, já ganhei bastante ao decorrer desses anos aí >> já ganhei. >> Vamos ver então. >> Já paguei alguns almoços. >> Vamos ver então quem vai pagar esse almoço hoje. >> Obrigado. >> Prazer, viu? >> Prazer. >> [ __ ] que pariu, cara. Ele tá falando aqui, ó, que é meio ingrato, porque >> é uma tentativa só. >> É, dentro de uma categoria, geralmente é uma tentativa só. Então ela não dá muito margem para erro, né? Então você se prepara, você vem, vem com o trailer, caminhão, [ __ ] estrutura e você vem ali para dar um tiro dentro de uma categoria. >> É um mais bonito que o outro, hein?",
+      "peak_text": "margem para erro, né? Então você se",
+      "clip_file": "clips/clip-002.mp4",
+      "frame_file": "frames/clip-002.jpg",
+      "caption_segments": [
+        {
+          "start": 307.639,
+          "end": 310.84000000000003,
+          "text": ">> Você pode tocar então no tambor,"
+        },
+        {
+          "start": 308.88,
+          "end": 312.68,
+          "text": ">> po tocar, pode segurar. Só não pode"
+        },
+        {
+          "start": 310.84,
+          "end": 314.4,
+          "text": "cair. Por exemplo, tem gente que tem"
+        },
+        {
+          "start": 312.68,
+          "end": 316.759,
+          "text": "essa habilidade de cair quase pegar lá"
+        },
+        {
+          "start": 314.4,
+          "end": 319.84,
+          "text": "do chão. Só não pode relar o tambor 100%"
+        },
+        {
+          "start": 316.759,
+          "end": 321.6,
+          "text": "no chão, né? Mas ele pode balançar, pode"
+        },
+        {
+          "start": 319.84,
+          "end": 323.08,
+          "text": "pender, pode segurar."
+        },
+        {
+          "start": 321.6,
+          "end": 324.52000000000004,
+          "text": ">> Você já ganhou muitos títulos?"
+        },
+        {
+          "start": 323.08,
+          "end": 326.44,
+          "text": ">> Ah, já ganhei bastante ao decorrer"
+        },
+        {
+          "start": 324.52,
+          "end": 328.08,
+          "text": "desses anos aí"
+        },
+        {
+          "start": 326.44,
+          "end": 329.319,
+          "text": ">> já ganhei."
+        },
+        {
+          "start": 328.08,
+          "end": 330.479,
+          "text": ">> Vamos ver então."
+        },
+        {
+          "start": 329.319,
+          "end": 331.8,
+          "text": ">> Já paguei alguns almoços."
+        },
+        {
+          "start": 330.479,
+          "end": 333.44,
+          "text": ">> Vamos ver então quem vai pagar esse"
+        },
+        {
+          "start": 331.8,
+          "end": 333.759,
+          "text": "almoço hoje."
+        },
+        {
+          "start": 333.44,
+          "end": 334.319,
+          "text": ">> Obrigado."
+        },
+        {
+          "start": 333.759,
+          "end": 335.88,
+          "text": ">> Prazer, viu?"
+        },
+        {
+          "start": 334.319,
+          "end": 337.91900000000004,
+          "text": ">> Prazer."
+        },
+        {
+          "start": 335.88,
+          "end": 342.68,
+          "text": ">> [ __ ] que pariu, cara. Ele tá falando"
+        },
+        {
+          "start": 337.919,
+          "end": 344.08,
+          "text": "aqui, ó, que é meio ingrato, porque"
+        },
+        {
+          "start": 342.68,
+          "end": 345.919,
+          "text": ">> é uma tentativa só."
+        },
+        {
+          "start": 344.08,
+          "end": 348.35999999999996,
+          "text": ">> É, dentro de uma categoria, geralmente é"
+        },
+        {
+          "start": 345.919,
+          "end": 350.639,
+          "text": "uma tentativa só. Então ela não dá muito"
+        },
+        {
+          "start": 348.36,
+          "end": 352.639,
+          "text": "margem para erro, né? Então você se"
+        },
+        {
+          "start": 350.639,
+          "end": 355.039,
+          "text": "prepara, você vem, vem com o trailer,"
+        },
+        {
+          "start": 352.639,
+          "end": 356.68,
+          "text": "caminhão, [ __ ] estrutura e você vem ali"
+        },
+        {
+          "start": 355.039,
+          "end": 358,
+          "text": "para dar um tiro dentro de uma"
+        },
+        {
+          "start": 356.68,
+          "end": 360.44,
+          "text": "categoria."
+        },
+        {
+          "start": 358,
+          "end": 363,
+          "text": ">> É um mais bonito que o outro, hein?"
+        }
+      ]
+    },
+    {
+      "rank": 3,
+      "start": 374.16,
+      "end": 437.819,
+      "peak": 426.16,
+      "score": 10.94,
+      "title": "Verdade. Desde os nove, sabe? Mas",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "Legal que não tem idade isso daqui, né? Se a pessoa tiver talento, pode ser um adolescente, >> homem, mulher. >> Homem, mulher, não tem distinção, cara. Isso é para todas mesmo. Divide cada um na sua categoria. >> Muito dinâmico, organizado. Meu Deus do céu. Esse cavalo forte demais, cara. É só Mister Olímpia aqui, cara. E aí, alemão? Você tá bom? Bom demais, >> rapaz. São bodybuilder, eles são fisiculturista. É você que monta? >> É eu que monta. >> Que lindo esse cavalo, bicho. Quantos anos ele tem? >> Essa daqui tem sete, anos. >> Anos. >> Oito anos. >> Você monta desde quanto? >> Eu monto desde os 10. >> Que isso, cara? Que cavalo maravilhoso. Verdade. Desde os nove, sabe? Mas comecei a correr aberta. É, desde os 16 eu comecei a correr aberto que a categoria. >> Qual que é o seu melhor tempo?",
+      "peak_text": "Verdade. Desde os nove, sabe? Mas",
+      "clip_file": "clips/clip-003.mp4",
+      "frame_file": "frames/clip-003.jpg",
+      "caption_segments": [
+        {
+          "start": 375.16,
+          "end": 380.28000000000003,
+          "text": "Legal que não tem idade isso daqui, né?"
+        },
+        {
+          "start": 377.96,
+          "end": 382.63899999999995,
+          "text": "Se a pessoa tiver talento, pode ser um"
+        },
+        {
+          "start": 380.28,
+          "end": 383.55999999999995,
+          "text": "adolescente,"
+        },
+        {
+          "start": 382.639,
+          "end": 385.599,
+          "text": ">> homem, mulher."
+        },
+        {
+          "start": 383.56,
+          "end": 388.08,
+          "text": ">> Homem, mulher, não tem distinção, cara."
+        },
+        {
+          "start": 385.599,
+          "end": 389.44,
+          "text": "Isso é para todas mesmo. Divide cada um"
+        },
+        {
+          "start": 388.08,
+          "end": 392.19899999999996,
+          "text": "na sua categoria."
+        },
+        {
+          "start": 389.44,
+          "end": 393.88,
+          "text": ">> Muito dinâmico, organizado."
+        },
+        {
+          "start": 392.199,
+          "end": 397,
+          "text": "Meu Deus do céu. Esse cavalo forte"
+        },
+        {
+          "start": 393.88,
+          "end": 400,
+          "text": "demais, cara. É só Mister Olímpia aqui,"
+        },
+        {
+          "start": 397,
+          "end": 400,
+          "text": "cara."
+        },
+        {
+          "start": 400.08,
+          "end": 405.479,
+          "text": "E aí, alemão? Você tá bom? Bom demais,"
+        },
+        {
+          "start": 403.639,
+          "end": 408.479,
+          "text": ">> rapaz. São bodybuilder, eles são"
+        },
+        {
+          "start": 405.479,
+          "end": 408.479,
+          "text": "fisiculturista."
+        },
+        {
+          "start": 408.759,
+          "end": 411.599,
+          "text": "É você que monta?"
+        },
+        {
+          "start": 409.8,
+          "end": 414.24,
+          "text": ">> É eu que monta."
+        },
+        {
+          "start": 411.599,
+          "end": 415.12,
+          "text": ">> Que lindo esse cavalo, bicho. Quantos"
+        },
+        {
+          "start": 414.24,
+          "end": 417.56,
+          "text": "anos ele tem?"
+        },
+        {
+          "start": 415.12,
+          "end": 418.12,
+          "text": ">> Essa daqui tem sete, anos."
+        },
+        {
+          "start": 417.56,
+          "end": 418.879,
+          "text": ">> Anos."
+        },
+        {
+          "start": 418.12,
+          "end": 420.52,
+          "text": ">> Oito anos."
+        },
+        {
+          "start": 418.879,
+          "end": 422.759,
+          "text": ">> Você monta desde quanto?"
+        },
+        {
+          "start": 420.52,
+          "end": 424.639,
+          "text": ">> Eu monto desde os 10."
+        },
+        {
+          "start": 422.759,
+          "end": 426.16,
+          "text": ">> Que isso, cara? Que cavalo maravilhoso."
+        },
+        {
+          "start": 424.639,
+          "end": 427.68,
+          "text": "Verdade. Desde os nove, sabe? Mas"
+        },
+        {
+          "start": 426.16,
+          "end": 430.199,
+          "text": "comecei a correr aberta."
+        },
+        {
+          "start": 427.68,
+          "end": 431.72,
+          "text": "É, desde os 16 eu comecei a correr"
+        },
+        {
+          "start": 430.199,
+          "end": 433.44,
+          "text": "aberto que a categoria."
+        },
+        {
+          "start": 431.72,
+          "end": 436.319,
+          "text": ">> Qual que é o seu melhor tempo?"
+        }
+      ]
+    },
+    {
+      "rank": 4,
+      "start": 423.639,
+      "end": 485.259,
+      "peak": 426.16,
+      "score": 11.45,
+      "title": "Verdade. Desde os nove, sabe? Mas",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "Verdade. Desde os nove, sabe? Mas comecei a correr aberta. É, desde os 16 eu comecei a correr aberto que a categoria. >> Qual que é o seu melhor tempo? >> 16 447. >> Eu tenho dois tempos igual. Ontem eu bati um igual em >> Ei, grandão. Rapaz, ó, o bicho tá suado, hein? >> Tá suado. >> Você tá aquecendo ele? >> Tô. Vou correr na na próxima ali. >> Daqui uma meia hora você tá subindo. >> Não, na próxima já. Na próxima bateria eu já vou já. >> Próxima. >> Qual que é o seu número? Que número que você tá? >> 63. >> 63. Qual que é o seu nome mesmo? >> Felipe de Morais. >> Felipe de Morais. Já ganhou muita prova, Felipe? >> Graças a Deus. Aqui eu ganhei quarta aberta cina uma outra. Essa daqui de cor 600. >> Qual que é a diferença da aberta snior pr as normais? É a categoria mais importante. >> As aberta, sabe? Primeiro dia tem o GP",
+      "peak_text": "Verdade. Desde os nove, sabe? Mas",
+      "clip_file": "clips/clip-004.mp4",
+      "frame_file": "frames/clip-004.jpg",
+      "caption_segments": [
+        {
+          "start": 424.639,
+          "end": 427.68,
+          "text": "Verdade. Desde os nove, sabe? Mas"
+        },
+        {
+          "start": 426.16,
+          "end": 430.199,
+          "text": "comecei a correr aberta."
+        },
+        {
+          "start": 427.68,
+          "end": 431.72,
+          "text": "É, desde os 16 eu comecei a correr"
+        },
+        {
+          "start": 430.199,
+          "end": 433.44,
+          "text": "aberto que a categoria."
+        },
+        {
+          "start": 431.72,
+          "end": 436.319,
+          "text": ">> Qual que é o seu melhor tempo?"
+        },
+        {
+          "start": 433.44,
+          "end": 438.479,
+          "text": ">> 16 447."
+        },
+        {
+          "start": 436.319,
+          "end": 440.199,
+          "text": ">> Eu tenho dois tempos igual. Ontem eu"
+        },
+        {
+          "start": 438.479,
+          "end": 442.599,
+          "text": "bati um igual em"
+        },
+        {
+          "start": 440.199,
+          "end": 444.68,
+          "text": ">> Ei, grandão."
+        },
+        {
+          "start": 442.599,
+          "end": 445.759,
+          "text": "Rapaz, ó, o bicho tá suado, hein?"
+        },
+        {
+          "start": 444.68,
+          "end": 447.52,
+          "text": ">> Tá suado."
+        },
+        {
+          "start": 445.759,
+          "end": 450.199,
+          "text": ">> Você tá aquecendo ele?"
+        },
+        {
+          "start": 447.52,
+          "end": 451.52,
+          "text": ">> Tô. Vou correr na na próxima ali."
+        },
+        {
+          "start": 450.199,
+          "end": 453.479,
+          "text": ">> Daqui uma meia hora você tá subindo."
+        },
+        {
+          "start": 451.52,
+          "end": 454.15999999999997,
+          "text": ">> Não, na próxima já. Na próxima bateria"
+        },
+        {
+          "start": 453.479,
+          "end": 455.24,
+          "text": "eu já vou já."
+        },
+        {
+          "start": 454.16,
+          "end": 457,
+          "text": ">> Próxima."
+        },
+        {
+          "start": 455.24,
+          "end": 457.84000000000003,
+          "text": ">> Qual que é o seu número?"
+        },
+        {
+          "start": 457,
+          "end": 458.68,
+          "text": "Que número que você tá?"
+        },
+        {
+          "start": 457.84,
+          "end": 460.479,
+          "text": ">> 63."
+        },
+        {
+          "start": 458.68,
+          "end": 461.56,
+          "text": ">> 63. Qual que é o seu nome mesmo?"
+        },
+        {
+          "start": 460.479,
+          "end": 464.479,
+          "text": ">> Felipe de Morais."
+        },
+        {
+          "start": 461.56,
+          "end": 465.08,
+          "text": ">> Felipe de Morais. Já ganhou muita prova,"
+        },
+        {
+          "start": 464.479,
+          "end": 467.96,
+          "text": "Felipe?"
+        },
+        {
+          "start": 465.08,
+          "end": 471.35999999999996,
+          "text": ">> Graças a Deus."
+        },
+        {
+          "start": 467.96,
+          "end": 474.56,
+          "text": "Aqui eu ganhei quarta aberta cina uma"
+        },
+        {
+          "start": 471.36,
+          "end": 476.24,
+          "text": "outra. Essa daqui de cor 600."
+        },
+        {
+          "start": 474.56,
+          "end": 478.12,
+          "text": ">> Qual que é a diferença da aberta snior"
+        },
+        {
+          "start": 476.24,
+          "end": 478.56,
+          "text": "pr as normais? É a categoria mais"
+        },
+        {
+          "start": 478.12,
+          "end": 480.84000000000003,
+          "text": "importante."
+        },
+        {
+          "start": 478.56,
+          "end": 483.759,
+          "text": ">> As aberta, sabe? Primeiro dia tem o GP"
+        }
+      ]
+    },
+    {
+      "rank": 5,
+      "start": 625.72,
+      "end": 695.42,
+      "peak": 691.98,
+      "score": 11.15,
+      "title": "quanto? Que que você tá buscando? Que",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": ">> Ou seja, ela é nova ainda. Uma égua pouco explorada, sabe? Depende muito. Tem cavalo que são um pouco explorado. É, tanto em remédio quanto em treinamento forte, essas coisas também. Isso manda muito. Então, se você conseguir manter um bom trabalho desse jeito aí, você vai conseguir ter um bom animal pra frente até bastante tempo. >> Tem algum problema com lesão, essas coisas? >> Não, essa não. >> E aí, Edu? >> Bora. >> Como é que tá aí? >> Vamos. Estamos pronto. >> Quais as expectativas para hoje? >> Expectativa é d no mínimo máximo, né? Sempre. >> Dá máximo. >> Conta pra galera quanto tempo você treinou. >> Três meses. >> Três meses. É. >> E no touro? no touro dois dias. >> Eu encontrei dois competidores, os dois falou que você é louco. >> Mas o mundo tá, o mundo precisa um pouco de louco, né? Hã, tá cheio de gente normal, mas do mesmo não faz nada. É isso aí, cara. >> Nós queremos o extraordinário. >> É, quem busca extraordinário tem que fazer extraordinário. Aí pros outros é louco. >> Sim. Você mentalizou? Você acha que o seu tempo hoje seria por volta de quanto? Que que você tá buscando? Que",
+      "peak_text": "quanto? Que que você tá buscando? Que",
+      "clip_file": "clips/clip-005.mp4",
+      "frame_file": "frames/clip-005.jpg",
+      "caption_segments": [
+        {
+          "start": 626.72,
+          "end": 630.399,
+          "text": ">> Ou seja, ela é nova ainda. Uma égua"
+        },
+        {
+          "start": 628.16,
+          "end": 632.36,
+          "text": "pouco explorada, sabe? Depende muito."
+        },
+        {
+          "start": 630.399,
+          "end": 634.68,
+          "text": "Tem cavalo que são um pouco explorado."
+        },
+        {
+          "start": 632.36,
+          "end": 636.24,
+          "text": "É, tanto em remédio quanto em"
+        },
+        {
+          "start": 634.68,
+          "end": 638.12,
+          "text": "treinamento forte, essas coisas também."
+        },
+        {
+          "start": 636.24,
+          "end": 640.76,
+          "text": "Isso manda muito. Então, se você"
+        },
+        {
+          "start": 638.12,
+          "end": 642.76,
+          "text": "conseguir manter um bom trabalho desse"
+        },
+        {
+          "start": 640.76,
+          "end": 645.279,
+          "text": "jeito aí, você vai conseguir ter um bom"
+        },
+        {
+          "start": 642.76,
+          "end": 646.92,
+          "text": "animal pra frente até bastante tempo."
+        },
+        {
+          "start": 645.279,
+          "end": 647.279,
+          "text": ">> Tem algum problema com lesão, essas"
+        },
+        {
+          "start": 646.92,
+          "end": 648.279,
+          "text": "coisas?"
+        },
+        {
+          "start": 647.279,
+          "end": 649.04,
+          "text": ">> Não, essa não."
+        },
+        {
+          "start": 648.279,
+          "end": 650,
+          "text": ">> E aí, Edu?"
+        },
+        {
+          "start": 649.04,
+          "end": 650.8389999999999,
+          "text": ">> Bora."
+        },
+        {
+          "start": 650,
+          "end": 652.04,
+          "text": ">> Como é que tá aí?"
+        },
+        {
+          "start": 650.839,
+          "end": 653.7600000000001,
+          "text": ">> Vamos. Estamos pronto."
+        },
+        {
+          "start": 652.04,
+          "end": 657.7199999999999,
+          "text": ">> Quais as expectativas para hoje?"
+        },
+        {
+          "start": 653.76,
+          "end": 658.72,
+          "text": ">> Expectativa é d no mínimo máximo, né?"
+        },
+        {
+          "start": 657.72,
+          "end": 659.32,
+          "text": "Sempre."
+        },
+        {
+          "start": 658.72,
+          "end": 660.639,
+          "text": ">> Dá máximo."
+        },
+        {
+          "start": 659.32,
+          "end": 661.5600000000001,
+          "text": ">> Conta pra galera quanto tempo você"
+        },
+        {
+          "start": 660.639,
+          "end": 662.6,
+          "text": "treinou."
+        },
+        {
+          "start": 661.56,
+          "end": 663.8389999999999,
+          "text": ">> Três meses."
+        },
+        {
+          "start": 662.6,
+          "end": 667.5600000000001,
+          "text": ">> Três meses. É."
+        },
+        {
+          "start": 663.839,
+          "end": 669.44,
+          "text": ">> E no touro? no touro dois dias."
+        },
+        {
+          "start": 667.56,
+          "end": 672.8,
+          "text": ">> Eu encontrei dois competidores, os dois"
+        },
+        {
+          "start": 669.44,
+          "end": 674.399,
+          "text": "falou que você é louco."
+        },
+        {
+          "start": 672.8,
+          "end": 677.399,
+          "text": ">> Mas o mundo tá, o mundo precisa um pouco"
+        },
+        {
+          "start": 674.399,
+          "end": 679.639,
+          "text": "de louco, né? Hã, tá cheio de gente"
+        },
+        {
+          "start": 677.399,
+          "end": 680.639,
+          "text": "normal, mas do mesmo não faz nada. É"
+        },
+        {
+          "start": 679.639,
+          "end": 681.9590000000001,
+          "text": "isso aí, cara."
+        },
+        {
+          "start": 680.639,
+          "end": 683.399,
+          "text": ">> Nós queremos o extraordinário."
+        },
+        {
+          "start": 681.959,
+          "end": 684.88,
+          "text": ">> É, quem busca extraordinário tem que"
+        },
+        {
+          "start": 683.399,
+          "end": 685.6,
+          "text": "fazer extraordinário. Aí pros outros é"
+        },
+        {
+          "start": 684.88,
+          "end": 688.24,
+          "text": "louco."
+        },
+        {
+          "start": 685.6,
+          "end": 690.0400000000001,
+          "text": ">> Sim. Você mentalizou? Você acha que o"
+        },
+        {
+          "start": 688.24,
+          "end": 691.92,
+          "text": "seu tempo hoje seria por volta de"
+        },
+        {
+          "start": 690.04,
+          "end": 693.92,
+          "text": "quanto? Que que você tá buscando? Que"
+        }
+      ]
+    },
+    {
+      "rank": 6,
+      "start": 680.959,
+      "end": 732.1,
+      "peak": 691.98,
+      "score": 11.73,
+      "title": "quanto? Que que você tá buscando? Que",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": ">> É, quem busca extraordinário tem que fazer extraordinário. Aí pros outros é louco. >> Sim. Você mentalizou? Você acha que o seu tempo hoje seria por volta de quanto? Que que você tá buscando? Que que você tá buscando nessa primeira prova? 17 700 tent baixar disso. Se eu vencer de mim mesmo, >> já é um negócio. >> Já é um negócio, né? Eu só tô três meses, então é muito pouco tempo para quem já deu 17 é muito pouco tempo da 3 meses dá 17, entendeu? Vou tentar tirar tempo, tentar um 17 baixo aí, 1700, 1700 para mim já tá valendo muito jáa >> para ver que daí se eu tirar tipo 17 eu tô a 1 segundo do recorde mundial. >> O recorde mundial é 16. >> É 15, né? >> É, >> é 15. 15 16 080 >> 16 080 >> é >> o bicho tá pele músculo, viu as fotos?",
+      "peak_text": "quanto? Que que você tá buscando? Que",
+      "clip_file": "clips/clip-006.mp4",
+      "frame_file": "frames/clip-006.jpg",
+      "caption_segments": [
+        {
+          "start": 681.959,
+          "end": 684.88,
+          "text": ">> É, quem busca extraordinário tem que"
+        },
+        {
+          "start": 683.399,
+          "end": 685.6,
+          "text": "fazer extraordinário. Aí pros outros é"
+        },
+        {
+          "start": 684.88,
+          "end": 688.24,
+          "text": "louco."
+        },
+        {
+          "start": 685.6,
+          "end": 690.0400000000001,
+          "text": ">> Sim. Você mentalizou? Você acha que o"
+        },
+        {
+          "start": 688.24,
+          "end": 691.92,
+          "text": "seu tempo hoje seria por volta de"
+        },
+        {
+          "start": 690.04,
+          "end": 693.92,
+          "text": "quanto? Que que você tá buscando? Que"
+        },
+        {
+          "start": 691.92,
+          "end": 696.88,
+          "text": "que você tá buscando nessa primeira"
+        },
+        {
+          "start": 693.92,
+          "end": 697.959,
+          "text": "prova? 17 700 tent baixar disso. Se eu"
+        },
+        {
+          "start": 696.88,
+          "end": 698.6,
+          "text": "vencer de mim mesmo,"
+        },
+        {
+          "start": 697.959,
+          "end": 700.3599999999999,
+          "text": ">> já é um negócio."
+        },
+        {
+          "start": 698.6,
+          "end": 702.839,
+          "text": ">> Já é um negócio, né? Eu só tô três"
+        },
+        {
+          "start": 700.36,
+          "end": 704.639,
+          "text": "meses, então"
+        },
+        {
+          "start": 702.839,
+          "end": 706.9200000000001,
+          "text": "é muito pouco tempo para quem já deu 17"
+        },
+        {
+          "start": 704.639,
+          "end": 708.9590000000001,
+          "text": "é muito pouco tempo da"
+        },
+        {
+          "start": 706.92,
+          "end": 710.88,
+          "text": "3 meses dá 17, entendeu? Vou tentar"
+        },
+        {
+          "start": 708.959,
+          "end": 713.8389999999999,
+          "text": "tirar tempo, tentar um 17 baixo aí,"
+        },
+        {
+          "start": 710.88,
+          "end": 714.68,
+          "text": "1700, 1700 para mim já tá valendo muito"
+        },
+        {
+          "start": 713.839,
+          "end": 717.44,
+          "text": "jáa"
+        },
+        {
+          "start": 714.68,
+          "end": 719.3199999999999,
+          "text": ">> para ver que daí se eu tirar tipo 17 eu"
+        },
+        {
+          "start": 717.44,
+          "end": 721.1600000000001,
+          "text": "tô a 1 segundo do recorde mundial."
+        },
+        {
+          "start": 719.32,
+          "end": 722.12,
+          "text": ">> O recorde mundial é 16."
+        },
+        {
+          "start": 721.16,
+          "end": 722.519,
+          "text": ">> É 15, né?"
+        },
+        {
+          "start": 722.12,
+          "end": 723.519,
+          "text": ">> É,"
+        },
+        {
+          "start": 722.519,
+          "end": 725.44,
+          "text": ">> é 15."
+        },
+        {
+          "start": 723.519,
+          "end": 726.24,
+          "text": "15 16 080"
+        },
+        {
+          "start": 725.44,
+          "end": 726.8800000000001,
+          "text": ">> 16 080"
+        },
+        {
+          "start": 726.24,
+          "end": 729.88,
+          "text": ">> é"
+        },
+        {
+          "start": 726.88,
+          "end": 730.6,
+          "text": ">> o bicho tá pele músculo, viu as fotos?"
+        }
+      ]
+    },
+    {
+      "rank": 7,
+      "start": 760.079,
+      "end": 811.699,
+      "peak": 766.66,
+      "score": 10.87,
+      "title": ">> Deve ser porque é mais rápido",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "atleta. Não tem jeito. >> Já em cima do tour ali. É menos ainda, cara. Menos ainda. Menos ainda. >> Deve ser porque é mais rápido. >> Não é mais rápido, mas não sei. É diferente. É diferente. Mas tu encaixa ali na hora que ele dá aquelas [ __ ] ele dá, ele bate ali, volta, bate, bate e é pressão. >> Você fica muito concentrado no que você e não dá tempo de ficar nervoso. É, não dá tempo de ficar nervoso. >> Fê, por que que você não vai com ele? >> Eu vou com ele. >> É, ele vai est >> Quando ele montar no cavalo, quem vai estar segurando a rédeia junto com a mão dele é a minha. Quando ele sentar na cela, eu tô junto. >> E quando ele tiver pisando no estribo, sou eu que dou a força para segurar. >> Mas você tá calmo que nem ele? >> Hã? >> Você tá calmo que nem ele? >> Calmo >> sim, mas na hora do touro aí eu vou ficar nervoso. >> Vamos curtir agora a prova dele. Ver o aquecimento. >> Que isso, pai? Pera aí, Julião. Nós",
+      "peak_text": ">> Deve ser porque é mais rápido.",
+      "clip_file": "clips/clip-007.mp4",
+      "frame_file": "frames/clip-007.jpg",
+      "caption_segments": [
+        {
+          "start": 761.079,
+          "end": 763.76,
+          "text": "atleta. Não tem jeito."
+        },
+        {
+          "start": 762.04,
+          "end": 765.16,
+          "text": ">> Já em cima do tour ali. É menos ainda,"
+        },
+        {
+          "start": 763.76,
+          "end": 766.56,
+          "text": "cara. Menos ainda. Menos ainda."
+        },
+        {
+          "start": 765.16,
+          "end": 768.16,
+          "text": ">> Deve ser porque é mais rápido."
+        },
+        {
+          "start": 766.56,
+          "end": 770.04,
+          "text": ">> Não é mais rápido, mas não sei. É"
+        },
+        {
+          "start": 768.16,
+          "end": 771.36,
+          "text": "diferente. É diferente. Mas tu encaixa"
+        },
+        {
+          "start": 770.04,
+          "end": 773.36,
+          "text": "ali na hora que ele dá aquelas [ __ ] ele"
+        },
+        {
+          "start": 771.36,
+          "end": 773.6800000000001,
+          "text": "dá, ele bate ali, volta, bate, bate e é"
+        },
+        {
+          "start": 773.36,
+          "end": 776.9590000000001,
+          "text": "pressão."
+        },
+        {
+          "start": 773.68,
+          "end": 778.3599999999999,
+          "text": ">> Você fica muito concentrado no que você"
+        },
+        {
+          "start": 776.959,
+          "end": 780.04,
+          "text": "e não dá tempo de ficar nervoso. É, não"
+        },
+        {
+          "start": 778.36,
+          "end": 782.76,
+          "text": "dá tempo de ficar nervoso."
+        },
+        {
+          "start": 780.04,
+          "end": 783.8389999999999,
+          "text": ">> Fê, por que que você não vai com ele?"
+        },
+        {
+          "start": 782.76,
+          "end": 784.88,
+          "text": ">> Eu vou com ele."
+        },
+        {
+          "start": 783.839,
+          "end": 787.12,
+          "text": ">> É, ele vai est"
+        },
+        {
+          "start": 784.88,
+          "end": 788.639,
+          "text": ">> Quando ele montar no cavalo, quem vai"
+        },
+        {
+          "start": 787.12,
+          "end": 790.36,
+          "text": "estar segurando a rédeia junto com a mão"
+        },
+        {
+          "start": 788.639,
+          "end": 791.6,
+          "text": "dele é a minha. Quando ele sentar na"
+        },
+        {
+          "start": 790.36,
+          "end": 793.04,
+          "text": "cela, eu tô junto."
+        },
+        {
+          "start": 791.6,
+          "end": 794.48,
+          "text": ">> E quando ele tiver pisando no estribo,"
+        },
+        {
+          "start": 793.04,
+          "end": 795.88,
+          "text": "sou eu que dou a força para segurar."
+        },
+        {
+          "start": 794.48,
+          "end": 796.48,
+          "text": ">> Mas você tá calmo que nem ele?"
+        },
+        {
+          "start": 795.88,
+          "end": 797.6,
+          "text": ">> Hã?"
+        },
+        {
+          "start": 796.48,
+          "end": 798.24,
+          "text": ">> Você tá calmo que nem ele?"
+        },
+        {
+          "start": 797.6,
+          "end": 800.12,
+          "text": ">> Calmo"
+        },
+        {
+          "start": 798.24,
+          "end": 802.199,
+          "text": ">> sim, mas na hora do touro aí eu vou"
+        },
+        {
+          "start": 800.12,
+          "end": 804.32,
+          "text": "ficar nervoso."
+        },
+        {
+          "start": 802.199,
+          "end": 807.04,
+          "text": ">> Vamos curtir agora a prova dele. Ver o"
+        },
+        {
+          "start": 804.32,
+          "end": 808.44,
+          "text": "aquecimento."
+        },
+        {
+          "start": 807.04,
+          "end": 810.199,
+          "text": ">> Que isso, pai? Pera aí, Julião. Nós"
+        }
+      ]
+    },
+    {
+      "rank": 8,
+      "start": 1171.44,
+      "end": 1224.78,
+      "peak": 1207.68,
+      "score": 11.98,
+      "title": ">> Astrô. Por quê? Porque ele não está bom",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "existisse uma segunda opção. >> É uma modalidade que ela não é muito divulgada em mídias, em redes sociais, mas ela é muito forte. Ela é muito forte. Tem provas aqui que tem 100 cavalos competindo. São 10 dias de competição, dá 15 milhão e meio de prêmio. E e são 6 a 7.000 1 passadas que você tá vendo aí assim durante os 10 dias de competição. Um um cavalo recordista, eu vou eu a gente vai tá aqui perto, eu vou falar: \"Ó, esse cavalo aqui, ele vale uns 10 milhões, uns 8 milhões, uns 15 milhões.\" Cavalos com valores >> astronômicos. >> Astrô. Por quê? Porque ele não está bom como atleta. Ele vem carregando >> a genética de outros campeões. >> E ele comprovou que ele é um dos melhores, com recordista, um cavalo que é muito ganhador. E o que que acaba acontecendo? acaba comercializando, seja",
+      "peak_text": ">> Astrô. Por quê? Porque ele não está bom",
+      "clip_file": "clips/clip-008.mp4",
+      "frame_file": "frames/clip-008.jpg",
+      "caption_segments": [
+        {
+          "start": 1172.44,
+          "end": 1175.3200000000002,
+          "text": "existisse uma segunda opção."
+        },
+        {
+          "start": 1173.96,
+          "end": 1177.6000000000001,
+          "text": ">> É uma modalidade que ela não é muito"
+        },
+        {
+          "start": 1175.32,
+          "end": 1179.08,
+          "text": "divulgada em mídias, em redes sociais,"
+        },
+        {
+          "start": 1177.6,
+          "end": 1181.32,
+          "text": "mas ela é muito forte. Ela é muito"
+        },
+        {
+          "start": 1179.08,
+          "end": 1183.08,
+          "text": "forte. Tem provas aqui que tem 100"
+        },
+        {
+          "start": 1181.32,
+          "end": 1184.24,
+          "text": "cavalos competindo. São 10 dias de"
+        },
+        {
+          "start": 1183.08,
+          "end": 1185.84,
+          "text": "competição, dá 15 milhão e meio de"
+        },
+        {
+          "start": 1184.24,
+          "end": 1190.88,
+          "text": "prêmio."
+        },
+        {
+          "start": 1185.84,
+          "end": 1192.6399999999999,
+          "text": "E e são 6 a 7.000 1 passadas que você tá"
+        },
+        {
+          "start": 1190.88,
+          "end": 1194.159,
+          "text": "vendo aí assim durante os 10 dias de"
+        },
+        {
+          "start": 1192.64,
+          "end": 1196.919,
+          "text": "competição."
+        },
+        {
+          "start": 1194.159,
+          "end": 1197.7600000000002,
+          "text": "Um um cavalo recordista, eu vou eu a"
+        },
+        {
+          "start": 1196.919,
+          "end": 1199.7990000000002,
+          "text": "gente vai tá aqui perto, eu vou falar:"
+        },
+        {
+          "start": 1197.76,
+          "end": 1202.08,
+          "text": "\"Ó, esse cavalo aqui, ele vale uns 10"
+        },
+        {
+          "start": 1199.799,
+          "end": 1204.6,
+          "text": "milhões, uns 8 milhões, uns 15 milhões.\""
+        },
+        {
+          "start": 1202.08,
+          "end": 1205.32,
+          "text": "Cavalos com valores"
+        },
+        {
+          "start": 1204.6,
+          "end": 1207.84,
+          "text": ">> astronômicos."
+        },
+        {
+          "start": 1205.32,
+          "end": 1210.039,
+          "text": ">> Astrô. Por quê? Porque ele não está bom"
+        },
+        {
+          "start": 1207.84,
+          "end": 1211.799,
+          "text": "como atleta. Ele vem carregando"
+        },
+        {
+          "start": 1210.039,
+          "end": 1213.72,
+          "text": ">> a genética de outros campeões."
+        },
+        {
+          "start": 1211.799,
+          "end": 1215.679,
+          "text": ">> E ele comprovou que ele é um dos"
+        },
+        {
+          "start": 1213.72,
+          "end": 1217.3600000000001,
+          "text": "melhores, com recordista, um cavalo que"
+        },
+        {
+          "start": 1215.679,
+          "end": 1220.159,
+          "text": "é muito ganhador. E o que que acaba"
+        },
+        {
+          "start": 1217.36,
+          "end": 1223.28,
+          "text": "acontecendo? acaba comercializando, seja"
+        }
+      ]
+    },
+    {
+      "rank": 9,
+      "start": 1318.52,
+      "end": 1363.9,
+      "peak": 1354.76,
+      "score": 10.54,
+      "title": "levanto. Porque você aprendeu como é que",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "regra é aumentar, é obrigado a aumentar. Você sabe quem você era antes do Renato? Maurissão sabe quem que era antes do Renato. Eu conheço o Maurício antes do Renato e eu conheço o Júlio Balestrin antes do Renato. >> Com certeza. Quando você aumenta a régua, você anda com pessoas que aumentam a sua régua de duas uma, ou você sai doquadro e cai fora automaticamente, ou você se esforça e alcança essa pessoa e essa pessoa sobe o nível dela e sobe e vai chegar um momento que o que que vai acontecer? Essa é a pessoa que te trouxe até aqui. Aí ela te levanta, tu levanta, te levanta, tu levanta. Tu opa, agora eu levanto. Porque você aprendeu como é que se faz, como é que momento que é você que tá puxando a corda, não só ele. >> Isso. Não, só ele. Aí vira vocês dois",
+      "peak_text": "levanto. Porque você aprendeu como é que",
+      "clip_file": "clips/clip-009.mp4",
+      "frame_file": "frames/clip-009.jpg",
+      "caption_segments": [
+        {
+          "start": 1319.52,
+          "end": 1324.039,
+          "text": "regra é aumentar, é obrigado a aumentar."
+        },
+        {
+          "start": 1322.039,
+          "end": 1325.2,
+          "text": "Você sabe quem você era antes do Renato?"
+        },
+        {
+          "start": 1324.039,
+          "end": 1326.559,
+          "text": "Maurissão sabe quem que era antes do"
+        },
+        {
+          "start": 1325.2,
+          "end": 1327.72,
+          "text": "Renato. Eu conheço o Maurício antes do"
+        },
+        {
+          "start": 1326.559,
+          "end": 1328.84,
+          "text": "Renato e eu conheço o Júlio Balestrin"
+        },
+        {
+          "start": 1327.72,
+          "end": 1331.08,
+          "text": "antes do Renato."
+        },
+        {
+          "start": 1328.84,
+          "end": 1332.24,
+          "text": ">> Com certeza. Quando você aumenta a"
+        },
+        {
+          "start": 1331.08,
+          "end": 1334.52,
+          "text": "régua, você anda com pessoas que"
+        },
+        {
+          "start": 1332.24,
+          "end": 1336.799,
+          "text": "aumentam a sua régua de duas uma, ou"
+        },
+        {
+          "start": 1334.52,
+          "end": 1338.52,
+          "text": "você sai doquadro e cai fora"
+        },
+        {
+          "start": 1336.799,
+          "end": 1341.44,
+          "text": "automaticamente,"
+        },
+        {
+          "start": 1338.52,
+          "end": 1343.679,
+          "text": "ou você se esforça e alcança essa pessoa"
+        },
+        {
+          "start": 1341.44,
+          "end": 1345.8400000000001,
+          "text": "e essa pessoa sobe o nível dela e sobe e"
+        },
+        {
+          "start": 1343.679,
+          "end": 1347.72,
+          "text": "vai chegar um momento que o que que vai"
+        },
+        {
+          "start": 1345.84,
+          "end": 1350.3999999999999,
+          "text": "acontecer? Essa é a pessoa que te trouxe"
+        },
+        {
+          "start": 1347.72,
+          "end": 1352.6000000000001,
+          "text": "até aqui. Aí ela te levanta, tu levanta,"
+        },
+        {
+          "start": 1350.4,
+          "end": 1354.799,
+          "text": "te levanta, tu levanta. Tu opa, agora eu"
+        },
+        {
+          "start": 1352.6,
+          "end": 1356.9189999999999,
+          "text": "levanto. Porque você aprendeu como é que"
+        },
+        {
+          "start": 1354.799,
+          "end": 1358.6399999999999,
+          "text": "se faz, como é que momento que é você"
+        },
+        {
+          "start": 1356.919,
+          "end": 1360.5200000000002,
+          "text": "que tá puxando a corda, não só ele."
+        },
+        {
+          "start": 1358.64,
+          "end": 1362.4,
+          "text": ">> Isso. Não, só ele. Aí vira vocês dois"
+        }
+      ]
+    },
+    {
+      "rank": 10,
+      "start": 1551.399,
+      "end": 1594.74,
+      "peak": 1582.66,
+      "score": 10.57,
+      "title": ">> Porque o cara tem que saber, não é",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "fundo do meu coração, quem entende, quem entende como vocês trabalham, da forma que vocês trabalham, com a intensidade que vocês trabalham, o sucesso não vem de graça, pessoal. Não v >> E quando vem de graça, ele vai de graça rápido. Você vê um monte de cantor que estoura, >> some. >> Por quê? >> Um álbum, uma música, >> é uma música que nem aquela do Reinaldo Benny lá, você água de coco lá. >> Sim, sumiu. >> Por iss que com água de coco acabou. >> Acabou. >> Porque o cara tem que saber, não é chegar no sucesso, é saber chegar no sucesso. E para saber chegar no sucesso, você tem que ser dedicado, determinado e ter coragem. E o tour aqui para vocês, pessoal, é para mostrar para vocês que tem que ter",
+      "peak_text": ">> Porque o cara tem que saber, não é",
+      "clip_file": "clips/clip-010.mp4",
+      "frame_file": "frames/clip-010.jpg",
+      "caption_segments": [
+        {
+          "start": 1552.399,
+          "end": 1557.799,
+          "text": "fundo do meu coração, quem entende, quem"
+        },
+        {
+          "start": 1555.76,
+          "end": 1559.1589999999999,
+          "text": "entende como vocês trabalham, da forma"
+        },
+        {
+          "start": 1557.799,
+          "end": 1561.399,
+          "text": "que vocês trabalham, com a intensidade"
+        },
+        {
+          "start": 1559.159,
+          "end": 1562.6000000000001,
+          "text": "que vocês trabalham, o sucesso não vem"
+        },
+        {
+          "start": 1561.399,
+          "end": 1564.2399999999998,
+          "text": "de graça, pessoal. Não v"
+        },
+        {
+          "start": 1562.6,
+          "end": 1566.279,
+          "text": ">> E quando vem de graça, ele vai de graça"
+        },
+        {
+          "start": 1564.24,
+          "end": 1567.48,
+          "text": "rápido. Você vê um monte de cantor que"
+        },
+        {
+          "start": 1566.279,
+          "end": 1568.919,
+          "text": "estoura,"
+        },
+        {
+          "start": 1567.48,
+          "end": 1569.3990000000001,
+          "text": ">> some."
+        },
+        {
+          "start": 1568.919,
+          "end": 1571.679,
+          "text": ">> Por quê?"
+        },
+        {
+          "start": 1569.399,
+          "end": 1574.1999999999998,
+          "text": ">> Um álbum, uma música,"
+        },
+        {
+          "start": 1571.679,
+          "end": 1576.8400000000001,
+          "text": ">> é uma música que nem aquela do Reinaldo"
+        },
+        {
+          "start": 1574.2,
+          "end": 1577.88,
+          "text": "Benny lá, você água de coco lá."
+        },
+        {
+          "start": 1576.84,
+          "end": 1579.76,
+          "text": ">> Sim, sumiu."
+        },
+        {
+          "start": 1577.88,
+          "end": 1581.0390000000002,
+          "text": ">> Por iss que com água de coco acabou."
+        },
+        {
+          "start": 1579.76,
+          "end": 1582.76,
+          "text": ">> Acabou."
+        },
+        {
+          "start": 1581.039,
+          "end": 1584.279,
+          "text": ">> Porque o cara tem que saber, não é"
+        },
+        {
+          "start": 1582.76,
+          "end": 1586,
+          "text": "chegar no sucesso, é saber chegar no"
+        },
+        {
+          "start": 1584.279,
+          "end": 1587.84,
+          "text": "sucesso. E para saber chegar no sucesso,"
+        },
+        {
+          "start": 1586,
+          "end": 1589.48,
+          "text": "você tem que ser dedicado, determinado e"
+        },
+        {
+          "start": 1587.84,
+          "end": 1590.76,
+          "text": "ter coragem."
+        },
+        {
+          "start": 1589.48,
+          "end": 1591.799,
+          "text": "E o tour aqui para vocês, pessoal, é"
+        },
+        {
+          "start": 1590.76,
+          "end": 1593.24,
+          "text": "para mostrar para vocês que tem que ter"
+        }
+      ]
+    }
+  ],
+  "export_format": "youtube",
+  "selected": [
+    {
+      "rank": 1,
+      "start": 195.28,
+      "end": 252.26,
+      "peak": 197.52,
+      "score": 10.79,
+      "title": ">> não? E tem que e tem que ser tem",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": ">> não? E tem que e tem que ser tem que tem que ser meio maluco, não dá. >> Tem que ter um parafuso a menos. >> Com certeza, cara. Não dá. >> Que que você acha? Nós temos um amigo que tá competindo hoje pela primeira vez. >> Começou a montar tem duas semanas. Faz duas semanas que ele monta >> no no boi ou no tambor? >> Noss dois. >> Não, no cavalo. No no touro ele já no cavalo já fazia um tempo. >> É, ele é ele tem muito parafuso solto. >> No cavalo ele faz no cavalo ele faz 15 alto o tempo. >> Muito vem para cá. OK, né? >> Não, 15 alto >> não. Eu acho o que é o nosso recordo. Recorde mundial. Tempo ser 16 alto, então >> 16 alto é um belo tempo. >> Ih, gatinha. >> Um bom tempo. >> É >> mais um. >> Ótimo tempo agora. Ótimo. Ótimo. >> Agora o touro é loucura. >> O touro é loucura. O touro é loucura. >> Você já foi, já foi a sua vez aí hoje? >> Não, a vai ser ainda. >> Que horas você tá mais, mais menos programado para você subir? >> Umas duas horas. Daqui umas duas horas, né? >> Qual que é o seu número?",
+      "peak_text": ">> não? E tem que e tem que ser tem que tem",
+      "clip_file": "clips/clip-001.mp4",
+      "frame_file": "frames/clip-001.jpg",
+      "caption_segments": [
+        {
+          "start": 196.28,
+          "end": 198.76,
+          "text": ">> não? E tem que e tem que ser tem que tem"
+        },
+        {
+          "start": 197.879,
+          "end": 199.879,
+          "text": "que ser meio maluco, não dá."
+        },
+        {
+          "start": 198.76,
+          "end": 201.319,
+          "text": ">> Tem que ter um parafuso a menos."
+        },
+        {
+          "start": 199.879,
+          "end": 202.879,
+          "text": ">> Com certeza, cara. Não dá."
+        },
+        {
+          "start": 201.319,
+          "end": 204.67999999999998,
+          "text": ">> Que que você acha? Nós temos um amigo"
+        },
+        {
+          "start": 202.879,
+          "end": 205.239,
+          "text": "que tá competindo hoje pela primeira"
+        },
+        {
+          "start": 204.68,
+          "end": 207,
+          "text": "vez."
+        },
+        {
+          "start": 205.239,
+          "end": 208.439,
+          "text": ">> Começou a montar tem duas semanas. Faz"
+        },
+        {
+          "start": 207,
+          "end": 209.959,
+          "text": "duas semanas que ele monta"
+        },
+        {
+          "start": 208.439,
+          "end": 210.599,
+          "text": ">> no no boi ou no tambor?"
+        },
+        {
+          "start": 209.959,
+          "end": 212.84,
+          "text": ">> Noss dois."
+        },
+        {
+          "start": 210.599,
+          "end": 214.319,
+          "text": ">> Não, no cavalo. No no touro ele já no"
+        },
+        {
+          "start": 212.84,
+          "end": 216.239,
+          "text": "cavalo já fazia um tempo."
+        },
+        {
+          "start": 214.319,
+          "end": 218.76,
+          "text": ">> É, ele é ele tem muito parafuso solto."
+        },
+        {
+          "start": 216.239,
+          "end": 219.36,
+          "text": ">> No cavalo ele faz no cavalo ele faz 15"
+        },
+        {
+          "start": 218.76,
+          "end": 221.48,
+          "text": "alto o tempo."
+        },
+        {
+          "start": 219.36,
+          "end": 222.64000000000001,
+          "text": ">> Muito vem para cá. OK, né?"
+        },
+        {
+          "start": 221.48,
+          "end": 227.07999999999998,
+          "text": ">> Não, 15 alto"
+        },
+        {
+          "start": 222.64,
+          "end": 228.64,
+          "text": ">> não. Eu acho o que é o nosso recordo."
+        },
+        {
+          "start": 227.08,
+          "end": 229,
+          "text": "Recorde mundial. Tempo ser 16 alto,"
+        },
+        {
+          "start": 228.64,
+          "end": 230.51899999999998,
+          "text": "então"
+        },
+        {
+          "start": 229,
+          "end": 231.959,
+          "text": ">> 16 alto é um belo tempo."
+        },
+        {
+          "start": 230.519,
+          "end": 232.87900000000002,
+          "text": ">> Ih, gatinha."
+        },
+        {
+          "start": 231.959,
+          "end": 233.439,
+          "text": ">> Um bom tempo."
+        },
+        {
+          "start": 232.879,
+          "end": 234.04,
+          "text": ">> É"
+        },
+        {
+          "start": 233.439,
+          "end": 236.56,
+          "text": ">> mais um."
+        },
+        {
+          "start": 234.04,
+          "end": 238.28,
+          "text": ">> Ótimo tempo agora. Ótimo. Ótimo."
+        },
+        {
+          "start": 236.56,
+          "end": 239.959,
+          "text": ">> Agora o touro é loucura."
+        },
+        {
+          "start": 238.28,
+          "end": 241.92,
+          "text": ">> O touro é loucura. O touro é loucura."
+        },
+        {
+          "start": 239.959,
+          "end": 243.28,
+          "text": ">> Você já foi, já foi a sua vez aí hoje?"
+        },
+        {
+          "start": 241.92,
+          "end": 244.83999999999997,
+          "text": ">> Não, a vai ser ainda."
+        },
+        {
+          "start": 243.28,
+          "end": 245.92,
+          "text": ">> Que horas você tá mais, mais menos"
+        },
+        {
+          "start": 244.84,
+          "end": 247.239,
+          "text": "programado para você subir?"
+        },
+        {
+          "start": 245.92,
+          "end": 248.23899999999998,
+          "text": ">> Umas duas horas. Daqui umas duas horas,"
+        },
+        {
+          "start": 247.239,
+          "end": 249.079,
+          "text": "né?"
+        },
+        {
+          "start": 248.239,
+          "end": 250.76,
+          "text": ">> Qual que é o seu número?"
+        }
+      ],
+      "status": "liked",
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 195.28,
+      "adjusted_end": 252.26,
+      "adjusted_duration": 56.98
+    },
+    {
+      "rank": 2,
+      "start": 306.639,
+      "end": 364.5,
+      "peak": 350.5,
+      "score": 11.83,
+      "title": "margem para erro, né? Então você se",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": ">> Você pode tocar então no tambor, >> po tocar, pode segurar. Só não pode cair. Por exemplo, tem gente que tem essa habilidade de cair quase pegar lá do chão. Só não pode relar o tambor 100% no chão, né? Mas ele pode balançar, pode pender, pode segurar. >> Você já ganhou muitos títulos? >> Ah, já ganhei bastante ao decorrer desses anos aí >> já ganhei. >> Vamos ver então. >> Já paguei alguns almoços. >> Vamos ver então quem vai pagar esse almoço hoje. >> Obrigado. >> Prazer, viu? >> Prazer. >> [ __ ] que pariu, cara. Ele tá falando aqui, ó, que é meio ingrato, porque >> é uma tentativa só. >> É, dentro de uma categoria, geralmente é uma tentativa só. Então ela não dá muito margem para erro, né? Então você se prepara, você vem, vem com o trailer, caminhão, [ __ ] estrutura e você vem ali para dar um tiro dentro de uma categoria. >> É um mais bonito que o outro, hein?",
+      "peak_text": "margem para erro, né? Então você se",
+      "clip_file": "clips/clip-002.mp4",
+      "frame_file": "frames/clip-002.jpg",
+      "caption_segments": [
+        {
+          "start": 307.639,
+          "end": 310.84000000000003,
+          "text": ">> Você pode tocar então no tambor,"
+        },
+        {
+          "start": 308.88,
+          "end": 312.68,
+          "text": ">> po tocar, pode segurar. Só não pode"
+        },
+        {
+          "start": 310.84,
+          "end": 314.4,
+          "text": "cair. Por exemplo, tem gente que tem"
+        },
+        {
+          "start": 312.68,
+          "end": 316.759,
+          "text": "essa habilidade de cair quase pegar lá"
+        },
+        {
+          "start": 314.4,
+          "end": 319.84,
+          "text": "do chão. Só não pode relar o tambor 100%"
+        },
+        {
+          "start": 316.759,
+          "end": 321.6,
+          "text": "no chão, né? Mas ele pode balançar, pode"
+        },
+        {
+          "start": 319.84,
+          "end": 323.08,
+          "text": "pender, pode segurar."
+        },
+        {
+          "start": 321.6,
+          "end": 324.52000000000004,
+          "text": ">> Você já ganhou muitos títulos?"
+        },
+        {
+          "start": 323.08,
+          "end": 326.44,
+          "text": ">> Ah, já ganhei bastante ao decorrer"
+        },
+        {
+          "start": 324.52,
+          "end": 328.08,
+          "text": "desses anos aí"
+        },
+        {
+          "start": 326.44,
+          "end": 329.319,
+          "text": ">> já ganhei."
+        },
+        {
+          "start": 328.08,
+          "end": 330.479,
+          "text": ">> Vamos ver então."
+        },
+        {
+          "start": 329.319,
+          "end": 331.8,
+          "text": ">> Já paguei alguns almoços."
+        },
+        {
+          "start": 330.479,
+          "end": 333.44,
+          "text": ">> Vamos ver então quem vai pagar esse"
+        },
+        {
+          "start": 331.8,
+          "end": 333.759,
+          "text": "almoço hoje."
+        },
+        {
+          "start": 333.44,
+          "end": 334.319,
+          "text": ">> Obrigado."
+        },
+        {
+          "start": 333.759,
+          "end": 335.88,
+          "text": ">> Prazer, viu?"
+        },
+        {
+          "start": 334.319,
+          "end": 337.91900000000004,
+          "text": ">> Prazer."
+        },
+        {
+          "start": 335.88,
+          "end": 342.68,
+          "text": ">> [ __ ] que pariu, cara. Ele tá falando"
+        },
+        {
+          "start": 337.919,
+          "end": 344.08,
+          "text": "aqui, ó, que é meio ingrato, porque"
+        },
+        {
+          "start": 342.68,
+          "end": 345.919,
+          "text": ">> é uma tentativa só."
+        },
+        {
+          "start": 344.08,
+          "end": 348.35999999999996,
+          "text": ">> É, dentro de uma categoria, geralmente é"
+        },
+        {
+          "start": 345.919,
+          "end": 350.639,
+          "text": "uma tentativa só. Então ela não dá muito"
+        },
+        {
+          "start": 348.36,
+          "end": 352.639,
+          "text": "margem para erro, né? Então você se"
+        },
+        {
+          "start": 350.639,
+          "end": 355.039,
+          "text": "prepara, você vem, vem com o trailer,"
+        },
+        {
+          "start": 352.639,
+          "end": 356.68,
+          "text": "caminhão, [ __ ] estrutura e você vem ali"
+        },
+        {
+          "start": 355.039,
+          "end": 358,
+          "text": "para dar um tiro dentro de uma"
+        },
+        {
+          "start": 356.68,
+          "end": 360.44,
+          "text": "categoria."
+        },
+        {
+          "start": 358,
+          "end": 363,
+          "text": ">> É um mais bonito que o outro, hein?"
+        }
+      ],
+      "status": "liked",
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 306.639,
+      "adjusted_end": 364.5,
+      "adjusted_duration": 57.861
+    }
+  ],
+  "caption_queue": [
+    {
+      "rank": 1,
+      "platform": "youtube",
+      "platform_label": "YouTube",
+      "width": 1920,
+      "height": 1080,
+      "publish_metadata": {},
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 195.28,
+      "adjusted_end": 252.26,
+      "adjusted_duration": 56.98,
+      "effect": {
+        "key": "old-film",
+        "label": "Filme Antigo",
+        "intensity": 85
+      },
+      "overlay": {
+        "key": "like-share",
+        "label": "Curta e compartilhe",
+        "x": 0.5959744854202401,
+        "y": 0.5146750524109015,
+        "width": 0.377733704974271,
+        "opacity": 95
+      },
+      "clip_file": "clips/clip-001.mp4",
+      "title": ">> não? E tem que e tem que ser tem",
+      "peak_text": ">> não? E tem que e tem que ser tem que tem",
+      "transcript": ">> não? E tem que e tem que ser tem que tem que ser meio maluco, não dá. >> Tem que ter um parafuso a menos. >> Com certeza, cara. Não dá. >> Que que você acha? Nós temos um amigo que tá competindo hoje pela primeira vez. >> Começou a montar tem duas semanas. Faz duas semanas que ele monta >> no no boi ou no tambor? >> Noss dois. >> Não, no cavalo. No no touro ele já no cavalo já fazia um tempo. >> É, ele é ele tem muito parafuso solto. >> No cavalo ele faz no cavalo ele faz 15 alto o tempo. >> Muito vem para cá. OK, né? >> Não, 15 alto >> não. Eu acho o que é o nosso recordo. Recorde mundial. Tempo ser 16 alto, então >> 16 alto é um belo tempo. >> Ih, gatinha. >> Um bom tempo. >> É >> mais um. >> Ótimo tempo agora. Ótimo. Ótimo. >> Agora o touro é loucura. >> O touro é loucura. O touro é loucura. >> Você já foi, já foi a sua vez aí hoje? >> Não, a vai ser ainda. >> Que horas você tá mais, mais menos programado para você subir? >> Umas duas horas. Daqui umas duas horas, né? >> Qual que é o seu número?",
+      "caption_segments": [
+        {
+          "start": 196.28,
+          "end": 198.76,
+          "text": ">> não? E tem que e tem que ser tem que tem"
+        },
+        {
+          "start": 197.879,
+          "end": 199.879,
+          "text": "que ser meio maluco, não dá."
+        },
+        {
+          "start": 198.76,
+          "end": 201.319,
+          "text": ">> Tem que ter um parafuso a menos."
+        },
+        {
+          "start": 199.879,
+          "end": 202.879,
+          "text": ">> Com certeza, cara. Não dá."
+        },
+        {
+          "start": 201.319,
+          "end": 204.67999999999998,
+          "text": ">> Que que você acha? Nós temos um amigo"
+        },
+        {
+          "start": 202.879,
+          "end": 205.239,
+          "text": "que tá competindo hoje pela primeira"
+        },
+        {
+          "start": 204.68,
+          "end": 207,
+          "text": "vez."
+        },
+        {
+          "start": 205.239,
+          "end": 208.439,
+          "text": ">> Começou a montar tem duas semanas. Faz"
+        },
+        {
+          "start": 207,
+          "end": 209.959,
+          "text": "duas semanas que ele monta"
+        },
+        {
+          "start": 208.439,
+          "end": 210.599,
+          "text": ">> no no boi ou no tambor?"
+        },
+        {
+          "start": 209.959,
+          "end": 212.84,
+          "text": ">> Noss dois."
+        },
+        {
+          "start": 210.599,
+          "end": 214.319,
+          "text": ">> Não, no cavalo. No no touro ele já no"
+        },
+        {
+          "start": 212.84,
+          "end": 216.239,
+          "text": "cavalo já fazia um tempo."
+        },
+        {
+          "start": 214.319,
+          "end": 218.76,
+          "text": ">> É, ele é ele tem muito parafuso solto."
+        },
+        {
+          "start": 216.239,
+          "end": 219.36,
+          "text": ">> No cavalo ele faz no cavalo ele faz 15"
+        },
+        {
+          "start": 218.76,
+          "end": 221.48,
+          "text": "alto o tempo."
+        },
+        {
+          "start": 219.36,
+          "end": 222.64000000000001,
+          "text": ">> Muito vem para cá. OK, né?"
+        },
+        {
+          "start": 221.48,
+          "end": 227.07999999999998,
+          "text": ">> Não, 15 alto"
+        },
+        {
+          "start": 222.64,
+          "end": 228.64,
+          "text": ">> não. Eu acho o que é o nosso recordo."
+        },
+        {
+          "start": 227.08,
+          "end": 229,
+          "text": "Recorde mundial. Tempo ser 16 alto,"
+        },
+        {
+          "start": 228.64,
+          "end": 230.51899999999998,
+          "text": "então"
+        },
+        {
+          "start": 229,
+          "end": 231.959,
+          "text": ">> 16 alto é um belo tempo."
+        },
+        {
+          "start": 230.519,
+          "end": 232.87900000000002,
+          "text": ">> Ih, gatinha."
+        },
+        {
+          "start": 231.959,
+          "end": 233.439,
+          "text": ">> Um bom tempo."
+        },
+        {
+          "start": 232.879,
+          "end": 234.04,
+          "text": ">> É"
+        },
+        {
+          "start": 233.439,
+          "end": 236.56,
+          "text": ">> mais um."
+        },
+        {
+          "start": 234.04,
+          "end": 238.28,
+          "text": ">> Ótimo tempo agora. Ótimo. Ótimo."
+        },
+        {
+          "start": 236.56,
+          "end": 239.959,
+          "text": ">> Agora o touro é loucura."
+        },
+        {
+          "start": 238.28,
+          "end": 241.92,
+          "text": ">> O touro é loucura. O touro é loucura."
+        },
+        {
+          "start": 239.959,
+          "end": 243.28,
+          "text": ">> Você já foi, já foi a sua vez aí hoje?"
+        },
+        {
+          "start": 241.92,
+          "end": 244.83999999999997,
+          "text": ">> Não, a vai ser ainda."
+        },
+        {
+          "start": 243.28,
+          "end": 245.92,
+          "text": ">> Que horas você tá mais, mais menos"
+        },
+        {
+          "start": 244.84,
+          "end": 247.239,
+          "text": "programado para você subir?"
+        },
+        {
+          "start": 245.92,
+          "end": 248.23899999999998,
+          "text": ">> Umas duas horas. Daqui umas duas horas,"
+        },
+        {
+          "start": 247.239,
+          "end": 249.079,
+          "text": "né?"
+        },
+        {
+          "start": 248.239,
+          "end": 250.76,
+          "text": ">> Qual que é o seu número?"
+        }
+      ]
+    },
+    {
+      "rank": 2,
+      "platform": "youtube",
+      "platform_label": "YouTube",
+      "width": 1920,
+      "height": 1080,
+      "publish_metadata": {},
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 306.639,
+      "adjusted_end": 364.5,
+      "adjusted_duration": 57.861,
+      "effect": {
+        "key": "light-grain",
+        "label": "Chuvisco Leve",
+        "intensity": 100
+      },
+      "overlay": {
+        "key": "subscribe",
+        "label": "Inscreva-se",
+        "x": 0.6405713979416809,
+        "y": 0.5634648370497427,
+        "width": 0.34,
+        "opacity": 70
+      },
+      "clip_file": "clips/clip-002.mp4",
+      "title": "margem para erro, né? Então você se",
+      "peak_text": "margem para erro, né? Então você se",
+      "transcript": ">> Você pode tocar então no tambor, >> po tocar, pode segurar. Só não pode cair. Por exemplo, tem gente que tem essa habilidade de cair quase pegar lá do chão. Só não pode relar o tambor 100% no chão, né? Mas ele pode balançar, pode pender, pode segurar. >> Você já ganhou muitos títulos? >> Ah, já ganhei bastante ao decorrer desses anos aí >> já ganhei. >> Vamos ver então. >> Já paguei alguns almoços. >> Vamos ver então quem vai pagar esse almoço hoje. >> Obrigado. >> Prazer, viu? >> Prazer. >> [ __ ] que pariu, cara. Ele tá falando aqui, ó, que é meio ingrato, porque >> é uma tentativa só. >> É, dentro de uma categoria, geralmente é uma tentativa só. Então ela não dá muito margem para erro, né? Então você se prepara, você vem, vem com o trailer, caminhão, [ __ ] estrutura e você vem ali para dar um tiro dentro de uma categoria. >> É um mais bonito que o outro, hein?",
+      "caption_segments": [
+        {
+          "start": 307.639,
+          "end": 310.84000000000003,
+          "text": ">> Você pode tocar então no tambor,"
+        },
+        {
+          "start": 308.88,
+          "end": 312.68,
+          "text": ">> po tocar, pode segurar. Só não pode"
+        },
+        {
+          "start": 310.84,
+          "end": 314.4,
+          "text": "cair. Por exemplo, tem gente que tem"
+        },
+        {
+          "start": 312.68,
+          "end": 316.759,
+          "text": "essa habilidade de cair quase pegar lá"
+        },
+        {
+          "start": 314.4,
+          "end": 319.84,
+          "text": "do chão. Só não pode relar o tambor 100%"
+        },
+        {
+          "start": 316.759,
+          "end": 321.6,
+          "text": "no chão, né? Mas ele pode balançar, pode"
+        },
+        {
+          "start": 319.84,
+          "end": 323.08,
+          "text": "pender, pode segurar."
+        },
+        {
+          "start": 321.6,
+          "end": 324.52000000000004,
+          "text": ">> Você já ganhou muitos títulos?"
+        },
+        {
+          "start": 323.08,
+          "end": 326.44,
+          "text": ">> Ah, já ganhei bastante ao decorrer"
+        },
+        {
+          "start": 324.52,
+          "end": 328.08,
+          "text": "desses anos aí"
+        },
+        {
+          "start": 326.44,
+          "end": 329.319,
+          "text": ">> já ganhei."
+        },
+        {
+          "start": 328.08,
+          "end": 330.479,
+          "text": ">> Vamos ver então."
+        },
+        {
+          "start": 329.319,
+          "end": 331.8,
+          "text": ">> Já paguei alguns almoços."
+        },
+        {
+          "start": 330.479,
+          "end": 333.44,
+          "text": ">> Vamos ver então quem vai pagar esse"
+        },
+        {
+          "start": 331.8,
+          "end": 333.759,
+          "text": "almoço hoje."
+        },
+        {
+          "start": 333.44,
+          "end": 334.319,
+          "text": ">> Obrigado."
+        },
+        {
+          "start": 333.759,
+          "end": 335.88,
+          "text": ">> Prazer, viu?"
+        },
+        {
+          "start": 334.319,
+          "end": 337.91900000000004,
+          "text": ">> Prazer."
+        },
+        {
+          "start": 335.88,
+          "end": 342.68,
+          "text": ">> [ __ ] que pariu, cara. Ele tá falando"
+        },
+        {
+          "start": 337.919,
+          "end": 344.08,
+          "text": "aqui, ó, que é meio ingrato, porque"
+        },
+        {
+          "start": 342.68,
+          "end": 345.919,
+          "text": ">> é uma tentativa só."
+        },
+        {
+          "start": 344.08,
+          "end": 348.35999999999996,
+          "text": ">> É, dentro de uma categoria, geralmente é"
+        },
+        {
+          "start": 345.919,
+          "end": 350.639,
+          "text": "uma tentativa só. Então ela não dá muito"
+        },
+        {
+          "start": 348.36,
+          "end": 352.639,
+          "text": "margem para erro, né? Então você se"
+        },
+        {
+          "start": 350.639,
+          "end": 355.039,
+          "text": "prepara, você vem, vem com o trailer,"
+        },
+        {
+          "start": 352.639,
+          "end": 356.68,
+          "text": "caminhão, [ __ ] estrutura e você vem ali"
+        },
+        {
+          "start": 355.039,
+          "end": 358,
+          "text": "para dar um tiro dentro de uma"
+        },
+        {
+          "start": 356.68,
+          "end": 360.44,
+          "text": "categoria."
+        },
+        {
+          "start": 358,
+          "end": 363,
+          "text": ">> É um mais bonito que o outro, hein?"
+        }
+      ]
+    }
+  ]
+}

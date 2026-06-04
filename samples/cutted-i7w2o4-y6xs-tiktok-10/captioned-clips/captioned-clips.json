@@ -1,0 +1,57 @@
+{
+  "source_caption_queue": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-i7w2o4-y6xs-tiktok-10\\caption-queue.json",
+  "captioned": [
+    {
+      "rank": 1,
+      "platform": "youtube",
+      "label": "YouTube",
+      "width": 1920,
+      "height": 1080,
+      "file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-i7w2o4-y6xs-tiktok-10\\captioned-clips\\clip-001-youtube-captioned.mp4",
+      "subtitle_file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-i7w2o4-y6xs-tiktok-10\\captioned-clips\\subtitles\\clip-001-youtube.ass",
+      "adjusted_start": 195.28,
+      "adjusted_end": 252.26,
+      "adjusted_duration": 56.98,
+      "publish_metadata": {},
+      "effect": {
+        "key": "old-film",
+        "label": "Filme Antigo",
+        "intensity": 85.0
+      },
+      "overlay": {
+        "key": "like-share",
+        "label": "Curta e compartilhe",
+        "x": 0.5959744854202401,
+        "y": 0.5146750524109015,
+        "width": 0.377733704974271,
+        "opacity": 95.0
+      }
+    },
+    {
+      "rank": 2,
+      "platform": "youtube",
+      "label": "YouTube",
+      "width": 1920,
+      "height": 1080,
+      "file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-i7w2o4-y6xs-tiktok-10\\captioned-clips\\clip-002-youtube-captioned.mp4",
+      "subtitle_file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-i7w2o4-y6xs-tiktok-10\\captioned-clips\\subtitles\\clip-002-youtube.ass",
+      "adjusted_start": 306.639,
+      "adjusted_end": 364.5,
+      "adjusted_duration": 57.861,
+      "publish_metadata": {},
+      "effect": {
+        "key": "light-grain",
+        "label": "Chuvisco Leve",
+        "intensity": 100.0
+      },
+      "overlay": {
+        "key": "subscribe",
+        "label": "Inscreva-se",
+        "x": 0.6405713979416809,
+        "y": 0.5634648370497427,
+        "width": 0.34,
+        "opacity": 70.0
+      }
+    }
+  ]
+}

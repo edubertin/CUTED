@@ -1,0 +1,1209 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CUTED Review</title>
+  <style>
+*{box-sizing:border-box}body{margin:0;background:#050505;color:#f4f4f4;font:14px/1.45 Arial,sans-serif}
+header{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;gap:16px;align-items:center;padding:18px 22px;background:#050505;border-bottom:1px solid #202020}.header-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+h1{margin:0;font-size:22px}header p{margin:3px 0 0;color:#9a9a9a}.tabs{position:sticky;top:75px;z-index:3;display:flex;gap:8px;padding:10px 22px;background:#060606;border-bottom:1px solid #1f1f1f}.tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 12px}.tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}.config{position:sticky;top:126px;z-index:2;display:flex;justify-content:space-between;gap:14px;align-items:center;padding:12px 22px;background:#080808;border-bottom:1px solid #202020}.config strong{display:block;font-size:13px}.config span{color:#9a9a9a;font-size:12px}.segments{display:flex;gap:6px;flex-wrap:wrap}.segments button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.segments button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}main{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;padding:18px;align-items:start}
+.card{background:#111;border:1px solid #272727;border-radius:8px;overflow:hidden}.card.liked{border-color:#24d17e}.card.discarded{opacity:.42}
+.media{position:relative;aspect-ratio:16/9;background:#000;max-height:58vh;transition:aspect-ratio .2s ease;overflow:hidden}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block}.placeholder{display:grid;place-items:center;height:100%;color:#777}
+body[data-format=tiktok] .media,body[data-format=shorts] .media,body[data-format=instagram] .media{aspect-ratio:9/16}body[data-format=facebook] .media{aspect-ratio:4/5}body[data-format=youtube] .media{aspect-ratio:16/9}
+.caption-item[data-effect=light-grain] .caption-preview video,.caption-item[data-effect=light-grain] .caption-preview img{filter:contrast(1.08) brightness(1.02)}
+.caption-item[data-effect=old-film] .caption-preview video,.caption-item[data-effect=old-film] .caption-preview img{filter:sepia(.48) contrast(1.2) saturate(.62) brightness(.92)}
+.caption-item[data-effect=vhs] .caption-preview video,.caption-item[data-effect=vhs] .caption-preview img{filter:saturate(.62) contrast(1.22) brightness(.9) hue-rotate(-7deg)}
+.caption-item[data-effect=bw-old] .caption-preview video,.caption-item[data-effect=bw-old] .caption-preview img{filter:grayscale(1) contrast(1.22) brightness(.9)}
+.caption-item[data-effect=light-grain] .caption-preview:after,.caption-item[data-effect=old-film] .caption-preview:after,.caption-item[data-effect=vhs] .caption-preview:after,.caption-item[data-effect=bw-old] .caption-preview:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--effect-opacity,.24);background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 70% 65%,rgba(0,0,0,.95) 0 1px,transparent 1.8px);background-size:4px 4px,6px 6px;mix-blend-mode:overlay}
+.caption-item[data-effect=old-film] .caption-preview:before,.caption-item[data-effect=bw-old] .caption-preview:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at center,transparent 44%,rgba(0,0,0,.46) 100%)}
+.caption-item[data-effect=vhs] .caption-preview:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 4px);mix-blend-mode:overlay}
+.body{padding:14px}.top{display:flex;gap:10px;align-items:center}.top span{color:#888}.top strong{font-size:15px}.peak{color:#fff;font-size:16px}
+p{color:#bebebe}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}
+.timeline-editor{padding:10px 14px 12px;background:#090909;border-top:1px solid #1e1e1e;border-bottom:1px solid #222}.timeline-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.timeline-head output{color:#f4f4f4;text-align:right}.timeline{position:relative;height:34px;margin-top:8px}.timeline-track{position:absolute;left:0;right:0;top:14px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:#f4f4f4;border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:34px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{display:flex;justify-content:space-between;color:#aaa;font-size:12px}
+.format-editor{display:block;padding:12px 14px;background:#090909;border-bottom:1px solid #222}.format-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.format-head output{color:#f4f4f4;text-align:right}.platform-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.platform-tags button{background:#191919;color:#ddd;border:1px solid #333}.platform-tags button.active{background:#24d17e;color:#04130b;border-color:#24d17e}.effect-stage,.overlay-stage{display:none;margin:18px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.effect-stage p,.overlay-stage p{margin:4px 0 0}.effect-summary,.overlay-summary{margin-top:12px;color:#aaa}.caption-item{border:1px solid #2a2a2a;border-radius:8px;background:#0a0a0a;overflow:hidden}.caption-preview{position:relative;display:flex;justify-content:center;background:#000;overflow:hidden}.caption-preview video,.caption-preview img{width:100%;max-height:64vh;object-fit:cover;background:#000}.caption-item[data-platform=tiktok] video,.caption-item[data-platform=shorts] video,.caption-item[data-platform=instagram] video{aspect-ratio:9/16}.caption-item[data-platform=facebook] video{aspect-ratio:4/5}.caption-item[data-platform=youtube] video{aspect-ratio:16/9}.caption-item-body{padding:12px}.caption-item strong{display:block}.caption-item span{display:inline-flex;margin:8px 8px 0 0;padding:4px 8px;border-radius:999px;background:#242424;color:#ddd;font-size:12px}.caption-item dl{margin-top:10px}
+.effect-preview,.overlay-preview{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin-top:16px;align-items:start}.effect-card-controls,.overlay-card-controls{display:grid;gap:10px;margin-top:12px}.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.effect-card-buttons button,.overlay-card-buttons button{background:#191919;color:#ddd;border:1px solid #333;text-align:left}.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;border-color:#24d17e}.effect-card-controls label,.overlay-card-controls label{display:grid;gap:6px;color:#aaa;font-size:12px}.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:#24d17e}.effect-empty,.overlay-empty{padding:18px;border:1px dashed #333;border-radius:8px;color:#aaa}.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,#24d17e);border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-resize{position:absolute;right:5px;bottom:5px;width:14px;height:14px;padding:0;border:1px solid rgba(255,255,255,.42);border-radius:3px;background:rgba(255,255,255,.18);cursor:nwse-resize}
+body[data-tab=effects] main,body[data-tab=effects] .config,body[data-tab=effects] .overlay-stage,body[data-tab=effects] .final-stage{display:none}body[data-tab=effects] .effect-stage{display:block}
+body[data-tab=overlays] main,body[data-tab=overlays] .config,body[data-tab=overlays] .effect-stage,body[data-tab=overlays] .final-stage{display:none}body[data-tab=overlays] .overlay-stage{display:block}
+body[data-tab=final] main,body[data-tab=final] .config,body[data-tab=final] .effect-stage,body[data-tab=final] .overlay-stage{display:none}body[data-tab=final] .final-stage{display:block}.final-stage{display:none;margin:18px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.final-panel{display:grid;grid-template-columns:120px 140px minmax(260px,1fr);gap:12px;margin-top:14px;align-items:end}.final-panel label{display:grid;gap:6px;color:#aaa}.final-panel select,.final-panel input{width:100%;background:#050505;color:#f4f4f4;border:1px solid #333;border-radius:6px;padding:9px}.final-panel code{display:block;min-height:40px;padding:10px;border:1px solid #303030;border-radius:6px;background:#050505;color:#ddd;white-space:normal;overflow-wrap:anywhere}
+details{border-top:1px solid #242424;margin-top:12px;padding-top:10px}summary{cursor:pointer;color:#ddd}.actions{display:flex;gap:8px;margin-top:12px}
+button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 12px;cursor:pointer}#reset-ui,button[data-action=discard]{background:#242424;color:#ddd}
+button[data-action=reset-trim]{background:#191919;color:#ddd;border:1px solid #333}
+@media(max-width:640px){.tabs{top:94px;overflow:auto}.config{top:144px;align-items:flex-start;flex-direction:column}.segments button{font-size:12px;padding:7px 9px}main{grid-template-columns:1fr;padding:12px}.effect-preview,.overlay-preview,.final-panel{grid-template-columns:1fr}}
+</style>
+</head>
+<body data-format="tiktok" data-tab="edit">
+  <header>
+    <div><h1>CUTED</h1><p>BALESTRIN MONTOU NUM TOURO ? O DONO DA GROWTH FICOU MALUCO !!!</p></div>
+    <div class="header-actions">
+      <button id="reset-ui">Zerar interface</button>
+      <button id="export">Exportar selecionados</button>
+    </div>
+  </header>
+  <nav class="tabs" aria-label="Fluxo">
+    <button data-tab="edit" class="active">1. Cortes e formatos</button>
+    <button data-tab="effects">2. Efeitos</button>
+    <button data-tab="overlays">3. Chamadas</button>
+    <button data-tab="final">4. Final</button>
+  </nav>
+  <section class="config" aria-label="Configuracao de formato">
+    <div>
+      <strong>Formato</strong>
+      <span data-format-hint>TikTok/Reels/Shorts - 9:16</span>
+    </div>
+    <div class="segments" role="group" aria-label="Formato do preview">
+      <button data-format="tiktok" class="active">TikTok</button>
+      <button data-format="shorts">Shorts</button>
+      <button data-format="youtube">YouTube</button>
+      <button data-format="instagram">Instagram</button>
+      <button data-format="facebook">Facebook</button>
+    </div>
+  </section>
+  <section class="effect-stage">
+    <div class="stage-head">
+      <div>
+        <strong>Efeitos</strong>
+        <p>Aplique um look por corte antes do render final.</p>
+      </div>
+      <button id="continue-overlays">Continuar para chamadas</button>
+    </div>
+    <div class="effect-summary" data-effect-summary>Nenhum corte marcado ainda.</div>
+    <div class="effect-preview" data-effect-preview></div>
+  </section>
+  <section class="overlay-stage">
+    <div class="stage-head">
+      <div>
+        <strong>Chamadas</strong>
+        <p>Escolha um card por corte, arraste no preview e fixe no render final.</p>
+      </div>
+      <button id="continue-final">Continuar para final</button>
+    </div>
+    <div class="overlay-summary" data-overlay-summary>Nenhum corte marcado ainda.</div>
+    <div class="overlay-preview" data-overlay-preview></div>
+  </section>
+  <section class="final-stage">
+    <div class="stage-head">
+      <div>
+        <strong>Final</strong>
+        <p data-final-summary>Prepare a fila com efeitos antes de renderizar.</p>
+      </div>
+      <div class="header-actions">
+        <button id="export-final-queue">Exportar fila</button>
+        <button id="copy-caption-command">Copiar comando</button>
+      </div>
+    </div>
+    <div class="final-panel">
+      <label>Linhas
+        <select data-caption-lines>
+          <option value="2" selected>2 linhas</option>
+          <option value="1">1 linha</option>
+          <option value="3">3 linhas</option>
+        </select>
+      </label>
+      <label>Largura
+        <input data-caption-width type="number" min="18" max="42" value="28">
+      </label>
+      <code data-caption-command>python cutted.py caption-selected "caption-queue.json" --out "captioned-clips" --base-dir "." --chars-per-line 28 --max-lines 2</code>
+    </div>
+  </section>
+  <main>
+    <article class="card" data-rank="1" data-start="195.280" data-end="252.260" data-duration="56.980">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-001.jpg?v=1-195280-252260" src="clips/clip-001.mp4?v=1-195280-252260"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 195.3s - 252.3s (57.0s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="57.0" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="57.0" step="0.1" value="57.0">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#01</span><strong>&gt;&gt; não? E tem que e tem que ser tem</strong></div>
+        <p class="peak">&gt;&gt; não? E tem que e tem que ser tem que tem</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>10.79</dd><dt>Inicio</dt><dd>195.3s</dd><dt>Fim</dt><dd>252.3s</dd></dl>
+        <details><summary>Transcript</summary><p>&gt;&gt; não? E tem que e tem que ser tem que tem que ser meio maluco, não dá. &gt;&gt; Tem que ter um parafuso a menos. &gt;&gt; Com certeza, cara. Não dá. &gt;&gt; Que que você acha? Nós temos um amigo que tá competindo hoje pela primeira vez. &gt;&gt; Começou a montar tem duas semanas. Faz duas semanas que ele monta &gt;&gt; no no boi ou no tambor? &gt;&gt; Noss dois. &gt;&gt; Não, no cavalo. No no touro ele já no cavalo já fazia um tempo. &gt;&gt; É, ele é ele tem muito parafuso solto. &gt;&gt; No cavalo ele faz no cavalo ele faz 15 alto o tempo. &gt;&gt; Muito vem para cá. OK, né? &gt;&gt; Não, 15 alto &gt;&gt; não. Eu acho o que é o nosso recordo. Recorde mundial. Tempo ser 16 alto, então &gt;&gt; 16 alto é um belo tempo. &gt;&gt; Ih, gatinha. &gt;&gt; Um bom tempo. &gt;&gt; É &gt;&gt; mais um. &gt;&gt; Ótimo tempo agora. Ótimo. Ótimo. &gt;&gt; Agora o touro é loucura. &gt;&gt; O touro é loucura. O touro é loucura. &gt;&gt; Você já foi, já foi a sua vez aí hoje? &gt;&gt; Não, a vai ser ainda. &gt;&gt; Que horas você tá mais, mais menos programado para você subir? &gt;&gt; Umas duas horas. Daqui umas duas horas, né? &gt;&gt; Qual que é o seu número?</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="2" data-start="306.639" data-end="364.500" data-duration="57.861">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-002.jpg?v=2-306639-364500" src="clips/clip-002.mp4?v=2-306639-364500"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 306.6s - 364.5s (57.9s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="57.9" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="57.9" step="0.1" value="57.9">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#02</span><strong>margem para erro, né? Então você se</strong></div>
+        <p class="peak">margem para erro, né? Então você se</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>11.83</dd><dt>Inicio</dt><dd>306.6s</dd><dt>Fim</dt><dd>364.5s</dd></dl>
+        <details><summary>Transcript</summary><p>&gt;&gt; Você pode tocar então no tambor, &gt;&gt; po tocar, pode segurar. Só não pode cair. Por exemplo, tem gente que tem essa habilidade de cair quase pegar lá do chão. Só não pode relar o tambor 100% no chão, né? Mas ele pode balançar, pode pender, pode segurar. &gt;&gt; Você já ganhou muitos títulos? &gt;&gt; Ah, já ganhei bastante ao decorrer desses anos aí &gt;&gt; já ganhei. &gt;&gt; Vamos ver então. &gt;&gt; Já paguei alguns almoços. &gt;&gt; Vamos ver então quem vai pagar esse almoço hoje. &gt;&gt; Obrigado. &gt;&gt; Prazer, viu? &gt;&gt; Prazer. &gt;&gt; [ __ ] que pariu, cara. Ele tá falando aqui, ó, que é meio ingrato, porque &gt;&gt; é uma tentativa só. &gt;&gt; É, dentro de uma categoria, geralmente é uma tentativa só. Então ela não dá muito margem para erro, né? Então você se prepara, você vem, vem com o trailer, caminhão, [ __ ] estrutura e você vem ali para dar um tiro dentro de uma categoria. &gt;&gt; É um mais bonito que o outro, hein?</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="3" data-start="374.160" data-end="437.819" data-duration="63.659">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-003.jpg?v=3-374160-437819" src="clips/clip-003.mp4?v=3-374160-437819"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 374.2s - 437.8s (63.7s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="63.7" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="63.7" step="0.1" value="63.7">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#03</span><strong>Verdade. Desde os nove, sabe? Mas</strong></div>
+        <p class="peak">Verdade. Desde os nove, sabe? Mas</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>10.94</dd><dt>Inicio</dt><dd>374.2s</dd><dt>Fim</dt><dd>437.8s</dd></dl>
+        <details><summary>Transcript</summary><p>Legal que não tem idade isso daqui, né? Se a pessoa tiver talento, pode ser um adolescente, &gt;&gt; homem, mulher. &gt;&gt; Homem, mulher, não tem distinção, cara. Isso é para todas mesmo. Divide cada um na sua categoria. &gt;&gt; Muito dinâmico, organizado. Meu Deus do céu. Esse cavalo forte demais, cara. É só Mister Olímpia aqui, cara. E aí, alemão? Você tá bom? Bom demais, &gt;&gt; rapaz. São bodybuilder, eles são fisiculturista. É você que monta? &gt;&gt; É eu que monta. &gt;&gt; Que lindo esse cavalo, bicho. Quantos anos ele tem? &gt;&gt; Essa daqui tem sete, anos. &gt;&gt; Anos. &gt;&gt; Oito anos. &gt;&gt; Você monta desde quanto? &gt;&gt; Eu monto desde os 10. &gt;&gt; Que isso, cara? Que cavalo maravilhoso. Verdade. Desde os nove, sabe? Mas comecei a correr aberta. É, desde os 16 eu comecei a correr aberto que a categoria. &gt;&gt; Qual que é o seu melhor tempo?</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="4" data-start="423.639" data-end="485.259" data-duration="61.620">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-004.jpg?v=4-423639-485259" src="clips/clip-004.mp4?v=4-423639-485259"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 423.6s - 485.3s (61.6s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="61.6" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="61.6" step="0.1" value="61.6">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#04</span><strong>Verdade. Desde os nove, sabe? Mas</strong></div>
+        <p class="peak">Verdade. Desde os nove, sabe? Mas</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>11.45</dd><dt>Inicio</dt><dd>423.6s</dd><dt>Fim</dt><dd>485.3s</dd></dl>
+        <details><summary>Transcript</summary><p>Verdade. Desde os nove, sabe? Mas comecei a correr aberta. É, desde os 16 eu comecei a correr aberto que a categoria. &gt;&gt; Qual que é o seu melhor tempo? &gt;&gt; 16 447. &gt;&gt; Eu tenho dois tempos igual. Ontem eu bati um igual em &gt;&gt; Ei, grandão. Rapaz, ó, o bicho tá suado, hein? &gt;&gt; Tá suado. &gt;&gt; Você tá aquecendo ele? &gt;&gt; Tô. Vou correr na na próxima ali. &gt;&gt; Daqui uma meia hora você tá subindo. &gt;&gt; Não, na próxima já. Na próxima bateria eu já vou já. &gt;&gt; Próxima. &gt;&gt; Qual que é o seu número? Que número que você tá? &gt;&gt; 63. &gt;&gt; 63. Qual que é o seu nome mesmo? &gt;&gt; Felipe de Morais. &gt;&gt; Felipe de Morais. Já ganhou muita prova, Felipe? &gt;&gt; Graças a Deus. Aqui eu ganhei quarta aberta cina uma outra. Essa daqui de cor 600. &gt;&gt; Qual que é a diferença da aberta snior pr as normais? É a categoria mais importante. &gt;&gt; As aberta, sabe? Primeiro dia tem o GP</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="5" data-start="625.720" data-end="695.420" data-duration="69.700">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-005.jpg?v=5-625720-695420" src="clips/clip-005.mp4?v=5-625720-695420"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 625.7s - 695.4s (69.7s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="69.7" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="69.7" step="0.1" value="69.7">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#05</span><strong>quanto? Que que você tá buscando? Que</strong></div>
+        <p class="peak">quanto? Que que você tá buscando? Que</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>11.15</dd><dt>Inicio</dt><dd>625.7s</dd><dt>Fim</dt><dd>695.4s</dd></dl>
+        <details><summary>Transcript</summary><p>&gt;&gt; Ou seja, ela é nova ainda. Uma égua pouco explorada, sabe? Depende muito. Tem cavalo que são um pouco explorado. É, tanto em remédio quanto em treinamento forte, essas coisas também. Isso manda muito. Então, se você conseguir manter um bom trabalho desse jeito aí, você vai conseguir ter um bom animal pra frente até bastante tempo. &gt;&gt; Tem algum problema com lesão, essas coisas? &gt;&gt; Não, essa não. &gt;&gt; E aí, Edu? &gt;&gt; Bora. &gt;&gt; Como é que tá aí? &gt;&gt; Vamos. Estamos pronto. &gt;&gt; Quais as expectativas para hoje? &gt;&gt; Expectativa é d no mínimo máximo, né? Sempre. &gt;&gt; Dá máximo. &gt;&gt; Conta pra galera quanto tempo você treinou. &gt;&gt; Três meses. &gt;&gt; Três meses. É. &gt;&gt; E no touro? no touro dois dias. &gt;&gt; Eu encontrei dois competidores, os dois falou que você é louco. &gt;&gt; Mas o mundo tá, o mundo precisa um pouco de louco, né? Hã, tá cheio de gente normal, mas do mesmo não faz nada. É isso aí, cara. &gt;&gt; Nós queremos o extraordinário. &gt;&gt; É, quem busca extraordinário tem que fazer extraordinário. Aí pros outros é louco. &gt;&gt; Sim. Você mentalizou? Você acha que o seu tempo hoje seria por volta de quanto? Que que você tá buscando? Que</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="6" data-start="680.959" data-end="732.100" data-duration="51.141">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-006.jpg?v=6-680959-732100" src="clips/clip-006.mp4?v=6-680959-732100"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 681.0s - 732.1s (51.1s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="51.1" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="51.1" step="0.1" value="51.1">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#06</span><strong>quanto? Que que você tá buscando? Que</strong></div>
+        <p class="peak">quanto? Que que você tá buscando? Que</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>11.73</dd><dt>Inicio</dt><dd>681.0s</dd><dt>Fim</dt><dd>732.1s</dd></dl>
+        <details><summary>Transcript</summary><p>&gt;&gt; É, quem busca extraordinário tem que fazer extraordinário. Aí pros outros é louco. &gt;&gt; Sim. Você mentalizou? Você acha que o seu tempo hoje seria por volta de quanto? Que que você tá buscando? Que que você tá buscando nessa primeira prova? 17 700 tent baixar disso. Se eu vencer de mim mesmo, &gt;&gt; já é um negócio. &gt;&gt; Já é um negócio, né? Eu só tô três meses, então é muito pouco tempo para quem já deu 17 é muito pouco tempo da 3 meses dá 17, entendeu? Vou tentar tirar tempo, tentar um 17 baixo aí, 1700, 1700 para mim já tá valendo muito jáa &gt;&gt; para ver que daí se eu tirar tipo 17 eu tô a 1 segundo do recorde mundial. &gt;&gt; O recorde mundial é 16. &gt;&gt; É 15, né? &gt;&gt; É, &gt;&gt; é 15. 15 16 080 &gt;&gt; 16 080 &gt;&gt; é &gt;&gt; o bicho tá pele músculo, viu as fotos?</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="7" data-start="760.079" data-end="811.699" data-duration="51.620">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-007.jpg?v=7-760079-811699" src="clips/clip-007.mp4?v=7-760079-811699"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 760.1s - 811.7s (51.6s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="51.6" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="51.6" step="0.1" value="51.6">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#07</span><strong>&gt;&gt; Deve ser porque é mais rápido</strong></div>
+        <p class="peak">&gt;&gt; Deve ser porque é mais rápido.</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>10.87</dd><dt>Inicio</dt><dd>760.1s</dd><dt>Fim</dt><dd>811.7s</dd></dl>
+        <details><summary>Transcript</summary><p>atleta. Não tem jeito. &gt;&gt; Já em cima do tour ali. É menos ainda, cara. Menos ainda. Menos ainda. &gt;&gt; Deve ser porque é mais rápido. &gt;&gt; Não é mais rápido, mas não sei. É diferente. É diferente. Mas tu encaixa ali na hora que ele dá aquelas [ __ ] ele dá, ele bate ali, volta, bate, bate e é pressão. &gt;&gt; Você fica muito concentrado no que você e não dá tempo de ficar nervoso. É, não dá tempo de ficar nervoso. &gt;&gt; Fê, por que que você não vai com ele? &gt;&gt; Eu vou com ele. &gt;&gt; É, ele vai est &gt;&gt; Quando ele montar no cavalo, quem vai estar segurando a rédeia junto com a mão dele é a minha. Quando ele sentar na cela, eu tô junto. &gt;&gt; E quando ele tiver pisando no estribo, sou eu que dou a força para segurar. &gt;&gt; Mas você tá calmo que nem ele? &gt;&gt; Hã? &gt;&gt; Você tá calmo que nem ele? &gt;&gt; Calmo &gt;&gt; sim, mas na hora do touro aí eu vou ficar nervoso. &gt;&gt; Vamos curtir agora a prova dele. Ver o aquecimento. &gt;&gt; Que isso, pai? Pera aí, Julião. Nós</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="8" data-start="1171.440" data-end="1224.780" data-duration="53.340">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-008.jpg?v=8-1171440-1224780" src="clips/clip-008.mp4?v=8-1171440-1224780"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 1171.4s - 1224.8s (53.3s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="53.3" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="53.3" step="0.1" value="53.3">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#08</span><strong>&gt;&gt; Astrô. Por quê? Porque ele não está bom</strong></div>
+        <p class="peak">&gt;&gt; Astrô. Por quê? Porque ele não está bom</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>11.98</dd><dt>Inicio</dt><dd>1171.4s</dd><dt>Fim</dt><dd>1224.8s</dd></dl>
+        <details><summary>Transcript</summary><p>existisse uma segunda opção. &gt;&gt; É uma modalidade que ela não é muito divulgada em mídias, em redes sociais, mas ela é muito forte. Ela é muito forte. Tem provas aqui que tem 100 cavalos competindo. São 10 dias de competição, dá 15 milhão e meio de prêmio. E e são 6 a 7.000 1 passadas que você tá vendo aí assim durante os 10 dias de competição. Um um cavalo recordista, eu vou eu a gente vai tá aqui perto, eu vou falar: &quot;Ó, esse cavalo aqui, ele vale uns 10 milhões, uns 8 milhões, uns 15 milhões.&quot; Cavalos com valores &gt;&gt; astronômicos. &gt;&gt; Astrô. Por quê? Porque ele não está bom como atleta. Ele vem carregando &gt;&gt; a genética de outros campeões. &gt;&gt; E ele comprovou que ele é um dos melhores, com recordista, um cavalo que é muito ganhador. E o que que acaba acontecendo? acaba comercializando, seja</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="9" data-start="1318.520" data-end="1363.900" data-duration="45.380">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-009.jpg?v=9-1318520-1363900" src="clips/clip-009.mp4?v=9-1318520-1363900"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 1318.5s - 1363.9s (45.4s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="45.4" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="45.4" step="0.1" value="45.4">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#09</span><strong>levanto. Porque você aprendeu como é que</strong></div>
+        <p class="peak">levanto. Porque você aprendeu como é que</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>10.54</dd><dt>Inicio</dt><dd>1318.5s</dd><dt>Fim</dt><dd>1363.9s</dd></dl>
+        <details><summary>Transcript</summary><p>regra é aumentar, é obrigado a aumentar. Você sabe quem você era antes do Renato? Maurissão sabe quem que era antes do Renato. Eu conheço o Maurício antes do Renato e eu conheço o Júlio Balestrin antes do Renato. &gt;&gt; Com certeza. Quando você aumenta a régua, você anda com pessoas que aumentam a sua régua de duas uma, ou você sai doquadro e cai fora automaticamente, ou você se esforça e alcança essa pessoa e essa pessoa sobe o nível dela e sobe e vai chegar um momento que o que que vai acontecer? Essa é a pessoa que te trouxe até aqui. Aí ela te levanta, tu levanta, te levanta, tu levanta. Tu opa, agora eu levanto. Porque você aprendeu como é que se faz, como é que momento que é você que tá puxando a corda, não só ele. &gt;&gt; Isso. Não, só ele. Aí vira vocês dois</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="10" data-start="1551.399" data-end="1594.740" data-duration="43.341">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-010.jpg?v=10-1551399-1594740" src="clips/clip-010.mp4?v=10-1551399-1594740"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 1551.4s - 1594.7s (43.3s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="43.3" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="43.3" step="0.1" value="43.3">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#10</span><strong>&gt;&gt; Porque o cara tem que saber, não é</strong></div>
+        <p class="peak">&gt;&gt; Porque o cara tem que saber, não é</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>10.57</dd><dt>Inicio</dt><dd>1551.4s</dd><dt>Fim</dt><dd>1594.7s</dd></dl>
+        <details><summary>Transcript</summary><p>fundo do meu coração, quem entende, quem entende como vocês trabalham, da forma que vocês trabalham, com a intensidade que vocês trabalham, o sucesso não vem de graça, pessoal. Não v &gt;&gt; E quando vem de graça, ele vai de graça rápido. Você vê um monte de cantor que estoura, &gt;&gt; some. &gt;&gt; Por quê? &gt;&gt; Um álbum, uma música, &gt;&gt; é uma música que nem aquela do Reinaldo Benny lá, você água de coco lá. &gt;&gt; Sim, sumiu. &gt;&gt; Por iss que com água de coco acabou. &gt;&gt; Acabou. &gt;&gt; Porque o cara tem que saber, não é chegar no sucesso, é saber chegar no sucesso. E para saber chegar no sucesso, você tem que ser dedicado, determinado e ter coragem. E o tour aqui para vocês, pessoal, é para mostrar para vocês que tem que ter</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article></main>
+  <script>window.CUTTED_DATA = {"moments": [{"rank": 1, "start": 195.28, "end": 252.26, "peak": 197.52, "score": 10.79, "title": ">> não? E tem que e tem que ser tem", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": ">> não? E tem que e tem que ser tem que tem que ser meio maluco, não dá. >> Tem que ter um parafuso a menos. >> Com certeza, cara. Não dá. >> Que que você acha? Nós temos um amigo que tá competindo hoje pela primeira vez. >> Começou a montar tem duas semanas. Faz duas semanas que ele monta >> no no boi ou no tambor? >> Noss dois. >> Não, no cavalo. No no touro ele já no cavalo já fazia um tempo. >> É, ele é ele tem muito parafuso solto. >> No cavalo ele faz no cavalo ele faz 15 alto o tempo. >> Muito vem para cá. OK, né? >> Não, 15 alto >> não. Eu acho o que é o nosso recordo. Recorde mundial. Tempo ser 16 alto, então >> 16 alto é um belo tempo. >> Ih, gatinha. >> Um bom tempo. >> É >> mais um. >> Ótimo tempo agora. Ótimo. Ótimo. >> Agora o touro é loucura. >> O touro é loucura. O touro é loucura. >> Você já foi, já foi a sua vez aí hoje? >> Não, a vai ser ainda. >> Que horas você tá mais, mais menos programado para você subir? >> Umas duas horas. Daqui umas duas horas, né? >> Qual que é o seu número?", "peak_text": ">> não? E tem que e tem que ser tem que tem", "clip_file": "clips/clip-001.mp4", "frame_file": "frames/clip-001.jpg", "caption_segments": [{"start": 196.28, "end": 198.76, "text": ">> não? E tem que e tem que ser tem que tem"}, {"start": 197.879, "end": 199.879, "text": "que ser meio maluco, não dá."}, {"start": 198.76, "end": 201.319, "text": ">> Tem que ter um parafuso a menos."}, {"start": 199.879, "end": 202.879, "text": ">> Com certeza, cara. Não dá."}, {"start": 201.319, "end": 204.67999999999998, "text": ">> Que que você acha? Nós temos um amigo"}, {"start": 202.879, "end": 205.239, "text": "que tá competindo hoje pela primeira"}, {"start": 204.68, "end": 207.0, "text": "vez."}, {"start": 205.239, "end": 208.439, "text": ">> Começou a montar tem duas semanas. Faz"}, {"start": 207.0, "end": 209.959, "text": "duas semanas que ele monta"}, {"start": 208.439, "end": 210.599, "text": ">> no no boi ou no tambor?"}, {"start": 209.959, "end": 212.84, "text": ">> Noss dois."}, {"start": 210.599, "end": 214.319, "text": ">> Não, no cavalo. No no touro ele já no"}, {"start": 212.84, "end": 216.239, "text": "cavalo já fazia um tempo."}, {"start": 214.319, "end": 218.76, "text": ">> É, ele é ele tem muito parafuso solto."}, {"start": 216.239, "end": 219.36, "text": ">> No cavalo ele faz no cavalo ele faz 15"}, {"start": 218.76, "end": 221.48, "text": "alto o tempo."}, {"start": 219.36, "end": 222.64000000000001, "text": ">> Muito vem para cá. OK, né?"}, {"start": 221.48, "end": 227.07999999999998, "text": ">> Não, 15 alto"}, {"start": 222.64, "end": 228.64, "text": ">> não. Eu acho o que é o nosso recordo."}, {"start": 227.08, "end": 229.0, "text": "Recorde mundial. Tempo ser 16 alto,"}, {"start": 228.64, "end": 230.51899999999998, "text": "então"}, {"start": 229.0, "end": 231.959, "text": ">> 16 alto é um belo tempo."}, {"start": 230.519, "end": 232.87900000000002, "text": ">> Ih, gatinha."}, {"start": 231.959, "end": 233.439, "text": ">> Um bom tempo."}, {"start": 232.879, "end": 234.04, "text": ">> É"}, {"start": 233.439, "end": 236.56, "text": ">> mais um."}, {"start": 234.04, "end": 238.28, "text": ">> Ótimo tempo agora. Ótimo. Ótimo."}, {"start": 236.56, "end": 239.959, "text": ">> Agora o touro é loucura."}, {"start": 238.28, "end": 241.92, "text": ">> O touro é loucura. O touro é loucura."}, {"start": 239.959, "end": 243.28, "text": ">> Você já foi, já foi a sua vez aí hoje?"}, {"start": 241.92, "end": 244.83999999999997, "text": ">> Não, a vai ser ainda."}, {"start": 243.28, "end": 245.92, "text": ">> Que horas você tá mais, mais menos"}, {"start": 244.84, "end": 247.239, "text": "programado para você subir?"}, {"start": 245.92, "end": 248.23899999999998, "text": ">> Umas duas horas. Daqui umas duas horas,"}, {"start": 247.239, "end": 249.079, "text": "né?"}, {"start": 248.239, "end": 250.76, "text": ">> Qual que é o seu número?"}]}, {"rank": 2, "start": 306.639, "end": 364.5, "peak": 350.5, "score": 11.83, "title": "margem para erro, né? Então você se", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": ">> Você pode tocar então no tambor, >> po tocar, pode segurar. Só não pode cair. Por exemplo, tem gente que tem essa habilidade de cair quase pegar lá do chão. Só não pode relar o tambor 100% no chão, né? Mas ele pode balançar, pode pender, pode segurar. >> Você já ganhou muitos títulos? >> Ah, já ganhei bastante ao decorrer desses anos aí >> já ganhei. >> Vamos ver então. >> Já paguei alguns almoços. >> Vamos ver então quem vai pagar esse almoço hoje. >> Obrigado. >> Prazer, viu? >> Prazer. >> [ __ ] que pariu, cara. Ele tá falando aqui, ó, que é meio ingrato, porque >> é uma tentativa só. >> É, dentro de uma categoria, geralmente é uma tentativa só. Então ela não dá muito margem para erro, né? Então você se prepara, você vem, vem com o trailer, caminhão, [ __ ] estrutura e você vem ali para dar um tiro dentro de uma categoria. >> É um mais bonito que o outro, hein?", "peak_text": "margem para erro, né? Então você se", "clip_file": "clips/clip-002.mp4", "frame_file": "frames/clip-002.jpg", "caption_segments": [{"start": 307.639, "end": 310.84000000000003, "text": ">> Você pode tocar então no tambor,"}, {"start": 308.88, "end": 312.68, "text": ">> po tocar, pode segurar. Só não pode"}, {"start": 310.84, "end": 314.4, "text": "cair. Por exemplo, tem gente que tem"}, {"start": 312.68, "end": 316.759, "text": "essa habilidade de cair quase pegar lá"}, {"start": 314.4, "end": 319.84, "text": "do chão. Só não pode relar o tambor 100%"}, {"start": 316.759, "end": 321.6, "text": "no chão, né? Mas ele pode balançar, pode"}, {"start": 319.84, "end": 323.08, "text": "pender, pode segurar."}, {"start": 321.6, "end": 324.52000000000004, "text": ">> Você já ganhou muitos títulos?"}, {"start": 323.08, "end": 326.44, "text": ">> Ah, já ganhei bastante ao decorrer"}, {"start": 324.52, "end": 328.08, "text": "desses anos aí"}, {"start": 326.44, "end": 329.319, "text": ">> já ganhei."}, {"start": 328.08, "end": 330.479, "text": ">> Vamos ver então."}, {"start": 329.319, "end": 331.8, "text": ">> Já paguei alguns almoços."}, {"start": 330.479, "end": 333.44, "text": ">> Vamos ver então quem vai pagar esse"}, {"start": 331.8, "end": 333.759, "text": "almoço hoje."}, {"start": 333.44, "end": 334.319, "text": ">> Obrigado."}, {"start": 333.759, "end": 335.88, "text": ">> Prazer, viu?"}, {"start": 334.319, "end": 337.91900000000004, "text": ">> Prazer."}, {"start": 335.88, "end": 342.68, "text": ">> [ __ ] que pariu, cara. Ele tá falando"}, {"start": 337.919, "end": 344.08, "text": "aqui, ó, que é meio ingrato, porque"}, {"start": 342.68, "end": 345.919, "text": ">> é uma tentativa só."}, {"start": 344.08, "end": 348.35999999999996, "text": ">> É, dentro de uma categoria, geralmente é"}, {"start": 345.919, "end": 350.639, "text": "uma tentativa só. Então ela não dá muito"}, {"start": 348.36, "end": 352.639, "text": "margem para erro, né? Então você se"}, {"start": 350.639, "end": 355.039, "text": "prepara, você vem, vem com o trailer,"}, {"start": 352.639, "end": 356.68, "text": "caminhão, [ __ ] estrutura e você vem ali"}, {"start": 355.039, "end": 358.0, "text": "para dar um tiro dentro de uma"}, {"start": 356.68, "end": 360.44, "text": "categoria."}, {"start": 358.0, "end": 363.0, "text": ">> É um mais bonito que o outro, hein?"}]}, {"rank": 3, "start": 374.16, "end": 437.819, "peak": 426.16, "score": 10.94, "title": "Verdade. Desde os nove, sabe? Mas", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "Legal que não tem idade isso daqui, né? Se a pessoa tiver talento, pode ser um adolescente, >> homem, mulher. >> Homem, mulher, não tem distinção, cara. Isso é para todas mesmo. Divide cada um na sua categoria. >> Muito dinâmico, organizado. Meu Deus do céu. Esse cavalo forte demais, cara. É só Mister Olímpia aqui, cara. E aí, alemão? Você tá bom? Bom demais, >> rapaz. São bodybuilder, eles são fisiculturista. É você que monta? >> É eu que monta. >> Que lindo esse cavalo, bicho. Quantos anos ele tem? >> Essa daqui tem sete, anos. >> Anos. >> Oito anos. >> Você monta desde quanto? >> Eu monto desde os 10. >> Que isso, cara? Que cavalo maravilhoso. Verdade. Desde os nove, sabe? Mas comecei a correr aberta. É, desde os 16 eu comecei a correr aberto que a categoria. >> Qual que é o seu melhor tempo?", "peak_text": "Verdade. Desde os nove, sabe? Mas", "clip_file": "clips/clip-003.mp4", "frame_file": "frames/clip-003.jpg", "caption_segments": [{"start": 375.16, "end": 380.28000000000003, "text": "Legal que não tem idade isso daqui, né?"}, {"start": 377.96, "end": 382.63899999999995, "text": "Se a pessoa tiver talento, pode ser um"}, {"start": 380.28, "end": 383.55999999999995, "text": "adolescente,"}, {"start": 382.639, "end": 385.599, "text": ">> homem, mulher."}, {"start": 383.56, "end": 388.08, "text": ">> Homem, mulher, não tem distinção, cara."}, {"start": 385.599, "end": 389.44, "text": "Isso é para todas mesmo. Divide cada um"}, {"start": 388.08, "end": 392.19899999999996, "text": "na sua categoria."}, {"start": 389.44, "end": 393.88, "text": ">> Muito dinâmico, organizado."}, {"start": 392.199, "end": 397.0, "text": "Meu Deus do céu. Esse cavalo forte"}, {"start": 393.88, "end": 400.0, "text": "demais, cara. É só Mister Olímpia aqui,"}, {"start": 397.0, "end": 400.0, "text": "cara."}, {"start": 400.08, "end": 405.479, "text": "E aí, alemão? Você tá bom? Bom demais,"}, {"start": 403.639, "end": 408.479, "text": ">> rapaz. São bodybuilder, eles são"}, {"start": 405.479, "end": 408.479, "text": "fisiculturista."}, {"start": 408.759, "end": 411.599, "text": "É você que monta?"}, {"start": 409.8, "end": 414.24, "text": ">> É eu que monta."}, {"start": 411.599, "end": 415.12, "text": ">> Que lindo esse cavalo, bicho. Quantos"}, {"start": 414.24, "end": 417.56, "text": "anos ele tem?"}, {"start": 415.12, "end": 418.12, "text": ">> Essa daqui tem sete, anos."}, {"start": 417.56, "end": 418.879, "text": ">> Anos."}, {"start": 418.12, "end": 420.52, "text": ">> Oito anos."}, {"start": 418.879, "end": 422.759, "text": ">> Você monta desde quanto?"}, {"start": 420.52, "end": 424.639, "text": ">> Eu monto desde os 10."}, {"start": 422.759, "end": 426.16, "text": ">> Que isso, cara? Que cavalo maravilhoso."}, {"start": 424.639, "end": 427.68, "text": "Verdade. Desde os nove, sabe? Mas"}, {"start": 426.16, "end": 430.199, "text": "comecei a correr aberta."}, {"start": 427.68, "end": 431.72, "text": "É, desde os 16 eu comecei a correr"}, {"start": 430.199, "end": 433.44, "text": "aberto que a categoria."}, {"start": 431.72, "end": 436.319, "text": ">> Qual que é o seu melhor tempo?"}]}, {"rank": 4, "start": 423.639, "end": 485.259, "peak": 426.16, "score": 11.45, "title": "Verdade. Desde os nove, sabe? Mas", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "Verdade. Desde os nove, sabe? Mas comecei a correr aberta. É, desde os 16 eu comecei a correr aberto que a categoria. >> Qual que é o seu melhor tempo? >> 16 447. >> Eu tenho dois tempos igual. Ontem eu bati um igual em >> Ei, grandão. Rapaz, ó, o bicho tá suado, hein? >> Tá suado. >> Você tá aquecendo ele? >> Tô. Vou correr na na próxima ali. >> Daqui uma meia hora você tá subindo. >> Não, na próxima já. Na próxima bateria eu já vou já. >> Próxima. >> Qual que é o seu número? Que número que você tá? >> 63. >> 63. Qual que é o seu nome mesmo? >> Felipe de Morais. >> Felipe de Morais. Já ganhou muita prova, Felipe? >> Graças a Deus. Aqui eu ganhei quarta aberta cina uma outra. Essa daqui de cor 600. >> Qual que é a diferença da aberta snior pr as normais? É a categoria mais importante. >> As aberta, sabe? Primeiro dia tem o GP", "peak_text": "Verdade. Desde os nove, sabe? Mas", "clip_file": "clips/clip-004.mp4", "frame_file": "frames/clip-004.jpg", "caption_segments": [{"start": 424.639, "end": 427.68, "text": "Verdade. Desde os nove, sabe? Mas"}, {"start": 426.16, "end": 430.199, "text": "comecei a correr aberta."}, {"start": 427.68, "end": 431.72, "text": "É, desde os 16 eu comecei a correr"}, {"start": 430.199, "end": 433.44, "text": "aberto que a categoria."}, {"start": 431.72, "end": 436.319, "text": ">> Qual que é o seu melhor tempo?"}, {"start": 433.44, "end": 438.479, "text": ">> 16 447."}, {"start": 436.319, "end": 440.199, "text": ">> Eu tenho dois tempos igual. Ontem eu"}, {"start": 438.479, "end": 442.599, "text": "bati um igual em"}, {"start": 440.199, "end": 444.68, "text": ">> Ei, grandão."}, {"start": 442.599, "end": 445.759, "text": "Rapaz, ó, o bicho tá suado, hein?"}, {"start": 444.68, "end": 447.52, "text": ">> Tá suado."}, {"start": 445.759, "end": 450.199, "text": ">> Você tá aquecendo ele?"}, {"start": 447.52, "end": 451.52, "text": ">> Tô. Vou correr na na próxima ali."}, {"start": 450.199, "end": 453.479, "text": ">> Daqui uma meia hora você tá subindo."}, {"start": 451.52, "end": 454.15999999999997, "text": ">> Não, na próxima já. Na próxima bateria"}, {"start": 453.479, "end": 455.24, "text": "eu já vou já."}, {"start": 454.16, "end": 457.0, "text": ">> Próxima."}, {"start": 455.24, "end": 457.84000000000003, "text": ">> Qual que é o seu número?"}, {"start": 457.0, "end": 458.68, "text": "Que número que você tá?"}, {"start": 457.84, "end": 460.479, "text": ">> 63."}, {"start": 458.68, "end": 461.56, "text": ">> 63. Qual que é o seu nome mesmo?"}, {"start": 460.479, "end": 464.479, "text": ">> Felipe de Morais."}, {"start": 461.56, "end": 465.08, "text": ">> Felipe de Morais. Já ganhou muita prova,"}, {"start": 464.479, "end": 467.96, "text": "Felipe?"}, {"start": 465.08, "end": 471.35999999999996, "text": ">> Graças a Deus."}, {"start": 467.96, "end": 474.56, "text": "Aqui eu ganhei quarta aberta cina uma"}, {"start": 471.36, "end": 476.24, "text": "outra. Essa daqui de cor 600."}, {"start": 474.56, "end": 478.12, "text": ">> Qual que é a diferença da aberta snior"}, {"start": 476.24, "end": 478.56, "text": "pr as normais? É a categoria mais"}, {"start": 478.12, "end": 480.84000000000003, "text": "importante."}, {"start": 478.56, "end": 483.759, "text": ">> As aberta, sabe? Primeiro dia tem o GP"}]}, {"rank": 5, "start": 625.72, "end": 695.42, "peak": 691.98, "score": 11.15, "title": "quanto? Que que você tá buscando? Que", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": ">> Ou seja, ela é nova ainda. Uma égua pouco explorada, sabe? Depende muito. Tem cavalo que são um pouco explorado. É, tanto em remédio quanto em treinamento forte, essas coisas também. Isso manda muito. Então, se você conseguir manter um bom trabalho desse jeito aí, você vai conseguir ter um bom animal pra frente até bastante tempo. >> Tem algum problema com lesão, essas coisas? >> Não, essa não. >> E aí, Edu? >> Bora. >> Como é que tá aí? >> Vamos. Estamos pronto. >> Quais as expectativas para hoje? >> Expectativa é d no mínimo máximo, né? Sempre. >> Dá máximo. >> Conta pra galera quanto tempo você treinou. >> Três meses. >> Três meses. É. >> E no touro? no touro dois dias. >> Eu encontrei dois competidores, os dois falou que você é louco. >> Mas o mundo tá, o mundo precisa um pouco de louco, né? Hã, tá cheio de gente normal, mas do mesmo não faz nada. É isso aí, cara. >> Nós queremos o extraordinário. >> É, quem busca extraordinário tem que fazer extraordinário. Aí pros outros é louco. >> Sim. Você mentalizou? Você acha que o seu tempo hoje seria por volta de quanto? Que que você tá buscando? Que", "peak_text": "quanto? Que que você tá buscando? Que", "clip_file": "clips/clip-005.mp4", "frame_file": "frames/clip-005.jpg", "caption_segments": [{"start": 626.72, "end": 630.399, "text": ">> Ou seja, ela é nova ainda. Uma égua"}, {"start": 628.16, "end": 632.36, "text": "pouco explorada, sabe? Depende muito."}, {"start": 630.399, "end": 634.68, "text": "Tem cavalo que são um pouco explorado."}, {"start": 632.36, "end": 636.24, "text": "É, tanto em remédio quanto em"}, {"start": 634.68, "end": 638.12, "text": "treinamento forte, essas coisas também."}, {"start": 636.24, "end": 640.76, "text": "Isso manda muito. Então, se você"}, {"start": 638.12, "end": 642.76, "text": "conseguir manter um bom trabalho desse"}, {"start": 640.76, "end": 645.279, "text": "jeito aí, você vai conseguir ter um bom"}, {"start": 642.76, "end": 646.92, "text": "animal pra frente até bastante tempo."}, {"start": 645.279, "end": 647.279, "text": ">> Tem algum problema com lesão, essas"}, {"start": 646.92, "end": 648.279, "text": "coisas?"}, {"start": 647.279, "end": 649.04, "text": ">> Não, essa não."}, {"start": 648.279, "end": 650.0, "text": ">> E aí, Edu?"}, {"start": 649.04, "end": 650.8389999999999, "text": ">> Bora."}, {"start": 650.0, "end": 652.04, "text": ">> Como é que tá aí?"}, {"start": 650.839, "end": 653.7600000000001, "text": ">> Vamos. Estamos pronto."}, {"start": 652.04, "end": 657.7199999999999, "text": ">> Quais as expectativas para hoje?"}, {"start": 653.76, "end": 658.72, "text": ">> Expectativa é d no mínimo máximo, né?"}, {"start": 657.72, "end": 659.32, "text": "Sempre."}, {"start": 658.72, "end": 660.639, "text": ">> Dá máximo."}, {"start": 659.32, "end": 661.5600000000001, "text": ">> Conta pra galera quanto tempo você"}, {"start": 660.639, "end": 662.6, "text": "treinou."}, {"start": 661.56, "end": 663.8389999999999, "text": ">> Três meses."}, {"start": 662.6, "end": 667.5600000000001, "text": ">> Três meses. É."}, {"start": 663.839, "end": 669.44, "text": ">> E no touro? no touro dois dias."}, {"start": 667.56, "end": 672.8, "text": ">> Eu encontrei dois competidores, os dois"}, {"start": 669.44, "end": 674.399, "text": "falou que você é louco."}, {"start": 672.8, "end": 677.399, "text": ">> Mas o mundo tá, o mundo precisa um pouco"}, {"start": 674.399, "end": 679.639, "text": "de louco, né? Hã, tá cheio de gente"}, {"start": 677.399, "end": 680.639, "text": "normal, mas do mesmo não faz nada. É"}, {"start": 679.639, "end": 681.9590000000001, "text": "isso aí, cara."}, {"start": 680.639, "end": 683.399, "text": ">> Nós queremos o extraordinário."}, {"start": 681.959, "end": 684.88, "text": ">> É, quem busca extraordinário tem que"}, {"start": 683.399, "end": 685.6, "text": "fazer extraordinário. Aí pros outros é"}, {"start": 684.88, "end": 688.24, "text": "louco."}, {"start": 685.6, "end": 690.0400000000001, "text": ">> Sim. Você mentalizou? Você acha que o"}, {"start": 688.24, "end": 691.92, "text": "seu tempo hoje seria por volta de"}, {"start": 690.04, "end": 693.92, "text": "quanto? Que que você tá buscando? Que"}]}, {"rank": 6, "start": 680.959, "end": 732.1, "peak": 691.98, "score": 11.73, "title": "quanto? Que que você tá buscando? Que", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": ">> É, quem busca extraordinário tem que fazer extraordinário. Aí pros outros é louco. >> Sim. Você mentalizou? Você acha que o seu tempo hoje seria por volta de quanto? Que que você tá buscando? Que que você tá buscando nessa primeira prova? 17 700 tent baixar disso. Se eu vencer de mim mesmo, >> já é um negócio. >> Já é um negócio, né? Eu só tô três meses, então é muito pouco tempo para quem já deu 17 é muito pouco tempo da 3 meses dá 17, entendeu? Vou tentar tirar tempo, tentar um 17 baixo aí, 1700, 1700 para mim já tá valendo muito jáa >> para ver que daí se eu tirar tipo 17 eu tô a 1 segundo do recorde mundial. >> O recorde mundial é 16. >> É 15, né? >> É, >> é 15. 15 16 080 >> 16 080 >> é >> o bicho tá pele músculo, viu as fotos?", "peak_text": "quanto? Que que você tá buscando? Que", "clip_file": "clips/clip-006.mp4", "frame_file": "frames/clip-006.jpg", "caption_segments": [{"start": 681.959, "end": 684.88, "text": ">> É, quem busca extraordinário tem que"}, {"start": 683.399, "end": 685.6, "text": "fazer extraordinário. Aí pros outros é"}, {"start": 684.88, "end": 688.24, "text": "louco."}, {"start": 685.6, "end": 690.0400000000001, "text": ">> Sim. Você mentalizou? Você acha que o"}, {"start": 688.24, "end": 691.92, "text": "seu tempo hoje seria por volta de"}, {"start": 690.04, "end": 693.92, "text": "quanto? Que que você tá buscando? Que"}, {"start": 691.92, "end": 696.88, "text": "que você tá buscando nessa primeira"}, {"start": 693.92, "end": 697.959, "text": "prova? 17 700 tent baixar disso. Se eu"}, {"start": 696.88, "end": 698.6, "text": "vencer de mim mesmo,"}, {"start": 697.959, "end": 700.3599999999999, "text": ">> já é um negócio."}, {"start": 698.6, "end": 702.839, "text": ">> Já é um negócio, né? Eu só tô três"}, {"start": 700.36, "end": 704.639, "text": "meses, então"}, {"start": 702.839, "end": 706.9200000000001, "text": "é muito pouco tempo para quem já deu 17"}, {"start": 704.639, "end": 708.9590000000001, "text": "é muito pouco tempo da"}, {"start": 706.92, "end": 710.88, "text": "3 meses dá 17, entendeu? Vou tentar"}, {"start": 708.959, "end": 713.8389999999999, "text": "tirar tempo, tentar um 17 baixo aí,"}, {"start": 710.88, "end": 714.68, "text": "1700, 1700 para mim já tá valendo muito"}, {"start": 713.839, "end": 717.44, "text": "jáa"}, {"start": 714.68, "end": 719.3199999999999, "text": ">> para ver que daí se eu tirar tipo 17 eu"}, {"start": 717.44, "end": 721.1600000000001, "text": "tô a 1 segundo do recorde mundial."}, {"start": 719.32, "end": 722.12, "text": ">> O recorde mundial é 16."}, {"start": 721.16, "end": 722.519, "text": ">> É 15, né?"}, {"start": 722.12, "end": 723.519, "text": ">> É,"}, {"start": 722.519, "end": 725.44, "text": ">> é 15."}, {"start": 723.519, "end": 726.24, "text": "15 16 080"}, {"start": 725.44, "end": 726.8800000000001, "text": ">> 16 080"}, {"start": 726.24, "end": 729.88, "text": ">> é"}, {"start": 726.88, "end": 730.6, "text": ">> o bicho tá pele músculo, viu as fotos?"}]}, {"rank": 7, "start": 760.079, "end": 811.699, "peak": 766.66, "score": 10.87, "title": ">> Deve ser porque é mais rápido", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "atleta. Não tem jeito. >> Já em cima do tour ali. É menos ainda, cara. Menos ainda. Menos ainda. >> Deve ser porque é mais rápido. >> Não é mais rápido, mas não sei. É diferente. É diferente. Mas tu encaixa ali na hora que ele dá aquelas [ __ ] ele dá, ele bate ali, volta, bate, bate e é pressão. >> Você fica muito concentrado no que você e não dá tempo de ficar nervoso. É, não dá tempo de ficar nervoso. >> Fê, por que que você não vai com ele? >> Eu vou com ele. >> É, ele vai est >> Quando ele montar no cavalo, quem vai estar segurando a rédeia junto com a mão dele é a minha. Quando ele sentar na cela, eu tô junto. >> E quando ele tiver pisando no estribo, sou eu que dou a força para segurar. >> Mas você tá calmo que nem ele? >> Hã? >> Você tá calmo que nem ele? >> Calmo >> sim, mas na hora do touro aí eu vou ficar nervoso. >> Vamos curtir agora a prova dele. Ver o aquecimento. >> Que isso, pai? Pera aí, Julião. Nós", "peak_text": ">> Deve ser porque é mais rápido.", "clip_file": "clips/clip-007.mp4", "frame_file": "frames/clip-007.jpg", "caption_segments": [{"start": 761.079, "end": 763.76, "text": "atleta. Não tem jeito."}, {"start": 762.04, "end": 765.16, "text": ">> Já em cima do tour ali. É menos ainda,"}, {"start": 763.76, "end": 766.56, "text": "cara. Menos ainda. Menos ainda."}, {"start": 765.16, "end": 768.16, "text": ">> Deve ser porque é mais rápido."}, {"start": 766.56, "end": 770.04, "text": ">> Não é mais rápido, mas não sei. É"}, {"start": 768.16, "end": 771.36, "text": "diferente. É diferente. Mas tu encaixa"}, {"start": 770.04, "end": 773.36, "text": "ali na hora que ele dá aquelas [ __ ] ele"}, {"start": 771.36, "end": 773.6800000000001, "text": "dá, ele bate ali, volta, bate, bate e é"}, {"start": 773.36, "end": 776.9590000000001, "text": "pressão."}, {"start": 773.68, "end": 778.3599999999999, "text": ">> Você fica muito concentrado no que você"}, {"start": 776.959, "end": 780.04, "text": "e não dá tempo de ficar nervoso. É, não"}, {"start": 778.36, "end": 782.76, "text": "dá tempo de ficar nervoso."}, {"start": 780.04, "end": 783.8389999999999, "text": ">> Fê, por que que você não vai com ele?"}, {"start": 782.76, "end": 784.88, "text": ">> Eu vou com ele."}, {"start": 783.839, "end": 787.12, "text": ">> É, ele vai est"}, {"start": 784.88, "end": 788.639, "text": ">> Quando ele montar no cavalo, quem vai"}, {"start": 787.12, "end": 790.36, "text": "estar segurando a rédeia junto com a mão"}, {"start": 788.639, "end": 791.6, "text": "dele é a minha. Quando ele sentar na"}, {"start": 790.36, "end": 793.04, "text": "cela, eu tô junto."}, {"start": 791.6, "end": 794.48, "text": ">> E quando ele tiver pisando no estribo,"}, {"start": 793.04, "end": 795.88, "text": "sou eu que dou a força para segurar."}, {"start": 794.48, "end": 796.48, "text": ">> Mas você tá calmo que nem ele?"}, {"start": 795.88, "end": 797.6, "text": ">> Hã?"}, {"start": 796.48, "end": 798.24, "text": ">> Você tá calmo que nem ele?"}, {"start": 797.6, "end": 800.12, "text": ">> Calmo"}, {"start": 798.24, "end": 802.199, "text": ">> sim, mas na hora do touro aí eu vou"}, {"start": 800.12, "end": 804.32, "text": "ficar nervoso."}, {"start": 802.199, "end": 807.04, "text": ">> Vamos curtir agora a prova dele. Ver o"}, {"start": 804.32, "end": 808.44, "text": "aquecimento."}, {"start": 807.04, "end": 810.199, "text": ">> Que isso, pai? Pera aí, Julião. Nós"}]}, {"rank": 8, "start": 1171.44, "end": 1224.78, "peak": 1207.68, "score": 11.98, "title": ">> Astrô. Por quê? Porque ele não está bom", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "existisse uma segunda opção. >> É uma modalidade que ela não é muito divulgada em mídias, em redes sociais, mas ela é muito forte. Ela é muito forte. Tem provas aqui que tem 100 cavalos competindo. São 10 dias de competição, dá 15 milhão e meio de prêmio. E e são 6 a 7.000 1 passadas que você tá vendo aí assim durante os 10 dias de competição. Um um cavalo recordista, eu vou eu a gente vai tá aqui perto, eu vou falar: \"Ó, esse cavalo aqui, ele vale uns 10 milhões, uns 8 milhões, uns 15 milhões.\" Cavalos com valores >> astronômicos. >> Astrô. Por quê? Porque ele não está bom como atleta. Ele vem carregando >> a genética de outros campeões. >> E ele comprovou que ele é um dos melhores, com recordista, um cavalo que é muito ganhador. E o que que acaba acontecendo? acaba comercializando, seja", "peak_text": ">> Astrô. Por quê? Porque ele não está bom", "clip_file": "clips/clip-008.mp4", "frame_file": "frames/clip-008.jpg", "caption_segments": [{"start": 1172.44, "end": 1175.3200000000002, "text": "existisse uma segunda opção."}, {"start": 1173.96, "end": 1177.6000000000001, "text": ">> É uma modalidade que ela não é muito"}, {"start": 1175.32, "end": 1179.08, "text": "divulgada em mídias, em redes sociais,"}, {"start": 1177.6, "end": 1181.32, "text": "mas ela é muito forte. Ela é muito"}, {"start": 1179.08, "end": 1183.08, "text": "forte. Tem provas aqui que tem 100"}, {"start": 1181.32, "end": 1184.24, "text": "cavalos competindo. São 10 dias de"}, {"start": 1183.08, "end": 1185.84, "text": "competição, dá 15 milhão e meio de"}, {"start": 1184.24, "end": 1190.88, "text": "prêmio."}, {"start": 1185.84, "end": 1192.6399999999999, "text": "E e são 6 a 7.000 1 passadas que você tá"}, {"start": 1190.88, "end": 1194.159, "text": "vendo aí assim durante os 10 dias de"}, {"start": 1192.64, "end": 1196.919, "text": "competição."}, {"start": 1194.159, "end": 1197.7600000000002, "text": "Um um cavalo recordista, eu vou eu a"}, {"start": 1196.919, "end": 1199.7990000000002, "text": "gente vai tá aqui perto, eu vou falar:"}, {"start": 1197.76, "end": 1202.08, "text": "\"Ó, esse cavalo aqui, ele vale uns 10"}, {"start": 1199.799, "end": 1204.6, "text": "milhões, uns 8 milhões, uns 15 milhões.\""}, {"start": 1202.08, "end": 1205.32, "text": "Cavalos com valores"}, {"start": 1204.6, "end": 1207.84, "text": ">> astronômicos."}, {"start": 1205.32, "end": 1210.039, "text": ">> Astrô. Por quê? Porque ele não está bom"}, {"start": 1207.84, "end": 1211.799, "text": "como atleta. Ele vem carregando"}, {"start": 1210.039, "end": 1213.72, "text": ">> a genética de outros campeões."}, {"start": 1211.799, "end": 1215.679, "text": ">> E ele comprovou que ele é um dos"}, {"start": 1213.72, "end": 1217.3600000000001, "text": "melhores, com recordista, um cavalo que"}, {"start": 1215.679, "end": 1220.159, "text": "é muito ganhador. E o que que acaba"}, {"start": 1217.36, "end": 1223.28, "text": "acontecendo? acaba comercializando, seja"}]}, {"rank": 9, "start": 1318.52, "end": 1363.9, "peak": 1354.76, "score": 10.54, "title": "levanto. Porque você aprendeu como é que", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "regra é aumentar, é obrigado a aumentar. Você sabe quem você era antes do Renato? Maurissão sabe quem que era antes do Renato. Eu conheço o Maurício antes do Renato e eu conheço o Júlio Balestrin antes do Renato. >> Com certeza. Quando você aumenta a régua, você anda com pessoas que aumentam a sua régua de duas uma, ou você sai doquadro e cai fora automaticamente, ou você se esforça e alcança essa pessoa e essa pessoa sobe o nível dela e sobe e vai chegar um momento que o que que vai acontecer? Essa é a pessoa que te trouxe até aqui. Aí ela te levanta, tu levanta, te levanta, tu levanta. Tu opa, agora eu levanto. Porque você aprendeu como é que se faz, como é que momento que é você que tá puxando a corda, não só ele. >> Isso. Não, só ele. Aí vira vocês dois", "peak_text": "levanto. Porque você aprendeu como é que", "clip_file": "clips/clip-009.mp4", "frame_file": "frames/clip-009.jpg", "caption_segments": [{"start": 1319.52, "end": 1324.039, "text": "regra é aumentar, é obrigado a aumentar."}, {"start": 1322.039, "end": 1325.2, "text": "Você sabe quem você era antes do Renato?"}, {"start": 1324.039, "end": 1326.559, "text": "Maurissão sabe quem que era antes do"}, {"start": 1325.2, "end": 1327.72, "text": "Renato. Eu conheço o Maurício antes do"}, {"start": 1326.559, "end": 1328.84, "text": "Renato e eu conheço o Júlio Balestrin"}, {"start": 1327.72, "end": 1331.08, "text": "antes do Renato."}, {"start": 1328.84, "end": 1332.24, "text": ">> Com certeza. Quando você aumenta a"}, {"start": 1331.08, "end": 1334.52, "text": "régua, você anda com pessoas que"}, {"start": 1332.24, "end": 1336.799, "text": "aumentam a sua régua de duas uma, ou"}, {"start": 1334.52, "end": 1338.52, "text": "você sai doquadro e cai fora"}, {"start": 1336.799, "end": 1341.44, "text": "automaticamente,"}, {"start": 1338.52, "end": 1343.679, "text": "ou você se esforça e alcança essa pessoa"}, {"start": 1341.44, "end": 1345.8400000000001, "text": "e essa pessoa sobe o nível dela e sobe e"}, {"start": 1343.679, "end": 1347.72, "text": "vai chegar um momento que o que que vai"}, {"start": 1345.84, "end": 1350.3999999999999, "text": "acontecer? Essa é a pessoa que te trouxe"}, {"start": 1347.72, "end": 1352.6000000000001, "text": "até aqui. Aí ela te levanta, tu levanta,"}, {"start": 1350.4, "end": 1354.799, "text": "te levanta, tu levanta. Tu opa, agora eu"}, {"start": 1352.6, "end": 1356.9189999999999, "text": "levanto. Porque você aprendeu como é que"}, {"start": 1354.799, "end": 1358.6399999999999, "text": "se faz, como é que momento que é você"}, {"start": 1356.919, "end": 1360.5200000000002, "text": "que tá puxando a corda, não só ele."}, {"start": 1358.64, "end": 1362.4, "text": ">> Isso. Não, só ele. Aí vira vocês dois"}]}, {"rank": 10, "start": 1551.399, "end": 1594.74, "peak": 1582.66, "score": 10.57, "title": ">> Porque o cara tem que saber, não é", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "fundo do meu coração, quem entende, quem entende como vocês trabalham, da forma que vocês trabalham, com a intensidade que vocês trabalham, o sucesso não vem de graça, pessoal. Não v >> E quando vem de graça, ele vai de graça rápido. Você vê um monte de cantor que estoura, >> some. >> Por quê? >> Um álbum, uma música, >> é uma música que nem aquela do Reinaldo Benny lá, você água de coco lá. >> Sim, sumiu. >> Por iss que com água de coco acabou. >> Acabou. >> Porque o cara tem que saber, não é chegar no sucesso, é saber chegar no sucesso. E para saber chegar no sucesso, você tem que ser dedicado, determinado e ter coragem. E o tour aqui para vocês, pessoal, é para mostrar para vocês que tem que ter", "peak_text": ">> Porque o cara tem que saber, não é", "clip_file": "clips/clip-010.mp4", "frame_file": "frames/clip-010.jpg", "caption_segments": [{"start": 1552.399, "end": 1557.799, "text": "fundo do meu coração, quem entende, quem"}, {"start": 1555.76, "end": 1559.1589999999999, "text": "entende como vocês trabalham, da forma"}, {"start": 1557.799, "end": 1561.399, "text": "que vocês trabalham, com a intensidade"}, {"start": 1559.159, "end": 1562.6000000000001, "text": "que vocês trabalham, o sucesso não vem"}, {"start": 1561.399, "end": 1564.2399999999998, "text": "de graça, pessoal. Não v"}, {"start": 1562.6, "end": 1566.279, "text": ">> E quando vem de graça, ele vai de graça"}, {"start": 1564.24, "end": 1567.48, "text": "rápido. Você vê um monte de cantor que"}, {"start": 1566.279, "end": 1568.919, "text": "estoura,"}, {"start": 1567.48, "end": 1569.3990000000001, "text": ">> some."}, {"start": 1568.919, "end": 1571.679, "text": ">> Por quê?"}, {"start": 1569.399, "end": 1574.1999999999998, "text": ">> Um álbum, uma música,"}, {"start": 1571.679, "end": 1576.8400000000001, "text": ">> é uma música que nem aquela do Reinaldo"}, {"start": 1574.2, "end": 1577.88, "text": "Benny lá, você água de coco lá."}, {"start": 1576.84, "end": 1579.76, "text": ">> Sim, sumiu."}, {"start": 1577.88, "end": 1581.0390000000002, "text": ">> Por iss que com água de coco acabou."}, {"start": 1579.76, "end": 1582.76, "text": ">> Acabou."}, {"start": 1581.039, "end": 1584.279, "text": ">> Porque o cara tem que saber, não é"}, {"start": 1582.76, "end": 1586.0, "text": "chegar no sucesso, é saber chegar no"}, {"start": 1584.279, "end": 1587.84, "text": "sucesso. E para saber chegar no sucesso,"}, {"start": 1586.0, "end": 1589.48, "text": "você tem que ser dedicado, determinado e"}, {"start": 1587.84, "end": 1590.76, "text": "ter coragem."}, {"start": 1589.48, "end": 1591.799, "text": "E o tour aqui para vocês, pessoal, é"}, {"start": 1590.76, "end": 1593.24, "text": "para mostrar para vocês que tem que ter"}]}]}; window.CUTTED_SCRIPT = "C:\\Users\\edube\\.codex\\skills\\cutted\\scripts\\cutted.py";</script>
+  <script>
+if (new URLSearchParams(location.search).has("reset")) {
+  localStorage.removeItem("cutted-state");
+  localStorage.removeItem("cutted-format");
+  localStorage.removeItem("cutted-tab");
+  history.replaceState(null, "", location.pathname);
+}
+const state = JSON.parse(localStorage.getItem("cutted-state") || "{}");
+function save(){ localStorage.setItem("cutted-state", JSON.stringify(state)); }
+function cardState(rank){
+  const raw = state[rank];
+  if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [], effect: defaultEffect(), overlay: defaultOverlay() };
+  const next = Object.assign({ status: null, trimStart: 0, trimEnd: 0, platforms: [], effect: defaultEffect(), overlay: defaultOverlay() }, raw || {});
+  next.effect = normalizeEffect(next.effect);
+  next.overlay = normalizeOverlay(next.overlay);
+  return next;
+}
+function setCardState(rank, patch){ state[rank] = Object.assign(cardState(rank), patch); save(); }
+function fixed(value){ return `${Number(value || 0).toFixed(1)}s`; }
+const formatMeta = {
+  tiktok: "TikTok - 9:16",
+  shorts: "YouTube Shorts - 9:16",
+  youtube: "YouTube - 16:9",
+  instagram: "Instagram Reels - 9:16",
+  facebook: "Facebook Feed - 4:5"
+};
+const platformMeta = {
+  tiktok: { label: "TikTok", width: 1080, height: 1920 },
+  shorts: { label: "Shorts", width: 1080, height: 1920 },
+  instagram: { label: "Instagram", width: 1080, height: 1920 },
+  facebook: { label: "Facebook", width: 1080, height: 1350 },
+  youtube: { label: "YouTube", width: 1920, height: 1080 }
+};
+const effectMeta = {
+  none: { label: "Sem efeito", note: "Preview limpo" },
+  "light-grain": { label: "Chuvisco Leve", note: "Granulado sutil" },
+  "old-film": { label: "Filme Antigo", note: "Vintage com vinheta" },
+  vhs: { label: "VHS / TV Antiga", note: "Ruido analogico" },
+  "bw-old": { label: "Preto e Branco Antigo", note: "P&B com grao" }
+};
+const overlayMeta = {
+  none: { label: "Sem chamada", title: "", subtitle: "", accent: "#000000" },
+  subscribe: { label: "Inscreva-se", title: "Inscreva-se", subtitle: "Novos cortes toda semana", accent: "#ff3b30" },
+  follow: { label: "Siga-nos", title: "Siga-nos", subtitle: "Mais cortes no perfil", accent: "#24d17e" },
+  description: { label: "Veja a descricao", title: "Veja a descricao", subtitle: "Link e contexto completo", accent: "#4da3ff" },
+  "like-share": { label: "Curta e compartilhe", title: "Curta e compartilhe", subtitle: "Mostre para alguem", accent: "#ffd166" },
+  "pinned-comment": { label: "Comentario fixado", title: "Comentario fixado", subtitle: "Detalhes no primeiro comentario", accent: "#b388ff" },
+  watermark: { label: "Marca d'agua", title: "CUTED", subtitle: "clip selecionado", accent: "#f4f4f4" }
+};
+function applyFormat(format){
+  const next = formatMeta[format] ? format : "tiktok";
+  document.body.dataset.format = next;
+  localStorage.setItem("cutted-format", next);
+  document.querySelector("[data-format-hint]").textContent = formatMeta[next];
+  document.querySelectorAll(".segments [data-format]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.format === next);
+  });
+  document.querySelectorAll(".card").forEach(updatePlatformUi);
+  renderCaptionQueue();
+}
+function applyTab(tab){
+  const next = ["edit", "effects", "overlays", "final"].includes(tab) ? tab : "edit";
+  document.body.dataset.tab = next;
+  localStorage.setItem("cutted-tab", next);
+  document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.tab === next);
+  });
+  renderEffectPreview();
+  renderOverlayPreview();
+  renderFinalStage();
+}
+function platformLabel(key){
+  return (platformMeta[key] || { label: key }).label;
+}
+function defaultEffect(){ return { key: "none", label: effectMeta.none.label, intensity: 0 }; }
+function normalizeEffect(effect){
+  const key = effectMeta[effect?.key] ? effect.key : "none";
+  const intensity = key === "none" ? 0 : Math.max(0, Math.min(Number(effect?.intensity || 65), 100));
+  return { key, label: effectMeta[key].label, intensity };
+}
+function effectLabel(effect){
+  const current = normalizeEffect(effect);
+  return current.key === "none" ? current.label : `${current.label} - ${current.intensity}%`;
+}
+function effectForRank(rank){ return normalizeEffect(cardState(String(rank)).effect); }
+function setEffectForRank(rank, patch){
+  const current = cardState(String(rank));
+  setCardState(String(rank), { effect: normalizeEffect(Object.assign({}, current.effect, patch)) });
+  renderEffectPreview();
+  renderFinalStage();
+}
+function effectOpacity(effect){
+  const current = normalizeEffect(effect);
+  return current.key === "none" ? 0 : Math.max(.12, current.intensity / 185);
+}
+function defaultOverlay(){ return { key: "none", label: overlayMeta.none.label, x: .62, y: .78, width: .34, opacity: 95 }; }
+function normalizeOverlay(overlay){
+  const key = overlayMeta[overlay?.key] ? overlay.key : "none";
+  if (key === "none") return defaultOverlay();
+  return {
+    key,
+    label: overlayMeta[key].label,
+    x: clampNumber(overlay?.x ?? .62, 0, 1),
+    y: clampNumber(overlay?.y ?? .78, 0, 1),
+    width: clampNumber(overlay?.width ?? .34, .18, .72),
+    opacity: clampNumber(overlay?.opacity ?? 95, 35, 100)
+  };
+}
+function overlayForRank(rank){ return normalizeOverlay(cardState(String(rank)).overlay); }
+function setOverlayForRank(rank, patch, rerender = true){
+  const current = cardState(String(rank));
+  setCardState(String(rank), { overlay: normalizeOverlay(Object.assign({}, current.overlay, patch)) });
+  if (rerender) renderOverlayPreview();
+  renderFinalStage();
+}
+function overlayLabel(overlay){
+  const current = normalizeOverlay(overlay);
+  return current.key === "none" ? current.label : `${current.label} - ${Math.round(current.opacity)}%`;
+}
+function overlayStyle(overlay){
+  const current = normalizeOverlay(overlay);
+  const meta = overlayMeta[current.key] || overlayMeta.none;
+  return `--overlay-x:${current.x};--overlay-y:${current.y};--overlay-width:${current.width};--overlay-opacity:${current.opacity / 100};--overlay-accent:${meta.accent}`;
+}
+function clampNumber(value, min, max){
+  const next = Number(value);
+  if (!Number.isFinite(next)) return min;
+  return Math.min(Math.max(next, min), max);
+}
+function updatePlatformUi(card){
+  const current = cardState(card.dataset.rank);
+  const platforms = Array.isArray(current.platforms) ? current.platforms : [];
+  card.querySelectorAll("[data-platform]").forEach(btn => {
+    btn.classList.toggle("active", platforms.includes(btn.dataset.platform));
+  });
+  const fallback = document.body.dataset.format || "tiktok";
+  const summary = platforms.length
+    ? platforms.map(platformLabel).join(", ")
+    : (current.status === "liked" ? `Formato atual: ${platformLabel(fallback)}` : "Nenhum destino marcado");
+  card.querySelector("[data-platform-summary]").textContent = summary;
+}
+function paint(card){
+  const current = cardState(card.dataset.rank);
+  card.classList.toggle("liked",current.status==="liked");
+  card.classList.toggle("discarded",current.status==="discarded");
+}
+function trimValues(card){
+  const start = Number(card.dataset.start);
+  const end = Number(card.dataset.end);
+  const duration = Number(card.dataset.duration);
+  const current = cardState(card.dataset.rank);
+  const trimStart = Math.min(Number(current.trimStart || 0), Math.max(duration - 1, 0));
+  const trimEnd = Math.min(Number(current.trimEnd || 0), Math.max(duration - trimStart - 1, 0));
+  return { start, end, duration, trimStart, trimEnd, startPos: trimStart, endPos: duration - trimEnd, adjustedStart: start + trimStart, adjustedEnd: end - trimEnd };
+}
+function updateTrimUi(card){
+  const values = trimValues(card);
+  const startInput = card.querySelector("[data-trim=start]");
+  const endInput = card.querySelector("[data-trim=end]");
+  startInput.max = values.duration.toFixed(1);
+  endInput.max = values.duration.toFixed(1);
+  startInput.value = values.startPos;
+  endInput.value = values.endPos;
+  card.querySelector("[data-output=start]").textContent = fixed(values.trimStart);
+  card.querySelector("[data-output=end]").textContent = fixed(values.trimEnd);
+  card.querySelector("[data-trim-summary]").textContent = `Final: ${fixed(values.adjustedStart)} - ${fixed(values.adjustedEnd)} (${fixed(values.adjustedEnd - values.adjustedStart)})`;
+  const fill = card.querySelector("[data-trim-fill]");
+  fill.style.left = `${(values.startPos / values.duration) * 100}%`;
+  fill.style.right = `${100 - ((values.endPos / values.duration) * 100)}%`;
+}
+function seekPreview(card){
+  const video = card.querySelector("video");
+  if (!video) return;
+  const values = trimValues(card);
+  video.currentTime = values.trimStart;
+}
+function adjustedMoment(moment){
+  const current = cardState(String(moment.rank));
+  const trimStart = Number(current.trimStart || 0);
+  const trimEnd = Number(current.trimEnd || 0);
+  const platforms = Array.isArray(current.platforms) ? current.platforms : [];
+  return Object.assign({}, moment, {
+    status: current.status || null,
+    platforms,
+    trim_start_seconds: trimStart,
+    trim_end_seconds: trimEnd,
+    adjusted_start: Number((moment.start + trimStart).toFixed(3)),
+    adjusted_end: Number((moment.end - trimEnd).toFixed(3)),
+    adjusted_duration: Number((moment.end - trimEnd - moment.start - trimStart).toFixed(3)),
+    effect: effectForRank(moment.rank),
+    overlay: overlayForRank(moment.rank)
+  });
+}
+function buildExportData(){
+  const data = Object.assign({}, window.CUTTED_DATA);
+  data.export_format = document.body.dataset.format || "tiktok";
+  const adjusted = data.moments.map(adjustedMoment);
+  data.moments = adjusted;
+  data.selected = adjusted.filter(m => m.status === "liked" || m.platforms.length > 0);
+  data.caption_queue = data.selected.flatMap(moment => captionPlatforms(moment, data.export_format).map(platform => ({
+    rank: moment.rank,
+    platform,
+    platform_label: platformLabel(platform),
+    width: platformMeta[platform]?.width || null,
+    height: platformMeta[platform]?.height || null,
+    publish_metadata: publishMetadata(platform, moment),
+    trim_start_seconds: moment.trim_start_seconds,
+    trim_end_seconds: moment.trim_end_seconds,
+    adjusted_start: moment.adjusted_start,
+    adjusted_end: moment.adjusted_end,
+    adjusted_duration: moment.adjusted_duration,
+    effect: moment.effect,
+    overlay: moment.overlay,
+    clip_file: moment.clip_file,
+    title: moment.title,
+    peak_text: moment.peak_text,
+    transcript: moment.transcript,
+    caption_segments: moment.caption_segments || []
+  })));
+  return data;
+}
+function captionPlatforms(moment, exportFormat){
+  if (Array.isArray(moment.platforms) && moment.platforms.length) return moment.platforms;
+  return moment.status === "liked" && platformMeta[exportFormat] ? [exportFormat] : [];
+}
+function publishMetadata(platform, moment){
+  const hashtags = suggestHashtags(platform, `${moment.title} ${moment.peak_text} ${moment.transcript}`);
+  return {
+    hashtags,
+    caption_hint: captionHint(platform, moment, hashtags),
+    strategy: platformStrategy(platform)
+  };
+}
+function suggestHashtags(platform, text){
+  const topicTags = extractTopicTags(text);
+  const topicalBoosts = inferTopicalBoosts(text);
+  const defaults = {
+    tiktok: ["IA", "InteligenciaArtificial", "Podcast"],
+    shorts: ["IA", "InteligenciaArtificial", "Shorts"],
+    youtube: ["IA", "InteligenciaArtificial", "Tecnologia"],
+    instagram: ["IA", "InteligenciaArtificial", "Reels"],
+    facebook: ["IA", "Tecnologia"]
+  };
+  const limits = { tiktok: 6, shorts: 4, youtube: 4, instagram: 5, facebook: 3 };
+  const merged = [...topicalBoosts, ...(defaults[platform] || []), ...topicTags];
+  return unique(merged).slice(0, limits[platform] || 4).map(tag => `#${tag}`);
+}
+function extractTopicTags(text){
+  const extraStopWords = [
+    "acho","ainda","agora","assim","cada","cara","certo","com","daqui","dele","dela","deles","dessa",
+    "desse","disso","dizer","esta","estao","falar","mas","meio","nao","nem","nessa","nesse",
+    "cortou","negocio","pela","pelo","qual","quando","que","quem","sabe","seguinte","tambem",
+    "tem","tipo","uma","volta","vou"
+  ];
+  const stop = new Set(["para","como","porque","entao","então","sobre","isso","essa","esse","aqui","gente","voce","você","video","clip","coisa","forma","mais","menos","muito","fala","falando"]);
+  extraStopWords.forEach(word => stop.add(word));
+  const normalized = String(text).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const words = normalized.match(/[a-zA-Z0-9]{3,}/g) || [];
+  const counts = new Map();
+  words.map(word => word.toLowerCase()).filter(word => !stop.has(word)).forEach(word => {
+    counts.set(word, (counts.get(word) || 0) + 1);
+  });
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
+    .slice(0, 4)
+    .map(([word]) => word.charAt(0).toUpperCase() + word.slice(1));
+}
+function inferTopicalBoosts(text){
+  const normalized = String(text).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const boosts = [];
+  if (/\bia\b|inteligencia artificial|artificial/.test(normalized)) boosts.push("IA", "InteligenciaArtificial");
+  if (/podcast|episodio|entrevista|conversa/.test(normalized)) boosts.push("Podcast");
+  if (/tecnologia|tech|futuro|ferramenta|automacao/.test(normalized)) boosts.push("Tecnologia");
+  if (/criador|conteudo|youtube|tiktok|instagram|reels|shorts/.test(normalized)) boosts.push("Criadores");
+  return boosts;
+}
+function unique(values){
+  const seen = new Set();
+  return values.filter(value => {
+    const clean = String(value).replace(/^#/, "").replace(/[^a-zA-Z0-9]/g, "");
+    const key = clean.toLowerCase();
+    if (!clean || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).map(value => String(value).replace(/^#/, "").replace(/[^a-zA-Z0-9]/g, ""));
+}
+function captionHint(platform, moment, hashtags){
+  const lead = moment.peak_text || moment.title || "Corte selecionado";
+  return `${lead}\n\n${hashtags.join(" ")}`;
+}
+function platformStrategy(platform){
+  return {
+    tiktok: "Usar poucos hashtags relevantes; validar tendencias no TikTok Creative Center antes de publicar.",
+    shorts: "Priorizar 3-4 hashtags relevantes; no YouTube, os primeiros hashtags da descricao sao os mais visiveis.",
+    youtube: "Usar hashtags como contexto, sem exagero; evitar excesso de hashtags.",
+    instagram: "Usar 3-5 hashtags especificos e relevantes; evitar blocos longos genericos.",
+    facebook: "Usar 1-3 hashtags pesquisaveis; legenda clara e nativa do feed importa mais que volume."
+  }[platform] || "Usar hashtags relevantes e especificos.";
+}
+function downloadJson(data, filename){
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+function renderCaptionQueue(){
+  renderEffectPreview();
+  renderOverlayPreview();
+  renderFinalStage();
+}
+function renderEffectPreview(){
+  const preview = document.querySelector("[data-effect-preview]");
+  const summary = document.querySelector("[data-effect-summary]");
+  if (!preview) return;
+  const queue = buildExportData().caption_queue || [];
+  if (!queue.length) {
+    if (summary) summary.textContent = "Marque cortes como Gostei ou escolha destinos para liberar os efeitos.";
+    preview.innerHTML = '<div class="effect-empty">Nenhum corte selecionado ainda.</div>';
+    return;
+  }
+  if (summary) summary.textContent = `${queue.length} saidas selecionadas. Escolha um efeito em cada uma.`;
+  preview.innerHTML = queue.map(effectPreviewItemHtml).join("");
+  bindEffectPreviewControls();
+}
+function effectPreviewItemHtml(item){
+  const effect = normalizeEffect(item.effect);
+  const src = cacheBustedPreview(item.clip_file || "", `effect-${item.rank}-${item.adjusted_start}-${item.adjusted_end}`);
+  return `<article class="caption-item" data-rank="${escapeAttr(item.rank)}" data-platform="${escapeAttr(item.platform)}" data-effect="${escapeAttr(effect.key)}" style="--effect-opacity:${effectOpacity(effect)}">
+    <div class="caption-preview"><video controls preload="metadata" src="${escapeAttr(src)}"></video></div>
+    <div class="caption-item-body">
+      <strong>Preview #${String(item.rank).padStart(2, "0")} ${escapeHtml(item.title || "")}</strong>
+      <span>${escapeHtml(item.platform_label)}</span><span data-effect-current>${escapeHtml(effectLabel(effect))}</span>
+      <div class="effect-card-controls">
+        <div class="effect-card-buttons" role="group" aria-label="Efeito do corte ${escapeAttr(item.rank)}">
+          ${effectButtonsHtml(effect)}
+        </div>
+        <label>Intensidade
+          <input data-preview-effect-intensity type="range" min="0" max="100" step="5" value="${effect.intensity}">
+        </label>
+      </div>
+    </div>
+  </article>`;
+}
+function effectButtonsHtml(current){
+  return Object.entries(effectMeta).map(([key, meta]) => {
+    const active = current.key === key ? " active" : "";
+    return `<button data-preview-effect="${escapeAttr(key)}" class="${active}">${escapeHtml(meta.label)}</button>`;
+  }).join("");
+}
+function bindEffectPreviewControls(){
+  document.querySelectorAll("[data-effect-preview] .caption-item").forEach(item => {
+    const rank = item.dataset.rank;
+    item.querySelectorAll("[data-preview-effect]").forEach(button => {
+      button.addEventListener("click", () => setEffectForRank(rank, { key: button.dataset.previewEffect }));
+    });
+    const intensity = item.querySelector("[data-preview-effect-intensity]");
+    if (intensity) {
+      intensity.addEventListener("input", () => setEffectForRank(rank, { intensity: Number(intensity.value) }));
+      intensity.addEventListener("change", () => setEffectForRank(rank, { intensity: Number(intensity.value) }));
+    }
+  });
+}
+function renderOverlayPreview(){
+  const preview = document.querySelector("[data-overlay-preview]");
+  const summary = document.querySelector("[data-overlay-summary]");
+  if (!preview) return;
+  const queue = buildExportData().caption_queue || [];
+  if (!queue.length) {
+    if (summary) summary.textContent = "Marque cortes como Gostei ou escolha destinos para liberar as chamadas.";
+    preview.innerHTML = '<div class="overlay-empty">Nenhum corte selecionado ainda.</div>';
+    return;
+  }
+  if (summary) summary.textContent = `${queue.length} saidas selecionadas. Escolha um card e arraste em cada preview.`;
+  preview.innerHTML = queue.map(overlayPreviewItemHtml).join("");
+  bindOverlayPreviewControls();
+}
+function overlayPreviewItemHtml(item){
+  const overlay = normalizeOverlay(item.overlay);
+  const meta = overlayMeta[overlay.key] || overlayMeta.none;
+  const src = cacheBustedPreview(item.clip_file || "", `overlay-${item.rank}-${item.adjusted_start}-${item.adjusted_end}`);
+  return `<article class="caption-item" data-rank="${escapeAttr(item.rank)}" data-platform="${escapeAttr(item.platform)}">
+    <div class="caption-preview" data-overlay-surface>
+      <video controls preload="metadata" src="${escapeAttr(src)}"></video>
+      <div class="overlay-box" data-overlay-drag data-overlay-key="${escapeAttr(overlay.key)}" style="${escapeAttr(overlayStyle(overlay))}">
+        <strong>${escapeHtml(meta.title)}</strong>
+        <em>${escapeHtml(meta.subtitle)}</em>
+        <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
+      </div>
+    </div>
+    <div class="caption-item-body">
+      <strong>Preview #${String(item.rank).padStart(2, "0")} ${escapeHtml(item.title || "")}</strong>
+      <span>${escapeHtml(item.platform_label)}</span><span data-overlay-current>${escapeHtml(overlayLabel(overlay))}</span>
+      <div class="overlay-card-controls">
+        <div class="overlay-card-buttons" role="group" aria-label="Chamada do corte ${escapeAttr(item.rank)}">
+          ${overlayButtonsHtml(overlay)}
+        </div>
+        <div class="overlay-tools">
+          <label>Opacidade
+            <input data-preview-overlay-opacity type="range" min="35" max="100" step="5" value="${overlay.opacity}">
+          </label>
+          <button data-overlay-reset>Resetar posicao</button>
+        </div>
+      </div>
+    </div>
+  </article>`;
+}
+function overlayButtonsHtml(current){
+  return Object.entries(overlayMeta).map(([key, meta]) => {
+    const active = current.key === key ? " active" : "";
+    return `<button data-preview-overlay="${escapeAttr(key)}" class="${active}">${escapeHtml(meta.label)}</button>`;
+  }).join("");
+}
+function bindOverlayPreviewControls(){
+  document.querySelectorAll("[data-overlay-preview] .caption-item").forEach(item => {
+    const rank = item.dataset.rank;
+    item.querySelectorAll("[data-preview-overlay]").forEach(button => {
+      button.addEventListener("click", () => setOverlayForRank(rank, { key: button.dataset.previewOverlay }));
+    });
+    const opacity = item.querySelector("[data-preview-overlay-opacity]");
+    if (opacity) {
+      opacity.addEventListener("input", () => setOverlayForRank(rank, { opacity: Number(opacity.value) }));
+      opacity.addEventListener("change", () => setOverlayForRank(rank, { opacity: Number(opacity.value) }));
+    }
+    const reset = item.querySelector("[data-overlay-reset]");
+    if (reset) reset.addEventListener("click", () => setOverlayForRank(rank, { x: .62, y: .78, width: .34 }));
+    bindOverlayDrag(item);
+  });
+}
+function bindOverlayDrag(item){
+  const surface = item.querySelector("[data-overlay-surface]");
+  const box = item.querySelector("[data-overlay-drag]");
+  if (!surface || !box || box.dataset.overlayKey === "none") return;
+  let drag = null;
+  const startDrag = event => {
+    const resizing = event.target?.hasAttribute?.("data-overlay-resize");
+    const surfaceRect = surface.getBoundingClientRect();
+    const boxRect = box.getBoundingClientRect();
+    drag = {
+      type: resizing ? "resize" : "move",
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startLeft: boxRect.left - surfaceRect.left,
+      startTop: boxRect.top - surfaceRect.top,
+      startWidth: boxRect.width,
+      surfaceWidth: surfaceRect.width,
+      surfaceHeight: surfaceRect.height
+    };
+    box.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  };
+  const moveDrag = event => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    const next = overlayForRank(item.dataset.rank);
+    if (drag.type === "resize") {
+      const width = clampNumber((drag.startWidth + dx) / drag.surfaceWidth, .18, .72);
+      box.style.setProperty("--overlay-width", width);
+      next.width = width;
+    } else {
+      const boxRect = box.getBoundingClientRect();
+      const maxLeft = Math.max(drag.surfaceWidth - boxRect.width, 0);
+      const maxTop = Math.max(drag.surfaceHeight - boxRect.height, 0);
+      const left = clampNumber(drag.startLeft + dx, 0, maxLeft);
+      const top = clampNumber(drag.startTop + dy, 0, maxTop);
+      next.x = drag.surfaceWidth ? left / drag.surfaceWidth : 0;
+      next.y = drag.surfaceHeight ? top / drag.surfaceHeight : 0;
+      box.style.setProperty("--overlay-x", next.x);
+      box.style.setProperty("--overlay-y", next.y);
+    }
+    setOverlayForRank(item.dataset.rank, next, false);
+  };
+  const endDrag = event => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    drag = null;
+    renderOverlayPreview();
+  };
+  box.addEventListener("pointerdown", startDrag);
+  box.addEventListener("pointermove", moveDrag);
+  box.addEventListener("pointerup", endDrag);
+  box.addEventListener("pointercancel", endDrag);
+}
+function renderFinalStage(){
+  const queue = buildExportData().caption_queue || [];
+  const summary = document.querySelector("[data-final-summary]");
+  if (summary) {
+    const effectCount = queue.filter(item => normalizeEffect(item.effect).key !== "none").length;
+    const overlayCount = queue.filter(item => normalizeOverlay(item.overlay).key !== "none").length;
+    summary.textContent = queue.length
+      ? `${queue.length} saidas prontas para render; ${effectCount} com efeito; ${overlayCount} com chamada.`
+      : "Selecione cortes e ajuste os efeitos antes de renderizar.";
+  }
+  const command = document.querySelector("[data-caption-command]");
+  if (command) command.textContent = captionCommand();
+}
+function captionCommand(){
+  const chars = Number(document.querySelector("[data-caption-width]")?.value || 28);
+  const lines = Number(document.querySelector("[data-caption-lines]")?.value || 2);
+  const script = window.CUTTED_SCRIPT || "cutted.py";
+  return `python "${script}" caption-selected "caption-queue.json" --out "captioned-clips" --base-dir "." --chars-per-line ${chars} --max-lines ${lines}`;
+}
+function captionItemHtml(item){
+  const previewSrc = cacheBustedPreview(item.clip_file || "", `${item.rank}-${item.adjusted_start}-${item.adjusted_end}`);
+  return `
+    <article class="caption-item" data-platform="${escapeAttr(item.platform)}">
+      <div class="caption-preview"><video controls preload="metadata" src="${escapeAttr(previewSrc)}"></video></div>
+      <div class="caption-item-body">
+        <strong>#${String(item.rank).padStart(2, "0")} ${escapeHtml(item.title || "")}</strong>
+        <span>${escapeHtml(item.platform_label)}</span><span>${item.width}x${item.height}</span><span>${fixed(item.adjusted_duration)}</span>
+        <p>${escapeHtml((item.publish_metadata?.hashtags || []).join(" "))}</p>
+        <dl><dt>Inicio</dt><dd>${fixed(item.adjusted_start)}</dd><dt>Fim</dt><dd>${fixed(item.adjusted_end)}</dd></dl>
+      </div>
+    </article>`;
+}
+function cacheBustedPreview(value, token){
+  if (!value) return "";
+  return `${value}${String(value).includes("?") ? "&" : "?"}v=${encodeURIComponent(token)}`;
+}
+function escapeHtml(value){
+  return String(value).replace(/[&<>"']/g, char => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[char]));
+}
+function escapeAttr(value){ return escapeHtml(value); }
+applyFormat(localStorage.getItem("cutted-format") || "tiktok");
+applyTab(localStorage.getItem("cutted-tab") || "edit");
+document.querySelectorAll(".segments [data-format]").forEach(btn => {
+  btn.addEventListener("click", () => applyFormat(btn.dataset.format));
+});
+document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
+  btn.addEventListener("click", () => { applyTab(btn.dataset.tab); renderCaptionQueue(); });
+});
+document.querySelectorAll(".card").forEach(card => {
+  paint(card);
+  updateTrimUi(card);
+  updatePlatformUi(card);
+  const video = card.querySelector("video");
+  if (video) {
+    video.addEventListener("play", () => {
+      const values = trimValues(card);
+      if (video.currentTime < values.trimStart || video.currentTime >= values.duration - values.trimEnd) {
+        video.currentTime = values.trimStart;
+      }
+    });
+    video.addEventListener("timeupdate", () => {
+      const values = trimValues(card);
+      if (video.currentTime >= values.duration - values.trimEnd) {
+        video.pause();
+        video.currentTime = values.trimStart;
+      }
+    });
+  }
+  card.querySelectorAll("[data-trim]").forEach(input => input.addEventListener("input", () => {
+    const current = cardState(card.dataset.rank);
+    const duration = Number(card.dataset.duration);
+    const startInput = card.querySelector("[data-trim=start]");
+    const endInput = card.querySelector("[data-trim=end]");
+    let startPos = Number(startInput.value);
+    let endPos = Number(endInput.value);
+    if (input.dataset.trim === "start") startPos = Math.min(startPos, endPos - 1);
+    if (input.dataset.trim === "end") endPos = Math.max(endPos, startPos + 1);
+    const patch = { trimStart: Math.max(startPos, 0), trimEnd: Math.max(duration - endPos, 0) };
+    setCardState(card.dataset.rank, Object.assign(current, patch));
+    updateTrimUi(card);
+    seekPreview(card);
+    renderCaptionQueue();
+  }));
+  card.querySelectorAll("[data-platform]").forEach(btn => btn.addEventListener("click", () => {
+    const current = cardState(card.dataset.rank);
+    const platforms = Array.isArray(current.platforms) ? current.platforms.slice() : [];
+    const existing = platforms.indexOf(btn.dataset.platform);
+    if (existing >= 0) platforms.splice(existing, 1);
+    else platforms.push(btn.dataset.platform);
+    setCardState(card.dataset.rank, { platforms });
+    updatePlatformUi(card);
+    renderCaptionQueue();
+  }));
+  card.querySelectorAll("button[data-action]").forEach(btn => btn.addEventListener("click", () => {
+    if (btn.dataset.action === "reset-trim") {
+      setCardState(card.dataset.rank, { trimStart: 0, trimEnd: 0 });
+      updateTrimUi(card);
+      seekPreview(card);
+      renderCaptionQueue();
+      return;
+    }
+    setCardState(card.dataset.rank, { status: btn.dataset.action === "like" ? "liked" : "discarded" });
+    paint(card);
+    updatePlatformUi(card);
+    renderCaptionQueue();
+  }));
+});
+document.getElementById("export").addEventListener("click", async () => {
+  downloadJson(buildExportData(), "selected-clips.json");
+});
+document.getElementById("reset-ui").addEventListener("click", () => {
+  if (!confirm("Zerar cortes, formatos e estado desta interface?")) return;
+  localStorage.removeItem("cutted-state");
+  localStorage.removeItem("cutted-format");
+  localStorage.removeItem("cutted-tab");
+  location.reload();
+});
+document.getElementById("continue-overlays").addEventListener("click", async () => {
+  applyTab("overlays");
+});
+document.getElementById("continue-final").addEventListener("click", async () => {
+  applyTab("final");
+});
+document.getElementById("export-final-queue").addEventListener("click", async () => {
+  downloadJson(buildExportData(), "caption-queue.json");
+});
+document.querySelectorAll("[data-caption-lines],[data-caption-width]").forEach(input => {
+  input.addEventListener("input", renderFinalStage);
+  input.addEventListener("change", renderFinalStage);
+});
+document.getElementById("copy-caption-command").addEventListener("click", async () => {
+  const button = document.getElementById("copy-caption-command");
+  const command = document.querySelector("[data-caption-command]");
+  const text = captionCommand();
+  try {
+    if (!navigator.clipboard) throw new Error("Clipboard unavailable");
+    await navigator.clipboard.writeText(text);
+    button.textContent = "Copiado";
+  } catch (error) {
+    selectElementText(command);
+    button.textContent = "Selecionado";
+  }
+  setTimeout(() => { button.textContent = "Copiar comando"; }, 1600);
+});
+function selectElementText(element){
+  if (!element || !window.getSelection || !document.createRange) return;
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+renderCaptionQueue();
+</script>
+</body>
+</html>
