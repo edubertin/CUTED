@@ -1,0 +1,1163 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cutted Review</title>
+  <style>
+*{box-sizing:border-box}body{margin:0;background:#050505;color:#f4f4f4;font:14px/1.45 Arial,sans-serif}
+header{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;gap:16px;align-items:center;padding:18px 22px;background:#050505;border-bottom:1px solid #202020}.header-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+h1{margin:0;font-size:22px}header p{margin:3px 0 0;color:#9a9a9a}.tabs{position:sticky;top:75px;z-index:3;display:flex;gap:8px;padding:10px 22px;background:#060606;border-bottom:1px solid #1f1f1f}.tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 12px}.tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}.config{position:sticky;top:126px;z-index:2;display:flex;justify-content:space-between;gap:14px;align-items:center;padding:12px 22px;background:#080808;border-bottom:1px solid #202020}.config strong{display:block;font-size:13px}.config span{color:#9a9a9a;font-size:12px}.segments{display:flex;gap:6px;flex-wrap:wrap}.segments button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.segments button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}main{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;padding:18px;align-items:start}
+.card{background:#111;border:1px solid #272727;border-radius:8px;overflow:hidden}.card.liked{border-color:#24d17e}.card.discarded{opacity:.42}
+.media{aspect-ratio:16/9;background:#000;max-height:58vh;transition:aspect-ratio .2s ease}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block}.placeholder{display:grid;place-items:center;height:100%;color:#777}
+body[data-format=tiktok] .media,body[data-format=shorts] .media,body[data-format=instagram] .media{aspect-ratio:9/16}body[data-format=facebook] .media{aspect-ratio:4/5}body[data-format=youtube] .media{aspect-ratio:16/9}
+.body{padding:14px}.top{display:flex;gap:10px;align-items:center}.top span{color:#888}.top strong{font-size:15px}.peak{color:#fff;font-size:16px}
+p{color:#bebebe}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}
+.timeline-editor{padding:10px 14px 12px;background:#090909;border-top:1px solid #1e1e1e;border-bottom:1px solid #222}.timeline-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.timeline-head output{color:#f4f4f4;text-align:right}.timeline{position:relative;height:34px;margin-top:8px}.timeline-track{position:absolute;left:0;right:0;top:14px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:#f4f4f4;border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:34px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{display:flex;justify-content:space-between;color:#aaa;font-size:12px}
+.format-editor{display:block;padding:12px 14px;background:#090909;border-bottom:1px solid #222}.format-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.format-head output{color:#f4f4f4;text-align:right}.platform-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.platform-tags button{background:#191919;color:#ddd;border:1px solid #333}.platform-tags button.active{background:#24d17e;color:#04130b;border-color:#24d17e}.caption-stage{display:none;margin:18px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.caption-stage p{margin:4px 0 0}.caption-summary{margin-top:12px;color:#aaa}.caption-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:14px;align-items:start}.caption-item{border:1px solid #2a2a2a;border-radius:8px;background:#0a0a0a;overflow:hidden}.caption-preview{display:flex;justify-content:center;background:#000}.caption-preview video{width:100%;max-height:64vh;object-fit:cover;background:#000}.caption-item[data-platform=tiktok] video,.caption-item[data-platform=shorts] video,.caption-item[data-platform=instagram] video{aspect-ratio:9/16}.caption-item[data-platform=facebook] video{aspect-ratio:4/5}.caption-item[data-platform=youtube] video{aspect-ratio:16/9}.caption-item-body{padding:12px}.caption-item strong{display:block}.caption-item span{display:inline-flex;margin:8px 8px 0 0;padding:4px 8px;border-radius:999px;background:#242424;color:#ddd;font-size:12px}.caption-item dl{margin-top:10px}
+body[data-tab=captions] main,body[data-tab=captions] .config,body[data-tab=captions] .final-stage{display:none}body[data-tab=captions] .caption-stage{display:block}
+body[data-tab=final] main,body[data-tab=final] .config,body[data-tab=final] .caption-stage{display:none}body[data-tab=final] .final-stage{display:block}.final-stage{display:none;margin:18px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.final-panel{display:grid;grid-template-columns:120px 140px minmax(260px,1fr);gap:12px;margin-top:14px;align-items:end}.final-panel label{display:grid;gap:6px;color:#aaa}.final-panel select,.final-panel input{width:100%;background:#050505;color:#f4f4f4;border:1px solid #333;border-radius:6px;padding:9px}.final-panel code{display:block;min-height:40px;padding:10px;border:1px solid #303030;border-radius:6px;background:#050505;color:#ddd;white-space:normal;overflow-wrap:anywhere}
+details{border-top:1px solid #242424;margin-top:12px;padding-top:10px}summary{cursor:pointer;color:#ddd}.actions{display:flex;gap:8px;margin-top:12px}
+button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 12px;cursor:pointer}#reset-ui,button[data-action=discard]{background:#242424;color:#ddd}
+button[data-action=reset-trim]{background:#191919;color:#ddd;border:1px solid #333}
+@media(max-width:640px){.tabs{top:94px;overflow:auto}.config{top:144px;align-items:flex-start;flex-direction:column}.segments button{font-size:12px;padding:7px 9px}main{grid-template-columns:1fr;padding:12px}.final-panel{grid-template-columns:1fr}}
+</style>
+</head>
+<body data-format="tiktok" data-tab="edit">
+  <header>
+    <div><h1>Cutted</h1><p>PÉRICLES - Podpah #945</p></div>
+    <div class="header-actions">
+      <button id="reset-ui">Zerar interface</button>
+      <button id="export">Exportar selecionados</button>
+    </div>
+  </header>
+  <nav class="tabs" aria-label="Fluxo">
+    <button data-tab="edit" class="active">1. Cortes e formatos</button>
+    <button data-tab="captions">2. Legendas</button>
+    <button data-tab="final">3. Final</button>
+  </nav>
+  <section class="config" aria-label="Configuracao de formato">
+    <div>
+      <strong>Formato</strong>
+      <span data-format-hint>TikTok/Reels/Shorts · 9:16</span>
+    </div>
+    <div class="segments" role="group" aria-label="Formato do preview">
+      <button data-format="tiktok" class="active">TikTok</button>
+      <button data-format="shorts">Shorts</button>
+      <button data-format="youtube">YouTube</button>
+      <button data-format="instagram">Instagram</button>
+      <button data-format="facebook">Facebook</button>
+    </div>
+  </section>
+  <section class="caption-stage">
+    <div class="stage-head">
+      <div>
+        <strong>Legendas</strong>
+        <p>Fila gerada a partir dos cortes, trims e plataformas marcadas.</p>
+      </div>
+      <button id="export-captions">Preparar legenda</button>
+    </div>
+    <div class="caption-summary" data-caption-summary>Nenhum corte marcado ainda.</div>
+    <div class="caption-list" data-caption-list></div>
+  </section>
+  <section class="final-stage">
+    <div class="stage-head">
+      <div>
+        <strong>Final</strong>
+        <p data-final-summary>Prepare a fila de legenda antes de renderizar.</p>
+      </div>
+      <button id="copy-caption-command">Copiar comando</button>
+    </div>
+    <div class="final-panel">
+      <label>Linhas
+        <select data-caption-lines>
+          <option value="2" selected>2 linhas</option>
+          <option value="1">1 linha</option>
+          <option value="3">3 linhas</option>
+        </select>
+      </label>
+      <label>Largura
+        <input data-caption-width type="number" min="18" max="42" value="28">
+      </label>
+      <code data-caption-command>python cutted.py caption-selected "caption-queue.json" --out "captioned-clips" --base-dir "." --chars-per-line 28 --max-lines 2</code>
+    </div>
+  </section>
+  <main>
+    <article class="card" data-rank="1" data-start="358.319" data-end="428.620" data-duration="70.301">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-001.jpg?v=1-358319-428620" src="clips/clip-001.mp4?v=1-358319-428620"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 358.3s - 428.6s (70.3s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="70.3" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="70.3" step="0.1" value="70.3">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#01</span><strong>&gt;&gt; Vai pra natação. Por quê? Porque ela é</strong></div>
+        <p class="peak">&gt;&gt; Vai pra natação. Por quê? Porque ela é</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.28</dd><dt>Inicio</dt><dd>358.3s</dd><dt>Fim</dt><dd>428.6s</dd></dl>
+        <details><summary>Transcript</summary><p>&gt;&gt; Sim, sim, sim. Hoje é um dia muito especial. A gente sempre fala dele. Ele já veio uma vez, agora veio de novo. &gt;&gt; Você tá bem? &gt;&gt; Eu tô bem. Você? Por que que você tá fazendo assim, irmão? Tá pedindo para eu calmar? &gt;&gt; Eu tô pedindo para você calmar um pouco. &gt;&gt; Eu que tô há uns dois meses querendo que você se acalme um pouco. Você tá muito, &gt;&gt; tô a mais. Tá demais, [ __ ] &gt;&gt; Eu queria falar isso no programa, no início do programa do P. &gt;&gt; Qu vocês estão em casa, mano? Dá um like, se inscreve no canal aí, mano. Ô, de verdade, episódios. &gt;&gt; Bom, 10 milhões de inscritos. &gt;&gt; Boa. &gt;&gt; Antes de &gt;&gt; apresentar nosso convidado maravilhoso, eu preciso falar dos nossos patrocinadores aqui da casa. Começando por Philips, Mítico Jovem. &gt;&gt; Ah, &gt;&gt; Philips está com lançamento novinho, novidade nova, que é a Philips Boom Beit. Exatamente. &gt;&gt; Vem com alcinha também, tá? &gt;&gt; Exatamente. É um som potente de alta qualidade com Rais. Tá bom, né? Que fala só que tem 200 W, tem 200 W de fato. Graves, fortes e agudos nítidos, portátil e fácil de carregar, como o mítico jovem disse, ela é muito estilosa porque ela tem uma uma faixinha que dá para você colocar lá no corpo. &gt;&gt; É, eu vou pra natação, coloco ela aqui, ela vai embora comigo. &gt;&gt; Vai pra natação. Por quê? Porque ela é</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="2" data-start="422.759" data-end="468.220" data-duration="45.461">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-002.jpg?v=2-422759-468219" src="clips/clip-002.mp4?v=2-422759-468219"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 422.8s - 468.2s (45.5s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="45.5" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="45.5" step="0.1" value="45.5">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#02</span><strong>&gt;&gt; Vai pra natação. Por quê? Porque ela é</strong></div>
+        <p class="peak">&gt;&gt; Vai pra natação. Por quê? Porque ela é</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.5</dd><dt>Inicio</dt><dd>422.8s</dd><dt>Fim</dt><dd>468.2s</dd></dl>
+        <details><summary>Transcript</summary><p>&gt;&gt; Vai pra natação. Por quê? Porque ela é resistente à água, jovem. &gt;&gt; Água e poeira. Tá bom. A qualidade do som tá absurda, mano. Você que gosta de um grave. Você que gosta de um gravezinho, aquele som gostosinho. &gt;&gt; E tem função kara o quê? &gt;&gt; Tem. &gt;&gt; Você que é metida a cantor? &gt;&gt; Eu? &gt;&gt; Aham. Plug plug o microfone. Seja feliz. Então conheça. Novo lançamento da Philips Bumbit e tenha um som de qualidade na sua casa, tá bom? E ó, falar de educação agora, falar de fã. Mítico jovem. &gt;&gt; Opa, &gt;&gt; ainda dá tempo de você se matricular para o na fã para esse semestre, tá bom? De verdade, parcerias com grandes empresas, incluindo o PODP. Você pode estagiar aqui no PP se você for um aluno fã, tá bom? Estágios exclusivos tem até</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="3" data-start="550.320" data-end="594.779" data-duration="44.459">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-003.jpg?v=3-550320-594779" src="clips/clip-003.mp4?v=3-550320-594779"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 550.3s - 594.8s (44.5s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="44.5" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="44.5" step="0.1" value="44.5">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#03</span><strong>&gt;&gt; Ah, por quê? Porque o mítico jovem ele</strong></div>
+        <p class="peak">&gt;&gt; Ah, por quê? Porque o mítico jovem ele</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.7</dd><dt>Inicio</dt><dd>550.3s</dd><dt>Fim</dt><dd>594.8s</dd></dl>
+        <details><summary>Transcript</summary><p>&gt;&gt; sim, cara. Eu amo a lander. &gt;&gt; Ah, aí é vantagem com a fã de verdade. Tem condições imperdíveis para sair de Lander Zero. Eu quero falar para vocês, ó. Voucher de R$ 1.000 na moto ou em produtos, você escolhe. Você comprando uma moto, você vai ganhar um voucher de R$ 1.000 que você escolhe como gastar. Taxa zero e 4 anos de garantia. Tá bom? Deus do céu. &gt;&gt; E importantíssimo você acessar o site e conferir todas as condições e escolha a sua motinha, escolha a sua Yamarra, tá bom? Aproveita, segue as redes sociais deles aí porque o trabalho deles também é maravilhoso. &gt;&gt; Mítico jovem, fala &gt;&gt; o nosso patrocinador master é para você. &gt;&gt; Ah, por quê? Porque o mítico jovem ele sai desse país, ele compra Rizes. Não, eu eu tenho até eu vou até de mala, meu</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="4" data-start="585.560" data-end="654.980" data-duration="69.420">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-004.jpg?v=4-585560-654980" src="clips/clip-004.mp4?v=4-585560-654980"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 585.6s - 655.0s (69.4s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="69.4" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="69.4" step="0.1" value="69.4">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#04</span><strong>&gt;&gt; Ah, por quê? Porque o mítico jovem ele</strong></div>
+        <p class="peak">&gt;&gt; Ah, por quê? Porque o mítico jovem ele</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.17</dd><dt>Inicio</dt><dd>585.6s</dd><dt>Fim</dt><dd>655.0s</dd></dl>
+        <details><summary>Transcript</summary><p>&gt;&gt; Ah, por quê? Porque o mítico jovem ele sai desse país, ele compra Rizes. Não, eu eu tenho até eu vou até de mala, meu irmão. &gt;&gt; De verdade, gente. &gt;&gt; Essa malinha aqui é Style, hein. &gt;&gt; Ó, R esse chocolate maravilhoso de pasta de amendoim com chocolate e que tava de ponta cabeça, me perdoa. Mas é isso. Toda vez que a gente viaja, a gente enche a mala disso aqui e despacha e meu Deus do céu. E volta cheio de chocolate para casa. Só que isso não precisa mais porque RES está no Brasil. Ah, meu Deus do céu. Então, muito obrigado. Tô com uma caixa igual o me mostrou ali. A gente ganhou aqui um monte de coisa. Você não viu que tem moletom aqui também? &gt;&gt; Tem moletom. &gt;&gt; Tem meia da R. &gt;&gt; Que isso? Obrigado, &gt;&gt; você que é gostosinho, tá? Se você nunca comeu um, come você ver. &gt;&gt; Então, não precisa mais você viajar para fora para comprar. Então, já compre o seu e, ó, escanei o Qcode e garanta sem precisar sair do sofá. Isso aqui é [ __ ] de gostoso. Desculpa, é muito bom mesmo. Desculizado. Agora tá no Brasil, tá no BR. Vamos que vamos, hein? &gt;&gt; Ou é muito gostoso e muito bonito esse laranjado também, né? Gostei. &gt;&gt; Obrigado, Rizes, de verdade, &gt;&gt; top, hein? Tô me sentindo gringo agora.</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="5" data-start="976.399" data-end="1028.780" data-duration="52.381">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-005.jpg?v=5-976399-1028780" src="clips/clip-005.mp4?v=5-976399-1028780"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 976.4s - 1028.8s (52.4s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="52.4" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="52.4" step="0.1" value="52.4">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#05</span><strong>levar o dinheiro para esse lugar, porque</strong></div>
+        <p class="peak">levar o dinheiro para esse lugar, porque</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.82</dd><dt>Inicio</dt><dd>976.4s</dd><dt>Fim</dt><dd>1028.8s</dd></dl>
+        <details><summary>Transcript</summary><p>poder ganhar um dinheiro e de também não tá na rua, tá fazendo cultura, sabe? tá podendo fazer um evento ali. Então eu acho que &gt;&gt; que isso abre eh espaço para outras outras empresas, outras outra galera, tipo um pode para pegar outras batalhas de outros estados e juntar. E a gente tá a fim de fazer. &gt;&gt; O que a gente quis fazer com isso é levar o dinheiro para esse lugar, porque a gente vende um da periferia, então a gente começa a conhecer um dinheiro desses patrocinadores que a gente fala: &quot;Nossa, diferente&quot;. E a gente fala assim: &quot;Beleza, agora a gente tá com esses patrocinadores, então vamos pegar os nossos patrocinadores e levar pra batalha&quot;. Isso aí. &gt;&gt; Então a chegamos. Então é isso que eu quero, sabe, peréx, mais dinheiro com a gente. É isso aí, pô. &gt;&gt; E que as marcas entendem que a batalha é um fenômeno que para eles chegarem. &gt;&gt; É, cara. Pô, isso é prosperidade. Isso é prosperidade. Porque você ganhar sozinho, não é? Quando você compartilha</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="6" data-start="1569.000" data-end="1625.460" data-duration="56.460">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-006.jpg?v=6-1569000-1625460" src="clips/clip-006.mp4?v=6-1569000-1625460"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 1569.0s - 1625.5s (56.5s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="56.5" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="56.5" step="0.1" value="56.5">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#06</span><strong>&gt;&gt; Entendeu? porque precisaria de uma carga</strong></div>
+        <p class="peak">&gt;&gt; Entendeu? porque precisaria de uma carga</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>11.96</dd><dt>Inicio</dt><dd>1569.0s</dd><dt>Fim</dt><dd>1625.5s</dd></dl>
+        <details><summary>Transcript</summary><p>com a música. &gt;&gt; Sempre é um berço muito musical, né? E sempre sai uns cantas maravil gente, revelou muita gente, &gt;&gt; acho que apresentou o instrumento para um monte de gente. &gt;&gt; Para um monte de gente. Além de apresentar o instrumento, apresentou uma saída. O os a igreja foi uma saída para muito, salvou muita gente. &gt;&gt; Mas você com essa idade, 14, 13 anos ali, você já sabia que seu futuro ia ser cantor, &gt;&gt; cara? Não, não. Eu, eu queria jogar vôlei. Eu joguei vôlei um tempão. Eu fui até onde o meu joelho deu e tá tudo bem. E, e, mas eu tenho eu tenho grandes amigos no vôlei. Grandes amigos. &gt;&gt; Você ficou frustrado quando não deu mais o vôlei? &gt;&gt; Não, não, não fiquei. &gt;&gt; Sério? &gt;&gt; Sério? &gt;&gt; O porque o samba já tava andando, rolando. &gt;&gt; Não, não porque tava rolando, mas eu eu tenho plena ciência &gt;&gt; que eu não iria muito mais longe. &gt;&gt; Entendi. &gt;&gt; Entendeu? porque precisaria de uma carga</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="7" data-start="1937.360" data-end="1981.980" data-duration="44.620">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-007.jpg?v=7-1937360-1981980" src="clips/clip-007.mp4?v=7-1937360-1981980"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 1937.4s - 1982.0s (44.6s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="44.6" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="44.6" step="0.1" value="44.6">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#07</span><strong>&gt;&gt; Quando que você começa a compor? Porque</strong></div>
+        <p class="peak">&gt;&gt; Quando que você começa a compor? Porque</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.31</dd><dt>Inicio</dt><dd>1937.4s</dd><dt>Fim</dt><dd>1982.0s</dd></dl>
+        <details><summary>Transcript</summary><p>responsabilidade, poxa, eu sou um filho mais velho, &gt;&gt; eu tenho que dar o exemplo. &gt;&gt; E os mais novos depois de você era muita diferença. &gt;&gt; Não, não, não, não. Um, dois anos. Um, dois anos. &gt;&gt; É isso que faz. Eu sou mais velho. Aí o outro com um ano a menos, &gt;&gt; dois, é um ano a menos. Fala: &quot;Ah, sai daí, &gt;&gt; sai daí, &gt;&gt; calma aí, F. &gt;&gt; Tá de brincadeira quando &gt;&gt; Mas sempre foi assim, sempre foi assim. E o o mais velho sempre, né, o pensamento é, poxa, se eu faltar, você que vai cuidar. &gt;&gt; Nessa época você já tava compondo? &gt;&gt; Não. &gt;&gt; Quando que você começa a compor? Porque também é um dom que a gente descobre, que você descobre, né? No caso.</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="8" data-start="2392.319" data-end="2444.220" data-duration="51.901">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-008.jpg?v=8-2392319-2444220" src="clips/clip-008.mp4?v=8-2392319-2444220"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 2392.3s - 2444.2s (51.9s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="51.9" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="51.9" step="0.1" value="51.9">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#08</span><strong>eu tenho eh porque eu é a música, né? A</strong></div>
+        <p class="peak">eu tenho eh porque eu é a música, né? A</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.19</dd><dt>Inicio</dt><dd>2392.3s</dd><dt>Fim</dt><dd>2444.2s</dd></dl>
+        <details><summary>Transcript</summary><p>mais fácil. &gt;&gt; Você sempre foi muito próximo ao rap, né, Mr. Catra? Eu agora você vai cantar no Detal com o Dexter. Dexter. &gt;&gt; Fala disso aí. &gt;&gt; Porque o Dexter tava aqui com a gente ontem, cara. &gt;&gt; Eu amo. Dexter. &gt;&gt; E aí, Titi? Tá firmeza? Fala, meu Deus. Ele é assim, ele é, ele é assim, &gt;&gt; ele é assim, ele é assim, &gt;&gt; [ __ ] É um cara, Dexter, eu te amo e você sabe muito bem. &gt;&gt; Amamos demais, cara. &gt;&gt; Poxa, ele é demais assim, a &gt;&gt; Domingo vai ter aniversário dele. &gt;&gt; É uma é um cara que ele se reinventou, né? Ele pegou &gt;&gt; meio limão e fez duas limonadas. &gt;&gt; Uma cachoeira de limonada, &gt;&gt; né? Isso tem relevância. E aí a gente vai cantar junto. Mas a proximidade que eu tenho eh porque eu é a música, né? A</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="9" data-start="2771.520" data-end="2816.740" data-duration="45.220">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-009.jpg?v=9-2771520-2816740" src="clips/clip-009.mp4?v=9-2771520-2816740"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 2771.5s - 2816.7s (45.2s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="45.2" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="45.2" step="0.1" value="45.2">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#09</span><strong>esquenta?&quot; É porque é muita risada</strong></div>
+        <p class="peak">esquenta?&quot; É porque é muita risada,</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.53</dd><dt>Inicio</dt><dd>2771.5s</dd><dt>Fim</dt><dd>2816.7s</dd></dl>
+        <details><summary>Transcript</summary><p>&gt;&gt; Da hora, da hora, da hora. &gt;&gt; Vai corte. &gt;&gt; Porque a gente tem essa parada com o esquenta, sabe? O esquenta era uma novidade. Muita gente criticou, po apareceu &gt;&gt; muita gente e teve uma teve uma teve pessoas que falou assim: &quot;O pai é tipo esquenta na internet&quot;. &gt;&gt; Mas aí aí a pessoa fala: &quot;Mas por que o esquenta?&quot; É porque é muita risada, muita gente feliz, com preconceito, óbvio, né, falando. Aí a gente contou isso pra pra Regina, né? E a gente falou assim, Regina, e a gente recebeu essa ofensa com um puto elogio, porque o esquenta pra gente é um fenômeno. &gt;&gt; É quando a gente viu junto a gente junto na hora a gente se olhou e falou: &gt;&gt; &quot;A gente é o esquenta, &gt;&gt; a gente é o esquenta [ __ ] é mó da hora aquela parada foi muito [ __ ] aquela</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="10" data-start="2945.960" data-end="2990.260" data-duration="44.300">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-010.jpg?v=10-2945960-2990260" src="clips/clip-010.mp4?v=10-2945960-2990260"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 2946.0s - 2990.3s (44.3s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="44.3" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="44.3" step="0.1" value="44.3">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#10</span><strong>isso? Muito louco aquilo, porque ah, a</strong></div>
+        <p class="peak">isso? Muito louco aquilo, porque ah, a</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.07</dd><dt>Inicio</dt><dd>2946.0s</dd><dt>Fim</dt><dd>2990.3s</dd></dl>
+        <details><summary>Transcript</summary><p>para cima e para baixo, cultura de favela, tudo de favela, entendeu? Queria tá lá, [ __ ] Queria estar no meio lá naquela. &gt;&gt; Eu ficava com a inveja do DG, irmão. Falei: &quot;Caramba, DG tá aí todo dia, mano. Deixa eu em um&quot;. Como que foi isso? Muito louco aquilo, porque ah, a gente fez a última apresentação do Exalta Samba lá no Esquenta, né, que foi o dia que o Lucas cantou lá, a gente cada um levou seus filhos e tudo mais, que foi impactante demais, foi lindo. E aí, &gt;&gt; mas o o convite era para você participar de um ou já era você fazer parte daquilo? Como que era isso? &gt;&gt; Não, o convite surgiu para eu fazer parte um dia.</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="11" data-start="4031.039" data-end="4076.460" data-duration="45.421">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-011.jpg?v=11-4031039-4076460" src="clips/clip-011.mp4?v=11-4031039-4076460"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 4031.0s - 4076.5s (45.4s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="45.4" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="45.4" step="0.1" value="45.4">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#11</span><strong>isso de de de ser válido isso? Porque o</strong></div>
+        <p class="peak">isso de de de ser válido isso? Porque o</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>11.92</dd><dt>Inicio</dt><dd>4031.0s</dd><dt>Fim</dt><dd>4076.5s</dd></dl>
+        <details><summary>Transcript</summary><p>isso de de de ser válido isso? Porque o artista, é muito importante isso que eu vou dizer, os artistas eles estão tomando mão dos seus trabalhos. O artista, ele não é só aquele que eh, de uma forma contemplativa vê seu trabalho crescer. Ele vê que hoje se ele não se ele não botar a mão na massa, não vai funcionar, &gt;&gt; não vai, &gt;&gt; entendeu? É isso, é o que vocês fazem, é o que a gente procura fazer. A gente tem que pôr a mão na massa, o artista tem que tomar diretriz do seu trabalho, né? E são vários os eh eh como é que eu vou dizer? Ah, foram várias as modalidades</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="12" data-start="4096.319" data-end="4141.620" data-duration="45.301">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-012.jpg?v=12-4096319-4141620" src="clips/clip-012.mp4?v=12-4096319-4141620"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 4096.3s - 4141.6s (45.3s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="45.3" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="45.3" step="0.1" value="45.3">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#12</span><strong>né? Porque é todo dia você busca e por</strong></div>
+        <p class="peak">né? Porque é todo dia você busca e por</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.1</dd><dt>Inicio</dt><dd>4096.3s</dd><dt>Fim</dt><dd>4141.6s</dd></dl>
+        <details><summary>Transcript</summary><p>vencer quando passar do outro lado. Então isso me motiva a querer ser melhor, fazer sempre melhor. É isso. &gt;&gt; E isso te dá uma segurança como artista? O que eu quero dizer é assim, Pericles, porque como você tem a sua festa, o seu projeto e você toca essa parada, então você sabe quantas pessoas você atrai, você sabe o preço do seu ticket, você sabe. Então eu acho que como artista você tem um um entendimento de quem sou eu nesse ramo. É isso que você tá dizendo? &gt;&gt; Sim, sim. O artista entende o seu tamanho, mas é é não tem nada garantido, né? Porque é todo dia você busca e por exemplo patrocínios diferentes, parceiros diferentes, né? Eh, essa turnê</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="13" data-start="5078.119" data-end="5122.980" data-duration="44.861">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-013.jpg?v=13-5078119-5122980" src="clips/clip-013.mp4?v=13-5078119-5122980"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 5078.1s - 5123.0s (44.9s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="44.9" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="44.9" step="0.1" value="44.9">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#13</span><strong>&gt;&gt; Começa por ela. Como que é isso? Porque</strong></div>
+        <p class="peak">&gt;&gt; Começa por ela. Como que é isso? Porque</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.16</dd><dt>Inicio</dt><dd>5078.1s</dd><dt>Fim</dt><dd>5123.0s</dd></dl>
+        <details><summary>Transcript</summary><p>que eu tava deixando de querer buscar novidades, deixando de querer criar. &gt;&gt; A gente fica ruim de cabeça, &gt;&gt; né? A gente fica, fica mesmo, né? E a Maria trouxe vida para todos nós, não só para mim, né? Ela é a filhada do meu compadre Isaías. Pô, o Isaías é outro cara hoje que ele é padrinho da Maria. &gt;&gt; Ela alegrou a casa, trouxe um brilho. &gt;&gt; Alou, bicho. Ela trouxe brilho para todos nós, todas as famílias que se formaram. &gt;&gt; Por conta dela que você tá no mundo Bita. &gt;&gt; Por causa dela. Por causa dela. A gente tá no mundo B. &gt;&gt; Começa por ela. Como que é isso? Porque quando eu te vi eh no Mundo Bit ali</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="14" data-start="5633.760" data-end="5688.580" data-duration="54.820">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-014.jpg?v=14-5633760-5688580" src="clips/clip-014.mp4?v=14-5633760-5688580"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 5633.8s - 5688.6s (54.8s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="54.8" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="54.8" step="0.1" value="54.8">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#14</span><strong>&gt;&gt; muito louco, né? Porque música tem</strong></div>
+        <p class="peak">&gt;&gt; muito louco, né? Porque música tem</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>11.94</dd><dt>Inicio</dt><dd>5633.8s</dd><dt>Fim</dt><dd>5688.6s</dd></dl>
+        <details><summary>Transcript</summary><p>&gt;&gt; Ah, falta de [ __ ] &gt;&gt; Não é, velho? &gt;&gt; Nossa, faz falta. Vocês fazem falta. &gt;&gt; O o o bens a Deus regravou que faz falta. O Magrão ele, [ __ ] &gt;&gt; amassou. [ __ ] vocês vão ouvir &gt;&gt; uma música do Tiaguinho. &gt;&gt; Uma música do Tiaguinho, melhor eu i. &gt;&gt; É do homem, né? &gt;&gt; É dele e do Dan. Tem algumas que são dele que é uma patada, né? Feito para durar. É &gt;&gt; muito louco, né? Porque música tem endereço. O Tiaguinho é um ótimo intérprete, cantor, mas ele deve ter falado assim: &quot;Tá, mas esse aqui que eu escrevi é do Pis.&quot; &gt;&gt; É, ele tem isso. Ele manda para mim fala: &quot;Não, essa não vou cantar não, essa é você&quot;. &gt;&gt; Que [ __ ] isso, né, mano? &gt;&gt; [ __ ] E a gente fez alguma uma outro dia juntos pelo WhatsApp e aí ele perguntou: &quot;Se vai gravar?&quot; Eu falei: &quot;Não, essa</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="15" data-start="6865.040" data-end="6911.699" data-duration="46.659">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-015.jpg?v=15-6865040-6911699" src="clips/clip-015.mp4?v=15-6865040-6911699"></video></div>
+      <div class="timeline-editor">
+        <div class="timeline-head">
+          <span>Ajuste fino</span>
+          <output data-trim-summary>Final: 6865.0s - 6911.7s (46.7s)</output>
+        </div>
+        <div class="timeline" aria-label="Ajuste visual de corte">
+          <div class="timeline-track">
+            <div class="timeline-fill" data-trim-fill></div>
+          </div>
+          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="46.7" step="0.1" value="0">
+          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="46.7" step="0.1" value="46.7">
+        </div>
+        <div class="timeline-values">
+          <span>Inicio +<output data-output="start">0.0s</output></span>
+          <span>Fim -<output data-output="end">0.0s</output></span>
+        </div>
+      </div>
+      <div class="format-editor">
+        <div class="format-head">
+          <span>Destinos deste corte</span>
+          <output data-platform-summary>Nenhum destino marcado</output>
+        </div>
+        <div class="platform-tags" role="group" aria-label="Destinos do clip">
+          <button data-platform="tiktok">TikTok</button>
+          <button data-platform="shorts">Shorts</button>
+          <button data-platform="instagram">Instagram</button>
+          <button data-platform="facebook">Facebook</button>
+          <button data-platform="youtube">YouTube</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="top"><span>#15</span><strong>aniversário ainda, né? É isso, né? Tá</strong></div>
+        <p class="peak">aniversário ainda, né? É isso, né? Tá</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>12.28</dd><dt>Inicio</dt><dd>6865.0s</dd><dt>Fim</dt><dd>6911.7s</dd></dl>
+        <details><summary>Transcript</summary><p>pro churrasqueiro. Ele é o ele é o mais [ __ ] do rolê. &gt;&gt; Ó, completamente emocionado, termina esse episódio. Espero que vocês tenham gostado. Se gostou, dá o like, se inscreva no canal, siga o Perériclis e todas as redes sociais vão estar aí na descrição. Vá o show de encerramento da turnê do pagode do Periclã lá no Rio de Janeiro. Que dia, meu irmão? &gt;&gt; 28 de setembro. &gt;&gt; 28 de setembro. No dia do nosso aniversário ainda, né? É isso, né? Tá maluco, [ __ ] Vamos embora então. É isso. &gt;&gt; Bora comemorar lá todo mundo. &gt;&gt; Nossa, meu Deus do céu. Faz tempo que eu não fico doido. Ó, espero que vocês tenham gostado. Dá o like, se inscreve no canal, siga o Peréricas redes sociais e agora pode ir pra visita na Love Funk com mau mau, certo? E é isso, Jovem. &gt;&gt; É isso mesmo. Tamamo junto. Tem última coisa para falar alguma coisa?</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+          <button data-action="reset-trim">Resetar corte</button>
+        </div>
+      </div>
+    </article></main>
+  <script>window.CUTTED_DATA = {"moments": [{"rank": 1, "start": 358.319, "end": 428.62, "peak": 425.44, "score": 12.28, "title": ">> Vai pra natação. Por quê? Porque ela é", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": ">> Sim, sim, sim. Hoje é um dia muito especial. A gente sempre fala dele. Ele já veio uma vez, agora veio de novo. >> Você tá bem? >> Eu tô bem. Você? Por que que você tá fazendo assim, irmão? Tá pedindo para eu calmar? >> Eu tô pedindo para você calmar um pouco. >> Eu que tô há uns dois meses querendo que você se acalme um pouco. Você tá muito, >> tô a mais. Tá demais, [ __ ] >> Eu queria falar isso no programa, no início do programa do P. >> Qu vocês estão em casa, mano? Dá um like, se inscreve no canal aí, mano. Ô, de verdade, episódios. >> Bom, 10 milhões de inscritos. >> Boa. >> Antes de >> apresentar nosso convidado maravilhoso, eu preciso falar dos nossos patrocinadores aqui da casa. Começando por Philips, Mítico Jovem. >> Ah, >> Philips está com lançamento novinho, novidade nova, que é a Philips Boom Beit. Exatamente. >> Vem com alcinha também, tá? >> Exatamente. É um som potente de alta qualidade com Rais. Tá bom, né? Que fala só que tem 200 W, tem 200 W de fato. Graves, fortes e agudos nítidos, portátil e fácil de carregar, como o mítico jovem disse, ela é muito estilosa porque ela tem uma uma faixinha que dá para você colocar lá no corpo. >> É, eu vou pra natação, coloco ela aqui, ela vai embora comigo. >> Vai pra natação. Por quê? Porque ela é", "peak_text": ">> Vai pra natação. Por quê? Porque ela é", "clip_file": "clips/clip-001.mp4", "frame_file": "frames/clip-001.jpg", "caption_segments": [{"start": 359.319, "end": 362.08000000000004, "text": ">> Sim, sim, sim. Hoje é um dia muito"}, {"start": 360.68, "end": 363.759, "text": "especial. A gente sempre fala dele. Ele"}, {"start": 362.08, "end": 364.4, "text": "já veio uma vez, agora veio de novo."}, {"start": 363.759, "end": 365.72, "text": ">> Você tá bem?"}, {"start": 364.4, "end": 367.039, "text": ">> Eu tô bem. Você? Por que que você tá"}, {"start": 365.72, "end": 367.44000000000005, "text": "fazendo assim, irmão? Tá pedindo para eu"}, {"start": 367.039, "end": 368.96, "text": "calmar?"}, {"start": 367.44, "end": 370.8, "text": ">> Eu tô pedindo para você calmar um pouco."}, {"start": 368.96, "end": 372.84, "text": ">> Eu que tô há uns dois meses querendo que"}, {"start": 370.8, "end": 374.96000000000004, "text": "você se acalme um pouco. Você tá muito,"}, {"start": 372.84, "end": 376.44, "text": ">> tô a mais. Tá demais, [ __ ]"}, {"start": 374.96, "end": 380.0, "text": ">> Eu queria falar isso no programa, no"}, {"start": 376.44, "end": 381.599, "text": "início do programa do P."}, {"start": 380.0, "end": 383.479, "text": ">> Qu vocês estão em casa, mano? Dá um"}, {"start": 381.599, "end": 384.4, "text": "like, se inscreve no canal aí, mano. Ô,"}, {"start": 383.479, "end": 385.88, "text": "de verdade, episódios."}, {"start": 384.4, "end": 386.479, "text": ">> Bom, 10 milhões de inscritos."}, {"start": 385.88, "end": 388.12, "text": ">> Boa."}, {"start": 386.479, "end": 389.75899999999996, "text": ">> Antes de"}, {"start": 388.12, "end": 391.12, "text": ">> apresentar nosso convidado maravilhoso,"}, {"start": 389.759, "end": 393.40000000000003, "text": "eu preciso falar dos nossos"}, {"start": 391.12, "end": 394.96, "text": "patrocinadores aqui da casa. Começando"}, {"start": 393.4, "end": 395.52, "text": "por Philips, Mítico Jovem."}, {"start": 394.96, "end": 398.15999999999997, "text": ">> Ah,"}, {"start": 395.52, "end": 401.479, "text": ">> Philips está com lançamento novinho,"}, {"start": 398.16, "end": 402.759, "text": "novidade nova, que é a Philips Boom"}, {"start": 401.479, "end": 403.84, "text": "Beit. Exatamente."}, {"start": 402.759, "end": 405.68, "text": ">> Vem com alcinha também, tá?"}, {"start": 403.84, "end": 409.039, "text": ">> Exatamente. É um som potente de alta"}, {"start": 405.68, "end": 411.88, "text": "qualidade com Rais. Tá bom, né? Que fala"}, {"start": 409.039, "end": 414.08, "text": "só que tem 200 W, tem 200 W de fato."}, {"start": 411.88, "end": 415.52, "text": "Graves, fortes e agudos nítidos,"}, {"start": 414.08, "end": 417.52, "text": "portátil e fácil de carregar, como o"}, {"start": 415.52, "end": 419.15999999999997, "text": "mítico jovem disse, ela é muito estilosa"}, {"start": 417.52, "end": 420.479, "text": "porque ela tem uma uma faixinha que dá"}, {"start": 419.16, "end": 422.52000000000004, "text": "para você colocar lá no corpo."}, {"start": 420.479, "end": 423.75899999999996, "text": ">> É, eu vou pra natação, coloco ela aqui,"}, {"start": 422.52, "end": 424.96, "text": "ela vai embora comigo."}, {"start": 423.759, "end": 427.12, "text": ">> Vai pra natação. Por quê? Porque ela é"}]}, {"rank": 2, "start": 422.759, "end": 468.21999999999997, "peak": 425.44, "score": 12.5, "title": ">> Vai pra natação. Por quê? Porque ela é", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": ">> Vai pra natação. Por quê? Porque ela é resistente à água, jovem. >> Água e poeira. Tá bom. A qualidade do som tá absurda, mano. Você que gosta de um grave. Você que gosta de um gravezinho, aquele som gostosinho. >> E tem função kara o quê? >> Tem. >> Você que é metida a cantor? >> Eu? >> Aham. Plug plug o microfone. Seja feliz. Então conheça. Novo lançamento da Philips Bumbit e tenha um som de qualidade na sua casa, tá bom? E ó, falar de educação agora, falar de fã. Mítico jovem. >> Opa, >> ainda dá tempo de você se matricular para o na fã para esse semestre, tá bom? De verdade, parcerias com grandes empresas, incluindo o PODP. Você pode estagiar aqui no PP se você for um aluno fã, tá bom? Estágios exclusivos tem até", "peak_text": ">> Vai pra natação. Por quê? Porque ela é", "clip_file": "clips/clip-002.mp4", "frame_file": "frames/clip-002.jpg", "caption_segments": [{"start": 423.759, "end": 427.12, "text": ">> Vai pra natação. Por quê? Porque ela é"}, {"start": 424.96, "end": 428.56, "text": "resistente à água, jovem."}, {"start": 427.12, "end": 430.599, "text": ">> Água e poeira. Tá bom. A qualidade do"}, {"start": 428.56, "end": 431.759, "text": "som tá absurda, mano. Você que gosta de"}, {"start": 430.599, "end": 433.71999999999997, "text": "um grave. Você que gosta de um"}, {"start": 431.759, "end": 435.039, "text": "gravezinho, aquele som gostosinho."}, {"start": 433.72, "end": 435.44000000000005, "text": ">> E tem função kara o quê?"}, {"start": 435.039, "end": 437.36, "text": ">> Tem."}, {"start": 435.44, "end": 437.84, "text": ">> Você que é metida a cantor?"}, {"start": 437.36, "end": 441.879, "text": ">> Eu?"}, {"start": 437.84, "end": 443.79999999999995, "text": ">> Aham. Plug plug o microfone. Seja feliz."}, {"start": 441.879, "end": 446.08000000000004, "text": "Então conheça. Novo lançamento da"}, {"start": 443.8, "end": 448.16, "text": "Philips Bumbit e tenha um som de"}, {"start": 446.08, "end": 451.08, "text": "qualidade na sua casa, tá bom? E ó,"}, {"start": 448.16, "end": 452.0, "text": "falar de educação agora, falar de fã."}, {"start": 451.08, "end": 452.44, "text": "Mítico jovem."}, {"start": 452.0, "end": 454.479, "text": ">> Opa,"}, {"start": 452.44, "end": 457.199, "text": ">> ainda dá tempo de você se matricular"}, {"start": 454.479, "end": 458.96, "text": "para o na fã para esse semestre, tá bom?"}, {"start": 457.199, "end": 460.8, "text": "De verdade, parcerias com grandes"}, {"start": 458.96, "end": 462.84, "text": "empresas, incluindo o PODP. Você pode"}, {"start": 460.8, "end": 465.28000000000003, "text": "estagiar aqui no PP se você for um aluno"}, {"start": 462.84, "end": 466.71999999999997, "text": "fã, tá bom? Estágios exclusivos tem até"}]}, {"rank": 3, "start": 550.32, "end": 594.779, "peak": 588.86, "score": 12.7, "title": ">> Ah, por quê? Porque o mítico jovem ele", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": ">> sim, cara. Eu amo a lander. >> Ah, aí é vantagem com a fã de verdade. Tem condições imperdíveis para sair de Lander Zero. Eu quero falar para vocês, ó. Voucher de R$ 1.000 na moto ou em produtos, você escolhe. Você comprando uma moto, você vai ganhar um voucher de R$ 1.000 que você escolhe como gastar. Taxa zero e 4 anos de garantia. Tá bom? Deus do céu. >> E importantíssimo você acessar o site e conferir todas as condições e escolha a sua motinha, escolha a sua Yamarra, tá bom? Aproveita, segue as redes sociais deles aí porque o trabalho deles também é maravilhoso. >> Mítico jovem, fala >> o nosso patrocinador master é para você. >> Ah, por quê? Porque o mítico jovem ele sai desse país, ele compra Rizes. Não, eu eu tenho até eu vou até de mala, meu", "peak_text": ">> Ah, por quê? Porque o mítico jovem ele", "clip_file": "clips/clip-003.mp4", "frame_file": "frames/clip-003.jpg", "caption_segments": [{"start": 551.32, "end": 554.839, "text": ">> sim, cara. Eu amo a lander."}, {"start": 553.24, "end": 557.399, "text": ">> Ah,"}, {"start": 554.839, "end": 559.24, "text": "aí é vantagem com a fã de verdade. Tem"}, {"start": 557.399, "end": 560.88, "text": "condições imperdíveis para sair de"}, {"start": 559.24, "end": 563.0790000000001, "text": "Lander Zero. Eu quero falar para vocês,"}, {"start": 560.88, "end": 564.68, "text": "ó. Voucher de R$ 1.000 na moto ou em"}, {"start": 563.079, "end": 565.76, "text": "produtos, você escolhe. Você comprando"}, {"start": 564.68, "end": 567.68, "text": "uma moto, você vai ganhar um voucher de"}, {"start": 565.76, "end": 571.64, "text": "R$ 1.000 que você escolhe como gastar."}, {"start": 567.68, "end": 572.1999999999999, "text": "Taxa zero e 4 anos de garantia. Tá bom?"}, {"start": 571.64, "end": 574.36, "text": "Deus do céu."}, {"start": 572.2, "end": 576.9590000000001, "text": ">> E importantíssimo você acessar o site e"}, {"start": 574.36, "end": 578.72, "text": "conferir todas as condições e escolha a"}, {"start": 576.959, "end": 580.079, "text": "sua motinha, escolha a sua Yamarra, tá"}, {"start": 578.72, "end": 581.64, "text": "bom? Aproveita, segue as redes sociais"}, {"start": 580.079, "end": 582.519, "text": "deles aí porque o trabalho deles também"}, {"start": 581.64, "end": 583.72, "text": "é maravilhoso."}, {"start": 582.519, "end": 586.5600000000001, "text": ">> Mítico jovem, fala"}, {"start": 583.72, "end": 588.0400000000001, "text": ">> o nosso patrocinador master é para você."}, {"start": 586.56, "end": 591.16, "text": ">> Ah, por quê? Porque o mítico jovem ele"}, {"start": 588.04, "end": 592.88, "text": "sai desse país, ele compra Rizes. Não,"}, {"start": 591.16, "end": 593.279, "text": "eu eu tenho até eu vou até de mala, meu"}]}, {"rank": 4, "start": 585.56, "end": 654.98, "peak": 588.86, "score": 12.17, "title": ">> Ah, por quê? Porque o mítico jovem ele", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": ">> Ah, por quê? Porque o mítico jovem ele sai desse país, ele compra Rizes. Não, eu eu tenho até eu vou até de mala, meu irmão. >> De verdade, gente. >> Essa malinha aqui é Style, hein. >> Ó, R esse chocolate maravilhoso de pasta de amendoim com chocolate e que tava de ponta cabeça, me perdoa. Mas é isso. Toda vez que a gente viaja, a gente enche a mala disso aqui e despacha e meu Deus do céu. E volta cheio de chocolate para casa. Só que isso não precisa mais porque RES está no Brasil. Ah, meu Deus do céu. Então, muito obrigado. Tô com uma caixa igual o me mostrou ali. A gente ganhou aqui um monte de coisa. Você não viu que tem moletom aqui também? >> Tem moletom. >> Tem meia da R. >> Que isso? Obrigado, >> você que é gostosinho, tá? Se você nunca comeu um, come você ver. >> Então, não precisa mais você viajar para fora para comprar. Então, já compre o seu e, ó, escanei o Qcode e garanta sem precisar sair do sofá. Isso aqui é [ __ ] de gostoso. Desculpa, é muito bom mesmo. Desculizado. Agora tá no Brasil, tá no BR. Vamos que vamos, hein? >> Ou é muito gostoso e muito bonito esse laranjado também, né? Gostei. >> Obrigado, Rizes, de verdade, >> top, hein? Tô me sentindo gringo agora.", "peak_text": ">> Ah, por quê? Porque o mítico jovem ele", "clip_file": "clips/clip-004.mp4", "frame_file": "frames/clip-004.jpg", "caption_segments": [{"start": 586.56, "end": 591.16, "text": ">> Ah, por quê? Porque o mítico jovem ele"}, {"start": 588.04, "end": 592.88, "text": "sai desse país, ele compra Rizes. Não,"}, {"start": 591.16, "end": 593.279, "text": "eu eu tenho até eu vou até de mala, meu"}, {"start": 592.88, "end": 593.959, "text": "irmão."}, {"start": 593.279, "end": 595.16, "text": ">> De verdade, gente."}, {"start": 593.959, "end": 597.64, "text": ">> Essa malinha aqui é Style, hein."}, {"start": 595.16, "end": 601.079, "text": ">> Ó, R esse chocolate maravilhoso de pasta"}, {"start": 597.64, "end": 602.92, "text": "de amendoim com chocolate e que tava de"}, {"start": 601.079, "end": 604.56, "text": "ponta cabeça, me perdoa. Mas é isso."}, {"start": 602.92, "end": 606.8389999999999, "text": "Toda vez que a gente viaja, a gente"}, {"start": 604.56, "end": 608.68, "text": "enche a mala disso aqui e despacha e meu"}, {"start": 606.839, "end": 611.24, "text": "Deus do céu. E volta cheio de chocolate"}, {"start": 608.68, "end": 614.16, "text": "para casa. Só que isso não precisa mais"}, {"start": 611.24, "end": 615.9590000000001, "text": "porque RES está no Brasil. Ah, meu Deus"}, {"start": 614.16, "end": 618.16, "text": "do céu. Então, muito obrigado. Tô com"}, {"start": 615.959, "end": 619.2399999999999, "text": "uma caixa igual o me mostrou ali. A"}, {"start": 618.16, "end": 620.64, "text": "gente ganhou aqui um monte de coisa."}, {"start": 619.24, "end": 620.92, "text": "Você não viu que tem moletom aqui"}, {"start": 620.64, "end": 621.8, "text": "também?"}, {"start": 620.92, "end": 623.4399999999999, "text": ">> Tem moletom."}, {"start": 621.8, "end": 624.7199999999999, "text": ">> Tem meia da R."}, {"start": 623.44, "end": 626.399, "text": ">> Que isso? Obrigado,"}, {"start": 624.72, "end": 627.36, "text": ">> você que é gostosinho, tá? Se você nunca"}, {"start": 626.399, "end": 629.04, "text": "comeu um, come você ver."}, {"start": 627.36, "end": 632.0, "text": ">> Então, não precisa mais você viajar para"}, {"start": 629.04, "end": 634.399, "text": "fora para comprar. Então, já compre o"}, {"start": 632.0, "end": 636.72, "text": "seu e, ó, escanei o Qcode e garanta sem"}, {"start": 634.399, "end": 638.88, "text": "precisar sair do sofá. Isso aqui é"}, {"start": 636.72, "end": 641.48, "text": "[ __ ] de gostoso. Desculpa, é muito"}, {"start": 638.88, "end": 643.32, "text": "bom mesmo. Desculizado. Agora tá no"}, {"start": 641.48, "end": 645.5600000000001, "text": "Brasil, tá no BR. Vamos que vamos, hein?"}, {"start": 643.32, "end": 647.72, "text": ">> Ou é muito gostoso e muito bonito esse"}, {"start": 645.56, "end": 649.4399999999999, "text": "laranjado também, né? Gostei."}, {"start": 647.72, "end": 651.0790000000001, "text": ">> Obrigado, Rizes, de verdade,"}, {"start": 649.44, "end": 653.48, "text": ">> top, hein? Tô me sentindo gringo agora."}]}, {"rank": 5, "start": 976.399, "end": 1028.78, "peak": 997.22, "score": 12.82, "title": "levar o dinheiro para esse lugar, porque", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "poder ganhar um dinheiro e de também não tá na rua, tá fazendo cultura, sabe? tá podendo fazer um evento ali. Então eu acho que >> que isso abre eh espaço para outras outras empresas, outras outra galera, tipo um pode para pegar outras batalhas de outros estados e juntar. E a gente tá a fim de fazer. >> O que a gente quis fazer com isso é levar o dinheiro para esse lugar, porque a gente vende um da periferia, então a gente começa a conhecer um dinheiro desses patrocinadores que a gente fala: \"Nossa, diferente\". E a gente fala assim: \"Beleza, agora a gente tá com esses patrocinadores, então vamos pegar os nossos patrocinadores e levar pra batalha\". Isso aí. >> Então a chegamos. Então é isso que eu quero, sabe, peréx, mais dinheiro com a gente. É isso aí, pô. >> E que as marcas entendem que a batalha é um fenômeno que para eles chegarem. >> É, cara. Pô, isso é prosperidade. Isso é prosperidade. Porque você ganhar sozinho, não é? Quando você compartilha", "peak_text": "levar o dinheiro para esse lugar, porque", "clip_file": "clips/clip-005.mp4", "frame_file": "frames/clip-005.jpg", "caption_segments": [{"start": 977.399, "end": 981.24, "text": "poder ganhar um dinheiro e de também não"}, {"start": 979.319, "end": 983.199, "text": "tá na rua, tá fazendo cultura, sabe? tá"}, {"start": 981.24, "end": 983.519, "text": "podendo fazer um evento ali. Então eu"}, {"start": 983.199, "end": 986.3599999999999, "text": "acho que"}, {"start": 983.519, "end": 988.279, "text": ">> que isso abre eh espaço para outras"}, {"start": 986.36, "end": 990.639, "text": "outras empresas, outras outra galera,"}, {"start": 988.279, "end": 992.759, "text": "tipo um pode para pegar outras batalhas"}, {"start": 990.639, "end": 993.24, "text": "de outros estados e juntar. E a gente tá"}, {"start": 992.759, "end": 995.0790000000001, "text": "a fim de fazer."}, {"start": 993.24, "end": 996.44, "text": ">> O que a gente quis fazer com isso é"}, {"start": 995.079, "end": 999.3599999999999, "text": "levar o dinheiro para esse lugar, porque"}, {"start": 996.44, "end": 1001.9200000000001, "text": "a gente vende um da periferia, então a"}, {"start": 999.36, "end": 1003.88, "text": "gente começa a conhecer um dinheiro"}, {"start": 1001.92, "end": 1005.88, "text": "desses patrocinadores que a gente fala:"}, {"start": 1003.88, "end": 1006.88, "text": "\"Nossa, diferente\". E a gente fala"}, {"start": 1005.88, "end": 1008.48, "text": "assim: \"Beleza, agora a gente tá com"}, {"start": 1006.88, "end": 1010.16, "text": "esses patrocinadores, então vamos pegar"}, {"start": 1008.48, "end": 1011.3190000000001, "text": "os nossos patrocinadores e levar pra"}, {"start": 1010.16, "end": 1013.48, "text": "batalha\". Isso aí."}, {"start": 1011.319, "end": 1015.079, "text": ">> Então a chegamos. Então é isso que eu"}, {"start": 1013.48, "end": 1016.36, "text": "quero, sabe, peréx, mais dinheiro com a"}, {"start": 1015.079, "end": 1018.279, "text": "gente. É isso aí, pô."}, {"start": 1016.36, "end": 1019.9590000000001, "text": ">> E que as marcas entendem que a batalha é"}, {"start": 1018.279, "end": 1022.24, "text": "um fenômeno que para eles chegarem."}, {"start": 1019.959, "end": 1023.6389999999999, "text": ">> É, cara. Pô, isso é prosperidade. Isso é"}, {"start": 1022.24, "end": 1025.6, "text": "prosperidade. Porque você ganhar"}, {"start": 1023.639, "end": 1027.28, "text": "sozinho, não é? Quando você compartilha"}]}, {"rank": 6, "start": 1569.0, "end": 1625.46, "peak": 1621.8, "score": 11.96, "title": ">> Entendeu? porque precisaria de uma carga", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "com a música. >> Sempre é um berço muito musical, né? E sempre sai uns cantas maravil gente, revelou muita gente, >> acho que apresentou o instrumento para um monte de gente. >> Para um monte de gente. Além de apresentar o instrumento, apresentou uma saída. O os a igreja foi uma saída para muito, salvou muita gente. >> Mas você com essa idade, 14, 13 anos ali, você já sabia que seu futuro ia ser cantor, >> cara? Não, não. Eu, eu queria jogar vôlei. Eu joguei vôlei um tempão. Eu fui até onde o meu joelho deu e tá tudo bem. E, e, mas eu tenho eu tenho grandes amigos no vôlei. Grandes amigos. >> Você ficou frustrado quando não deu mais o vôlei? >> Não, não, não fiquei. >> Sério? >> Sério? >> O porque o samba já tava andando, rolando. >> Não, não porque tava rolando, mas eu eu tenho plena ciência >> que eu não iria muito mais longe. >> Entendi. >> Entendeu? porque precisaria de uma carga", "peak_text": ">> Entendeu? porque precisaria de uma carga", "clip_file": "clips/clip-006.mp4", "frame_file": "frames/clip-006.jpg", "caption_segments": [{"start": 1570.0, "end": 1572.52, "text": "com a música."}, {"start": 1570.52, "end": 1575.2, "text": ">> Sempre é um berço muito musical, né? E"}, {"start": 1572.52, "end": 1576.559, "text": "sempre sai uns cantas maravil gente,"}, {"start": 1575.2, "end": 1578.0, "text": "revelou muita gente,"}, {"start": 1576.559, "end": 1578.84, "text": ">> acho que apresentou o instrumento para"}, {"start": 1578.0, "end": 1580.399, "text": "um monte de gente."}, {"start": 1578.84, "end": 1581.8799999999999, "text": ">> Para um monte de gente. Além de"}, {"start": 1580.399, "end": 1585.0, "text": "apresentar o instrumento, apresentou uma"}, {"start": 1581.88, "end": 1586.5590000000002, "text": "saída. O os a igreja foi uma saída para"}, {"start": 1585.0, "end": 1588.6, "text": "muito, salvou muita gente."}, {"start": 1586.559, "end": 1591.0, "text": ">> Mas você com essa idade, 14, 13 anos"}, {"start": 1588.6, "end": 1591.52, "text": "ali, você já sabia que seu futuro ia ser"}, {"start": 1591.0, "end": 1593.88, "text": "cantor,"}, {"start": 1591.52, "end": 1597.1589999999999, "text": ">> cara? Não, não. Eu, eu queria jogar"}, {"start": 1593.88, "end": 1600.3200000000002, "text": "vôlei. Eu joguei vôlei um tempão. Eu fui"}, {"start": 1597.159, "end": 1602.72, "text": "até onde o meu joelho deu e tá tudo bem."}, {"start": 1600.32, "end": 1604.72, "text": "E, e, mas eu tenho eu tenho grandes"}, {"start": 1602.72, "end": 1606.24, "text": "amigos no vôlei. Grandes amigos."}, {"start": 1604.72, "end": 1606.88, "text": ">> Você ficou frustrado quando não deu mais"}, {"start": 1606.24, "end": 1609.44, "text": "o vôlei?"}, {"start": 1606.88, "end": 1609.96, "text": ">> Não, não, não fiquei."}, {"start": 1609.44, "end": 1610.799, "text": ">> Sério?"}, {"start": 1609.96, "end": 1612.52, "text": ">> Sério?"}, {"start": 1610.799, "end": 1612.96, "text": ">> O porque o samba já tava andando,"}, {"start": 1612.52, "end": 1614.44, "text": "rolando."}, {"start": 1612.96, "end": 1616.52, "text": ">> Não, não porque tava rolando, mas eu eu"}, {"start": 1614.44, "end": 1619.159, "text": "tenho plena ciência"}, {"start": 1616.52, "end": 1619.6399999999999, "text": ">> que eu não iria muito mais longe."}, {"start": 1619.159, "end": 1621.96, "text": ">> Entendi."}, {"start": 1619.64, "end": 1623.96, "text": ">> Entendeu? porque precisaria de uma carga"}]}, {"rank": 7, "start": 1937.36, "end": 1981.98, "peak": 1974.5, "score": 12.31, "title": ">> Quando que você começa a compor? Porque", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "responsabilidade, poxa, eu sou um filho mais velho, >> eu tenho que dar o exemplo. >> E os mais novos depois de você era muita diferença. >> Não, não, não, não. Um, dois anos. Um, dois anos. >> É isso que faz. Eu sou mais velho. Aí o outro com um ano a menos, >> dois, é um ano a menos. Fala: \"Ah, sai daí, >> sai daí, >> calma aí, F. >> Tá de brincadeira quando >> Mas sempre foi assim, sempre foi assim. E o o mais velho sempre, né, o pensamento é, poxa, se eu faltar, você que vai cuidar. >> Nessa época você já tava compondo? >> Não. >> Quando que você começa a compor? Porque também é um dom que a gente descobre, que você descobre, né? No caso.", "peak_text": ">> Quando que você começa a compor? Porque", "clip_file": "clips/clip-007.mp4", "frame_file": "frames/clip-007.jpg", "caption_segments": [{"start": 1938.36, "end": 1942.1589999999999, "text": "responsabilidade, poxa, eu sou um filho"}, {"start": 1940.84, "end": 1944.639, "text": "mais velho,"}, {"start": 1942.159, "end": 1947.0800000000002, "text": ">> eu tenho que dar o exemplo."}, {"start": 1944.639, "end": 1947.84, "text": ">> E os mais novos depois de você era muita"}, {"start": 1947.08, "end": 1950.76, "text": "diferença."}, {"start": 1947.84, "end": 1951.32, "text": ">> Não, não, não, não. Um, dois anos. Um,"}, {"start": 1950.76, "end": 1952.919, "text": "dois anos."}, {"start": 1951.32, "end": 1954.519, "text": ">> É isso que faz. Eu sou mais velho. Aí o"}, {"start": 1952.919, "end": 1956.24, "text": "outro com um ano a menos,"}, {"start": 1954.519, "end": 1956.6, "text": ">> dois, é um ano a menos. Fala: \"Ah, sai"}, {"start": 1956.24, "end": 1958.08, "text": "daí,"}, {"start": 1956.6, "end": 1958.9599999999998, "text": ">> sai daí,"}, {"start": 1958.08, "end": 1960.799, "text": ">> calma aí, F."}, {"start": 1958.96, "end": 1961.08, "text": ">> Tá de brincadeira"}, {"start": 1960.799, "end": 1962.72, "text": "quando"}, {"start": 1961.08, "end": 1966.24, "text": ">> Mas sempre foi assim, sempre foi assim."}, {"start": 1962.72, "end": 1969.48, "text": "E o o mais velho sempre, né, o"}, {"start": 1966.24, "end": 1970.159, "text": "pensamento é, poxa, se eu faltar, você"}, {"start": 1969.48, "end": 1972.039, "text": "que vai cuidar."}, {"start": 1970.159, "end": 1972.8400000000001, "text": ">> Nessa época você já tava compondo?"}, {"start": 1972.039, "end": 1974.679, "text": ">> Não."}, {"start": 1972.84, "end": 1976.1589999999999, "text": ">> Quando que você começa a compor? Porque"}, {"start": 1974.679, "end": 1977.2, "text": "também é um dom que a gente descobre,"}, {"start": 1976.159, "end": 1980.48, "text": "que você descobre, né? No caso."}]}, {"rank": 8, "start": 2392.319, "end": 2444.22, "peak": 2439.54, "score": 12.19, "title": "eu tenho eh porque eu é a música, né? A", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "mais fácil. >> Você sempre foi muito próximo ao rap, né, Mr. Catra? Eu agora você vai cantar no Detal com o Dexter. Dexter. >> Fala disso aí. >> Porque o Dexter tava aqui com a gente ontem, cara. >> Eu amo. Dexter. >> E aí, Titi? Tá firmeza? Fala, meu Deus. Ele é assim, ele é, ele é assim, >> ele é assim, ele é assim, >> [ __ ] É um cara, Dexter, eu te amo e você sabe muito bem. >> Amamos demais, cara. >> Poxa, ele é demais assim, a >> Domingo vai ter aniversário dele. >> É uma é um cara que ele se reinventou, né? Ele pegou >> meio limão e fez duas limonadas. >> Uma cachoeira de limonada, >> né? Isso tem relevância. E aí a gente vai cantar junto. Mas a proximidade que eu tenho eh porque eu é a música, né? A", "peak_text": "eu tenho eh porque eu é a música, né? A", "clip_file": "clips/clip-008.mp4", "frame_file": "frames/clip-008.jpg", "caption_segments": [{"start": 2393.319, "end": 2395.16, "text": "mais fácil."}, {"start": 2393.68, "end": 2398.48, "text": ">> Você sempre foi muito próximo ao rap,"}, {"start": 2395.16, "end": 2400.48, "text": "né, Mr. Catra? Eu agora você vai cantar"}, {"start": 2398.48, "end": 2401.2, "text": "no Detal com o Dexter. Dexter."}, {"start": 2400.48, "end": 2402.599, "text": ">> Fala disso aí."}, {"start": 2401.2, "end": 2403.7599999999998, "text": ">> Porque o Dexter tava aqui com a gente"}, {"start": 2402.599, "end": 2405.96, "text": "ontem, cara."}, {"start": 2403.76, "end": 2408.48, "text": ">> Eu amo. Dexter."}, {"start": 2405.96, "end": 2410.119, "text": ">> E aí, Titi? Tá firmeza? Fala, meu Deus."}, {"start": 2408.48, "end": 2411.44, "text": "Ele é assim, ele é, ele é assim,"}, {"start": 2410.119, "end": 2413.8, "text": ">> ele é assim, ele é assim,"}, {"start": 2411.44, "end": 2415.079, "text": ">> [ __ ] É um cara, Dexter, eu te amo e"}, {"start": 2413.8, "end": 2416.8390000000004, "text": "você sabe muito bem."}, {"start": 2415.079, "end": 2419.119, "text": ">> Amamos demais, cara."}, {"start": 2416.839, "end": 2420.44, "text": ">> Poxa, ele é demais assim, a"}, {"start": 2419.119, "end": 2423.8, "text": ">> Domingo vai ter aniversário dele."}, {"start": 2420.44, "end": 2426.64, "text": ">> É uma é um cara que ele se reinventou,"}, {"start": 2423.8, "end": 2430.319, "text": "né? Ele pegou"}, {"start": 2426.64, "end": 2431.44, "text": ">> meio limão e fez duas limonadas."}, {"start": 2430.319, "end": 2434.8, "text": ">> Uma cachoeira de limonada,"}, {"start": 2431.44, "end": 2436.359, "text": ">> né? Isso tem relevância. E aí a gente"}, {"start": 2434.8, "end": 2440.0, "text": "vai cantar junto. Mas a proximidade que"}, {"start": 2436.359, "end": 2442.72, "text": "eu tenho eh porque eu é a música, né? A"}]}, {"rank": 9, "start": 2771.52, "end": 2816.7400000000002, "peak": 2792.0, "score": 12.53, "title": "esquenta?\" É porque é muita risada", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": ">> Da hora, da hora, da hora. >> Vai corte. >> Porque a gente tem essa parada com o esquenta, sabe? O esquenta era uma novidade. Muita gente criticou, po apareceu >> muita gente e teve uma teve uma teve pessoas que falou assim: \"O pai é tipo esquenta na internet\". >> Mas aí aí a pessoa fala: \"Mas por que o esquenta?\" É porque é muita risada, muita gente feliz, com preconceito, óbvio, né, falando. Aí a gente contou isso pra pra Regina, né? E a gente falou assim, Regina, e a gente recebeu essa ofensa com um puto elogio, porque o esquenta pra gente é um fenômeno. >> É quando a gente viu junto a gente junto na hora a gente se olhou e falou: >> \"A gente é o esquenta, >> a gente é o esquenta [ __ ] é mó da hora aquela parada foi muito [ __ ] aquela", "peak_text": "esquenta?\" É porque é muita risada,", "clip_file": "clips/clip-009.mp4", "frame_file": "frames/clip-009.jpg", "caption_segments": [{"start": 2772.52, "end": 2775.64, "text": ">> Da hora, da hora, da hora."}, {"start": 2774.839, "end": 2777.0789999999997, "text": ">> Vai corte."}, {"start": 2775.64, "end": 2778.8799999999997, "text": ">> Porque a gente tem essa parada com o"}, {"start": 2777.079, "end": 2780.88, "text": "esquenta, sabe? O esquenta era uma"}, {"start": 2778.88, "end": 2782.1600000000003, "text": "novidade. Muita gente criticou, po"}, {"start": 2780.88, "end": 2784.6800000000003, "text": "apareceu"}, {"start": 2782.16, "end": 2786.8799999999997, "text": ">> muita gente e teve uma teve uma teve"}, {"start": 2784.68, "end": 2788.319, "text": "pessoas que falou assim: \"O pai é tipo"}, {"start": 2786.88, "end": 2790.1600000000003, "text": "esquenta na internet\"."}, {"start": 2788.319, "end": 2791.92, "text": ">> Mas aí aí a pessoa fala: \"Mas por que o"}, {"start": 2790.16, "end": 2793.839, "text": "esquenta?\" É porque é muita risada,"}, {"start": 2791.92, "end": 2795.359, "text": "muita gente feliz, com preconceito,"}, {"start": 2793.839, "end": 2798.119, "text": "óbvio, né, falando. Aí a gente contou"}, {"start": 2795.359, "end": 2800.359, "text": "isso pra pra Regina, né? E a gente falou"}, {"start": 2798.119, "end": 2802.44, "text": "assim, Regina, e a gente recebeu essa"}, {"start": 2800.359, "end": 2805.04, "text": "ofensa com um puto elogio, porque o"}, {"start": 2802.44, "end": 2807.88, "text": "esquenta pra gente é um fenômeno."}, {"start": 2805.04, "end": 2809.119, "text": ">> É quando a gente viu junto a gente junto"}, {"start": 2807.88, "end": 2809.8, "text": "na hora a gente se olhou e falou:"}, {"start": 2809.119, "end": 2811.28, "text": ">> \"A gente é o esquenta,"}, {"start": 2809.8, "end": 2813.44, "text": ">> a gente é o esquenta [ __ ] é mó da"}, {"start": 2811.28, "end": 2815.2400000000002, "text": "hora aquela parada foi muito [ __ ] aquela"}]}, {"rank": 10, "start": 2945.96, "end": 2990.26, "peak": 2963.78, "score": 12.07, "title": "isso? Muito louco aquilo, porque ah, a", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "para cima e para baixo, cultura de favela, tudo de favela, entendeu? Queria tá lá, [ __ ] Queria estar no meio lá naquela. >> Eu ficava com a inveja do DG, irmão. Falei: \"Caramba, DG tá aí todo dia, mano. Deixa eu em um\". Como que foi isso? Muito louco aquilo, porque ah, a gente fez a última apresentação do Exalta Samba lá no Esquenta, né, que foi o dia que o Lucas cantou lá, a gente cada um levou seus filhos e tudo mais, que foi impactante demais, foi lindo. E aí, >> mas o o convite era para você participar de um ou já era você fazer parte daquilo? Como que era isso? >> Não, o convite surgiu para eu fazer parte um dia.", "peak_text": "isso? Muito louco aquilo, porque ah, a", "clip_file": "clips/clip-010.mp4", "frame_file": "frames/clip-010.jpg", "caption_segments": [{"start": 2946.96, "end": 2951.44, "text": "para cima e para baixo, cultura de"}, {"start": 2948.68, "end": 2953.839, "text": "favela, tudo de favela, entendeu? Queria"}, {"start": 2951.44, "end": 2954.319, "text": "tá lá, [ __ ] Queria estar no meio lá"}, {"start": 2953.839, "end": 2956.359, "text": "naquela."}, {"start": 2954.319, "end": 2958.0, "text": ">> Eu ficava com a inveja do DG, irmão."}, {"start": 2956.359, "end": 2960.52, "text": "Falei: \"Caramba, DG tá aí todo dia,"}, {"start": 2958.0, "end": 2964.28, "text": "mano. Deixa eu em um\". Como que foi"}, {"start": 2960.52, "end": 2967.04, "text": "isso? Muito louco aquilo, porque ah, a"}, {"start": 2964.28, "end": 2971.3590000000004, "text": "gente fez a última apresentação do"}, {"start": 2967.04, "end": 2973.16, "text": "Exalta Samba lá no Esquenta, né, que foi"}, {"start": 2971.359, "end": 2975.2799999999997, "text": "o dia que o Lucas cantou lá, a gente"}, {"start": 2973.16, "end": 2978.72, "text": "cada um levou seus filhos e tudo mais,"}, {"start": 2975.28, "end": 2978.88, "text": "que foi impactante demais, foi lindo. E"}, {"start": 2978.72, "end": 2981.0789999999997, "text": "aí,"}, {"start": 2978.88, "end": 2982.92, "text": ">> mas o o convite era para você participar"}, {"start": 2981.079, "end": 2983.8390000000004, "text": "de um ou já era você fazer parte"}, {"start": 2982.92, "end": 2986.079, "text": "daquilo? Como que era isso?"}, {"start": 2983.839, "end": 2987.599, "text": ">> Não, o convite surgiu para eu fazer"}, {"start": 2986.079, "end": 2988.76, "text": "parte um dia."}]}, {"rank": 11, "start": 4031.039, "end": 4076.46, "peak": 4034.86, "score": 11.92, "title": "isso de de de ser válido isso? Porque o", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "isso de de de ser válido isso? Porque o artista, é muito importante isso que eu vou dizer, os artistas eles estão tomando mão dos seus trabalhos. O artista, ele não é só aquele que eh, de uma forma contemplativa vê seu trabalho crescer. Ele vê que hoje se ele não se ele não botar a mão na massa, não vai funcionar, >> não vai, >> entendeu? É isso, é o que vocês fazem, é o que a gente procura fazer. A gente tem que pôr a mão na massa, o artista tem que tomar diretriz do seu trabalho, né? E são vários os eh eh como é que eu vou dizer? Ah, foram várias as modalidades", "peak_text": "isso de de de ser válido isso? Porque o", "clip_file": "clips/clip-011.mp4", "frame_file": "frames/clip-011.jpg", "caption_segments": [{"start": 4032.039, "end": 4037.6800000000003, "text": "isso de de de ser válido isso? Porque o"}, {"start": 4035.92, "end": 4040.119, "text": "artista, é muito importante isso que eu"}, {"start": 4037.68, "end": 4043.68, "text": "vou dizer, os artistas eles estão"}, {"start": 4040.119, "end": 4047.48, "text": "tomando mão dos seus trabalhos. O"}, {"start": 4043.68, "end": 4049.64, "text": "artista, ele não é só aquele que eh, de"}, {"start": 4047.48, "end": 4052.4, "text": "uma forma contemplativa vê seu trabalho"}, {"start": 4049.64, "end": 4054.5589999999997, "text": "crescer. Ele vê que hoje se ele não se"}, {"start": 4052.4, "end": 4055.1600000000003, "text": "ele não botar a mão na massa, não vai"}, {"start": 4054.559, "end": 4055.76, "text": "funcionar,"}, {"start": 4055.16, "end": 4058.52, "text": ">> não vai,"}, {"start": 4055.76, "end": 4060.039, "text": ">> entendeu? É isso, é o que vocês fazem, é"}, {"start": 4058.52, "end": 4061.44, "text": "o que a gente procura fazer. A gente tem"}, {"start": 4060.039, "end": 4064.92, "text": "que pôr a mão na massa, o artista tem"}, {"start": 4061.44, "end": 4069.279, "text": "que tomar diretriz do seu trabalho, né?"}, {"start": 4064.92, "end": 4072.319, "text": "E são vários os eh eh como é que eu vou"}, {"start": 4069.279, "end": 4074.96, "text": "dizer? Ah, foram várias as modalidades"}]}, {"rank": 12, "start": 4096.319, "end": 4141.62, "peak": 4132.9, "score": 12.1, "title": "né? Porque é todo dia você busca e por", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "vencer quando passar do outro lado. Então isso me motiva a querer ser melhor, fazer sempre melhor. É isso. >> E isso te dá uma segurança como artista? O que eu quero dizer é assim, Pericles, porque como você tem a sua festa, o seu projeto e você toca essa parada, então você sabe quantas pessoas você atrai, você sabe o preço do seu ticket, você sabe. Então eu acho que como artista você tem um um entendimento de quem sou eu nesse ramo. É isso que você tá dizendo? >> Sim, sim. O artista entende o seu tamanho, mas é é não tem nada garantido, né? Porque é todo dia você busca e por exemplo patrocínios diferentes, parceiros diferentes, né? Eh, essa turnê", "peak_text": "né? Porque é todo dia você busca e por", "clip_file": "clips/clip-012.mp4", "frame_file": "frames/clip-012.jpg", "caption_segments": [{"start": 4097.319, "end": 4102.359, "text": "vencer quando passar do outro lado."}, {"start": 4099.279, "end": 4104.1990000000005, "text": "Então isso me motiva a querer ser"}, {"start": 4102.359, "end": 4106.0, "text": "melhor, fazer sempre melhor. É isso."}, {"start": 4104.199, "end": 4107.639999999999, "text": ">> E isso te dá uma segurança como artista?"}, {"start": 4106.0, "end": 4110.12, "text": "O que eu quero dizer é assim, Pericles,"}, {"start": 4107.64, "end": 4112.04, "text": "porque como você tem a sua festa, o seu"}, {"start": 4110.12, "end": 4115.88, "text": "projeto e você toca essa parada, então"}, {"start": 4112.04, "end": 4118.08, "text": "você sabe quantas pessoas você atrai,"}, {"start": 4115.88, "end": 4119.719, "text": "você sabe o preço do seu ticket, você"}, {"start": 4118.08, "end": 4122.6, "text": "sabe. Então eu acho que como artista"}, {"start": 4119.719, "end": 4124.6, "text": "você tem um um entendimento de quem sou"}, {"start": 4122.6, "end": 4125.0, "text": "eu nesse ramo. É isso que você tá"}, {"start": 4124.6, "end": 4126.679, "text": "dizendo?"}, {"start": 4125.0, "end": 4130.64, "text": ">> Sim, sim. O artista entende o seu"}, {"start": 4126.679, "end": 4133.359, "text": "tamanho, mas é é não tem nada garantido,"}, {"start": 4130.64, "end": 4135.159000000001, "text": "né? Porque é todo dia você busca e por"}, {"start": 4133.359, "end": 4138.279, "text": "exemplo patrocínios diferentes,"}, {"start": 4135.159, "end": 4140.12, "text": "parceiros diferentes, né? Eh, essa turnê"}]}, {"rank": 13, "start": 5078.119, "end": 5122.9800000000005, "peak": 5115.78, "score": 12.16, "title": ">> Começa por ela. Como que é isso? Porque", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "que eu tava deixando de querer buscar novidades, deixando de querer criar. >> A gente fica ruim de cabeça, >> né? A gente fica, fica mesmo, né? E a Maria trouxe vida para todos nós, não só para mim, né? Ela é a filhada do meu compadre Isaías. Pô, o Isaías é outro cara hoje que ele é padrinho da Maria. >> Ela alegrou a casa, trouxe um brilho. >> Alou, bicho. Ela trouxe brilho para todos nós, todas as famílias que se formaram. >> Por conta dela que você tá no mundo Bita. >> Por causa dela. Por causa dela. A gente tá no mundo B. >> Começa por ela. Como que é isso? Porque quando eu te vi eh no Mundo Bit ali", "peak_text": ">> Começa por ela. Como que é isso? Porque", "clip_file": "clips/clip-013.mp4", "frame_file": "frames/clip-013.jpg", "caption_segments": [{"start": 5079.119, "end": 5083.88, "text": "que eu tava deixando de querer buscar"}, {"start": 5080.84, "end": 5085.0, "text": "novidades, deixando de querer criar."}, {"start": 5083.88, "end": 5088.1990000000005, "text": ">> A gente fica ruim de cabeça,"}, {"start": 5085.0, "end": 5090.639, "text": ">> né? A gente fica, fica mesmo, né? E a"}, {"start": 5088.199, "end": 5093.32, "text": "Maria trouxe vida para todos nós, não só"}, {"start": 5090.639, "end": 5095.28, "text": "para mim, né? Ela é a filhada do meu"}, {"start": 5093.32, "end": 5098.4, "text": "compadre Isaías. Pô, o Isaías é outro"}, {"start": 5095.28, "end": 5100.5199999999995, "text": "cara hoje que ele é padrinho da Maria."}, {"start": 5098.4, "end": 5102.32, "text": ">> Ela alegrou a casa, trouxe um brilho."}, {"start": 5100.52, "end": 5104.6, "text": ">> Alou, bicho. Ela trouxe brilho para"}, {"start": 5102.32, "end": 5105.199, "text": "todos nós, todas as famílias que se"}, {"start": 5104.6, "end": 5107.0, "text": "formaram."}, {"start": 5105.199, "end": 5108.239, "text": ">> Por conta dela que você tá no mundo"}, {"start": 5107.0, "end": 5111.36, "text": "Bita."}, {"start": 5108.239, "end": 5112.839999999999, "text": ">> Por causa dela. Por causa dela. A gente"}, {"start": 5111.36, "end": 5115.5199999999995, "text": "tá no mundo B."}, {"start": 5112.84, "end": 5118.719, "text": ">> Começa por ela. Como que é isso? Porque"}, {"start": 5115.52, "end": 5121.4800000000005, "text": "quando eu te vi eh no Mundo Bit ali"}]}, {"rank": 14, "start": 5633.76, "end": 5688.58, "peak": 5666.48, "score": 11.94, "title": ">> muito louco, né? Porque música tem", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": ">> Ah, falta de [ __ ] >> Não é, velho? >> Nossa, faz falta. Vocês fazem falta. >> O o o bens a Deus regravou que faz falta. O Magrão ele, [ __ ] >> amassou. [ __ ] vocês vão ouvir >> uma música do Tiaguinho. >> Uma música do Tiaguinho, melhor eu i. >> É do homem, né? >> É dele e do Dan. Tem algumas que são dele que é uma patada, né? Feito para durar. É >> muito louco, né? Porque música tem endereço. O Tiaguinho é um ótimo intérprete, cantor, mas ele deve ter falado assim: \"Tá, mas esse aqui que eu escrevi é do Pis.\" >> É, ele tem isso. Ele manda para mim fala: \"Não, essa não vou cantar não, essa é você\". >> Que [ __ ] isso, né, mano? >> [ __ ] E a gente fez alguma uma outro dia juntos pelo WhatsApp e aí ele perguntou: \"Se vai gravar?\" Eu falei: \"Não, essa", "peak_text": ">> muito louco, né? Porque música tem", "clip_file": "clips/clip-014.mp4", "frame_file": "frames/clip-014.jpg", "caption_segments": [{"start": 5634.76, "end": 5636.52, "text": ">> Ah, falta de [ __ ]"}, {"start": 5635.84, "end": 5638.0, "text": ">> Não é, velho?"}, {"start": 5636.52, "end": 5641.84, "text": ">> Nossa, faz falta. Vocês fazem falta."}, {"start": 5638.0, "end": 5645.0, "text": ">> O o o bens a Deus regravou que faz"}, {"start": 5641.84, "end": 5648.400000000001, "text": "falta. O Magrão ele, [ __ ]"}, {"start": 5645.0, "end": 5650.159, "text": ">> amassou. [ __ ] vocês vão ouvir"}, {"start": 5648.4, "end": 5653.799999999999, "text": ">> uma música do Tiaguinho."}, {"start": 5650.159, "end": 5653.799999999999, "text": ">> Uma música do Tiaguinho,"}, {"start": 5653.84, "end": 5657.400000000001, "text": "melhor eu i."}, {"start": 5656.44, "end": 5660.159, "text": ">> É do homem, né?"}, {"start": 5657.4, "end": 5663.239, "text": ">> É dele e do Dan. Tem algumas que são"}, {"start": 5660.159, "end": 5665.0, "text": "dele que é uma patada, né? Feito para"}, {"start": 5663.239, "end": 5666.32, "text": "durar. É"}, {"start": 5665.0, "end": 5667.96, "text": ">> muito louco, né? Porque música tem"}, {"start": 5666.32, "end": 5669.759999999999, "text": "endereço. O Tiaguinho é um ótimo"}, {"start": 5667.96, "end": 5671.44, "text": "intérprete, cantor, mas ele deve ter"}, {"start": 5669.76, "end": 5672.719, "text": "falado assim: \"Tá, mas esse aqui que eu"}, {"start": 5671.44, "end": 5674.799999999999, "text": "escrevi é do Pis.\""}, {"start": 5672.719, "end": 5675.84, "text": ">> É, ele tem isso. Ele manda para mim"}, {"start": 5674.8, "end": 5676.8, "text": "fala: \"Não, essa não vou cantar não,"}, {"start": 5675.84, "end": 5677.96, "text": "essa é você\"."}, {"start": 5676.8, "end": 5680.56, "text": ">> Que [ __ ] isso, né, mano?"}, {"start": 5677.96, "end": 5683.679, "text": ">> [ __ ] E a gente fez alguma uma outro dia"}, {"start": 5680.56, "end": 5684.96, "text": "juntos pelo WhatsApp e aí ele perguntou:"}, {"start": 5683.679, "end": 5687.08, "text": "\"Se vai gravar?\" Eu falei: \"Não, essa"}]}, {"rank": 15, "start": 6865.04, "end": 6911.699, "peak": 6888.3, "score": 12.28, "title": "aniversário ainda, né? É isso, né? Tá", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "pro churrasqueiro. Ele é o ele é o mais [ __ ] do rolê. >> Ó, completamente emocionado, termina esse episódio. Espero que vocês tenham gostado. Se gostou, dá o like, se inscreva no canal, siga o Perériclis e todas as redes sociais vão estar aí na descrição. Vá o show de encerramento da turnê do pagode do Periclã lá no Rio de Janeiro. Que dia, meu irmão? >> 28 de setembro. >> 28 de setembro. No dia do nosso aniversário ainda, né? É isso, né? Tá maluco, [ __ ] Vamos embora então. É isso. >> Bora comemorar lá todo mundo. >> Nossa, meu Deus do céu. Faz tempo que eu não fico doido. Ó, espero que vocês tenham gostado. Dá o like, se inscreve no canal, siga o Peréricas redes sociais e agora pode ir pra visita na Love Funk com mau mau, certo? E é isso, Jovem. >> É isso mesmo. Tamamo junto. Tem última coisa para falar alguma coisa?", "peak_text": "aniversário ainda, né? É isso, né? Tá", "clip_file": "clips/clip-015.mp4", "frame_file": "frames/clip-015.jpg", "caption_segments": [{"start": 6866.04, "end": 6868.84, "text": "pro churrasqueiro. Ele é o ele é o mais"}, {"start": 6867.96, "end": 6870.8, "text": "[ __ ] do rolê."}, {"start": 6868.84, "end": 6872.360000000001, "text": ">> Ó, completamente emocionado, termina"}, {"start": 6870.8, "end": 6873.679, "text": "esse episódio. Espero que vocês tenham"}, {"start": 6872.36, "end": 6875.799999999999, "text": "gostado. Se gostou, dá o like, se"}, {"start": 6873.679, "end": 6876.96, "text": "inscreva no canal, siga o Perériclis e"}, {"start": 6875.8, "end": 6879.719, "text": "todas as redes sociais vão estar aí na"}, {"start": 6876.96, "end": 6882.2390000000005, "text": "descrição. Vá o show de encerramento da"}, {"start": 6879.719, "end": 6883.599, "text": "turnê do pagode do Periclã lá no Rio de"}, {"start": 6882.239, "end": 6884.678999999999, "text": "Janeiro. Que dia, meu irmão?"}, {"start": 6883.599, "end": 6886.1990000000005, "text": ">> 28 de setembro."}, {"start": 6884.679, "end": 6888.8, "text": ">> 28 de setembro. No dia do nosso"}, {"start": 6886.199, "end": 6890.4, "text": "aniversário ainda, né? É isso, né? Tá"}, {"start": 6888.8, "end": 6890.599, "text": "maluco, [ __ ] Vamos embora então. É"}, {"start": 6890.4, "end": 6891.92, "text": "isso."}, {"start": 6890.599, "end": 6894.4800000000005, "text": ">> Bora comemorar lá todo mundo."}, {"start": 6891.92, "end": 6896.52, "text": ">> Nossa, meu Deus do céu. Faz tempo que eu"}, {"start": 6894.48, "end": 6898.32, "text": "não fico doido. Ó, espero que vocês"}, {"start": 6896.52, "end": 6900.96, "text": "tenham gostado. Dá o like, se inscreve"}, {"start": 6898.32, "end": 6903.48, "text": "no canal, siga o Peréricas redes sociais"}, {"start": 6900.96, "end": 6905.44, "text": "e agora pode ir pra visita na Love Funk"}, {"start": 6903.48, "end": 6907.4, "text": "com mau mau, certo? E é isso, Jovem."}, {"start": 6905.44, "end": 6908.759999999999, "text": ">> É isso mesmo. Tamamo junto. Tem última"}, {"start": 6907.4, "end": 6910.199, "text": "coisa para falar alguma coisa?"}]}]}; window.CUTTED_SCRIPT = "C:\\Users\\edube\\.codex\\skills\\cutted\\scripts\\cutted.py";</script>
+  <script>
+if (new URLSearchParams(location.search).has("reset")) {
+  localStorage.removeItem("cutted-state");
+  localStorage.removeItem("cutted-format");
+  localStorage.removeItem("cutted-tab");
+  history.replaceState(null, "", location.pathname);
+}
+const state = JSON.parse(localStorage.getItem("cutted-state") || "{}");
+function save(){ localStorage.setItem("cutted-state", JSON.stringify(state)); }
+function cardState(rank){
+  const raw = state[rank];
+  if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [] };
+  return Object.assign({ status: null, trimStart: 0, trimEnd: 0, platforms: [] }, raw || {});
+}
+function setCardState(rank, patch){ state[rank] = Object.assign(cardState(rank), patch); save(); }
+function fixed(value){ return `${Number(value || 0).toFixed(1)}s`; }
+const formatMeta = {
+  tiktok: "TikTok · 9:16",
+  shorts: "YouTube Shorts · 9:16",
+  youtube: "YouTube · 16:9",
+  instagram: "Instagram Reels · 9:16",
+  facebook: "Facebook Feed · 4:5"
+};
+const platformMeta = {
+  tiktok: { label: "TikTok", width: 1080, height: 1920 },
+  shorts: { label: "Shorts", width: 1080, height: 1920 },
+  instagram: { label: "Instagram", width: 1080, height: 1920 },
+  facebook: { label: "Facebook", width: 1080, height: 1350 },
+  youtube: { label: "YouTube", width: 1920, height: 1080 }
+};
+function applyFormat(format){
+  const next = formatMeta[format] ? format : "tiktok";
+  document.body.dataset.format = next;
+  localStorage.setItem("cutted-format", next);
+  document.querySelector("[data-format-hint]").textContent = formatMeta[next];
+  document.querySelectorAll(".segments [data-format]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.format === next);
+  });
+  document.querySelectorAll(".card").forEach(updatePlatformUi);
+  renderCaptionQueue();
+}
+function applyTab(tab){
+  const next = ["edit", "captions", "final"].includes(tab) ? tab : "edit";
+  document.body.dataset.tab = next;
+  localStorage.setItem("cutted-tab", next);
+  document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.tab === next);
+  });
+  renderFinalStage();
+}
+function platformLabel(key){
+  return (platformMeta[key] || { label: key }).label;
+}
+function updatePlatformUi(card){
+  const current = cardState(card.dataset.rank);
+  const platforms = Array.isArray(current.platforms) ? current.platforms : [];
+  card.querySelectorAll("[data-platform]").forEach(btn => {
+    btn.classList.toggle("active", platforms.includes(btn.dataset.platform));
+  });
+  const fallback = document.body.dataset.format || "tiktok";
+  const summary = platforms.length
+    ? platforms.map(platformLabel).join(", ")
+    : (current.status === "liked" ? `Formato atual: ${platformLabel(fallback)}` : "Nenhum destino marcado");
+  card.querySelector("[data-platform-summary]").textContent = summary;
+}
+function paint(card){
+  const current = cardState(card.dataset.rank);
+  card.classList.toggle("liked",current.status==="liked");
+  card.classList.toggle("discarded",current.status==="discarded");
+}
+function trimValues(card){
+  const start = Number(card.dataset.start);
+  const end = Number(card.dataset.end);
+  const duration = Number(card.dataset.duration);
+  const current = cardState(card.dataset.rank);
+  const trimStart = Math.min(Number(current.trimStart || 0), Math.max(duration - 1, 0));
+  const trimEnd = Math.min(Number(current.trimEnd || 0), Math.max(duration - trimStart - 1, 0));
+  return { start, end, duration, trimStart, trimEnd, startPos: trimStart, endPos: duration - trimEnd, adjustedStart: start + trimStart, adjustedEnd: end - trimEnd };
+}
+function updateTrimUi(card){
+  const values = trimValues(card);
+  const startInput = card.querySelector("[data-trim=start]");
+  const endInput = card.querySelector("[data-trim=end]");
+  startInput.max = values.duration.toFixed(1);
+  endInput.max = values.duration.toFixed(1);
+  startInput.value = values.startPos;
+  endInput.value = values.endPos;
+  card.querySelector("[data-output=start]").textContent = fixed(values.trimStart);
+  card.querySelector("[data-output=end]").textContent = fixed(values.trimEnd);
+  card.querySelector("[data-trim-summary]").textContent = `Final: ${fixed(values.adjustedStart)} - ${fixed(values.adjustedEnd)} (${fixed(values.adjustedEnd - values.adjustedStart)})`;
+  const fill = card.querySelector("[data-trim-fill]");
+  fill.style.left = `${(values.startPos / values.duration) * 100}%`;
+  fill.style.right = `${100 - ((values.endPos / values.duration) * 100)}%`;
+}
+function seekPreview(card){
+  const video = card.querySelector("video");
+  if (!video) return;
+  const values = trimValues(card);
+  video.currentTime = values.trimStart;
+}
+function adjustedMoment(moment){
+  const current = cardState(String(moment.rank));
+  const trimStart = Number(current.trimStart || 0);
+  const trimEnd = Number(current.trimEnd || 0);
+  const platforms = Array.isArray(current.platforms) ? current.platforms : [];
+  return Object.assign({}, moment, {
+    status: current.status || null,
+    platforms,
+    trim_start_seconds: trimStart,
+    trim_end_seconds: trimEnd,
+    adjusted_start: Number((moment.start + trimStart).toFixed(3)),
+    adjusted_end: Number((moment.end - trimEnd).toFixed(3)),
+    adjusted_duration: Number((moment.end - trimEnd - moment.start - trimStart).toFixed(3))
+  });
+}
+function buildExportData(){
+  const data = Object.assign({}, window.CUTTED_DATA);
+  data.export_format = document.body.dataset.format || "tiktok";
+  const adjusted = data.moments.map(adjustedMoment);
+  data.moments = adjusted;
+  data.selected = adjusted.filter(m => m.status === "liked" || m.platforms.length > 0);
+  data.caption_queue = data.selected.flatMap(moment => captionPlatforms(moment, data.export_format).map(platform => ({
+    rank: moment.rank,
+    platform,
+    platform_label: platformLabel(platform),
+    width: platformMeta[platform]?.width || null,
+    height: platformMeta[platform]?.height || null,
+    publish_metadata: publishMetadata(platform, moment),
+    trim_start_seconds: moment.trim_start_seconds,
+    trim_end_seconds: moment.trim_end_seconds,
+    adjusted_start: moment.adjusted_start,
+    adjusted_end: moment.adjusted_end,
+    adjusted_duration: moment.adjusted_duration,
+    clip_file: moment.clip_file,
+    title: moment.title,
+    peak_text: moment.peak_text,
+    transcript: moment.transcript,
+    caption_segments: moment.caption_segments || []
+  })));
+  return data;
+}
+function captionPlatforms(moment, exportFormat){
+  if (Array.isArray(moment.platforms) && moment.platforms.length) return moment.platforms;
+  return moment.status === "liked" && platformMeta[exportFormat] ? [exportFormat] : [];
+}
+function publishMetadata(platform, moment){
+  const hashtags = suggestHashtags(platform, `${moment.title} ${moment.peak_text} ${moment.transcript}`);
+  return {
+    hashtags,
+    caption_hint: captionHint(platform, moment, hashtags),
+    strategy: platformStrategy(platform)
+  };
+}
+function suggestHashtags(platform, text){
+  const topicTags = extractTopicTags(text);
+  const topicalBoosts = inferTopicalBoosts(text);
+  const defaults = {
+    tiktok: ["IA", "InteligenciaArtificial", "Podcast"],
+    shorts: ["IA", "InteligenciaArtificial", "Shorts"],
+    youtube: ["IA", "InteligenciaArtificial", "Tecnologia"],
+    instagram: ["IA", "InteligenciaArtificial", "Reels"],
+    facebook: ["IA", "Tecnologia"]
+  };
+  const limits = { tiktok: 6, shorts: 4, youtube: 4, instagram: 5, facebook: 3 };
+  const merged = [...topicalBoosts, ...(defaults[platform] || []), ...topicTags];
+  return unique(merged).slice(0, limits[platform] || 4).map(tag => `#${tag}`);
+}
+function extractTopicTags(text){
+  const extraStopWords = [
+    "acho","ainda","agora","assim","cada","cara","certo","com","daqui","dele","dela","deles","dessa",
+    "desse","disso","dizer","esta","estao","falar","mas","meio","nao","nem","nessa","nesse",
+    "cortou","negocio","pela","pelo","qual","quando","que","quem","sabe","seguinte","tambem",
+    "tem","tipo","uma","volta","vou"
+  ];
+  const stop = new Set(["para","como","porque","entao","então","sobre","isso","essa","esse","aqui","gente","voce","você","video","clip","coisa","forma","mais","menos","muito","fala","falando"]);
+  extraStopWords.forEach(word => stop.add(word));
+  const normalized = String(text).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const words = normalized.match(/[a-zA-Z0-9]{3,}/g) || [];
+  const counts = new Map();
+  words.map(word => word.toLowerCase()).filter(word => !stop.has(word)).forEach(word => {
+    counts.set(word, (counts.get(word) || 0) + 1);
+  });
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
+    .slice(0, 4)
+    .map(([word]) => word.charAt(0).toUpperCase() + word.slice(1));
+}
+function inferTopicalBoosts(text){
+  const normalized = String(text).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const boosts = [];
+  if (/\bia\b|inteligencia artificial|artificial/.test(normalized)) boosts.push("IA", "InteligenciaArtificial");
+  if (/podcast|episodio|entrevista|conversa/.test(normalized)) boosts.push("Podcast");
+  if (/tecnologia|tech|futuro|ferramenta|automacao/.test(normalized)) boosts.push("Tecnologia");
+  if (/criador|conteudo|youtube|tiktok|instagram|reels|shorts/.test(normalized)) boosts.push("Criadores");
+  return boosts;
+}
+function unique(values){
+  const seen = new Set();
+  return values.filter(value => {
+    const clean = String(value).replace(/^#/, "").replace(/[^a-zA-Z0-9]/g, "");
+    const key = clean.toLowerCase();
+    if (!clean || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).map(value => String(value).replace(/^#/, "").replace(/[^a-zA-Z0-9]/g, ""));
+}
+function captionHint(platform, moment, hashtags){
+  const lead = moment.peak_text || moment.title || "Corte selecionado";
+  return `${lead}\n\n${hashtags.join(" ")}`;
+}
+function platformStrategy(platform){
+  return {
+    tiktok: "Usar poucos hashtags relevantes; validar tendencias no TikTok Creative Center antes de publicar.",
+    shorts: "Priorizar 3-4 hashtags relevantes; no YouTube, os primeiros hashtags da descricao sao os mais visiveis.",
+    youtube: "Usar hashtags como contexto, sem exagero; evitar excesso de hashtags.",
+    instagram: "Usar 3-5 hashtags especificos e relevantes; evitar blocos longos genericos.",
+    facebook: "Usar 1-3 hashtags pesquisaveis; legenda clara e nativa do feed importa mais que volume."
+  }[platform] || "Usar hashtags relevantes e especificos.";
+}
+function downloadJson(data, filename){
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+function renderCaptionQueue(){
+  const data = buildExportData();
+  const list = document.querySelector("[data-caption-list]");
+  const summary = document.querySelector("[data-caption-summary]");
+  if (!data.caption_queue.length) {
+    summary.textContent = "Nenhum corte marcado ainda.";
+    list.innerHTML = "";
+    return;
+  }
+  summary.textContent = `${data.caption_queue.length} saidas prontas para render e legenda.`;
+  list.innerHTML = data.caption_queue.map(item => captionItemHtml(item)).join("");
+  renderFinalStage();
+}
+function renderFinalStage(){
+  const queue = buildExportData().caption_queue || [];
+  const summary = document.querySelector("[data-final-summary]");
+  if (summary) {
+    summary.textContent = queue.length
+      ? `${queue.length} saidas podem ser renderizadas com legenda.`
+      : "Prepare a fila de legenda antes de renderizar.";
+  }
+  const command = document.querySelector("[data-caption-command]");
+  if (command) command.textContent = captionCommand();
+}
+function captionCommand(){
+  const chars = Number(document.querySelector("[data-caption-width]")?.value || 28);
+  const lines = Number(document.querySelector("[data-caption-lines]")?.value || 2);
+  const script = window.CUTTED_SCRIPT || "cutted.py";
+  return `python "${script}" caption-selected "caption-queue.json" --out "captioned-clips" --base-dir "." --chars-per-line ${chars} --max-lines ${lines}`;
+}
+function captionItemHtml(item){
+  const previewSrc = cacheBustedPreview(item.clip_file || "", `${item.rank}-${item.adjusted_start}-${item.adjusted_end}`);
+  return `
+    <article class="caption-item" data-platform="${escapeAttr(item.platform)}">
+      <div class="caption-preview"><video controls preload="metadata" src="${escapeAttr(previewSrc)}"></video></div>
+      <div class="caption-item-body">
+        <strong>#${String(item.rank).padStart(2, "0")} ${escapeHtml(item.title || "")}</strong>
+        <span>${escapeHtml(item.platform_label)}</span><span>${item.width}x${item.height}</span><span>${fixed(item.adjusted_duration)}</span>
+        <p>${escapeHtml((item.publish_metadata?.hashtags || []).join(" "))}</p>
+        <dl><dt>Inicio</dt><dd>${fixed(item.adjusted_start)}</dd><dt>Fim</dt><dd>${fixed(item.adjusted_end)}</dd></dl>
+      </div>
+    </article>`;
+}
+function cacheBustedPreview(value, token){
+  if (!value) return "";
+  return `${value}${String(value).includes("?") ? "&" : "?"}v=${encodeURIComponent(token)}`;
+}
+function escapeHtml(value){
+  return String(value).replace(/[&<>"']/g, char => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[char]));
+}
+function escapeAttr(value){ return escapeHtml(value); }
+applyFormat(localStorage.getItem("cutted-format") || "tiktok");
+applyTab(localStorage.getItem("cutted-tab") || "edit");
+document.querySelectorAll(".segments [data-format]").forEach(btn => {
+  btn.addEventListener("click", () => applyFormat(btn.dataset.format));
+});
+document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
+  btn.addEventListener("click", () => { applyTab(btn.dataset.tab); renderCaptionQueue(); });
+});
+document.querySelectorAll(".card").forEach(card => {
+  paint(card);
+  updateTrimUi(card);
+  updatePlatformUi(card);
+  const video = card.querySelector("video");
+  if (video) {
+    video.addEventListener("play", () => {
+      const values = trimValues(card);
+      if (video.currentTime < values.trimStart || video.currentTime >= values.duration - values.trimEnd) {
+        video.currentTime = values.trimStart;
+      }
+    });
+    video.addEventListener("timeupdate", () => {
+      const values = trimValues(card);
+      if (video.currentTime >= values.duration - values.trimEnd) {
+        video.pause();
+        video.currentTime = values.trimStart;
+      }
+    });
+  }
+  card.querySelectorAll("[data-trim]").forEach(input => input.addEventListener("input", () => {
+    const current = cardState(card.dataset.rank);
+    const duration = Number(card.dataset.duration);
+    const startInput = card.querySelector("[data-trim=start]");
+    const endInput = card.querySelector("[data-trim=end]");
+    let startPos = Number(startInput.value);
+    let endPos = Number(endInput.value);
+    if (input.dataset.trim === "start") startPos = Math.min(startPos, endPos - 1);
+    if (input.dataset.trim === "end") endPos = Math.max(endPos, startPos + 1);
+    const patch = { trimStart: Math.max(startPos, 0), trimEnd: Math.max(duration - endPos, 0) };
+    setCardState(card.dataset.rank, Object.assign(current, patch));
+    updateTrimUi(card);
+    seekPreview(card);
+    renderCaptionQueue();
+  }));
+  card.querySelectorAll("[data-platform]").forEach(btn => btn.addEventListener("click", () => {
+    const current = cardState(card.dataset.rank);
+    const platforms = Array.isArray(current.platforms) ? current.platforms.slice() : [];
+    const existing = platforms.indexOf(btn.dataset.platform);
+    if (existing >= 0) platforms.splice(existing, 1);
+    else platforms.push(btn.dataset.platform);
+    setCardState(card.dataset.rank, { platforms });
+    updatePlatformUi(card);
+    renderCaptionQueue();
+  }));
+  card.querySelectorAll("button[data-action]").forEach(btn => btn.addEventListener("click", () => {
+    if (btn.dataset.action === "reset-trim") {
+      setCardState(card.dataset.rank, { trimStart: 0, trimEnd: 0 });
+      updateTrimUi(card);
+      seekPreview(card);
+      renderCaptionQueue();
+      return;
+    }
+    setCardState(card.dataset.rank, { status: btn.dataset.action === "like" ? "liked" : "discarded" });
+    paint(card);
+    updatePlatformUi(card);
+    renderCaptionQueue();
+  }));
+});
+document.getElementById("export").addEventListener("click", async () => {
+  downloadJson(buildExportData(), "selected-clips.json");
+});
+document.getElementById("reset-ui").addEventListener("click", () => {
+  if (!confirm("Zerar cortes, formatos e estado desta interface?")) return;
+  localStorage.removeItem("cutted-state");
+  localStorage.removeItem("cutted-format");
+  localStorage.removeItem("cutted-tab");
+  location.reload();
+});
+document.getElementById("export-captions").addEventListener("click", async () => {
+  downloadJson(buildExportData(), "caption-queue.json");
+  applyTab("final");
+});
+document.querySelectorAll("[data-caption-lines],[data-caption-width]").forEach(input => {
+  input.addEventListener("input", renderFinalStage);
+  input.addEventListener("change", renderFinalStage);
+});
+document.getElementById("copy-caption-command").addEventListener("click", async () => {
+  const button = document.getElementById("copy-caption-command");
+  const command = document.querySelector("[data-caption-command]");
+  const text = captionCommand();
+  try {
+    if (!navigator.clipboard) throw new Error("Clipboard unavailable");
+    await navigator.clipboard.writeText(text);
+    button.textContent = "Copiado";
+  } catch (error) {
+    selectElementText(command);
+    button.textContent = "Selecionado";
+  }
+  setTimeout(() => { button.textContent = "Copiar comando"; }, 1600);
+});
+function selectElementText(element){
+  if (!element || !window.getSelection || !document.createRange) return;
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+renderCaptionQueue();
+</script>
+</body>
+</html>

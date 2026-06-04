@@ -1,0 +1,30 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,72,&H00FFFFFF,&H0000FFFF,&H00000000,&H99000000,-1,0,0,0,100,100,0,0,1,7,0,2,80,80,250,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:04.48,Default,,0,0,0,,Eu vou te mostrar esse daqui\Nque é um
+Dialogue: 0,0:00:02.08,0:00:05.96,Default,,0,0,0,,dos perfumes mais caros do\Nmundo. Quanto
+Dialogue: 0,0:00:04.48,0:00:07.64,Default,,0,0,0,,você acha que custa esse\Nperfume? Porque
+Dialogue: 0,0:00:05.96,0:00:09.64,Default,,0,0,0,,muita gente não sabe pedir\Nperfume na
+Dialogue: 0,0:00:07.64,0:00:10.28,Default,,0,0,0,,loja. É o aroma, sei lá.\NPosso falar
+Dialogue: 0,0:00:09.64,0:00:13.44,Default,,0,0,0,,cheiro?
+Dialogue: 0,0:00:10.28,0:00:16.04,Default,,0,0,0,,Pode. Aroma não. Aroma é pra\Ncomida.
+Dialogue: 0,0:00:13.44,0:00:17.12,Default,,0,0,0,,E você vai sentir a madeira\Nagora.
+Dialogue: 0,0:00:16.04,0:00:19.36,Default,,0,0,0,,Ó o cara, velho.
+Dialogue: 0,0:00:17.12,0:00:21.00,Default,,0,0,0,,Hum. [ __ ]
+Dialogue: 0,0:00:19.36,0:00:23.00,Default,,0,0,0,,Por que que o perfumaria\Nárabe explodiu
+Dialogue: 0,0:00:21.00,0:00:25.32,Default,,0,0,0,,tanto? Porque eles trazem\Numa baita
+Dialogue: 0,0:00:23.00,0:00:26.96,Default,,0,0,0,,qualidade de apresentação e\Numa baita
+Dialogue: 0,0:00:25.32,0:00:31.88,Default,,0,0,0,,qualidade de ingrediente e\Nalta
+Dialogue: 0,0:00:26.96,0:00:32.96,Default,,0,0,0,,performance. Nessa mão temos\No nessa
+Dialogue: 0,0:00:31.88,0:00:34.32,Default,,0,0,0,,e agora?
+Dialogue: 0,0:00:32.96,0:00:38.56,Default,,0,0,0,,E agora,
+Dialogue: 0,0:00:34.32,0:00:38.56,Default,,0,0,0,,cara? Eu vou decepcionar\Nvocê, hein?

@@ -1,0 +1,1151 @@
+{
+  "source": "Irã ataca países do Golfo; Caos na Bolívia; Novas tarifas dos EUA e+",
+  "duration": 0.0,
+  "config": {
+    "clips": 10,
+    "min_duration": 30.0,
+    "max_duration": 70.0,
+    "target_duration": 42.0,
+    "smart_boundaries": true,
+    "lead_in": 1.0,
+    "tail_out": 1.5,
+    "preset": "tiktok"
+  },
+  "moments": [
+    {
+      "rank": 1,
+      "start": 231.12,
+      "end": 276.18,
+      "peak": 271.66,
+      "score": 10.1,
+      "title": "são verdade e então coloca o ponto nesse",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "Eu pedi que a nossa produção trouxesse um mapa à tona e creio, Daniel, que a gente tem aqui o mapa divulgado pelos serviços da Bolívia. E aí está nesse mapa muito a ser analisado. Eu coloco em tela cheia. Cada um desses pontos é uma das 103 interrupções que nós citávamos há pouco. A fonte é precisamente a autoridade de transportes da Bolívia. Ah, para dar o nome certo, a Administração de Transportes da Bolívia, vindo do site do próprio governo boliviano e registra em tempo real as denúncias. Quer dizer, isso significa que isso é de agora, coisa que acontece no momento. As pessoas ali denunciando para o governo boliviano, esse site congrega essas denúncias, verifica se são verdade e então coloca o ponto nesse",
+      "peak_text": "são verdade e então coloca o ponto nesse",
+      "clip_file": "clips/clip-001.mp4",
+      "frame_file": "frames/clip-001.jpg",
+      "caption_segments": [
+        {
+          "start": 232.12,
+          "end": 235.0,
+          "text": "Eu pedi que a nossa produção trouxesse"
+        },
+        {
+          "start": 233.56,
+          "end": 236.799,
+          "text": "um mapa à tona e creio, Daniel, que a"
+        },
+        {
+          "start": 235.0,
+          "end": 239.519,
+          "text": "gente tem aqui o mapa divulgado pelos"
+        },
+        {
+          "start": 236.799,
+          "end": 242.0,
+          "text": "serviços da Bolívia. E aí está nesse"
+        },
+        {
+          "start": 239.519,
+          "end": 244.59900000000002,
+          "text": "mapa muito a ser analisado. Eu coloco em"
+        },
+        {
+          "start": 242.0,
+          "end": 246.959,
+          "text": "tela cheia. Cada um desses pontos é uma"
+        },
+        {
+          "start": 244.599,
+          "end": 249.0,
+          "text": "das 103 interrupções que nós citávamos"
+        },
+        {
+          "start": 246.959,
+          "end": 251.36,
+          "text": "há pouco. A fonte é precisamente a"
+        },
+        {
+          "start": 249.0,
+          "end": 252.92,
+          "text": "autoridade de transportes da Bolívia."
+        },
+        {
+          "start": 251.36,
+          "end": 255.079,
+          "text": "Ah, para dar o nome certo, a"
+        },
+        {
+          "start": 252.92,
+          "end": 256.59999999999997,
+          "text": "Administração de Transportes da Bolívia,"
+        },
+        {
+          "start": 255.079,
+          "end": 258.479,
+          "text": "vindo do site do próprio governo"
+        },
+        {
+          "start": 256.6,
+          "end": 260.6,
+          "text": "boliviano e registra em tempo real as"
+        },
+        {
+          "start": 258.479,
+          "end": 262.84,
+          "text": "denúncias. Quer dizer, isso significa"
+        },
+        {
+          "start": 260.6,
+          "end": 265.12,
+          "text": "que isso é de agora, coisa que acontece"
+        },
+        {
+          "start": 262.84,
+          "end": 266.75899999999996,
+          "text": "no momento. As pessoas ali denunciando"
+        },
+        {
+          "start": 265.12,
+          "end": 268.639,
+          "text": "para o governo boliviano, esse site"
+        },
+        {
+          "start": 266.759,
+          "end": 271.039,
+          "text": "congrega essas denúncias, verifica se"
+        },
+        {
+          "start": 268.639,
+          "end": 274.68,
+          "text": "são verdade e então coloca o ponto nesse"
+        }
+      ]
+    },
+    {
+      "rank": 2,
+      "start": 470.599,
+      "end": 514.419,
+      "peak": 509.6,
+      "score": 10.6,
+      "title": "porque tem gente entrando e eu posso",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "bloqueios com o apoio do crime e dos traficantes. Eu falei com o Paz nessa tarde, recapitulando, isso não é recente, coisa de uma semana atrás. Só recapitulando a crise pra gente ter as informações em mão, ele completa que falou com eles e que os Estados Unidos estão apoiando a Bolívia. repercute então o que já havia dito o próprio Marco Rúbio. Aí o número um e o número dois do Departamento de Estado, Rúbio e Landal pontuando o assunto. Agora com a retrospectiva em mãos, o momento é um no qual o país está parado e a pressão para que alguma coisa seja feita não vem só dos socialistas que pedem a queda do governo. Daniel, eh, eu vou pedir que a gente deixe até as imagens dos protestos na tela novamente, porque tem gente entrando e eu posso prosseguir com a fala enquanto a gente",
+      "peak_text": "porque tem gente entrando e eu posso",
+      "clip_file": "clips/clip-002.mp4",
+      "frame_file": "frames/clip-002.jpg",
+      "caption_segments": [
+        {
+          "start": 471.599,
+          "end": 475.479,
+          "text": "bloqueios com o apoio do crime e dos"
+        },
+        {
+          "start": 473.319,
+          "end": 476.96000000000004,
+          "text": "traficantes. Eu falei com o Paz nessa"
+        },
+        {
+          "start": 475.479,
+          "end": 479.31899999999996,
+          "text": "tarde, recapitulando, isso não é"
+        },
+        {
+          "start": 476.96,
+          "end": 480.71999999999997,
+          "text": "recente, coisa de uma semana atrás."
+        },
+        {
+          "start": 479.319,
+          "end": 482.759,
+          "text": "Só recapitulando a crise pra gente ter"
+        },
+        {
+          "start": 480.72,
+          "end": 484.52000000000004,
+          "text": "as informações em mão, ele completa que"
+        },
+        {
+          "start": 482.759,
+          "end": 486.319,
+          "text": "falou com eles e que os Estados Unidos"
+        },
+        {
+          "start": 484.52,
+          "end": 488.0,
+          "text": "estão apoiando a Bolívia. repercute"
+        },
+        {
+          "start": 486.319,
+          "end": 490.28000000000003,
+          "text": "então o que já havia dito o próprio"
+        },
+        {
+          "start": 488.0,
+          "end": 492.52,
+          "text": "Marco Rúbio. Aí o número um e o número"
+        },
+        {
+          "start": 490.28,
+          "end": 495.35999999999996,
+          "text": "dois do Departamento de Estado, Rúbio e"
+        },
+        {
+          "start": 492.52,
+          "end": 497.159,
+          "text": "Landal pontuando o assunto."
+        },
+        {
+          "start": 495.36,
+          "end": 498.91900000000004,
+          "text": "Agora com a retrospectiva em mãos, o"
+        },
+        {
+          "start": 497.159,
+          "end": 500.56,
+          "text": "momento é um no qual o país está parado"
+        },
+        {
+          "start": 498.919,
+          "end": 502.71999999999997,
+          "text": "e a pressão para que alguma coisa seja"
+        },
+        {
+          "start": 500.56,
+          "end": 505.24,
+          "text": "feita não vem só dos socialistas que"
+        },
+        {
+          "start": 502.72,
+          "end": 506.15900000000005,
+          "text": "pedem a queda do governo. Daniel, eh, eu"
+        },
+        {
+          "start": 505.24,
+          "end": 507.759,
+          "text": "vou pedir que a gente deixe até as"
+        },
+        {
+          "start": 506.159,
+          "end": 509.479,
+          "text": "imagens dos protestos na tela novamente,"
+        },
+        {
+          "start": 507.759,
+          "end": 511.44,
+          "text": "porque tem gente entrando e eu posso"
+        },
+        {
+          "start": 509.479,
+          "end": 512.919,
+          "text": "prosseguir com a fala enquanto a gente"
+        }
+      ]
+    },
+    {
+      "rank": 3,
+      "start": 504.24,
+      "end": 547.98,
+      "peak": 509.6,
+      "score": 10.17,
+      "title": "porque tem gente entrando e eu posso",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "vou pedir que a gente deixe até as imagens dos protestos na tela novamente, porque tem gente entrando e eu posso prosseguir com a fala enquanto a gente acompanha. Vamos lá. Você tá acompanhando as imagens dos protestos na Bolívia, os pneus queimados, a interdição das vias. A pressão é grande quando se fala dessas organizações da esquerda boliviana aliadas ao más movimento ao socialismo e a Luiz Arceu, o Luto e Evo Morales. Ah, isso é um dos pontos de alta tensão. Aí se vê os protestos dos últimos dias, mas vamos prosseguir agora trazendo à tona a pressão que vem não só deles, mas de outros setores. pessoas que não estão necessariamente envolvidas nos protestos e estão pressionando não necessariamente para que o governo caia, mas para que",
+      "peak_text": "porque tem gente entrando e eu posso",
+      "clip_file": "clips/clip-003.mp4",
+      "frame_file": "frames/clip-003.jpg",
+      "caption_segments": [
+        {
+          "start": 505.24,
+          "end": 507.759,
+          "text": "vou pedir que a gente deixe até as"
+        },
+        {
+          "start": 506.159,
+          "end": 509.479,
+          "text": "imagens dos protestos na tela novamente,"
+        },
+        {
+          "start": 507.759,
+          "end": 511.44,
+          "text": "porque tem gente entrando e eu posso"
+        },
+        {
+          "start": 509.479,
+          "end": 512.919,
+          "text": "prosseguir com a fala enquanto a gente"
+        },
+        {
+          "start": 511.44,
+          "end": 514.399,
+          "text": "acompanha. Vamos lá. Você tá"
+        },
+        {
+          "start": 512.919,
+          "end": 516.159,
+          "text": "acompanhando as imagens dos protestos na"
+        },
+        {
+          "start": 514.399,
+          "end": 518.8,
+          "text": "Bolívia, os pneus queimados, a"
+        },
+        {
+          "start": 516.159,
+          "end": 520.8389999999999,
+          "text": "interdição das vias. A pressão é grande"
+        },
+        {
+          "start": 518.8,
+          "end": 523.3599999999999,
+          "text": "quando se fala dessas organizações da"
+        },
+        {
+          "start": 520.839,
+          "end": 525.5600000000001,
+          "text": "esquerda boliviana aliadas ao más"
+        },
+        {
+          "start": 523.36,
+          "end": 528.519,
+          "text": "movimento ao socialismo e a Luiz Arceu,"
+        },
+        {
+          "start": 525.56,
+          "end": 530.64,
+          "text": "o Luto e Evo Morales. Ah, isso é um dos"
+        },
+        {
+          "start": 528.519,
+          "end": 533.399,
+          "text": "pontos de alta tensão."
+        },
+        {
+          "start": 530.64,
+          "end": 535.12,
+          "text": "Aí se vê os protestos dos últimos dias,"
+        },
+        {
+          "start": 533.399,
+          "end": 537.68,
+          "text": "mas vamos prosseguir agora trazendo à"
+        },
+        {
+          "start": 535.12,
+          "end": 539.48,
+          "text": "tona a pressão que vem não só deles, mas"
+        },
+        {
+          "start": 537.68,
+          "end": 541.519,
+          "text": "de outros setores. pessoas que não estão"
+        },
+        {
+          "start": 539.48,
+          "end": 543.48,
+          "text": "necessariamente envolvidas nos protestos"
+        },
+        {
+          "start": 541.519,
+          "end": 544.92,
+          "text": "e estão pressionando não necessariamente"
+        },
+        {
+          "start": 543.48,
+          "end": 546.48,
+          "text": "para que o governo caia, mas para que"
+        }
+      ]
+    },
+    {
+      "rank": 4,
+      "start": 641.12,
+      "end": 685.38,
+      "peak": 661.86,
+      "score": 10.09,
+      "title": "importante para toda a região. Não é uma",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "inteiro. Ontem à noite, o ministro da defesa, Marcelo Salinas, renunciou e já foi substituído agora. Beatriz Garcia na educação também colocou o cargo à disposição e mais cedo, semanas atrás, a gente viu também uma mudança no Ministério do Trabalho. A coisa na Bolívia é grave, mas também é importante para toda a região. Não é uma questão da imagem chamativa, por chamativas que sejam as imagens que a gente viu aqui ao meu lado, para você que tá assistindo em vídeo, que eu sei que também tem retransmissor aqui a rádio, mas o fato de que as pautas ali discutidas repercutem nos países vizinhos coloca isso em outra dimensão. E vamos entender essa dimensão. Então, a Colômbia em semanas enfrentará o segundo",
+      "peak_text": "importante para toda a região. Não é uma",
+      "clip_file": "clips/clip-004.mp4",
+      "frame_file": "frames/clip-004.jpg",
+      "caption_segments": [
+        {
+          "start": 642.12,
+          "end": 647.12,
+          "text": "inteiro. Ontem à noite, o ministro da"
+        },
+        {
+          "start": 644.24,
+          "end": 649.519,
+          "text": "defesa, Marcelo Salinas, renunciou e já"
+        },
+        {
+          "start": 647.12,
+          "end": 651.12,
+          "text": "foi substituído agora. Beatriz Garcia na"
+        },
+        {
+          "start": 649.519,
+          "end": 653.68,
+          "text": "educação também colocou o cargo à"
+        },
+        {
+          "start": 651.12,
+          "end": 654.88,
+          "text": "disposição e mais cedo, semanas atrás, a"
+        },
+        {
+          "start": 653.68,
+          "end": 657.0,
+          "text": "gente viu também uma mudança no"
+        },
+        {
+          "start": 654.88,
+          "end": 659.959,
+          "text": "Ministério do Trabalho."
+        },
+        {
+          "start": 657.0,
+          "end": 662.32,
+          "text": "A coisa na Bolívia é grave, mas também é"
+        },
+        {
+          "start": 659.959,
+          "end": 663.76,
+          "text": "importante para toda a região. Não é uma"
+        },
+        {
+          "start": 662.32,
+          "end": 665.519,
+          "text": "questão da imagem chamativa, por"
+        },
+        {
+          "start": 663.76,
+          "end": 667.12,
+          "text": "chamativas que sejam as imagens que a"
+        },
+        {
+          "start": 665.519,
+          "end": 668.6,
+          "text": "gente viu aqui ao meu lado, para você"
+        },
+        {
+          "start": 667.12,
+          "end": 670.079,
+          "text": "que tá assistindo em vídeo, que eu sei"
+        },
+        {
+          "start": 668.6,
+          "end": 672.6800000000001,
+          "text": "que também tem retransmissor aqui a"
+        },
+        {
+          "start": 670.079,
+          "end": 674.4799999999999,
+          "text": "rádio, mas o fato de que as pautas ali"
+        },
+        {
+          "start": 672.68,
+          "end": 677.519,
+          "text": "discutidas repercutem nos países"
+        },
+        {
+          "start": 674.48,
+          "end": 679.6800000000001,
+          "text": "vizinhos coloca isso em outra dimensão."
+        },
+        {
+          "start": 677.519,
+          "end": 681.88,
+          "text": "E vamos entender essa dimensão. Então, a"
+        },
+        {
+          "start": 679.68,
+          "end": 683.88,
+          "text": "Colômbia em semanas enfrentará o segundo"
+        }
+      ]
+    },
+    {
+      "rank": 5,
+      "start": 762.399,
+      "end": 805.579,
+      "peak": 777.06,
+      "score": 10.17,
+      "title": "organizações terroristas, eu quero fazer",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "comerciais. A relação com Washington, o rumo da economia a longo prazo definem também a disputa presidencial de outubro. Agora, quando se fala da designação do primeiro comando da capital e do comando vermelho como organizações terroristas, eu quero fazer uma tangente, sair aqui pelo lado da pauta pra gente trazer uma coisa que tem muito a ver, mas é periférica de certa forma. Vocês vão entender o que eu quero dizer. A gente deve ter aqui imagens de uma das faixas que esteve pendurada na Bolívia ao longo desse momento. Para você que vai estar eh a gente tem aqui um vídeo que foi gravado em Lapaz e o vídeo é interessante também, mostra a população olhando. Para você que tá no rádio, nos escutando em retransmissora, vai ter 10 segundos de silêncio. Não se",
+      "peak_text": "organizações terroristas, eu quero fazer",
+      "clip_file": "clips/clip-005.mp4",
+      "frame_file": "frames/clip-005.jpg",
+      "caption_segments": [
+        {
+          "start": 763.399,
+          "end": 767.639,
+          "text": "comerciais. A relação com Washington, o"
+        },
+        {
+          "start": 765.56,
+          "end": 769.199,
+          "text": "rumo da economia a longo prazo definem"
+        },
+        {
+          "start": 767.639,
+          "end": 771.5600000000001,
+          "text": "também a disputa presidencial de"
+        },
+        {
+          "start": 769.199,
+          "end": 773.4799999999999,
+          "text": "outubro. Agora, quando se fala da"
+        },
+        {
+          "start": 771.56,
+          "end": 774.92,
+          "text": "designação do primeiro comando da"
+        },
+        {
+          "start": 773.48,
+          "end": 776.839,
+          "text": "capital e do comando vermelho como"
+        },
+        {
+          "start": 774.92,
+          "end": 779.199,
+          "text": "organizações terroristas, eu quero fazer"
+        },
+        {
+          "start": 776.839,
+          "end": 781.1990000000001,
+          "text": "uma tangente, sair aqui pelo lado da"
+        },
+        {
+          "start": 779.199,
+          "end": 783.76,
+          "text": "pauta pra gente trazer uma coisa que tem"
+        },
+        {
+          "start": 781.199,
+          "end": 785.16,
+          "text": "muito a ver, mas é periférica de certa"
+        },
+        {
+          "start": 783.76,
+          "end": 787.36,
+          "text": "forma. Vocês vão entender o que eu quero"
+        },
+        {
+          "start": 785.16,
+          "end": 790.0,
+          "text": "dizer. A gente deve ter aqui imagens de"
+        },
+        {
+          "start": 787.36,
+          "end": 791.9590000000001,
+          "text": "uma das faixas que esteve pendurada na"
+        },
+        {
+          "start": 790.0,
+          "end": 793.88,
+          "text": "Bolívia ao longo desse momento. Para"
+        },
+        {
+          "start": 791.959,
+          "end": 795.3199999999999,
+          "text": "você que vai estar eh a gente tem aqui"
+        },
+        {
+          "start": 793.88,
+          "end": 796.76,
+          "text": "um vídeo que foi gravado em Lapaz e o"
+        },
+        {
+          "start": 795.32,
+          "end": 798.519,
+          "text": "vídeo é interessante também, mostra a"
+        },
+        {
+          "start": 796.76,
+          "end": 801.0,
+          "text": "população olhando. Para você que tá no"
+        },
+        {
+          "start": 798.519,
+          "end": 802.92,
+          "text": "rádio, nos escutando em retransmissora,"
+        },
+        {
+          "start": 801.0,
+          "end": 804.079,
+          "text": "vai ter 10 segundos de silêncio. Não se"
+        }
+      ]
+    },
+    {
+      "rank": 6,
+      "start": 1925.24,
+      "end": 1970.82,
+      "peak": 1967.16,
+      "score": 10.24,
+      "title": "de dinheiro no Irã que poderia ser usada",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "Eu fiz a cronologia dos ataques agora a pouco. Vamos pros detalhes sobre a resposta americana. Os Estados Unidos responderam com ataques contra um alvo militar na ilha de Kem, que fica em território iraniano. Essa é uma ilha crítica quando se fala sobre o projeto do Irã de cobrar pedágio no estreito de Ormus. A gente sempre busca dar o contexto e garantir que você possa navegar essas notícias complexas que acontecem no mundo. Então, breve recapitulação. O Irã busca, como um dos termos de um eventual acordo ou mesmo enquanto agora o cessar fogo está em vigor, cobrar pedágio para que navios passem pelo estreito de Ormus. Os Estados Unidos fala que isso está fora de cogitação, não só porque eles arrecadariam uma quantidade imensa de dinheiro no Irã que poderia ser usada",
+      "peak_text": "de dinheiro no Irã que poderia ser usada",
+      "clip_file": "clips/clip-006.mp4",
+      "frame_file": "frames/clip-006.jpg",
+      "caption_segments": [
+        {
+          "start": 1926.24,
+          "end": 1929.639,
+          "text": "Eu fiz a cronologia dos ataques agora a"
+        },
+        {
+          "start": 1927.84,
+          "end": 1932.279,
+          "text": "pouco. Vamos pros detalhes sobre a"
+        },
+        {
+          "start": 1929.639,
+          "end": 1934.08,
+          "text": "resposta americana. Os Estados Unidos"
+        },
+        {
+          "start": 1932.279,
+          "end": 1936.12,
+          "text": "responderam com ataques contra um alvo"
+        },
+        {
+          "start": 1934.08,
+          "end": 1937.84,
+          "text": "militar na ilha de Kem, que fica em"
+        },
+        {
+          "start": 1936.12,
+          "end": 1939.7199999999998,
+          "text": "território iraniano. Essa é uma ilha"
+        },
+        {
+          "start": 1937.84,
+          "end": 1941.9189999999999,
+          "text": "crítica quando se fala sobre o projeto"
+        },
+        {
+          "start": 1939.72,
+          "end": 1943.519,
+          "text": "do Irã de cobrar pedágio no estreito de"
+        },
+        {
+          "start": 1941.919,
+          "end": 1945.0,
+          "text": "Ormus."
+        },
+        {
+          "start": 1943.519,
+          "end": 1946.639,
+          "text": "A gente sempre busca dar o contexto e"
+        },
+        {
+          "start": 1945.0,
+          "end": 1948.279,
+          "text": "garantir que você possa navegar essas"
+        },
+        {
+          "start": 1946.639,
+          "end": 1951.1589999999999,
+          "text": "notícias complexas que acontecem no"
+        },
+        {
+          "start": 1948.279,
+          "end": 1953.12,
+          "text": "mundo. Então, breve recapitulação. O Irã"
+        },
+        {
+          "start": 1951.159,
+          "end": 1955.3200000000002,
+          "text": "busca, como um dos termos de um eventual"
+        },
+        {
+          "start": 1953.12,
+          "end": 1957.5189999999998,
+          "text": "acordo ou mesmo enquanto agora o cessar"
+        },
+        {
+          "start": 1955.32,
+          "end": 1958.96,
+          "text": "fogo está em vigor, cobrar pedágio para"
+        },
+        {
+          "start": 1957.519,
+          "end": 1960.84,
+          "text": "que navios passem pelo estreito de"
+        },
+        {
+          "start": 1958.96,
+          "end": 1963.0,
+          "text": "Ormus. Os Estados Unidos fala que isso"
+        },
+        {
+          "start": 1960.84,
+          "end": 1965.0,
+          "text": "está fora de cogitação, não só porque"
+        },
+        {
+          "start": 1963.0,
+          "end": 1967.159,
+          "text": "eles arrecadariam uma quantidade imensa"
+        },
+        {
+          "start": 1965.0,
+          "end": 1969.32,
+          "text": "de dinheiro no Irã que poderia ser usada"
+        }
+      ]
+    },
+    {
+      "rank": 7,
+      "start": 2388.44,
+      "end": 2432.819,
+      "peak": 2427.4,
+      "score": 11.86,
+      "title": "grupo terrorista, porque ataques",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "Um porta-voz do Departamento de Estado disse que o objetivo é chegar a um acordo que traga tanto a soberania do Líbano quanto a segurança de Israel em consideração. O resbolá já rejeitou proposta antes de cessar fogo parcial e já rejeitou se desarmar. Até teve antes tentativa de acordo como esse e o resbolá perdeu prazo para entregar as armas. Coisa complicada ali. Enquanto Israel desistiu de ataques contra a capital do Líbano Beirut, alvejando resbolar, no sul seguiram os ataques, tá? Ah, mesmo hoje o exército de Israel emitiu alertas urgentes paraa evacuação de moradores de vilarejos, aonde havia infraestrutura do grupo terrorista, porque ataques poderiam acontecer. E ao longo das",
+      "peak_text": "grupo terrorista, porque ataques",
+      "clip_file": "clips/clip-007.mp4",
+      "frame_file": "frames/clip-007.jpg",
+      "caption_segments": [
+        {
+          "start": 2389.44,
+          "end": 2392.48,
+          "text": "Um porta-voz do Departamento de Estado"
+        },
+        {
+          "start": 2391.119,
+          "end": 2394.2400000000002,
+          "text": "disse que o objetivo é chegar a um"
+        },
+        {
+          "start": 2392.48,
+          "end": 2396.56,
+          "text": "acordo que traga tanto a soberania do"
+        },
+        {
+          "start": 2394.24,
+          "end": 2398.9199999999996,
+          "text": "Líbano quanto a segurança de Israel em"
+        },
+        {
+          "start": 2396.56,
+          "end": 2401.2,
+          "text": "consideração. O resbolá já rejeitou"
+        },
+        {
+          "start": 2398.92,
+          "end": 2403.4,
+          "text": "proposta antes de cessar fogo parcial e"
+        },
+        {
+          "start": 2401.2,
+          "end": 2405.24,
+          "text": "já rejeitou se desarmar. Até teve antes"
+        },
+        {
+          "start": 2403.4,
+          "end": 2407.119,
+          "text": "tentativa de acordo como esse e o"
+        },
+        {
+          "start": 2405.24,
+          "end": 2408.5989999999997,
+          "text": "resbolá perdeu prazo para entregar as"
+        },
+        {
+          "start": 2407.119,
+          "end": 2411.599,
+          "text": "armas."
+        },
+        {
+          "start": 2408.599,
+          "end": 2413.319,
+          "text": "Coisa complicada ali. Enquanto Israel"
+        },
+        {
+          "start": 2411.599,
+          "end": 2415.7200000000003,
+          "text": "desistiu de ataques contra a capital do"
+        },
+        {
+          "start": 2413.319,
+          "end": 2418.72,
+          "text": "Líbano Beirut, alvejando resbolar, no"
+        },
+        {
+          "start": 2415.72,
+          "end": 2421.0789999999997,
+          "text": "sul seguiram os ataques, tá? Ah, mesmo"
+        },
+        {
+          "start": 2418.72,
+          "end": 2423.1189999999997,
+          "text": "hoje o exército de Israel emitiu alertas"
+        },
+        {
+          "start": 2421.079,
+          "end": 2425.76,
+          "text": "urgentes paraa evacuação de moradores de"
+        },
+        {
+          "start": 2423.119,
+          "end": 2427.079,
+          "text": "vilarejos, aonde havia infraestrutura do"
+        },
+        {
+          "start": 2425.76,
+          "end": 2429.0400000000004,
+          "text": "grupo terrorista, porque ataques"
+        },
+        {
+          "start": 2427.079,
+          "end": 2431.319,
+          "text": "poderiam acontecer. E ao longo das"
+        }
+      ]
+    },
+    {
+      "rank": 8,
+      "start": 2424.76,
+      "end": 2468.42,
+      "peak": 2427.4,
+      "score": 12.16,
+      "title": "grupo terrorista, porque ataques",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "grupo terrorista, porque ataques poderiam acontecer. E ao longo das últimas semanas se viu centenas de bombardeios a posições do resbolado. Cenário escalatório numa região que de estável de estável já não tem muito. Para concluir o segmento, começa uma guerra que traz o interesse não só de quem gosta de acompanhar a geopolítica, mas de quem se preocupa com o bolso, já que o que acontece ali impacta não só a bolsa de valores, mas também o preço dos combustíveis. Ah, vale a pena falar que no estito de Ormus teve desdobramentos. Americanos informaram então que impediram a entrada de um petroleiro no Irã desdobrou a crise de ataques que a gente cobriu no início do bloco. Eh, para além disso, Nataniarro naquela",
+      "peak_text": "grupo terrorista, porque ataques",
+      "clip_file": "clips/clip-008.mp4",
+      "frame_file": "frames/clip-008.jpg",
+      "caption_segments": [
+        {
+          "start": 2425.76,
+          "end": 2429.0400000000004,
+          "text": "grupo terrorista, porque ataques"
+        },
+        {
+          "start": 2427.079,
+          "end": 2431.319,
+          "text": "poderiam acontecer. E ao longo das"
+        },
+        {
+          "start": 2429.04,
+          "end": 2433.88,
+          "text": "últimas semanas se viu centenas de"
+        },
+        {
+          "start": 2431.319,
+          "end": 2436.16,
+          "text": "bombardeios a posições do resbolado."
+        },
+        {
+          "start": 2433.88,
+          "end": 2439.52,
+          "text": "Cenário escalatório numa região que de"
+        },
+        {
+          "start": 2436.16,
+          "end": 2441.16,
+          "text": "estável de estável já não tem muito."
+        },
+        {
+          "start": 2439.52,
+          "end": 2443.2,
+          "text": "Para concluir o segmento, começa uma"
+        },
+        {
+          "start": 2441.16,
+          "end": 2445.04,
+          "text": "guerra que traz o interesse não só de"
+        },
+        {
+          "start": 2443.2,
+          "end": 2446.8799999999997,
+          "text": "quem gosta de acompanhar a geopolítica,"
+        },
+        {
+          "start": 2445.04,
+          "end": 2449.079,
+          "text": "mas de quem se preocupa com o bolso, já"
+        },
+        {
+          "start": 2446.88,
+          "end": 2451.0,
+          "text": "que o que acontece ali impacta não só a"
+        },
+        {
+          "start": 2449.079,
+          "end": 2453.28,
+          "text": "bolsa de valores, mas também o preço dos"
+        },
+        {
+          "start": 2451.0,
+          "end": 2455.44,
+          "text": "combustíveis. Ah, vale a pena falar que"
+        },
+        {
+          "start": 2453.28,
+          "end": 2456.96,
+          "text": "no estito de Ormus teve desdobramentos."
+        },
+        {
+          "start": 2455.44,
+          "end": 2458.92,
+          "text": "Americanos informaram então que"
+        },
+        {
+          "start": 2456.96,
+          "end": 2460.92,
+          "text": "impediram a entrada de um petroleiro no"
+        },
+        {
+          "start": 2458.92,
+          "end": 2463.119,
+          "text": "Irã desdobrou a crise de ataques que a"
+        },
+        {
+          "start": 2460.92,
+          "end": 2464.64,
+          "text": "gente cobriu no início do bloco. Eh,"
+        },
+        {
+          "start": 2463.119,
+          "end": 2466.92,
+          "text": "para além disso, Nataniarro naquela"
+        }
+      ]
+    },
+    {
+      "rank": 9,
+      "start": 2532.48,
+      "end": 2576.42,
+      "peak": 2548.02,
+      "score": 10.1,
+      "title": "esteja em curso. Mas verdadeiramente",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "Esse ataque foi, claro, notório no dia de hoje. Na guerra da Ucrânia, agora já fazem 4 anos que essa maior guerra na Europa, desde a Segunda Guerra Mundial acontece. Então, parece dar um tom de mesmícia, não é? O novo normal é que ela esteja em curso. Mas verdadeiramente houve hoje um ataque relevante, uma coisa que tá para além da mismíice dos noticiários lá no leste da Europa, entre Rússia e Ucrânia. Um ataque a São Petersburgo, uma das cidades mais relevantes da Rússia e no meio de um fórum econômico. A coisa não é só um ataque à Rússia fundo no seu território, como foi outras vezes, Moscou ou a Operação Teia de Aranha, mas vem no meio de um fórum com um recado simbólico e até uma delegação americana envolvida. A",
+      "peak_text": "esteja em curso. Mas verdadeiramente",
+      "clip_file": "clips/clip-009.mp4",
+      "frame_file": "frames/clip-009.jpg",
+      "caption_segments": [
+        {
+          "start": 2533.48,
+          "end": 2538.16,
+          "text": "Esse ataque foi, claro, notório no dia"
+        },
+        {
+          "start": 2535.28,
+          "end": 2540.119,
+          "text": "de hoje. Na guerra da Ucrânia, agora já"
+        },
+        {
+          "start": 2538.16,
+          "end": 2541.7599999999998,
+          "text": "fazem 4 anos que essa maior guerra na"
+        },
+        {
+          "start": 2540.119,
+          "end": 2543.839,
+          "text": "Europa, desde a Segunda Guerra Mundial"
+        },
+        {
+          "start": 2541.76,
+          "end": 2545.76,
+          "text": "acontece. Então, parece dar um tom de"
+        },
+        {
+          "start": 2543.839,
+          "end": 2548.16,
+          "text": "mesmícia, não é? O novo normal é que ela"
+        },
+        {
+          "start": 2545.76,
+          "end": 2550.28,
+          "text": "esteja em curso. Mas verdadeiramente"
+        },
+        {
+          "start": 2548.16,
+          "end": 2552.16,
+          "text": "houve hoje um ataque relevante, uma"
+        },
+        {
+          "start": 2550.28,
+          "end": 2554.92,
+          "text": "coisa que tá para além da mismíice dos"
+        },
+        {
+          "start": 2552.16,
+          "end": 2557.0,
+          "text": "noticiários lá no leste da Europa, entre"
+        },
+        {
+          "start": 2554.92,
+          "end": 2559.2400000000002,
+          "text": "Rússia e Ucrânia. Um ataque a São"
+        },
+        {
+          "start": 2557.0,
+          "end": 2560.76,
+          "text": "Petersburgo, uma das cidades mais"
+        },
+        {
+          "start": 2559.24,
+          "end": 2563.24,
+          "text": "relevantes da Rússia e no meio de um"
+        },
+        {
+          "start": 2560.76,
+          "end": 2565.2000000000003,
+          "text": "fórum econômico. A coisa não é só um"
+        },
+        {
+          "start": 2563.24,
+          "end": 2567.319,
+          "text": "ataque à Rússia fundo no seu território,"
+        },
+        {
+          "start": 2565.2,
+          "end": 2569.319,
+          "text": "como foi outras vezes, Moscou ou a"
+        },
+        {
+          "start": 2567.319,
+          "end": 2571.5589999999997,
+          "text": "Operação Teia de Aranha, mas vem no meio"
+        },
+        {
+          "start": 2569.319,
+          "end": 2573.8,
+          "text": "de um fórum com um recado simbólico e"
+        },
+        {
+          "start": 2571.559,
+          "end": 2574.92,
+          "text": "até uma delegação americana envolvida. A"
+        }
+      ]
+    },
+    {
+      "rank": 10,
+      "start": 3186.24,
+      "end": 3231.1800000000003,
+      "peak": 3224.48,
+      "score": 10.1,
+      "title": "são a o qual a palavra que eu procuro? O",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": ">> Perfeito. Então meu muito obrigado, Manu, por nos atender mais uma vez, então, desdobrando o que acontece no leste da Europa com ataque simbólico, coisa de impacto global. Antes da gente prosseguir pro giro de notícias, te agradeço, Manu. Daniel, posso ficar eu em tela cheia? Quero fazer um um acréscimo aí sobre ainda eh esse segmento antes da gente prosseguir. Ah, de forma muito interessante, Manu trazia à tona essa questão dos drones e de fato os países do Golfo, como ela mencionou, pediram ou conseguiram o auxílio da Ucrânia via Estados Unidos para lidar com os drones. Isso traz outra questão para ir, mesmo a questão dos lastos entre Irã e Rússia. Os drones Shah que são a o qual a palavra que eu procuro? O drone de destaque entre a frota de",
+      "peak_text": "são a o qual a palavra que eu procuro? O",
+      "clip_file": "clips/clip-010.mp4",
+      "frame_file": "frames/clip-010.jpg",
+      "caption_segments": [
+        {
+          "start": 3187.24,
+          "end": 3190.52,
+          "text": ">> Perfeito. Então meu muito obrigado,"
+        },
+        {
+          "start": 3188.76,
+          "end": 3191.92,
+          "text": "Manu, por nos atender mais uma vez,"
+        },
+        {
+          "start": 3190.52,
+          "end": 3194.04,
+          "text": "então, desdobrando o que acontece no"
+        },
+        {
+          "start": 3191.92,
+          "end": 3196.359,
+          "text": "leste da Europa com ataque simbólico,"
+        },
+        {
+          "start": 3194.04,
+          "end": 3197.52,
+          "text": "coisa de impacto global. Antes da gente"
+        },
+        {
+          "start": 3196.359,
+          "end": 3199.2799999999997,
+          "text": "prosseguir pro giro de notícias, te"
+        },
+        {
+          "start": 3197.52,
+          "end": 3200.799,
+          "text": "agradeço, Manu. Daniel, posso ficar eu"
+        },
+        {
+          "start": 3199.28,
+          "end": 3202.599,
+          "text": "em tela cheia? Quero fazer um um"
+        },
+        {
+          "start": 3200.799,
+          "end": 3205.119,
+          "text": "acréscimo aí sobre ainda eh esse"
+        },
+        {
+          "start": 3202.599,
+          "end": 3206.76,
+          "text": "segmento antes da gente prosseguir. Ah,"
+        },
+        {
+          "start": 3205.119,
+          "end": 3209.2400000000002,
+          "text": "de forma muito interessante, Manu trazia"
+        },
+        {
+          "start": 3206.76,
+          "end": 3211.1600000000003,
+          "text": "à tona essa questão dos drones e de fato"
+        },
+        {
+          "start": 3209.24,
+          "end": 3213.1189999999997,
+          "text": "os países do Golfo, como ela mencionou,"
+        },
+        {
+          "start": 3211.16,
+          "end": 3215.1189999999997,
+          "text": "pediram ou conseguiram o auxílio da"
+        },
+        {
+          "start": 3213.119,
+          "end": 3216.839,
+          "text": "Ucrânia via Estados Unidos para lidar"
+        },
+        {
+          "start": 3215.119,
+          "end": 3218.6800000000003,
+          "text": "com os drones. Isso traz outra questão"
+        },
+        {
+          "start": 3216.839,
+          "end": 3221.72,
+          "text": "para ir, mesmo a questão dos lastos"
+        },
+        {
+          "start": 3218.68,
+          "end": 3224.9199999999996,
+          "text": "entre Irã e Rússia. Os drones Shah que"
+        },
+        {
+          "start": 3221.72,
+          "end": 3227.24,
+          "text": "são a o qual a palavra que eu procuro? O"
+        },
+        {
+          "start": 3224.92,
+          "end": 3229.6800000000003,
+          "text": "drone de destaque entre a frota de"
+        }
+      ]
+    }
+  ]
+}

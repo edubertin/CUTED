@@ -1,0 +1,65 @@
+{
+  "source_caption_queue": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ckds8wsm8-4-tiktok-20\\caption-queue.json",
+  "captioned": [
+    {
+      "rank": 1,
+      "platform": "tiktok",
+      "label": "TikTok",
+      "width": 1080,
+      "height": 1920,
+      "file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ckds8wsm8-4-tiktok-20\\captioned-clips\\clip-001-tiktok-captioned.mp4",
+      "subtitle_file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ckds8wsm8-4-tiktok-20\\captioned-clips\\subtitles\\clip-001-tiktok.ass",
+      "adjusted_start": 168.48,
+      "adjusted_end": 204.08,
+      "adjusted_duration": 35.6,
+      "publish_metadata": {
+        "hashtags": []
+      }
+    },
+    {
+      "rank": 1,
+      "platform": "youtube",
+      "label": "YouTube",
+      "width": 1920,
+      "height": 1080,
+      "file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ckds8wsm8-4-tiktok-20\\captioned-clips\\clip-001-youtube-captioned.mp4",
+      "subtitle_file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ckds8wsm8-4-tiktok-20\\captioned-clips\\subtitles\\clip-001-youtube.ass",
+      "adjusted_start": 168.48,
+      "adjusted_end": 204.08,
+      "adjusted_duration": 35.6,
+      "publish_metadata": {
+        "hashtags": []
+      }
+    },
+    {
+      "rank": 12,
+      "platform": "shorts",
+      "label": "Shorts",
+      "width": 1080,
+      "height": 1920,
+      "file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ckds8wsm8-4-tiktok-20\\captioned-clips\\clip-012-shorts-captioned.mp4",
+      "subtitle_file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ckds8wsm8-4-tiktok-20\\captioned-clips\\subtitles\\clip-012-shorts.ass",
+      "adjusted_start": 6021.599,
+      "adjusted_end": 6069.499,
+      "adjusted_duration": 47.9,
+      "publish_metadata": {
+        "hashtags": []
+      }
+    },
+    {
+      "rank": 12,
+      "platform": "instagram",
+      "label": "Instagram",
+      "width": 1080,
+      "height": 1920,
+      "file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ckds8wsm8-4-tiktok-20\\captioned-clips\\clip-012-instagram-captioned.mp4",
+      "subtitle_file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ckds8wsm8-4-tiktok-20\\captioned-clips\\subtitles\\clip-012-instagram.ass",
+      "adjusted_start": 6021.599,
+      "adjusted_end": 6069.499,
+      "adjusted_duration": 47.9,
+      "publish_metadata": {
+        "hashtags": []
+      }
+    }
+  ]
+}

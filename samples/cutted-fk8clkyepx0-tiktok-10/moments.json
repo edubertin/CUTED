@@ -1,0 +1,1546 @@
+{
+  "source": "VILELA COM CHEIRO DE RICO? VISITA A PERFUMARIA DE LUXO -  Manual da Vida #003",
+  "duration": 0.0,
+  "config": {
+    "clips": 10,
+    "min_duration": 30.0,
+    "max_duration": 70.0,
+    "target_duration": 42.0,
+    "smart_boundaries": true,
+    "lead_in": 1.0,
+    "tail_out": 1.5,
+    "preset": "tiktok"
+  },
+  "moments": [
+    {
+      "rank": 1,
+      "start": 0.0,
+      "end": 40.059,
+      "peak": 6.06,
+      "score": 11.76,
+      "title": "você acha que custa esse perfume? Porque",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "Eu vou te mostrar esse daqui que é um dos perfumes mais caros do mundo. Quanto você acha que custa esse perfume? Porque muita gente não sabe pedir perfume na loja. É o aroma, sei lá. Posso falar cheiro? >> Pode. Aroma não. Aroma é pra comida. >> E você vai sentir a madeira agora. >> Ó o cara, velho. >> Hum. [ __ ] >> Por que que o perfumaria árabe explodiu tanto? Porque eles trazem uma baita qualidade de apresentação e uma baita qualidade de ingrediente e alta performance. Nessa mão temos o nessa e agora? >> E agora, >> cara? Eu vou decepcionar você, hein?",
+      "peak_text": "você acha que custa esse perfume? Porque",
+      "clip_file": "clips/clip-001.mp4",
+      "frame_file": "frames/clip-001.jpg",
+      "caption_segments": [
+        {
+          "start": 0.0,
+          "end": 4.48,
+          "text": "Eu vou te mostrar esse daqui que é um"
+        },
+        {
+          "start": 2.08,
+          "end": 5.96,
+          "text": "dos perfumes mais caros do mundo. Quanto"
+        },
+        {
+          "start": 4.48,
+          "end": 7.640000000000001,
+          "text": "você acha que custa esse perfume? Porque"
+        },
+        {
+          "start": 5.96,
+          "end": 9.639,
+          "text": "muita gente não sabe pedir perfume na"
+        },
+        {
+          "start": 7.64,
+          "end": 10.28,
+          "text": "loja. É o aroma, sei lá. Posso falar"
+        },
+        {
+          "start": 9.639,
+          "end": 13.44,
+          "text": "cheiro?"
+        },
+        {
+          "start": 10.28,
+          "end": 16.039,
+          "text": ">> Pode. Aroma não. Aroma é pra comida."
+        },
+        {
+          "start": 13.44,
+          "end": 17.119,
+          "text": ">> E você vai sentir a madeira agora."
+        },
+        {
+          "start": 16.039,
+          "end": 19.359,
+          "text": ">> Ó o cara, velho."
+        },
+        {
+          "start": 17.119,
+          "end": 21.0,
+          "text": ">> Hum. [ __ ]"
+        },
+        {
+          "start": 19.359,
+          "end": 23.0,
+          "text": ">> Por que que o perfumaria árabe explodiu"
+        },
+        {
+          "start": 21.0,
+          "end": 25.32,
+          "text": "tanto? Porque eles trazem uma baita"
+        },
+        {
+          "start": 23.0,
+          "end": 26.96,
+          "text": "qualidade de apresentação e uma baita"
+        },
+        {
+          "start": 25.32,
+          "end": 31.88,
+          "text": "qualidade de ingrediente e alta"
+        },
+        {
+          "start": 26.96,
+          "end": 32.96,
+          "text": "performance. Nessa mão temos o nessa"
+        },
+        {
+          "start": 31.88,
+          "end": 34.32,
+          "text": "e agora?"
+        },
+        {
+          "start": 32.96,
+          "end": 38.559,
+          "text": ">> E agora,"
+        },
+        {
+          "start": 34.32,
+          "end": 38.559,
+          "text": ">> cara? Eu vou decepcionar você, hein?"
+        }
+      ]
+    },
+    {
+      "rank": 2,
+      "start": 713.519,
+      "end": 757.94,
+      "peak": 752.0,
+      "score": 12.37,
+      "title": ">> Não, oleoso porque é extrato, né? Pô",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": ">> É como se você tivesse deixado o abacaxi na grelha da churrasqueira >> e ele ficou defumando. Defumando. Imagina assim que você tá mexendo com lenha, com fogueira, lareira. >> Tá bom. tá no mexendo com lareira e fica aquele cheiro da fumaça no no na no braço. Isso é defumado. É que assim, na perfumaria existem ingredientes que são extração e tem ingredientes sintéticos. >> Eu não sei de falar exatamente se o defumado tá. Agora, o que eu sei que esse perfume tem, ele tem uma madeira chamada musgo de carvalho que não vai aparecer agora, mas daqui a pouquinho. >> Mas ele teria que sumir na minha pele ou é assim mesmo? >> Não, oleoso porque é extrato, né? Pô, tem que respeitar. Tá. >> Vamos com calma aí. Estrato de parfã.",
+      "peak_text": ">> Não, oleoso porque é extrato, né? Pô,",
+      "clip_file": "clips/clip-002.mp4",
+      "frame_file": "frames/clip-002.jpg",
+      "caption_segments": [
+        {
+          "start": 714.519,
+          "end": 718.5600000000001,
+          "text": ">> É como se você tivesse deixado o abacaxi"
+        },
+        {
+          "start": 716.839,
+          "end": 720.9200000000001,
+          "text": "na grelha da churrasqueira"
+        },
+        {
+          "start": 718.56,
+          "end": 722.3599999999999,
+          "text": ">> e ele ficou defumando. Defumando."
+        },
+        {
+          "start": 720.92,
+          "end": 724.399,
+          "text": "Imagina assim que você tá mexendo com"
+        },
+        {
+          "start": 722.36,
+          "end": 726.9590000000001,
+          "text": "lenha, com fogueira, lareira."
+        },
+        {
+          "start": 724.399,
+          "end": 729.68,
+          "text": ">> Tá bom. tá no mexendo com lareira e fica"
+        },
+        {
+          "start": 726.959,
+          "end": 731.88,
+          "text": "aquele cheiro da fumaça no no na no"
+        },
+        {
+          "start": 729.68,
+          "end": 734.76,
+          "text": "braço. Isso é defumado. É que assim, na"
+        },
+        {
+          "start": 731.88,
+          "end": 737.68,
+          "text": "perfumaria existem ingredientes que são"
+        },
+        {
+          "start": 734.76,
+          "end": 740.36,
+          "text": "extração e tem ingredientes sintéticos."
+        },
+        {
+          "start": 737.68,
+          "end": 742.12,
+          "text": ">> Eu não sei de falar exatamente se o"
+        },
+        {
+          "start": 740.36,
+          "end": 743.92,
+          "text": "defumado tá. Agora, o que eu sei que"
+        },
+        {
+          "start": 742.12,
+          "end": 746.199,
+          "text": "esse perfume tem, ele tem uma madeira"
+        },
+        {
+          "start": 743.92,
+          "end": 748.4799999999999,
+          "text": "chamada musgo de carvalho que não vai"
+        },
+        {
+          "start": 746.199,
+          "end": 749.8,
+          "text": "aparecer agora, mas daqui a pouquinho."
+        },
+        {
+          "start": 748.48,
+          "end": 750.279,
+          "text": ">> Mas ele teria que sumir na minha pele ou"
+        },
+        {
+          "start": 749.8,
+          "end": 752.4799999999999,
+          "text": "é assim mesmo?"
+        },
+        {
+          "start": 750.279,
+          "end": 753.72,
+          "text": ">> Não, oleoso porque é extrato, né? Pô,"
+        },
+        {
+          "start": 752.48,
+          "end": 755.519,
+          "text": "tem que respeitar. Tá."
+        },
+        {
+          "start": 753.72,
+          "end": 756.44,
+          "text": ">> Vamos com calma aí. Estrato de parfã."
+        }
+      ]
+    },
+    {
+      "rank": 3,
+      "start": 745.199,
+      "end": 790.4590000000001,
+      "peak": 752.0,
+      "score": 12.52,
+      "title": ">> Não, oleoso porque é extrato, né? Pô",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "aparecer agora, mas daqui a pouquinho. >> Mas ele teria que sumir na minha pele ou é assim mesmo? >> Não, oleoso porque é extrato, né? Pô, tem que respeitar. Tá. >> Vamos com calma aí. Estrato de parfã. >> Estrato fica assim mesmo. >> 30 40% de óleo. >> 10. >> Ah. >> Tá junto com reflection. Ó, já tem no meu pódio aqui. Reflection. E esse que é o >> Tô feliz, velho. >> Rivar >> de ter conseguido, então, >> nossa, >> um perfume 10 para você. >> Mas você não esperava que já ia logo com 10. >> Não. Vai acontecer uma coisa que eu quero que no fim do vídeo você me conte uma das coisas que eu mais amo na perfumaria. Musgo de carvalho, vetivver e patuli são madeiras que tm um aspecto úmido, terroso, como se fosse você tá",
+      "peak_text": ">> Não, oleoso porque é extrato, né? Pô,",
+      "clip_file": "clips/clip-003.mp4",
+      "frame_file": "frames/clip-003.jpg",
+      "caption_segments": [
+        {
+          "start": 746.199,
+          "end": 749.8,
+          "text": "aparecer agora, mas daqui a pouquinho."
+        },
+        {
+          "start": 748.48,
+          "end": 750.279,
+          "text": ">> Mas ele teria que sumir na minha pele ou"
+        },
+        {
+          "start": 749.8,
+          "end": 752.4799999999999,
+          "text": "é assim mesmo?"
+        },
+        {
+          "start": 750.279,
+          "end": 753.72,
+          "text": ">> Não, oleoso porque é extrato, né? Pô,"
+        },
+        {
+          "start": 752.48,
+          "end": 755.519,
+          "text": "tem que respeitar. Tá."
+        },
+        {
+          "start": 753.72,
+          "end": 756.44,
+          "text": ">> Vamos com calma aí. Estrato de parfã."
+        },
+        {
+          "start": 755.519,
+          "end": 759.0,
+          "text": ">> Estrato fica assim mesmo."
+        },
+        {
+          "start": 756.44,
+          "end": 760.32,
+          "text": ">> 30 40% de óleo."
+        },
+        {
+          "start": 759.0,
+          "end": 761.519,
+          "text": ">> 10."
+        },
+        {
+          "start": 760.32,
+          "end": 763.279,
+          "text": ">> Ah."
+        },
+        {
+          "start": 761.519,
+          "end": 765.399,
+          "text": ">> Tá junto com reflection. Ó, já tem no"
+        },
+        {
+          "start": 763.279,
+          "end": 765.68,
+          "text": "meu pódio aqui. Reflection. E esse que é"
+        },
+        {
+          "start": 765.399,
+          "end": 767.16,
+          "text": "o"
+        },
+        {
+          "start": 765.68,
+          "end": 767.6389999999999,
+          "text": ">> Tô feliz, velho."
+        },
+        {
+          "start": 767.16,
+          "end": 769.12,
+          "text": ">> Rivar"
+        },
+        {
+          "start": 767.639,
+          "end": 769.5600000000001,
+          "text": ">> de ter conseguido, então,"
+        },
+        {
+          "start": 769.12,
+          "end": 770.72,
+          "text": ">> nossa,"
+        },
+        {
+          "start": 769.56,
+          "end": 772.5189999999999,
+          "text": ">> um perfume 10 para você."
+        },
+        {
+          "start": 770.72,
+          "end": 772.839,
+          "text": ">> Mas você não esperava que já ia logo com"
+        },
+        {
+          "start": 772.519,
+          "end": 774.32,
+          "text": "10."
+        },
+        {
+          "start": 772.839,
+          "end": 777.0,
+          "text": ">> Não. Vai acontecer uma coisa que eu"
+        },
+        {
+          "start": 774.32,
+          "end": 778.32,
+          "text": "quero que no fim do vídeo você me conte"
+        },
+        {
+          "start": 777.0,
+          "end": 781.199,
+          "text": "uma das coisas que eu mais amo na"
+        },
+        {
+          "start": 778.32,
+          "end": 784.32,
+          "text": "perfumaria. Musgo de carvalho, vetivver"
+        },
+        {
+          "start": 781.199,
+          "end": 786.5999999999999,
+          "text": "e patuli são madeiras que tm um aspecto"
+        },
+        {
+          "start": 784.32,
+          "end": 788.9590000000001,
+          "text": "úmido, terroso, como se fosse você tá"
+        }
+      ]
+    },
+    {
+      "rank": 4,
+      "start": 836.12,
+      "end": 886.259,
+      "peak": 869.28,
+      "score": 12.2,
+      "title": ">> tá? Momblan não é nicho, né",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "bastante amadeirado, fica muito mais masculino, tá? E o tipo da baunilha também. >> Esse daqui é cheiro de rico, hein? >> Muito. Mas o ani é melhor que ele. >> Cheiro, sério, isso é cheiro de rico. >> Esse é o an. >> É cheiro de riqueza, hein, >> irmão. Aí tem o limão siciliano. Absurdo, >> cara. Colocar um black t. Isso daqui >> sim, >> acho que combina. >> É para encontro romântico, sedutor. >> Gostei daqui. Novezinho, hein. >> Mas o ani é muito melhor, tá? Pô, agora fiquei curioso. >> O é muito, mas muito melhor. Eu quero te mostrar de forma aleatória mesmo um da Momblan aqui, >> tá? Momblan não é nicho, né? >> Não é nicho. No entanto, ela tem a linha de alta perfumaria, tá? >> Que são esses aqui, ó. Aí, esse daqui é um é uma versão de viagem. >> Entendi. >> Que é o que eu mais gosto dessa linha aqui, que é a linha de alta perfumaria de Momblan. Inspirado nas canetas, né?",
+      "peak_text": ">> tá? Momblan não é nicho, né?",
+      "clip_file": "clips/clip-004.mp4",
+      "frame_file": "frames/clip-004.jpg",
+      "caption_segments": [
+        {
+          "start": 837.12,
+          "end": 841.519,
+          "text": "bastante amadeirado, fica muito mais"
+        },
+        {
+          "start": 839.279,
+          "end": 842.0,
+          "text": "masculino, tá? E o tipo da baunilha"
+        },
+        {
+          "start": 841.519,
+          "end": 843.8,
+          "text": "também."
+        },
+        {
+          "start": 842.0,
+          "end": 845.48,
+          "text": ">> Esse daqui é cheiro de rico, hein?"
+        },
+        {
+          "start": 843.8,
+          "end": 846.8,
+          "text": ">> Muito. Mas o ani é melhor que ele."
+        },
+        {
+          "start": 845.48,
+          "end": 847.399,
+          "text": ">> Cheiro, sério, isso é cheiro de rico."
+        },
+        {
+          "start": 846.8,
+          "end": 849.24,
+          "text": ">> Esse é o an."
+        },
+        {
+          "start": 847.399,
+          "end": 851.0,
+          "text": ">> É cheiro de riqueza, hein,"
+        },
+        {
+          "start": 849.24,
+          "end": 851.36,
+          "text": ">> irmão. Aí tem o limão siciliano."
+        },
+        {
+          "start": 851.0,
+          "end": 853.519,
+          "text": "Absurdo,"
+        },
+        {
+          "start": 851.36,
+          "end": 853.8000000000001,
+          "text": ">> cara. Colocar um black t. Isso daqui"
+        },
+        {
+          "start": 853.519,
+          "end": 854.72,
+          "text": ">> sim,"
+        },
+        {
+          "start": 853.8,
+          "end": 856.8389999999999,
+          "text": ">> acho que combina."
+        },
+        {
+          "start": 854.72,
+          "end": 859.9200000000001,
+          "text": ">> É para encontro romântico, sedutor."
+        },
+        {
+          "start": 856.839,
+          "end": 861.6,
+          "text": ">> Gostei daqui. Novezinho, hein."
+        },
+        {
+          "start": 859.92,
+          "end": 862.279,
+          "text": ">> Mas o ani é muito melhor, tá? Pô, agora"
+        },
+        {
+          "start": 861.6,
+          "end": 864.88,
+          "text": "fiquei curioso."
+        },
+        {
+          "start": 862.279,
+          "end": 866.759,
+          "text": ">> O é muito, mas muito melhor. Eu quero te"
+        },
+        {
+          "start": 864.88,
+          "end": 867.56,
+          "text": "mostrar de forma aleatória mesmo um da"
+        },
+        {
+          "start": 866.759,
+          "end": 869.1990000000001,
+          "text": "Momblan aqui,"
+        },
+        {
+          "start": 867.56,
+          "end": 871.0,
+          "text": ">> tá? Momblan não é nicho, né?"
+        },
+        {
+          "start": 869.199,
+          "end": 872.56,
+          "text": ">> Não é nicho. No entanto, ela tem a linha"
+        },
+        {
+          "start": 871.0,
+          "end": 874.24,
+          "text": "de alta perfumaria, tá?"
+        },
+        {
+          "start": 872.56,
+          "end": 876.3199999999999,
+          "text": ">> Que são esses aqui, ó. Aí, esse daqui é"
+        },
+        {
+          "start": 874.24,
+          "end": 876.639,
+          "text": "um é uma versão de viagem."
+        },
+        {
+          "start": 876.32,
+          "end": 878.1990000000001,
+          "text": ">> Entendi."
+        },
+        {
+          "start": 876.639,
+          "end": 880.12,
+          "text": ">> Que é o que eu mais gosto dessa linha"
+        },
+        {
+          "start": 878.199,
+          "end": 882.88,
+          "text": "aqui, que é a linha de alta perfumaria"
+        },
+        {
+          "start": 880.12,
+          "end": 884.759,
+          "text": "de Momblan. Inspirado nas canetas, né?"
+        }
+      ]
+    },
+    {
+      "rank": 5,
+      "start": 1314.24,
+      "end": 1361.74,
+      "peak": 1358.06,
+      "score": 11.79,
+      "title": "tanto? Porque eles trazem uma baita",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "de Cadlage. Vou borrifar na pele para ver se você pega mais. Eu não entendi. Esse daqui é uma cópia de alguns. >> Esse aí a perfumaria árabe, dependendo assim da marca, existe o árabe árabe árabe que é a moage, tipo, né? O árabe mesmo >> que é original. >> Oj, é algumas marcas árabes que trazem a cultura mesmo. The Spirit of Dubai, por exemplo. E tem a perfumaria árabe que são marcas feitas em Dubai, só que são low cost, tá? >> São perfumes assim de 50, 30, 40, >> são inspirados. chega no Brasil por uns R$ 250, R$ 400 >> e todos eles são, a grande maioria são inspirados em perfumaria de nicho. Por que que o perfumaria árabe explodiu tanto? Porque eles trazem uma baita",
+      "peak_text": "tanto? Porque eles trazem uma baita",
+      "clip_file": "clips/clip-005.mp4",
+      "frame_file": "frames/clip-005.jpg",
+      "caption_segments": [
+        {
+          "start": 1315.24,
+          "end": 1318.32,
+          "text": "de Cadlage. Vou borrifar na pele para"
+        },
+        {
+          "start": 1317.08,
+          "end": 1320.039,
+          "text": "ver se você pega mais. Eu não entendi."
+        },
+        {
+          "start": 1318.32,
+          "end": 1322.8799999999999,
+          "text": "Esse daqui é uma cópia de alguns."
+        },
+        {
+          "start": 1320.039,
+          "end": 1324.96,
+          "text": ">> Esse aí a perfumaria árabe, dependendo"
+        },
+        {
+          "start": 1322.88,
+          "end": 1328.24,
+          "text": "assim da marca, existe o árabe árabe"
+        },
+        {
+          "start": 1324.96,
+          "end": 1328.48,
+          "text": "árabe que é a moage, tipo, né? O árabe"
+        },
+        {
+          "start": 1328.24,
+          "end": 1329.6,
+          "text": "mesmo"
+        },
+        {
+          "start": 1328.48,
+          "end": 1333.0,
+          "text": ">> que é original."
+        },
+        {
+          "start": 1329.6,
+          "end": 1335.48,
+          "text": ">> Oj, é algumas marcas árabes que trazem a"
+        },
+        {
+          "start": 1333.0,
+          "end": 1338.08,
+          "text": "cultura mesmo. The Spirit of Dubai, por"
+        },
+        {
+          "start": 1335.48,
+          "end": 1340.919,
+          "text": "exemplo. E tem a perfumaria árabe que"
+        },
+        {
+          "start": 1338.08,
+          "end": 1342.24,
+          "text": "são marcas feitas em Dubai, só que são"
+        },
+        {
+          "start": 1340.919,
+          "end": 1345.24,
+          "text": "low cost, tá?"
+        },
+        {
+          "start": 1342.24,
+          "end": 1347.08,
+          "text": ">> São perfumes assim de 50, 30, 40,"
+        },
+        {
+          "start": 1345.24,
+          "end": 1349.6,
+          "text": ">> são inspirados. chega no Brasil por uns"
+        },
+        {
+          "start": 1347.08,
+          "end": 1352.0,
+          "text": "R$ 250, R$ 400"
+        },
+        {
+          "start": 1349.6,
+          "end": 1354.36,
+          "text": ">> e todos eles são, a grande maioria são"
+        },
+        {
+          "start": 1352.0,
+          "end": 1355.88,
+          "text": "inspirados em perfumaria de nicho. Por"
+        },
+        {
+          "start": 1354.36,
+          "end": 1357.9189999999999,
+          "text": "que que o perfumaria árabe explodiu"
+        },
+        {
+          "start": 1355.88,
+          "end": 1360.24,
+          "text": "tanto? Porque eles trazem uma baita"
+        }
+      ]
+    },
+    {
+      "rank": 6,
+      "start": 1346.08,
+      "end": 1407.02,
+      "peak": 1358.06,
+      "score": 12.01,
+      "title": "tanto? Porque eles trazem uma baita",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "R$ 250, R$ 400 >> e todos eles são, a grande maioria são inspirados em perfumaria de nicho. Por que que o perfumaria árabe explodiu tanto? Porque eles trazem uma baita qualidade de apresentação e uma baita qualidade de ingrediente e alta performance. Então a perfumaria árabe ela tá quebrando tudo porque por R$ 300, R$ 400 você pega um perfume melhor do que às vezes um designer de 1000. Esse que eu borrifei aqui, ele também, eu acho que você vai gostar desse. >> Gostei. >> Sabia >> qual que é esse. >> Esse é o Iseland. >> Mas esse é árabe também. >> Ele tem uma nota que é a mesma nota que tem no Reflection. Uma nota. >> Uma nota maestra. Uma nota maestro. Not. Olha só. >> Olha só. >> Pablo. Qual é a música? Eu gosto muito. >> Ah, cara, tem abacaxi. >> [ __ ] merda. >> Meu Deus. >> Não tem. >> Tem. Que é isso? >> Que gosto, cara. Eu gosto de abacaxi, então, hein. >> [ __ ] cara. Tô orgulhoso, cara. Mano, eu vou te falar um bagulho muito louco desse perfume. >> Ele tem, na verdade, o acorde que é a",
+      "peak_text": "tanto? Porque eles trazem uma baita",
+      "clip_file": "clips/clip-006.mp4",
+      "frame_file": "frames/clip-006.jpg",
+      "caption_segments": [
+        {
+          "start": 1347.08,
+          "end": 1352.0,
+          "text": "R$ 250, R$ 400"
+        },
+        {
+          "start": 1349.6,
+          "end": 1354.36,
+          "text": ">> e todos eles são, a grande maioria são"
+        },
+        {
+          "start": 1352.0,
+          "end": 1355.88,
+          "text": "inspirados em perfumaria de nicho. Por"
+        },
+        {
+          "start": 1354.36,
+          "end": 1357.9189999999999,
+          "text": "que que o perfumaria árabe explodiu"
+        },
+        {
+          "start": 1355.88,
+          "end": 1360.24,
+          "text": "tanto? Porque eles trazem uma baita"
+        },
+        {
+          "start": 1357.919,
+          "end": 1361.88,
+          "text": "qualidade de apresentação e uma baita"
+        },
+        {
+          "start": 1360.24,
+          "end": 1363.799,
+          "text": "qualidade de ingrediente e alta"
+        },
+        {
+          "start": 1361.88,
+          "end": 1366.48,
+          "text": "performance. Então a perfumaria árabe"
+        },
+        {
+          "start": 1363.799,
+          "end": 1368.679,
+          "text": "ela tá quebrando tudo porque por R$ 300,"
+        },
+        {
+          "start": 1366.48,
+          "end": 1370.279,
+          "text": "R$ 400 você pega um perfume melhor do"
+        },
+        {
+          "start": 1368.679,
+          "end": 1372.279,
+          "text": "que às vezes um designer de 1000. Esse"
+        },
+        {
+          "start": 1370.279,
+          "end": 1373.52,
+          "text": "que eu borrifei aqui, ele também, eu"
+        },
+        {
+          "start": 1372.279,
+          "end": 1374.08,
+          "text": "acho que você vai gostar desse."
+        },
+        {
+          "start": 1373.52,
+          "end": 1374.52,
+          "text": ">> Gostei."
+        },
+        {
+          "start": 1374.08,
+          "end": 1375.6399999999999,
+          "text": ">> Sabia"
+        },
+        {
+          "start": 1374.52,
+          "end": 1376.84,
+          "text": ">> qual que é esse."
+        },
+        {
+          "start": 1375.64,
+          "end": 1378.2,
+          "text": ">> Esse é o Iseland."
+        },
+        {
+          "start": 1376.84,
+          "end": 1380.6789999999999,
+          "text": ">> Mas esse é árabe também."
+        },
+        {
+          "start": 1378.2,
+          "end": 1382.2,
+          "text": ">> Ele tem uma nota que é a mesma nota que"
+        },
+        {
+          "start": 1380.679,
+          "end": 1384.64,
+          "text": "tem no Reflection. Uma nota."
+        },
+        {
+          "start": 1382.2,
+          "end": 1385.32,
+          "text": ">> Uma nota maestra. Uma nota maestro. Not."
+        },
+        {
+          "start": 1384.64,
+          "end": 1385.919,
+          "text": "Olha só."
+        },
+        {
+          "start": 1385.32,
+          "end": 1388.08,
+          "text": ">> Olha só."
+        },
+        {
+          "start": 1385.919,
+          "end": 1389.679,
+          "text": ">> Pablo. Qual é a música? Eu gosto muito."
+        },
+        {
+          "start": 1388.08,
+          "end": 1391.1589999999999,
+          "text": ">> Ah, cara, tem abacaxi."
+        },
+        {
+          "start": 1389.679,
+          "end": 1392.3200000000002,
+          "text": ">> [ __ ] merda."
+        },
+        {
+          "start": 1391.159,
+          "end": 1393.1200000000001,
+          "text": ">> Meu Deus."
+        },
+        {
+          "start": 1392.32,
+          "end": 1394.6399999999999,
+          "text": ">> Não tem."
+        },
+        {
+          "start": 1393.12,
+          "end": 1395.4799999999998,
+          "text": ">> Tem."
+        },
+        {
+          "start": 1394.64,
+          "end": 1397.159,
+          "text": "Que é isso?"
+        },
+        {
+          "start": 1395.48,
+          "end": 1397.76,
+          "text": ">> Que gosto, cara. Eu gosto de abacaxi,"
+        },
+        {
+          "start": 1397.159,
+          "end": 1399.6000000000001,
+          "text": "então, hein."
+        },
+        {
+          "start": 1397.76,
+          "end": 1400.84,
+          "text": ">> [ __ ] cara. Tô orgulhoso, cara. Mano,"
+        },
+        {
+          "start": 1399.6,
+          "end": 1402.0,
+          "text": "eu vou te falar um bagulho muito louco"
+        },
+        {
+          "start": 1400.84,
+          "end": 1404.32,
+          "text": "desse perfume."
+        },
+        {
+          "start": 1402.0,
+          "end": 1405.52,
+          "text": ">> Ele tem, na verdade, o acorde que é a"
+        }
+      ]
+    },
+    {
+      "rank": 7,
+      "start": 1439.32,
+      "end": 1493.5,
+      "peak": 1441.62,
+      "score": 12.62,
+      "title": "borrifar direitinho, né? Porque isso",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "borrifar direitinho, né? Porque isso também dá uma dá uma mudadinha. >> É, diferenciou. Agora tá ficando bom. >> Uhum. Existe uma >> É bem parecido mesmo. O que parece que esse levemente mais, eu não sei. Vanila é doce? >> Sim. É, então ele é mais doce. É um pouco mais doce que esse. Por isso eu gosto mais desse. >> Depois de um tempinho fica bem similar os dois, hein? >> Não [ __ ] Que eu te falei, é pouquinha coisa mais. >> Você muito sincero com essa câmera agora, que esse é o momento do corte. >> Então vamos lá. Eu vou te fazer algumas perguntas agora. >> Se você misturasse os dois, eu não ia saber. >> Não, eu vou te Então, esse aqui é o original e esse é o coisa. Vamos lá. É momento do importante. Similaridade. Você acha de z0 a 10, que nota você daria? >> Putz, 8 e5 por 9, cara. >> Pra, então que é isso? Então aí pro seu gosto pessoal seria esse. Esse. >> Então é isso quer >> Mas se eu não conhecesse esse, esse eu já tinha achado muito bom. Qual que é o lance dessa marca aqui? Me me conta a",
+      "peak_text": "borrifar direitinho, né? Porque isso",
+      "clip_file": "clips/clip-007.mp4",
+      "frame_file": "frames/clip-007.jpg",
+      "caption_segments": [
+        {
+          "start": 1440.32,
+          "end": 1442.9189999999999,
+          "text": "borrifar direitinho, né? Porque isso"
+        },
+        {
+          "start": 1441.72,
+          "end": 1445.919,
+          "text": "também dá uma dá uma mudadinha."
+        },
+        {
+          "start": 1442.919,
+          "end": 1447.5590000000002,
+          "text": ">> É, diferenciou. Agora tá ficando bom."
+        },
+        {
+          "start": 1445.919,
+          "end": 1448.159,
+          "text": ">> Uhum."
+        },
+        {
+          "start": 1447.559,
+          "end": 1451.3999999999999,
+          "text": "Existe uma"
+        },
+        {
+          "start": 1448.159,
+          "end": 1454.64,
+          "text": ">> É bem parecido mesmo. O que parece que"
+        },
+        {
+          "start": 1451.4,
+          "end": 1455.48,
+          "text": "esse levemente mais, eu não sei. Vanila"
+        },
+        {
+          "start": 1454.64,
+          "end": 1457.4,
+          "text": "é doce?"
+        },
+        {
+          "start": 1455.48,
+          "end": 1459.2,
+          "text": ">> Sim. É, então ele é mais doce. É um"
+        },
+        {
+          "start": 1457.4,
+          "end": 1460.159,
+          "text": "pouco mais doce que esse. Por isso eu"
+        },
+        {
+          "start": 1459.2,
+          "end": 1462.0,
+          "text": "gosto mais desse."
+        },
+        {
+          "start": 1460.159,
+          "end": 1462.96,
+          "text": ">> Depois de um tempinho fica bem similar"
+        },
+        {
+          "start": 1462.0,
+          "end": 1464.559,
+          "text": "os dois, hein?"
+        },
+        {
+          "start": 1462.96,
+          "end": 1464.96,
+          "text": ">> Não [ __ ] Que eu te falei, é pouquinha"
+        },
+        {
+          "start": 1464.559,
+          "end": 1466.36,
+          "text": "coisa mais."
+        },
+        {
+          "start": 1464.96,
+          "end": 1468.2,
+          "text": ">> Você muito sincero com essa câmera"
+        },
+        {
+          "start": 1466.36,
+          "end": 1469.84,
+          "text": "agora, que esse é o momento do corte."
+        },
+        {
+          "start": 1468.2,
+          "end": 1470.6000000000001,
+          "text": ">> Então vamos lá. Eu vou te fazer algumas"
+        },
+        {
+          "start": 1469.84,
+          "end": 1472.12,
+          "text": "perguntas agora."
+        },
+        {
+          "start": 1470.6,
+          "end": 1472.32,
+          "text": ">> Se você misturasse os dois, eu não ia"
+        },
+        {
+          "start": 1472.12,
+          "end": 1473.4399999999998,
+          "text": "saber."
+        },
+        {
+          "start": 1472.32,
+          "end": 1474.96,
+          "text": ">> Não, eu vou te Então, esse aqui é o"
+        },
+        {
+          "start": 1473.44,
+          "end": 1477.279,
+          "text": "original e esse é o coisa. Vamos lá. É"
+        },
+        {
+          "start": 1474.96,
+          "end": 1479.279,
+          "text": "momento do importante. Similaridade."
+        },
+        {
+          "start": 1477.279,
+          "end": 1479.72,
+          "text": "Você acha de z0 a 10, que nota você"
+        },
+        {
+          "start": 1479.279,
+          "end": 1481.24,
+          "text": "daria?"
+        },
+        {
+          "start": 1479.72,
+          "end": 1483.0,
+          "text": ">> Putz, 8 e5 por 9, cara."
+        },
+        {
+          "start": 1481.24,
+          "end": 1484.919,
+          "text": ">> Pra, então que é isso? Então aí pro seu"
+        },
+        {
+          "start": 1483.0,
+          "end": 1485.88,
+          "text": "gosto pessoal seria esse. Esse."
+        },
+        {
+          "start": 1484.919,
+          "end": 1487.44,
+          "text": ">> Então é isso quer"
+        },
+        {
+          "start": 1485.88,
+          "end": 1489.3600000000001,
+          "text": ">> Mas se eu não conhecesse esse, esse eu"
+        },
+        {
+          "start": 1487.44,
+          "end": 1491.3600000000001,
+          "text": "já tinha achado muito bom. Qual que é o"
+        },
+        {
+          "start": 1489.36,
+          "end": 1492.0,
+          "text": "lance dessa marca aqui? Me me conta a"
+        }
+      ]
+    },
+    {
+      "rank": 8,
+      "start": 1536.919,
+      "end": 1581.8990000000001,
+      "peak": 1565.32,
+      "score": 12.15,
+      "title": "que que a marca é cara? Porque eles",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "essa. Muita gente vai me odiar por isso, mas também quero que isso dane. >> O que acontece é o seguinte, cara. Bodícia, ela não é muito melhor em qualidade que nichani. Vai ter gente que vai me xingar, mas Dane-se. Agora sim, quem realmente conhece de perfumaria coleciona, cara, se você pegar Nichani, Regalen, muitas marcas vão ter em questão de qualidade muito próximo. Em alguns casos, nich até melhor. No entanto, posicionamento, né? Então, por que que a marca é cara? Porque eles querem ser caros. Posicionamento, >> vendem escassez, poucas pessoas têm, >> não acha em qualquer lugar, não quer dizer que é ruim, é bom, só que eu acho que não vale 7.000, >> tá? >> Então já tô sendo polêmico agora. Vamos ver você.",
+      "peak_text": "que que a marca é cara? Porque eles",
+      "clip_file": "clips/clip-008.mp4",
+      "frame_file": "frames/clip-008.jpg",
+      "caption_segments": [
+        {
+          "start": 1537.919,
+          "end": 1540.8400000000001,
+          "text": "essa. Muita gente vai me odiar por isso,"
+        },
+        {
+          "start": 1539.36,
+          "end": 1542.4399999999998,
+          "text": "mas também quero que isso dane."
+        },
+        {
+          "start": 1540.84,
+          "end": 1545.48,
+          "text": ">> O que acontece é o seguinte, cara."
+        },
+        {
+          "start": 1542.44,
+          "end": 1547.88,
+          "text": "Bodícia, ela não é muito melhor em"
+        },
+        {
+          "start": 1545.48,
+          "end": 1550.3990000000001,
+          "text": "qualidade que nichani. Vai ter gente que"
+        },
+        {
+          "start": 1547.88,
+          "end": 1552.0800000000002,
+          "text": "vai me xingar, mas Dane-se. Agora sim,"
+        },
+        {
+          "start": 1550.399,
+          "end": 1554.6399999999999,
+          "text": "quem realmente conhece de perfumaria"
+        },
+        {
+          "start": 1552.08,
+          "end": 1556.799,
+          "text": "coleciona, cara, se você pegar Nichani,"
+        },
+        {
+          "start": 1554.64,
+          "end": 1559.5590000000002,
+          "text": "Regalen, muitas marcas vão ter em"
+        },
+        {
+          "start": 1556.799,
+          "end": 1561.44,
+          "text": "questão de qualidade muito próximo. Em"
+        },
+        {
+          "start": 1559.559,
+          "end": 1563.559,
+          "text": "alguns casos, nich até melhor. No"
+        },
+        {
+          "start": 1561.44,
+          "end": 1565.159,
+          "text": "entanto, posicionamento, né? Então, por"
+        },
+        {
+          "start": 1563.559,
+          "end": 1567.08,
+          "text": "que que a marca é cara? Porque eles"
+        },
+        {
+          "start": 1565.159,
+          "end": 1569.5590000000002,
+          "text": "querem ser caros. Posicionamento,"
+        },
+        {
+          "start": 1567.08,
+          "end": 1571.8799999999999,
+          "text": ">> vendem escassez, poucas pessoas têm,"
+        },
+        {
+          "start": 1569.559,
+          "end": 1574.52,
+          "text": ">> não acha em qualquer lugar, não quer"
+        },
+        {
+          "start": 1571.88,
+          "end": 1576.7600000000002,
+          "text": "dizer que é ruim, é bom, só que eu acho"
+        },
+        {
+          "start": 1574.52,
+          "end": 1577.24,
+          "text": "que não vale 7.000,"
+        },
+        {
+          "start": 1576.76,
+          "end": 1578.679,
+          "text": ">> tá?"
+        },
+        {
+          "start": 1577.24,
+          "end": 1579.3990000000001,
+          "text": ">> Então já tô sendo polêmico agora. Vamos"
+        },
+        {
+          "start": 1578.679,
+          "end": 1580.3990000000001,
+          "text": "ver você."
+        }
+      ]
+    },
+    {
+      "rank": 9,
+      "start": 1855.24,
+      "end": 1911.659,
+      "peak": 1877.32,
+      "score": 12.08,
+      "title": ">> desses? Foi esse ou foi esse",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": ">> Quero saber o que você mais gostou agora pra gente finalizar esse vídeo com uma surpresa. >> Então, não lembro, cara. >> Rivar da >> dessa série. Vamos relembrar. Vamos relembrar. >> O Long Chá você já não curtiu tanto, >> que era aquele verde. Você gostou? Eu lembro desse que é o árabe de maçã. >> Desse que é original. >> Original. Lebu. Você gostou >> desses? Foi esse ou foi esse? >> Você gostou muito do Rivá? >> É >> que você mais gostou. >> Verdade. >> Você também gostou do ani. É. Só que esse aqui é o N X. Eu eu queria. >> Ah, é. Eu preferia que você esperasse o aninho normal, porque eu antes esse você gostou mais ou menos. Esse aqui é um de rosa que você gostou. Os Creeds, você gostou assim a ponto de entrar para uma decisão assim? >> Cara, eu quero, eu é, eu queria mais um no mundo Creed, porque eu gosto tanto do Creed. Qual dos dois vocês recomenda para ficar diferentão do Aventos que eu tenho? >> Cara, esse é clássico que é o Greenard Tweed, né? Que é >> esse é o dourado ou pret?",
+      "peak_text": ">> desses? Foi esse ou foi esse?",
+      "clip_file": "clips/clip-009.mp4",
+      "frame_file": "frames/clip-009.jpg",
+      "caption_segments": [
+        {
+          "start": 1856.24,
+          "end": 1859.24,
+          "text": ">> Quero saber o que você mais gostou agora"
+        },
+        {
+          "start": 1857.799,
+          "end": 1859.72,
+          "text": "pra gente finalizar esse vídeo com uma"
+        },
+        {
+          "start": 1859.24,
+          "end": 1861.6,
+          "text": "surpresa."
+        },
+        {
+          "start": 1859.72,
+          "end": 1862.679,
+          "text": ">> Então, não lembro, cara."
+        },
+        {
+          "start": 1861.6,
+          "end": 1864.1589999999999,
+          "text": ">> Rivar da"
+        },
+        {
+          "start": 1862.679,
+          "end": 1865.5590000000002,
+          "text": ">> dessa série. Vamos relembrar. Vamos"
+        },
+        {
+          "start": 1864.159,
+          "end": 1867.519,
+          "text": "relembrar."
+        },
+        {
+          "start": 1865.559,
+          "end": 1869.84,
+          "text": ">> O Long Chá você já não curtiu tanto,"
+        },
+        {
+          "start": 1867.519,
+          "end": 1872.519,
+          "text": ">> que era aquele verde. Você gostou? Eu"
+        },
+        {
+          "start": 1869.84,
+          "end": 1873.6789999999999,
+          "text": "lembro desse que é o árabe de maçã."
+        },
+        {
+          "start": 1872.519,
+          "end": 1875.72,
+          "text": ">> Desse que é original."
+        },
+        {
+          "start": 1873.679,
+          "end": 1877.44,
+          "text": ">> Original. Lebu. Você gostou"
+        },
+        {
+          "start": 1875.72,
+          "end": 1878.919,
+          "text": ">> desses? Foi esse ou foi esse?"
+        },
+        {
+          "start": 1877.44,
+          "end": 1879.3600000000001,
+          "text": ">> Você gostou muito do Rivá?"
+        },
+        {
+          "start": 1878.919,
+          "end": 1880.96,
+          "text": ">> É"
+        },
+        {
+          "start": 1879.36,
+          "end": 1881.7199999999998,
+          "text": ">> que você mais gostou."
+        },
+        {
+          "start": 1880.96,
+          "end": 1883.32,
+          "text": ">> Verdade."
+        },
+        {
+          "start": 1881.72,
+          "end": 1884.919,
+          "text": ">> Você também gostou do ani. É. Só que"
+        },
+        {
+          "start": 1883.32,
+          "end": 1887.32,
+          "text": "esse aqui é o N X. Eu eu queria."
+        },
+        {
+          "start": 1884.919,
+          "end": 1890.2,
+          "text": ">> Ah, é. Eu preferia que você esperasse o"
+        },
+        {
+          "start": 1887.32,
+          "end": 1891.799,
+          "text": "aninho normal, porque eu antes esse você"
+        },
+        {
+          "start": 1890.2,
+          "end": 1893.96,
+          "text": "gostou mais ou menos. Esse aqui é um de"
+        },
+        {
+          "start": 1891.799,
+          "end": 1896.279,
+          "text": "rosa que você gostou. Os Creeds, você"
+        },
+        {
+          "start": 1893.96,
+          "end": 1897.2,
+          "text": "gostou assim a ponto de entrar para uma"
+        },
+        {
+          "start": 1896.279,
+          "end": 1899.24,
+          "text": "decisão assim?"
+        },
+        {
+          "start": 1897.2,
+          "end": 1900.72,
+          "text": ">> Cara, eu quero, eu é, eu queria mais um"
+        },
+        {
+          "start": 1899.24,
+          "end": 1902.6,
+          "text": "no mundo Creed, porque eu gosto tanto do"
+        },
+        {
+          "start": 1900.72,
+          "end": 1904.44,
+          "text": "Creed. Qual dos dois vocês recomenda"
+        },
+        {
+          "start": 1902.6,
+          "end": 1905.039,
+          "text": "para ficar diferentão do Aventos que eu"
+        },
+        {
+          "start": 1904.44,
+          "end": 1906.919,
+          "text": "tenho?"
+        },
+        {
+          "start": 1905.039,
+          "end": 1907.679,
+          "text": ">> Cara, esse é clássico que é o Greenard"
+        },
+        {
+          "start": 1906.919,
+          "end": 1908.44,
+          "text": "Tweed, né? Que é"
+        },
+        {
+          "start": 1907.679,
+          "end": 1910.159,
+          "text": ">> esse é o dourado ou pret?"
+        }
+      ]
+    },
+    {
+      "rank": 10,
+      "start": 1898.24,
+      "end": 1961.779,
+      "peak": 1931.24,
+      "score": 11.63,
+      "title": "eu dei? Você lembra",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "no mundo Creed, porque eu gosto tanto do Creed. Qual dos dois vocês recomenda para ficar diferentão do Aventos que eu tenho? >> Cara, esse é clássico que é o Greenard Tweed, né? Que é >> esse é o dourado ou pret? >> É o do Jorge Cloney. É o preto. >> Esse é clássico. >> É diferente do Aventus. muito diferentes, mas o milesine ele é mais exclusivo >> porque não tem muitos inspirados nele. >> Ah, então eu quero ele. >> É o milzinho mais dois. >> Os dois são ótimos. >> Tá. >> Tá. >> Fechou. >> É, esse aqui é aquele de rosa. Você gostou? Mas eu acho que não para tanto. Não sei. >> Não lembro, cara. Você lembra a nota que eu dei? Você lembra? >> Você deu nota boa, mas não sei se para tanto. >> Então tá. Nós temos aqui os que você mais curtiu. >> Isso. >> Rassivani, Xani, Lebo. >> Eles que que que eles tm em comum ou não tem nada em comum? >> Nada em comum. Sério? >> Totalmente diferentes. Isso é muito massa. E você inclusive vai ter aqui um perfume para cada tipo de ocasião. O Lebol Parfã, ele ele é um perfume, o próprio frasco já entrega, ele é um perfume de balada de verão, >> né? O próprio frasco já entrega.",
+      "peak_text": "eu dei? Você lembra?",
+      "clip_file": "clips/clip-010.mp4",
+      "frame_file": "frames/clip-010.jpg",
+      "caption_segments": [
+        {
+          "start": 1899.24,
+          "end": 1902.6,
+          "text": "no mundo Creed, porque eu gosto tanto do"
+        },
+        {
+          "start": 1900.72,
+          "end": 1904.44,
+          "text": "Creed. Qual dos dois vocês recomenda"
+        },
+        {
+          "start": 1902.6,
+          "end": 1905.039,
+          "text": "para ficar diferentão do Aventos que eu"
+        },
+        {
+          "start": 1904.44,
+          "end": 1906.919,
+          "text": "tenho?"
+        },
+        {
+          "start": 1905.039,
+          "end": 1907.679,
+          "text": ">> Cara, esse é clássico que é o Greenard"
+        },
+        {
+          "start": 1906.919,
+          "end": 1908.44,
+          "text": "Tweed, né? Que é"
+        },
+        {
+          "start": 1907.679,
+          "end": 1910.159,
+          "text": ">> esse é o dourado ou pret?"
+        },
+        {
+          "start": 1908.44,
+          "end": 1911.159,
+          "text": ">> É o do Jorge Cloney. É o preto."
+        },
+        {
+          "start": 1910.159,
+          "end": 1913.24,
+          "text": ">> Esse é clássico."
+        },
+        {
+          "start": 1911.159,
+          "end": 1916.3600000000001,
+          "text": ">> É diferente do Aventus. muito"
+        },
+        {
+          "start": 1913.24,
+          "end": 1917.519,
+          "text": "diferentes, mas o milesine ele é mais"
+        },
+        {
+          "start": 1916.36,
+          "end": 1919.6,
+          "text": "exclusivo"
+        },
+        {
+          "start": 1917.519,
+          "end": 1920.519,
+          "text": ">> porque não tem muitos inspirados nele."
+        },
+        {
+          "start": 1919.6,
+          "end": 1922.0,
+          "text": ">> Ah, então eu quero ele."
+        },
+        {
+          "start": 1920.519,
+          "end": 1923.039,
+          "text": ">> É o milzinho mais dois."
+        },
+        {
+          "start": 1922.0,
+          "end": 1923.48,
+          "text": ">> Os dois são ótimos."
+        },
+        {
+          "start": 1923.039,
+          "end": 1924.039,
+          "text": ">> Tá."
+        },
+        {
+          "start": 1923.48,
+          "end": 1924.679,
+          "text": ">> Tá."
+        },
+        {
+          "start": 1924.039,
+          "end": 1926.08,
+          "text": ">> Fechou."
+        },
+        {
+          "start": 1924.679,
+          "end": 1927.88,
+          "text": ">> É, esse aqui é aquele de rosa. Você"
+        },
+        {
+          "start": 1926.08,
+          "end": 1928.1999999999998,
+          "text": "gostou? Mas eu acho que não para tanto."
+        },
+        {
+          "start": 1927.88,
+          "end": 1929.519,
+          "text": "Não sei."
+        },
+        {
+          "start": 1928.2,
+          "end": 1930.3600000000001,
+          "text": ">> Não lembro, cara. Você lembra a nota que"
+        },
+        {
+          "start": 1929.519,
+          "end": 1932.96,
+          "text": "eu dei? Você lembra?"
+        },
+        {
+          "start": 1930.36,
+          "end": 1933.8799999999999,
+          "text": ">> Você deu nota boa, mas não sei se para"
+        },
+        {
+          "start": 1932.96,
+          "end": 1935.559,
+          "text": "tanto."
+        },
+        {
+          "start": 1933.88,
+          "end": 1936.5590000000002,
+          "text": ">> Então tá. Nós temos aqui os que você"
+        },
+        {
+          "start": 1935.559,
+          "end": 1937.12,
+          "text": "mais curtiu."
+        },
+        {
+          "start": 1936.559,
+          "end": 1939.24,
+          "text": ">> Isso."
+        },
+        {
+          "start": 1937.12,
+          "end": 1940.8799999999999,
+          "text": ">> Rassivani, Xani, Lebo."
+        },
+        {
+          "start": 1939.24,
+          "end": 1941.48,
+          "text": ">> Eles que que que eles tm em comum ou não"
+        },
+        {
+          "start": 1940.88,
+          "end": 1943.0,
+          "text": "tem nada em comum?"
+        },
+        {
+          "start": 1941.48,
+          "end": 1944.48,
+          "text": ">> Nada em comum. Sério?"
+        },
+        {
+          "start": 1943.0,
+          "end": 1946.399,
+          "text": ">> Totalmente diferentes. Isso é muito"
+        },
+        {
+          "start": 1944.48,
+          "end": 1948.159,
+          "text": "massa. E você inclusive vai ter aqui um"
+        },
+        {
+          "start": 1946.399,
+          "end": 1950.799,
+          "text": "perfume para cada tipo de ocasião. O"
+        },
+        {
+          "start": 1948.159,
+          "end": 1952.6000000000001,
+          "text": "Lebol Parfã, ele ele é um perfume, o"
+        },
+        {
+          "start": 1950.799,
+          "end": 1955.24,
+          "text": "próprio frasco já entrega, ele é um"
+        },
+        {
+          "start": 1952.6,
+          "end": 1957.1589999999999,
+          "text": "perfume de balada de verão,"
+        },
+        {
+          "start": 1955.24,
+          "end": 1960.279,
+          "text": ">> né? O próprio frasco já entrega."
+        }
+      ]
+    }
+  ]
+}

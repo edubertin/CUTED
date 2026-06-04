@@ -1,0 +1,27 @@
+{
+  "source_selection": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ckds8wsm8-4-tiktok-20\\selected-smoke.json",
+  "rendered": [
+    {
+      "rank": 1,
+      "platform": "tiktok",
+      "label": "TikTok",
+      "width": 1080,
+      "height": 1920,
+      "file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ckds8wsm8-4-tiktok-20\\final-smoke\\clip-001-tiktok.mp4",
+      "adjusted_start": 166.08,
+      "adjusted_end": 207.459,
+      "adjusted_duration": 41.37899999999999
+    },
+    {
+      "rank": 1,
+      "platform": "facebook",
+      "label": "Facebook",
+      "width": 1080,
+      "height": 1350,
+      "file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ckds8wsm8-4-tiktok-20\\final-smoke\\clip-001-facebook.mp4",
+      "adjusted_start": 166.08,
+      "adjusted_end": 207.459,
+      "adjusted_duration": 41.37899999999999
+    }
+  ]
+}

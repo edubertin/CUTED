@@ -1,0 +1,31 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,54,&H00FFFFFF,&H0000FFFF,&H00000000,&H99000000,-1,0,0,0,100,100,0,0,1,5,0,2,80,80,95,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:03.88,Default,,0,0,0,,Eu pedi que a nossa produção\Ntrouxesse
+Dialogue: 0,0:00:02.44,0:00:05.68,Default,,0,0,0,,um mapa à tona e creio,\NDaniel, que a
+Dialogue: 0,0:00:03.88,0:00:08.40,Default,,0,0,0,,gente tem aqui o mapa\Ndivulgado pelos
+Dialogue: 0,0:00:05.68,0:00:10.88,Default,,0,0,0,,serviços da Bolívia. E aí\Nestá nesse
+Dialogue: 0,0:00:08.40,0:00:13.48,Default,,0,0,0,,mapa muito a ser analisado.\NEu coloco em
+Dialogue: 0,0:00:10.88,0:00:15.84,Default,,0,0,0,,tela cheia. Cada um desses\Npontos é uma
+Dialogue: 0,0:00:13.48,0:00:17.88,Default,,0,0,0,,das 103 interrupções que nós\Ncitávamos
+Dialogue: 0,0:00:15.84,0:00:20.24,Default,,0,0,0,,há pouco. A fonte é\Nprecisamente a
+Dialogue: 0,0:00:17.88,0:00:21.80,Default,,0,0,0,,autoridade de transportes da\NBolívia.
+Dialogue: 0,0:00:20.24,0:00:23.96,Default,,0,0,0,,Ah, para dar o nome certo, a
+Dialogue: 0,0:00:21.80,0:00:25.48,Default,,0,0,0,,Administração de Transportes\Nda Bolívia,
+Dialogue: 0,0:00:23.96,0:00:27.36,Default,,0,0,0,,vindo do site do próprio\Ngoverno
+Dialogue: 0,0:00:25.48,0:00:29.48,Default,,0,0,0,,boliviano e registra em\Ntempo real as
+Dialogue: 0,0:00:27.36,0:00:31.72,Default,,0,0,0,,denúncias. Quer dizer, isso\Nsignifica
+Dialogue: 0,0:00:29.48,0:00:34.00,Default,,0,0,0,,que isso é de agora, coisa\Nque acontece
+Dialogue: 0,0:00:31.72,0:00:35.64,Default,,0,0,0,,no momento. As pessoas ali\Ndenunciando
+Dialogue: 0,0:00:34.00,0:00:37.52,Default,,0,0,0,,para o governo boliviano,\Nesse site
+Dialogue: 0,0:00:35.64,0:00:39.92,Default,,0,0,0,,congrega essas denúncias,\Nverifica se
+Dialogue: 0,0:00:37.52,0:00:43.56,Default,,0,0,0,,são verdade e então coloca o\Nponto nesse

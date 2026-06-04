@@ -1,0 +1,226 @@
+{
+  "caption_queue": [
+    {
+      "rank": 1,
+      "platform": "tiktok",
+      "platform_label": "TikTok",
+      "width": 1080,
+      "height": 1920,
+      "clip_file": "clips/clip-001.mp4",
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 0,
+      "adjusted_end": 40.059,
+      "adjusted_duration": 40.059,
+      "title": "você acha que custa esse perfume? Porque",
+      "peak_text": "você acha que custa esse perfume? Porque",
+      "transcript": "Eu vou te mostrar esse daqui que é um dos perfumes mais caros do mundo. Quanto você acha que custa esse perfume? Porque muita gente não sabe pedir perfume na loja. É o aroma, sei lá. Posso falar cheiro? >> Pode. Aroma não. Aroma é pra comida. >> E você vai sentir a madeira agora. >> Ó o cara, velho. >> Hum. [ __ ] >> Por que que o perfumaria árabe explodiu tanto? Porque eles trazem uma baita qualidade de apresentação e uma baita qualidade de ingrediente e alta performance. Nessa mão temos o nessa e agora? >> E agora, >> cara? Eu vou decepcionar você, hein?",
+      "caption_segments": [
+        {
+          "start": 0,
+          "end": 4.48,
+          "text": "Eu vou te mostrar esse daqui que é um"
+        },
+        {
+          "start": 2.08,
+          "end": 5.96,
+          "text": "dos perfumes mais caros do mundo. Quanto"
+        },
+        {
+          "start": 4.48,
+          "end": 7.640000000000001,
+          "text": "você acha que custa esse perfume? Porque"
+        },
+        {
+          "start": 5.96,
+          "end": 9.639,
+          "text": "muita gente não sabe pedir perfume na"
+        },
+        {
+          "start": 7.64,
+          "end": 10.28,
+          "text": "loja. É o aroma, sei lá. Posso falar"
+        },
+        {
+          "start": 9.639,
+          "end": 13.44,
+          "text": "cheiro?"
+        },
+        {
+          "start": 10.28,
+          "end": 16.039,
+          "text": ">> Pode. Aroma não. Aroma é pra comida."
+        },
+        {
+          "start": 13.44,
+          "end": 17.119,
+          "text": ">> E você vai sentir a madeira agora."
+        },
+        {
+          "start": 16.039,
+          "end": 19.359,
+          "text": ">> Ó o cara, velho."
+        },
+        {
+          "start": 17.119,
+          "end": 21,
+          "text": ">> Hum. [ __ ]"
+        },
+        {
+          "start": 19.359,
+          "end": 23,
+          "text": ">> Por que que o perfumaria árabe explodiu"
+        },
+        {
+          "start": 21,
+          "end": 25.32,
+          "text": "tanto? Porque eles trazem uma baita"
+        },
+        {
+          "start": 23,
+          "end": 26.96,
+          "text": "qualidade de apresentação e uma baita"
+        },
+        {
+          "start": 25.32,
+          "end": 31.88,
+          "text": "qualidade de ingrediente e alta"
+        },
+        {
+          "start": 26.96,
+          "end": 32.96,
+          "text": "performance. Nessa mão temos o nessa"
+        },
+        {
+          "start": 31.88,
+          "end": 34.32,
+          "text": "e agora?"
+        },
+        {
+          "start": 32.96,
+          "end": 38.559,
+          "text": ">> E agora,"
+        },
+        {
+          "start": 34.32,
+          "end": 38.559,
+          "text": ">> cara? Eu vou decepcionar você, hein?"
+        }
+      ],
+      "publish_metadata": {
+        "hashtags": []
+      }
+    },
+    {
+      "rank": 1,
+      "platform": "youtube",
+      "platform_label": "YouTube",
+      "width": 1920,
+      "height": 1080,
+      "clip_file": "clips/clip-001.mp4",
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 0,
+      "adjusted_end": 40.059,
+      "adjusted_duration": 40.059,
+      "title": "você acha que custa esse perfume? Porque",
+      "peak_text": "você acha que custa esse perfume? Porque",
+      "transcript": "Eu vou te mostrar esse daqui que é um dos perfumes mais caros do mundo. Quanto você acha que custa esse perfume? Porque muita gente não sabe pedir perfume na loja. É o aroma, sei lá. Posso falar cheiro? >> Pode. Aroma não. Aroma é pra comida. >> E você vai sentir a madeira agora. >> Ó o cara, velho. >> Hum. [ __ ] >> Por que que o perfumaria árabe explodiu tanto? Porque eles trazem uma baita qualidade de apresentação e uma baita qualidade de ingrediente e alta performance. Nessa mão temos o nessa e agora? >> E agora, >> cara? Eu vou decepcionar você, hein?",
+      "caption_segments": [
+        {
+          "start": 0,
+          "end": 4.48,
+          "text": "Eu vou te mostrar esse daqui que é um"
+        },
+        {
+          "start": 2.08,
+          "end": 5.96,
+          "text": "dos perfumes mais caros do mundo. Quanto"
+        },
+        {
+          "start": 4.48,
+          "end": 7.640000000000001,
+          "text": "você acha que custa esse perfume? Porque"
+        },
+        {
+          "start": 5.96,
+          "end": 9.639,
+          "text": "muita gente não sabe pedir perfume na"
+        },
+        {
+          "start": 7.64,
+          "end": 10.28,
+          "text": "loja. É o aroma, sei lá. Posso falar"
+        },
+        {
+          "start": 9.639,
+          "end": 13.44,
+          "text": "cheiro?"
+        },
+        {
+          "start": 10.28,
+          "end": 16.039,
+          "text": ">> Pode. Aroma não. Aroma é pra comida."
+        },
+        {
+          "start": 13.44,
+          "end": 17.119,
+          "text": ">> E você vai sentir a madeira agora."
+        },
+        {
+          "start": 16.039,
+          "end": 19.359,
+          "text": ">> Ó o cara, velho."
+        },
+        {
+          "start": 17.119,
+          "end": 21,
+          "text": ">> Hum. [ __ ]"
+        },
+        {
+          "start": 19.359,
+          "end": 23,
+          "text": ">> Por que que o perfumaria árabe explodiu"
+        },
+        {
+          "start": 21,
+          "end": 25.32,
+          "text": "tanto? Porque eles trazem uma baita"
+        },
+        {
+          "start": 23,
+          "end": 26.96,
+          "text": "qualidade de apresentação e uma baita"
+        },
+        {
+          "start": 25.32,
+          "end": 31.88,
+          "text": "qualidade de ingrediente e alta"
+        },
+        {
+          "start": 26.96,
+          "end": 32.96,
+          "text": "performance. Nessa mão temos o nessa"
+        },
+        {
+          "start": 31.88,
+          "end": 34.32,
+          "text": "e agora?"
+        },
+        {
+          "start": 32.96,
+          "end": 38.559,
+          "text": ">> E agora,"
+        },
+        {
+          "start": 34.32,
+          "end": 38.559,
+          "text": ">> cara? Eu vou decepcionar você, hein?"
+        }
+      ],
+      "publish_metadata": {
+        "hashtags": []
+      }
+    }
+  ]
+}

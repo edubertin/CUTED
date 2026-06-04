@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cutted Review</title>
+  <style>
+*{box-sizing:border-box}body{margin:0;background:#050505;color:#f4f4f4;font:14px/1.45 Arial,sans-serif}
+header{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;gap:16px;align-items:center;padding:18px 22px;background:#050505;border-bottom:1px solid #202020}
+h1{margin:0;font-size:22px}header p{margin:3px 0 0;color:#9a9a9a}main{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;padding:18px}
+.card{background:#111;border:1px solid #272727;border-radius:8px;overflow:hidden}.card.liked{border-color:#24d17e}.card.discarded{opacity:.42}
+.media{aspect-ratio:16/9;background:#000}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block}.placeholder{display:grid;place-items:center;height:100%;color:#777}
+.body{padding:14px}.top{display:flex;gap:10px;align-items:center}.top span{color:#888}.top strong{font-size:15px}.peak{color:#fff;font-size:16px}
+p{color:#bebebe}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}
+details{border-top:1px solid #242424;margin-top:12px;padding-top:10px}summary{cursor:pointer;color:#ddd}.actions{display:flex;gap:8px;margin-top:12px}
+button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 12px;cursor:pointer}button[data-action=discard]{background:#242424;color:#ddd}
+</style>
+</head>
+<body>
+  <header>
+    <div><h1>Cutted</h1><p>flow-renan-12min.mp4</p></div>
+    <button id="export">Exportar selecionados</button>
+  </header>
+  <main>
+    <article class="card" data-rank="1">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-001.jpg" src="clips/clip-001.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#01</span><strong>para não perder a retensão, porque se eu falasse sempre</strong></div>
+        <p class="peak">para não perder a retensão, porque se eu falasse sempre você ir, então,</p>
+        <p>Bom candidato, com pico de fala claro.</p>
+        <dl><dt>Score</dt><dd>7.67</dd><dt>Inicio</dt><dd>35.1s</dd><dt>Fim</dt><dd>47.1s</dd></dl>
+        <details><summary>Transcript</summary><p>e para manter a pessoa através da retensão, entendendo que eu estou falando, eu entendi uma lógica em que eu falo rápido e com o cateno ideias de maneira rápida, para não perder a retensão, porque se eu falasse sempre você ir, então,</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="2">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-002.jpg" src="clips/clip-002.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#02</span><strong>ele é um público que se dedica mais a causa</strong></div>
+        <p class="peak">ele é um público que se dedica mais a causa, porque ele teve tempo de entender e aprofundar aquilo.</p>
+        <p>Bom candidato, com pico de fala claro.</p>
+        <dl><dt>Score</dt><dd>8.46</dd><dt>Inicio</dt><dd>62.1s</dd><dt>Fim</dt><dd>74.1s</dd></dl>
+        <details><summary>Transcript</summary><p>e gerar um público de melhor qualidade, esse público de melhor qualidade, ele é um público que se dedica mais a causa, porque ele teve tempo de entender e aprofundar aquilo. Então, usei uma força que eu tinha como um cara de internet de vídeos longos,</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="3">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-003.jpg" src="clips/clip-003.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#03</span><strong>porque eu falo, vamos ver com o cateno as ideias</strong></div>
+        <p class="peak">porque eu falo, vamos ver com o cateno as ideias de maneira original,</p>
+        <p>Bom candidato, com pico de fala claro.</p>
+        <dl><dt>Score</dt><dd>8.08</dd><dt>Inicio</dt><dd>79.1s</dd><dt>Fim</dt><dd>92.1s</dd></dl>
+        <details><summary>Transcript</summary><p>E é isso que me permitiu ser uma pessoa que vai bem, pode esquecer, vai bem entrevistas, porque eu falo, vamos ver com o cateno as ideias de maneira original, uma maneira melhor do que eu estou. Eu queria que o cara do vídeo curto, não tem essa habilidade, por mais que ele vem na internet e não vai ter essa habilidade,</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="4">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-004.jpg" src="clips/clip-004.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#04</span><strong>Porque eu não era um 3% de um político testado</strong></div>
+        <p class="peak">Porque eu não era um 3% de um político testado,</p>
+        <p>Bom candidato, com pico de fala claro.</p>
+        <dl><dt>Score</dt><dd>7.64</dd><dt>Inicio</dt><dd>179.1s</dd><dt>Fim</dt><dd>191.1s</dd></dl>
+        <details><summary>Transcript</summary><p>Eu não tinha muitas ideações de voto, mas eu tava saco 3%. O Zema tem 3%. Até agora. O Caeado, o governo do 215, até agora. Agora o meu 3%. Valei a menos o que 3%. Porque eu não era um 3% de um político testado,</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="5">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-005.jpg" src="clips/clip-005.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#05</span><strong>O que é um erro</strong></div>
+        <p class="peak">O que é um erro?</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>9.35</dd><dt>Inicio</dt><dd>194.1s</dd><dt>Fim</dt><dd>206.1s</dd></dl>
+        <details><summary>Transcript</summary><p>Eu tenho que fazer muito mais do que eles, para eles me levar em a série. E mesmo assim, parte da imprensa, não me leva até uma série quanto eles. O que é um erro? É um erro muito grande da imprensa, porque qual que é um hoje que trabalha com dados</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="6">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-006.jpg" src="clips/clip-006.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#06</span><strong>como de carro? Porque era salva dos anos 500, como</strong></div>
+        <p class="peak">como de carro? Porque era salva dos anos 500, como de salva do ano. Mas se é ver o de que</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>10.81</dd><dt>Inicio</dt><dd>427.1s</dd><dt>Fim</dt><dd>441.9s</dd></dl>
+        <details><summary>Transcript</summary><p>estava agora na Bahia e ele falou... Aquilo de carro de vocês... As folhas de sim, aqueles dois... Não é um carro de dois, cara. No tamanho de tão pobre assim. Os dois carros são... Não sei... Mas você tava... Onde de carro mesmo? como de carro? Porque era salva dos anos 500, como de salva do ano. Mas se é ver o de que</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="7">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-007.jpg" src="clips/clip-007.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#07</span><strong>salva do de carro, eu vim de salva do de</strong></div>
+        <p class="peak">salva do de carro, eu vim de salva do de carro? Tá. É, foi mas como é que você pertene</p>
+        <p>Bom candidato, com pico de fala claro.</p>
+        <dl><dt>Score</dt><dd>8.32</dd><dt>Inicio</dt><dd>441.9s</dd><dt>Fim</dt><dd>456.0s</dd></dl>
+        <details><summary>Transcript</summary><p>salva do de carro, eu vim de salva do de carro? Tá. É, foi mas como é que você pertene de ganha deles é um de carro? Eu vou te explicar uma coisa. Você acha que ele fez os meus concorrentes ou Flávio, ele fez um grande investimento em Tano Pelle, ele tem um nome bom sonário,</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="8">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-008.jpg" src="clips/clip-008.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#08</span><strong>investimento político? Eu não estar no escando o NSS. O</strong></div>
+        <p class="peak">investimento político? Eu não estar no escando o NSS. O quanto vale em termos de investimento político?</p>
+        <p>Gancho forte, fala densa e bom contexto isolado.</p>
+        <dl><dt>Score</dt><dd>10.05</dd><dt>Inicio</dt><dd>456.0s</dd><dt>Fim</dt><dd>468.2s</dd></dl>
+        <details><summary>Transcript</summary><p>tal? Mas penso em investimento que eu fiz, é um investimento que você não vê. Eu não estou no Banco Master, o quanto isto vale em termos de investimento político? O quanto vale em termos de investimento político? Eu não estar no escando o NSS. O quanto vale em termos de investimento político?</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="9">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-009.jpg" src="clips/clip-009.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#09</span><strong>porque parece que o simbvio que fiquei parado não fazendo</strong></div>
+        <p class="peak">porque parece que o simbvio que fiquei parado não fazendo coisas. Mas eu estou na política, estava</p>
+        <p>Bom candidato, com pico de fala claro.</p>
+        <dl><dt>Score</dt><dd>7.84</dd><dt>Inicio</dt><dd>468.2s</dd><dt>Fim</dt><dd>483.2s</dd></dl>
+        <details><summary>Transcript</summary><p>Eu não tenho a sociedade da vagabundo, não está dando com cara de milícia aqui, de comando vermelho ali, de não pegar a grana com vagabundo. Estão investimento, ele não aparece em seu investimento, porque parece que o simbvio que fiquei parado não fazendo coisas. Mas eu estou na política, estava</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="10">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-010.jpg" src="clips/clip-010.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#10</span><strong>porque parece que o simbvio que fiquei parado não fazendo</strong></div>
+        <p class="peak">porque parece que o simbvio que fiquei parado não fazendo coisas. Mas eu estou na política, estava</p>
+        <p>Bom candidato, com pico de fala claro.</p>
+        <dl><dt>Score</dt><dd>8.22</dd><dt>Inicio</dt><dd>478.4s</dd><dt>Fim</dt><dd>493.0s</dd></dl>
+        <details><summary>Transcript</summary><p>porque parece que o simbvio que fiquei parado não fazendo coisas. Mas eu estou na política, estava montando um partido político. E enquanto eu fiz isso, eu abdiquei de todo o lucro político de ter grana fácil de puxar o sacoçado do político certo? Na certa vez, eu tenho de ter puxado saco o Marcelo</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="11">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-011.jpg" src="clips/clip-011.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#11</span><strong>fácil de puxar o sacoçado do político certo? Na certa</strong></div>
+        <p class="peak">fácil de puxar o sacoçado do político certo? Na certa vez, eu tenho de ter puxado saco o Marcelo</p>
+        <p>Bom candidato, com pico de fala claro.</p>
+        <dl><dt>Score</dt><dd>7.77</dd><dt>Inicio</dt><dd>488.7s</dd><dt>Fim</dt><dd>503.4s</dd></dl>
+        <details><summary>Transcript</summary><p>fácil de puxar o sacoçado do político certo? Na certa vez, eu tenho de ter puxado saco o Marcelo 24, todo mundo do nosso crescia, podia ter puxado saco do Bolsonaro, podia puxado o saco do único, como tem uns que puxam. E eu ficava subindo de escadinha. Hoje, o melhor investimento</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="12">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-012.jpg" src="clips/clip-012.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#12</span><strong>aqui e a que a que a que a que</strong></div>
+        <p class="peak">aqui e a que a que a que a que é? Mas eu entoi com o que eu entoi. E a que tem. É interessante</p>
+        <p>Bom candidato, com pico de fala claro.</p>
+        <dl><dt>Score</dt><dd>8.06</dd><dt>Inicio</dt><dd>519.6s</dd><dt>Fim</dt><dd>533.0s</dd></dl>
+        <details><summary>Transcript</summary><p>entoi um tempo, e eu entoi eu entoi com o caramba. Porque eu meура a que é que a aqui e a que a que a que a que é? Mas eu entoi com o que eu entoi. E a que tem. É interessante</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="13">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-013.jpg" src="clips/clip-013.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#13</span><strong>começa a se pagar? Pois bem, eu acredita tanta credibilidade</strong></div>
+        <p class="peak">começa a se pagar? Pois bem, eu acredita tanta credibilidade com meu público que eu tive mais</p>
+        <p>Bom candidato, com pico de fala claro.</p>
+        <dl><dt>Score</dt><dd>7.67</dd><dt>Inicio</dt><dd>589.3s</dd><dt>Fim</dt><dd>604.0s</dd></dl>
+        <details><summary>Transcript</summary><p>não fazem isso. Ele falou não vou fazer, o ato de não fazer o investimento, o ato de não entrar no esquema investimento. Então todas as escolhas que nós fizemos foram investimentos. E como o investimento começa a se pagar? Pois bem, eu acredita tanta credibilidade com meu público que eu tive mais</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="14">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-014.jpg" src="clips/clip-014.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#14</span><strong>vi com um banco mais, ter o gosto de conversar</strong></div>
+        <p class="peak">vi com um banco mais, ter o gosto de conversar com o tio, o seu banco mais, tem porque</p>
+        <p>Bom candidato, com pico de fala claro.</p>
+        <dl><dt>Score</dt><dd>8.63</dd><dt>Inicio</dt><dd>687.2s</dd><dt>Fim</dt><dd>700.6s</dd></dl>
+        <details><summary>Transcript</summary><p>é isso, se paga nessa, nessa, nessa, nessa, essa disputa, nessa disputa, outra uma posição muito privilegiada. E tem um escar aí, que tal, o tempo inteiro, cada vez mais, cagado, no que tem, eu vi com um banco mais, ter o gosto de conversar com o tio, o seu banco mais, tem porque</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="15">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-015.jpg" src="clips/clip-015.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#15</span><strong>vi com um banco mais, ter o gosto de conversar</strong></div>
+        <p class="peak">vi com um banco mais, ter o gosto de conversar com o tio, o seu banco mais, tem porque</p>
+        <p>Bom candidato, com pico de fala claro.</p>
+        <dl><dt>Score</dt><dd>8.63</dd><dt>Inicio</dt><dd>697.9s</dd><dt>Fim</dt><dd>711.5s</dd></dl>
+        <details><summary>Transcript</summary><p>vi com um banco mais, ter o gosto de conversar com o tio, o seu banco mais, tem porque eu me parece que tu mande do que, eu gosto das coisas, eu acho que eu acho que eu acho que tu existe, que eu tinha acontecido ali, né? É bom, e tu tava me contando, cara, bom, você está assistindo aí o programa, meu amigo, eu tô com o braço meio, eu tô com braço que</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article></main>
+  <script>window.CUTTED_DATA = {"moments": [{"rank": 1, "start": 35.12, "end": 47.12, "peak": 45.12, "score": 7.67, "title": "para não perder a retensão, porque se eu falasse sempre", "reason": "Bom candidato, com pico de fala claro.", "transcript": "e para manter a pessoa através da retensão, entendendo que eu estou falando, eu entendi uma lógica em que eu falo rápido e com o cateno ideias de maneira rápida, para não perder a retensão, porque se eu falasse sempre você ir, então,", "peak_text": "para não perder a retensão, porque se eu falasse sempre você ir, então,", "clip_file": "clips/clip-001.mp4", "frame_file": "frames/clip-001.jpg"}, {"rank": 2, "start": 62.12, "end": 74.12, "peak": 67.62, "score": 8.46, "title": "ele é um público que se dedica mais a causa", "reason": "Bom candidato, com pico de fala claro.", "transcript": "e gerar um público de melhor qualidade, esse público de melhor qualidade, ele é um público que se dedica mais a causa, porque ele teve tempo de entender e aprofundar aquilo. Então, usei uma força que eu tinha como um cara de internet de vídeos longos,", "peak_text": "ele é um público que se dedica mais a causa, porque ele teve tempo de entender e aprofundar aquilo.", "clip_file": "clips/clip-002.mp4", "frame_file": "frames/clip-002.jpg"}, {"rank": 3, "start": 79.12, "end": 92.12, "peak": 85.12, "score": 8.08, "title": "porque eu falo, vamos ver com o cateno as ideias", "reason": "Bom candidato, com pico de fala claro.", "transcript": "E é isso que me permitiu ser uma pessoa que vai bem, pode esquecer, vai bem entrevistas, porque eu falo, vamos ver com o cateno as ideias de maneira original, uma maneira melhor do que eu estou. Eu queria que o cara do vídeo curto, não tem essa habilidade, por mais que ele vem na internet e não vai ter essa habilidade,", "peak_text": "porque eu falo, vamos ver com o cateno as ideias de maneira original,", "clip_file": "clips/clip-003.mp4", "frame_file": "frames/clip-003.jpg"}, {"rank": 4, "start": 179.12, "end": 191.12, "peak": 189.62, "score": 7.64, "title": "Porque eu não era um 3% de um político testado", "reason": "Bom candidato, com pico de fala claro.", "transcript": "Eu não tinha muitas ideações de voto, mas eu tava saco 3%. O Zema tem 3%. Até agora. O Caeado, o governo do 215, até agora. Agora o meu 3%. Valei a menos o que 3%. Porque eu não era um 3% de um político testado,", "peak_text": "Porque eu não era um 3% de um político testado,", "clip_file": "clips/clip-004.mp4", "frame_file": "frames/clip-004.jpg"}, {"rank": 5, "start": 194.12, "end": 206.12, "peak": 201.62, "score": 9.35, "title": "O que é um erro", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "Eu tenho que fazer muito mais do que eles, para eles me levar em a série. E mesmo assim, parte da imprensa, não me leva até uma série quanto eles. O que é um erro? É um erro muito grande da imprensa, porque qual que é um hoje que trabalha com dados", "peak_text": "O que é um erro?", "clip_file": "clips/clip-005.mp4", "frame_file": "frames/clip-005.jpg"}, {"rank": 6, "start": 427.12, "end": 441.92, "peak": 439.52, "score": 10.81, "title": "como de carro? Porque era salva dos anos 500, como", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "estava agora na Bahia e ele falou... Aquilo de carro de vocês... As folhas de sim, aqueles dois... Não é um carro de dois, cara. No tamanho de tão pobre assim. Os dois carros são... Não sei... Mas você tava... Onde de carro mesmo? como de carro? Porque era salva dos anos 500, como de salva do ano. Mas se é ver o de que", "peak_text": "como de carro? Porque era salva dos anos 500, como de salva do ano. Mas se é ver o de que", "clip_file": "clips/clip-006.mp4", "frame_file": "frames/clip-006.jpg"}, {"rank": 7, "start": 441.92, "end": 455.96, "peak": 443.84, "score": 8.32, "title": "salva do de carro, eu vim de salva do de", "reason": "Bom candidato, com pico de fala claro.", "transcript": "salva do de carro, eu vim de salva do de carro? Tá. É, foi mas como é que você pertene de ganha deles é um de carro? Eu vou te explicar uma coisa. Você acha que ele fez os meus concorrentes ou Flávio, ele fez um grande investimento em Tano Pelle, ele tem um nome bom sonário,", "peak_text": "salva do de carro, eu vim de salva do de carro? Tá. É, foi mas como é que você pertene", "clip_file": "clips/clip-007.mp4", "frame_file": "frames/clip-007.jpg"}, {"rank": 8, "start": 455.96, "end": 468.2, "peak": 465.84, "score": 10.05, "title": "investimento político? Eu não estar no escando o NSS. O", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "tal? Mas penso em investimento que eu fiz, é um investimento que você não vê. Eu não estou no Banco Master, o quanto isto vale em termos de investimento político? O quanto vale em termos de investimento político? Eu não estar no escando o NSS. O quanto vale em termos de investimento político?", "peak_text": "investimento político? Eu não estar no escando o NSS. O quanto vale em termos de investimento político?", "clip_file": "clips/clip-008.mp4", "frame_file": "frames/clip-008.jpg"}, {"rank": 9, "start": 468.2, "end": 483.24, "peak": 480.82, "score": 7.84, "title": "porque parece que o simbvio que fiquei parado não fazendo", "reason": "Bom candidato, com pico de fala claro.", "transcript": "Eu não tenho a sociedade da vagabundo, não está dando com cara de milícia aqui, de comando vermelho ali, de não pegar a grana com vagabundo. Estão investimento, ele não aparece em seu investimento, porque parece que o simbvio que fiquei parado não fazendo coisas. Mas eu estou na política, estava", "peak_text": "porque parece que o simbvio que fiquei parado não fazendo coisas. Mas eu estou na política, estava", "clip_file": "clips/clip-009.mp4", "frame_file": "frames/clip-009.jpg"}, {"rank": 10, "start": 478.4, "end": 492.96, "peak": 480.82, "score": 8.22, "title": "porque parece que o simbvio que fiquei parado não fazendo", "reason": "Bom candidato, com pico de fala claro.", "transcript": "porque parece que o simbvio que fiquei parado não fazendo coisas. Mas eu estou na política, estava montando um partido político. E enquanto eu fiz isso, eu abdiquei de todo o lucro político de ter grana fácil de puxar o sacoçado do político certo? Na certa vez, eu tenho de ter puxado saco o Marcelo", "peak_text": "porque parece que o simbvio que fiquei parado não fazendo coisas. Mas eu estou na política, estava", "clip_file": "clips/clip-010.mp4", "frame_file": "frames/clip-010.jpg"}, {"rank": 11, "start": 488.72, "end": 503.4, "peak": 490.84, "score": 7.77, "title": "fácil de puxar o sacoçado do político certo? Na certa", "reason": "Bom candidato, com pico de fala claro.", "transcript": "fácil de puxar o sacoçado do político certo? Na certa vez, eu tenho de ter puxado saco o Marcelo 24, todo mundo do nosso crescia, podia ter puxado saco do Bolsonaro, podia puxado o saco do único, como tem uns que puxam. E eu ficava subindo de escadinha. Hoje, o melhor investimento", "peak_text": "fácil de puxar o sacoçado do político certo? Na certa vez, eu tenho de ter puxado saco o Marcelo", "clip_file": "clips/clip-011.mp4", "frame_file": "frames/clip-011.jpg"}, {"rank": 12, "start": 519.56, "end": 532.96, "peak": 529.66, "score": 8.06, "title": "aqui e a que a que a que a que", "reason": "Bom candidato, com pico de fala claro.", "transcript": "entoi um tempo, e eu entoi eu entoi com o caramba. Porque eu meура a que é que a aqui e a que a que a que a que é? Mas eu entoi com o que eu entoi. E a que tem. É interessante", "peak_text": "aqui e a que a que a que a que é? Mas eu entoi com o que eu entoi. E a que tem. É interessante", "clip_file": "clips/clip-012.mp4", "frame_file": "frames/clip-012.jpg"}, {"rank": 13, "start": 589.34, "end": 603.96, "peak": 601.86, "score": 7.67, "title": "começa a se pagar? Pois bem, eu acredita tanta credibilidade", "reason": "Bom candidato, com pico de fala claro.", "transcript": "não fazem isso. Ele falou não vou fazer, o ato de não fazer o investimento, o ato de não entrar no esquema investimento. Então todas as escolhas que nós fizemos foram investimentos. E como o investimento começa a se pagar? Pois bem, eu acredita tanta credibilidade com meu público que eu tive mais", "peak_text": "começa a se pagar? Pois bem, eu acredita tanta credibilidade com meu público que eu tive mais", "clip_file": "clips/clip-013.mp4", "frame_file": "frames/clip-013.jpg"}, {"rank": 14, "start": 687.2, "end": 700.56, "peak": 699.22, "score": 8.63, "title": "vi com um banco mais, ter o gosto de conversar", "reason": "Bom candidato, com pico de fala claro.", "transcript": "é isso, se paga nessa, nessa, nessa, nessa, essa disputa, nessa disputa, outra uma posição muito privilegiada. E tem um escar aí, que tal, o tempo inteiro, cada vez mais, cagado, no que tem, eu vi com um banco mais, ter o gosto de conversar com o tio, o seu banco mais, tem porque", "peak_text": "vi com um banco mais, ter o gosto de conversar com o tio, o seu banco mais, tem porque", "clip_file": "clips/clip-014.mp4", "frame_file": "frames/clip-014.jpg"}, {"rank": 15, "start": 697.88, "end": 711.48, "peak": 699.22, "score": 8.63, "title": "vi com um banco mais, ter o gosto de conversar", "reason": "Bom candidato, com pico de fala claro.", "transcript": "vi com um banco mais, ter o gosto de conversar com o tio, o seu banco mais, tem porque eu me parece que tu mande do que, eu gosto das coisas, eu acho que eu acho que eu acho que tu existe, que eu tinha acontecido ali, né? É bom, e tu tava me contando, cara, bom, você está assistindo aí o programa, meu amigo, eu tô com o braço meio, eu tô com braço que", "peak_text": "vi com um banco mais, ter o gosto de conversar com o tio, o seu banco mais, tem porque", "clip_file": "clips/clip-015.mp4", "frame_file": "frames/clip-015.jpg"}]};</script>
+  <script>
+const state = JSON.parse(localStorage.getItem("cutted-state") || "{}");
+function save(){ localStorage.setItem("cutted-state", JSON.stringify(state)); }
+function paint(card){ const r=card.dataset.rank; card.classList.toggle("liked",state[r]==="liked"); card.classList.toggle("discarded",state[r]==="discarded"); }
+document.querySelectorAll(".card").forEach(card => {
+  paint(card);
+  card.querySelectorAll("button[data-action]").forEach(btn => btn.addEventListener("click", () => {
+    state[card.dataset.rank] = btn.dataset.action === "like" ? "liked" : "discarded";
+    save(); paint(card);
+  }));
+});
+document.getElementById("export").addEventListener("click", async () => {
+  const data = window.CUTTED_DATA;
+  data.selected = data.moments.filter(m => state[String(m.rank)] === "liked");
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "selected-clips.json"; a.click();
+});
+</script>
+</body>
+</html>

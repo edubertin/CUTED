@@ -1,0 +1,28 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,54,&H00FFFFFF,&H0000FFFF,&H00000000,&H99000000,-1,0,0,0,100,100,0,0,1,5,0,2,80,80,95,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:03.52,Default,,0,0,0,,vou pedir que a gente deixe\Naté as
+Dialogue: 0,0:00:01.92,0:00:05.24,Default,,0,0,0,,imagens dos protestos na\Ntela novamente,
+Dialogue: 0,0:00:03.52,0:00:07.20,Default,,0,0,0,,porque tem gente entrando e\Neu posso
+Dialogue: 0,0:00:05.24,0:00:08.68,Default,,0,0,0,,prosseguir com a fala\Nenquanto a gente
+Dialogue: 0,0:00:07.20,0:00:10.16,Default,,0,0,0,,acompanha. Vamos lá. Você tá
+Dialogue: 0,0:00:08.68,0:00:11.92,Default,,0,0,0,,acompanhando as imagens dos\Nprotestos na
+Dialogue: 0,0:00:10.16,0:00:14.56,Default,,0,0,0,,Bolívia, os pneus queimados,\Na
+Dialogue: 0,0:00:11.92,0:00:16.60,Default,,0,0,0,,interdição das vias. A\Npressão é grande
+Dialogue: 0,0:00:14.56,0:00:19.12,Default,,0,0,0,,quando se fala dessas\Norganizações da
+Dialogue: 0,0:00:16.60,0:00:21.32,Default,,0,0,0,,esquerda boliviana aliadas\Nao más
+Dialogue: 0,0:00:19.12,0:00:24.28,Default,,0,0,0,,movimento ao socialismo e a\NLuiz Arceu,
+Dialogue: 0,0:00:21.32,0:00:26.40,Default,,0,0,0,,o Luto e Evo Morales. Ah,\Nisso é um dos
+Dialogue: 0,0:00:24.28,0:00:29.16,Default,,0,0,0,,pontos de alta tensão.
+Dialogue: 0,0:00:26.40,0:00:30.88,Default,,0,0,0,,Aí se vê os protestos dos\Núltimos dias,
+Dialogue: 0,0:00:29.16,0:00:32.70,Default,,0,0,0,,vamos prosseguir agora\Ntrazendo à
+Dialogue: 0,0:00:30.88,0:00:32.70,Default,,0,0,0,,tona a pressão que vem não\Nsó deles, mas

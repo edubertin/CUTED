@@ -1,0 +1,32 @@
+{
+  "source": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\steven-interview.mp4",
+  "duration": 0.0,
+  "moments": [
+    {
+      "rank": 1,
+      "start": 2.89,
+      "end": 26.69,
+      "peak": 17.01,
+      "score": 4.53,
+      "title": "and I thought this would be the best avenue to",
+      "reason": "Usable candidate; review the cut before exporting.",
+      "transcript": "I have a job lined up with Teach for America. I haven't graduated yet, but they did give me an offer, and I plan to teach economics in the Rio Grande Valley. I've always wanted to be a teacher at some point, and I thought this would be the best avenue to do it, because economics is very applicable to life. And seeing how it can apply in their lives,",
+      "peak_text": "and I thought this would be the best avenue to do it,",
+      "clip_file": "clips/clip-001.mp4",
+      "frame_file": "frames/clip-001.jpg"
+    },
+    {
+      "rank": 2,
+      "start": 35.05,
+      "end": 55.77,
+      "peak": 43.21,
+      "score": 4.66,
+      "title": "and think about how am I going to pay for",
+      "reason": "Usable candidate; review the cut before exporting.",
+      "transcript": "So if I can incorporate that into my lesson plans, then it'll help them learn to budget and think about how am I going to pay for college and things like that. I also want to do consumer finance or personal finance. So working with people and helping them manage their retirement thunder, planning for their kids' college,",
+      "peak_text": "and think about how am I going to pay for college and things like that.",
+      "clip_file": "clips/clip-002.mp4",
+      "frame_file": "frames/clip-002.jpg"
+    }
+  ]
+}

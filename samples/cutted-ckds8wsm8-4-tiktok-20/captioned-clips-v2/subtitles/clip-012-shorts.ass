@@ -1,0 +1,29 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,72,&H00FFFFFF,&H0000FFFF,&H00000000,&H99000000,-1,0,0,0,100,100,0,0,1,7,0,2,80,80,250,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:02.82,Default,,0,0,0,,gente vai entender. Você\Nacha porque é que você a sorte
+Dialogue: 0,0:00:02.82,0:00:05.64,Default,,0,0,0,,sua é que você não tá aqui,\Nné? Ah, uma sorte
+Dialogue: 0,0:00:05.64,0:00:08.45,Default,,0,0,0,,gigantesca. Porque não foi\Nsorte, foi escolha. Essa já
+Dialogue: 0,0:00:08.45,0:00:11.27,Default,,0,0,0,,te falei. Você você tem\Nescolha também. Você tem escolha
+Dialogue: 0,0:00:11.27,0:00:14.09,Default,,0,0,0,,também. Escolha. A sorte que\Neu digo assim no do momento
+Dialogue: 0,0:00:14.09,0:00:16.91,Default,,0,0,0,,que elas vão viver, porque\Nnesse momento é nós vamos ter
+Dialogue: 0,0:00:16.91,0:00:19.72,Default,,0,0,0,,eleição esse ano, né? Eu\Nsempre falo pra galera que tem
+Dialogue: 0,0:00:19.72,0:00:22.54,Default,,0,0,0,,que perguntar pro cara sobre\Nas terras raras. Porque o
+Dialogue: 0,0:00:22.54,0:00:25.36,Default,,0,0,0,,Brasil é a segunda maior\Nreserva do mundo, entendeu? E a
+Dialogue: 0,0:00:25.36,0:00:28.18,Default,,0,0,0,,chance pode passar na nossa\Nfrente, a gente não
+Dialogue: 0,0:00:28.18,0:00:30.99,Default,,0,0,0,,aproveitar de novo, igual a\Ngente já aproveitou, vai
+Dialogue: 0,0:00:30.99,0:00:33.81,Default,,0,0,0,,ficar ou vai ficar na mão de\Npoucas pessoas. Esse é o
+Dialogue: 0,0:00:33.81,0:00:36.63,Default,,0,0,0,,mais triste. É, então, mas é\Na hora da gente ter esse
+Dialogue: 0,0:00:36.63,0:00:39.45,Default,,0,0,0,,negócio aqui, né, de alguma\Ncoisa o político tem que
+Dialogue: 0,0:00:39.45,0:00:42.26,Default,,0,0,0,,falar e tem que ter um plano\Nhoje para isso aqui, pras
+Dialogue: 0,0:00:42.26,0:00:45.08,Default,,0,0,0,,terras raras. E outra coisa,\Npra inteligência
+Dialogue: 0,0:00:45.08,0:00:47.90,Default,,0,0,0,,artificial, né? Porque é uma\Ncoisa

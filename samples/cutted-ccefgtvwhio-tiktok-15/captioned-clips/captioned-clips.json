@@ -1,0 +1,80 @@
+{
+  "source_caption_queue": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ccefgtvwhio-tiktok-15\\caption-queue.json",
+  "captioned": [
+    {
+      "rank": 5,
+      "platform": "tiktok",
+      "label": "TikTok",
+      "width": 1080,
+      "height": 1920,
+      "file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ccefgtvwhio-tiktok-15\\captioned-clips\\clip-005-tiktok-captioned.mp4",
+      "subtitle_file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ccefgtvwhio-tiktok-15\\captioned-clips\\subtitles\\clip-005-tiktok.ass",
+      "adjusted_start": 976.399,
+      "adjusted_end": 1017.699,
+      "adjusted_duration": 41.3,
+      "publish_metadata": {
+        "hashtags": []
+      }
+    },
+    {
+      "rank": 5,
+      "platform": "shorts",
+      "label": "Shorts",
+      "width": 1080,
+      "height": 1920,
+      "file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ccefgtvwhio-tiktok-15\\captioned-clips\\clip-005-shorts-captioned.mp4",
+      "subtitle_file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ccefgtvwhio-tiktok-15\\captioned-clips\\subtitles\\clip-005-shorts.ass",
+      "adjusted_start": 976.399,
+      "adjusted_end": 1017.699,
+      "adjusted_duration": 41.3,
+      "publish_metadata": {
+        "hashtags": []
+      }
+    },
+    {
+      "rank": 5,
+      "platform": "instagram",
+      "label": "Instagram",
+      "width": 1080,
+      "height": 1920,
+      "file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ccefgtvwhio-tiktok-15\\captioned-clips\\clip-005-instagram-captioned.mp4",
+      "subtitle_file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ccefgtvwhio-tiktok-15\\captioned-clips\\subtitles\\clip-005-instagram.ass",
+      "adjusted_start": 976.399,
+      "adjusted_end": 1017.699,
+      "adjusted_duration": 41.3,
+      "publish_metadata": {
+        "hashtags": []
+      }
+    },
+    {
+      "rank": 5,
+      "platform": "facebook",
+      "label": "Facebook",
+      "width": 1080,
+      "height": 1350,
+      "file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ccefgtvwhio-tiktok-15\\captioned-clips\\clip-005-facebook-captioned.mp4",
+      "subtitle_file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ccefgtvwhio-tiktok-15\\captioned-clips\\subtitles\\clip-005-facebook.ass",
+      "adjusted_start": 976.399,
+      "adjusted_end": 1017.699,
+      "adjusted_duration": 41.3,
+      "publish_metadata": {
+        "hashtags": []
+      }
+    },
+    {
+      "rank": 5,
+      "platform": "youtube",
+      "label": "YouTube",
+      "width": 1920,
+      "height": 1080,
+      "file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ccefgtvwhio-tiktok-15\\captioned-clips\\clip-005-youtube-captioned.mp4",
+      "subtitle_file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-ccefgtvwhio-tiktok-15\\captioned-clips\\subtitles\\clip-005-youtube.ass",
+      "adjusted_start": 976.399,
+      "adjusted_end": 1017.699,
+      "adjusted_duration": 41.3,
+      "publish_metadata": {
+        "hashtags": []
+      }
+    }
+  ]
+}

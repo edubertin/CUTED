@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cutted Review</title>
+  <style>
+*{box-sizing:border-box}body{margin:0;background:#050505;color:#f4f4f4;font:14px/1.45 Arial,sans-serif}
+header{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;gap:16px;align-items:center;padding:18px 22px;background:#050505;border-bottom:1px solid #202020}
+h1{margin:0;font-size:22px}header p{margin:3px 0 0;color:#9a9a9a}main{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;padding:18px}
+.card{background:#111;border:1px solid #272727;border-radius:8px;overflow:hidden}.card.liked{border-color:#24d17e}.card.discarded{opacity:.42}
+.media{aspect-ratio:16/9;background:#000}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block}.placeholder{display:grid;place-items:center;height:100%;color:#777}
+.body{padding:14px}.top{display:flex;gap:10px;align-items:center}.top span{color:#888}.top strong{font-size:15px}.peak{color:#fff;font-size:16px}
+p{color:#bebebe}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}
+details{border-top:1px solid #242424;margin-top:12px;padding-top:10px}summary{cursor:pointer;color:#ddd}.actions{display:flex;gap:8px;margin-top:12px}
+button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 12px;cursor:pointer}button[data-action=discard]{background:#242424;color:#ddd}
+</style>
+</head>
+<body>
+  <header>
+    <div><h1>Cutted</h1><p>podcast-design-12min.mp4</p></div>
+    <button id="export">Exportar selecionados</button>
+  </header>
+  <main>
+    <article class="card" data-rank="1">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-001.jpg" src="clips/clip-001.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#01</span><strong>Jeder auf seiner Art? Wir auf seiner Art, genau</strong></div>
+        <p class="peak">Jeder auf seiner Art? Wir auf seiner Art, genau.</p>
+        <p>Usable candidate; review the cut before exporting.</p>
+        <dl><dt>Score</dt><dd>5.9</dd><dt>Inicio</dt><dd>35.4s</dd><dt>Fim</dt><dd>47.4s</dd></dl>
+        <details><summary>Transcript</summary><p>um Podcast bemüht haben in den letzten vielen Jahren. Jeder auf seiner Art? Wir auf seiner Art, genau. Aber beide haben wir auf jeden Fall mal damit angefangen, Podcast zu machen.</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="2">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-002.jpg" src="clips/clip-002.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#02</span><strong>Seit 2010? 2010</strong></div>
+        <p class="peak">Seit 2010? 2010?</p>
+        <p>Good candidate with a clear spoken peak.</p>
+        <dl><dt>Score</dt><dd>7.06</dd><dt>Inicio</dt><dd>43.4s</dd><dt>Fim</dt><dd>57.4s</dd></dl>
+        <details><summary>Transcript</summary><p>Aber beide haben wir auf jeden Fall mal damit angefangen, Podcast zu machen. Ja. Und ich weiß gar nicht genau, wann es bei dir los ging. Kannst du das? Seit 2010? 2010?</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="3">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-003.jpg" src="clips/clip-003.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#03</span><strong>Seit 2010? 2010</strong></div>
+        <p class="peak">Seit 2010? 2010?</p>
+        <p>Good candidate with a clear spoken peak.</p>
+        <dl><dt>Score</dt><dd>6.62</dd><dt>Inicio</dt><dd>53.4s</dd><dt>Fim</dt><dd>66.4s</dd></dl>
+        <details><summary>Transcript</summary><p>Kannst du das? Seit 2010? 2010? 2010? 2010? Dass du konkret einen gemacht hast? Genau. Und was hat dich dazu verleitet, einen zu machen?</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="4">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-004.jpg" src="clips/clip-004.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#04</span><strong>Und was hat dich dazu verleitet, einen zu machen</strong></div>
+        <p class="peak">Und was hat dich dazu verleitet, einen zu machen?</p>
+        <p>Usable candidate; review the cut before exporting.</p>
+        <dl><dt>Score</dt><dd>5.7</dd><dt>Inicio</dt><dd>62.4s</dd><dt>Fim</dt><dd>75.4s</dd></dl>
+        <details><summary>Transcript</summary><p>Und was hat dich dazu verleitet, einen zu machen? Dass ich anderen dabei zu gehört habe und dass du das kann ich auch. Was hast du denn gehört? Zell du Leute?</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="5">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-005.jpg" src="clips/clip-005.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#05</span><strong>Und der hat mir dann davon erzählt, dass sie dann</strong></div>
+        <p class="peak">Und der hat mir dann davon erzählt, dass sie dann noch mehr so</p>
+        <p>Usable candidate; review the cut before exporting.</p>
+        <dl><dt>Score</dt><dd>5.37</dd><dt>Inicio</dt><dd>127.4s</dd><dt>Fim</dt><dd>140.4s</dd></dl>
+        <details><summary>Transcript</summary><p>Und ich habe gesagt, hier hört es mal, damit ich mir das nicht anhören muss. Und ich wusste auch gar nicht, dass ich dann gerade ein Podcast oder das war einfach so eine Audio MP3. Und der hat mir dann davon erzählt, dass sie dann noch mehr so</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="6">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-006.jpg" src="clips/clip-006.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#06</span><strong>Und bin lang als auch noch gedauert, bis zum eigenen</strong></div>
+        <p class="peak">Und bin lang als auch noch gedauert, bis zum eigenen Podcast.</p>
+        <p>Usable candidate; review the cut before exporting.</p>
+        <dl><dt>Score</dt><dd>5.5</dd><dt>Inicio</dt><dd>143.4s</dd><dt>Fim</dt><dd>156.4s</dd></dl>
+        <details><summary>Transcript</summary><p>Und das ist erst mal. Weil im Podcast haben sie es Podcast genannt. Da war ich dann das erst mal sozusagen. Okay. Bin ich drüber gestolpert. Genau. Und bin lang als auch noch gedauert, bis zum eigenen Podcast. Also ich würde jetzt... Ich bin mir jetzt nicht genau sicher, welche es hier hat.</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="7">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-007.jpg" src="clips/clip-007.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#07</span><strong>Weil ich meine abgesehen habe, dass das einfach eure Geschichten</strong></div>
+        <p class="peak">Weil ich meine abgesehen habe, dass das einfach eure Geschichten lustig waren.</p>
+        <p>Usable candidate; review the cut before exporting.</p>
+        <dl><dt>Score</dt><dd>5.09</dd><dt>Inicio</dt><dd>318.4s</dd><dt>Fim</dt><dd>330.4s</dd></dl>
+        <details><summary>Transcript</summary><p>Ich weiß nicht. Jetzt die ganze Zeit nur Nutella um die Lippen. Aber es muss jetzt mal sein. Ist auch so über ihr könnt ihr nicht reinhören. Gucken abstint. Ja. Weil ich meine abgesehen habe, dass das einfach eure Geschichten lustig waren.</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="8">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-008.jpg" src="clips/clip-008.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#08</span><strong>Und da hält es am, ob man schlüpft, einfach sofort</strong></div>
+        <p class="peak">Und da hält es am, ob man schlüpft, einfach sofort mit unter die Decke.</p>
+        <p>Usable candidate; review the cut before exporting.</p>
+        <dl><dt>Score</dt><dd>5.34</dd><dt>Inicio</dt><dd>357.4s</dd><dt>Fim</dt><dd>371.4s</dd></dl>
+        <details><summary>Transcript</summary><p>So mal einfach super. Und da hält es am, ob man schlüpft, einfach sofort mit unter die Decke. Es war einfach, man fühlt es sich einfach sofort irgendwie in diesem privaten Raum, den ihr da aufgezogen habt, mal. Und wie dabei und das macht dann natürlich diese Faszination so aus.</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="9">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-009.jpg" src="clips/clip-009.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#09</span><strong>Das heißt nicht, dass er jetzt immer mit privaten Geschichten</strong></div>
+        <p class="peak">Das heißt nicht, dass er jetzt immer mit privaten Geschichten gefüllt werden muss.</p>
+        <p>Usable candidate; review the cut before exporting.</p>
+        <dl><dt>Score</dt><dd>5.6</dd><dt>Inicio</dt><dd>396.4s</dd><dt>Fim</dt><dd>409.4s</dd></dl>
+        <details><summary>Transcript</summary><p>Ich finde ein Podcast funktioniert immer dann wirklich sehr gut, wenn er eben es schafft. So ein privaten Raum aufzumachen. Das heißt nicht, dass er jetzt immer mit privaten Geschichten gefüllt werden muss. Oder wenn man ihn als privaten findet. Ja. Also so dieses hat man anderen Talk auch so gesagt.</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="10">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-010.jpg" src="clips/clip-010.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#10</span><strong>Ich bin auch manchmal zurückgehalten, wenn mich Leute fragen, was</strong></div>
+        <p class="peak">Ich bin auch manchmal zurückgehalten, wenn mich Leute fragen, was ich so höre.</p>
+        <p>Usable candidate; review the cut before exporting.</p>
+        <dl><dt>Score</dt><dd>5.02</dd><dt>Inicio</dt><dd>428.4s</dd><dt>Fim</dt><dd>440.4s</dd></dl>
+        <details><summary>Transcript</summary><p>Also wenn man meine Podcastsliste kennt, dann ist man mir sehr nah. Das ist dies nur meine. Ich bin auch manchmal zurückgehalten, wenn mich Leute fragen, was ich so höre. Ja, es gibt so die 4, die man sagen kann.</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="11">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-011.jpg" src="clips/clip-011.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#11</span><strong>Oder was</strong></div>
+        <p class="peak">Oder was?</p>
+        <p>Usable candidate; review the cut before exporting.</p>
+        <dl><dt>Score</dt><dd>4.99</dd><dt>Inicio</dt><dd>458.4s</dd><dt>Fim</dt><dd>471.4s</dd></dl>
+        <details><summary>Transcript</summary><p>Kann man mal sagen, so ist Podcast Business. Ja. Ein steig. Realativ früh, ich weiß ja mal ganz genau, was war das. Nicht lange danach. Ja. Also. Oder was? 13.</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="12">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-012.jpg" src="clips/clip-012.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#12</span><strong>Was war da noch mal die Idee</strong></div>
+        <p class="peak">Was war da noch mal die Idee?</p>
+        <p>Usable candidate; review the cut before exporting.</p>
+        <dl><dt>Score</dt><dd>5.05</dd><dt>Inicio</dt><dd>468.4s</dd><dt>Fim</dt><dd>480.4s</dd></dl>
+        <details><summary>Transcript</summary><p>Oder was? 13. Ja. Ja. Ja. Und das hast du mit einem Kollegen zusammen gemacht. Genau. Was war da noch mal die Idee?</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="13">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-013.jpg" src="clips/clip-013.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#13</span><strong>Was war da noch mal die Idee</strong></div>
+        <p class="peak">Was war da noch mal die Idee?</p>
+        <p>Usable candidate; review the cut before exporting.</p>
+        <dl><dt>Score</dt><dd>5.98</dd><dt>Inicio</dt><dd>478.4s</dd><dt>Fim</dt><dd>491.4s</dd></dl>
+        <details><summary>Transcript</summary><p>Was war da noch mal die Idee? Also die Idee war krass zu nauten war. Ich hatte vorher schon ein bisschen als selbstständige Produceden gearbeitet. Quasi Leute, Freunde, Bekannte und dann auch Leute, die ich nicht kannte.</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="14">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-014.jpg" src="clips/clip-014.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#14</span><strong>Und dachte, noch geht er, müssen wir das halt immer</strong></div>
+        <p class="peak">Und dachte, noch geht er, müssen wir das halt immer versuchen.</p>
+        <p>Usable candidate; review the cut before exporting.</p>
+        <dl><dt>Score</dt><dd>5.5</dd><dt>Inicio</dt><dd>602.4s</dd><dt>Fim</dt><dd>616.4s</dd></dl>
+        <details><summary>Transcript</summary><p>die da drin dann Werbung schalten wollen. Wir hatten das in den amerikanischen Podcast schon gehört. Das ist schon viel mehr passiert. Und in Deutschland gab es noch nicht so. Wir sah es dann auch mit zu Werberagenten, sondern die behaupten nicht wussten, von wir reden. Und dachte, noch geht er, müssen wir das halt immer versuchen.</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" data-rank="15">
+      <div class="media"><video controls preload="metadata" poster="frames/clip-015.jpg" src="clips/clip-015.mp4"></video></div>
+      <div class="body">
+        <div class="top"><span>#15</span><strong>Was man dann eben zu macht, über so ein halbes</strong></div>
+        <p class="peak">Was man dann eben zu macht, über so ein halbes Dreifeljahr</p>
+        <p>Usable candidate; review the cut before exporting.</p>
+        <dl><dt>Score</dt><dd>5.14</dd><dt>Inicio</dt><dd>619.4s</dd><dt>Fim</dt><dd>633.4s</dd></dl>
+        <details><summary>Transcript</summary><p>Was man dann eben zu macht, über so ein halbes Dreifeljahr oder so ganzes Jahr halten, Logo. Und alles so aufgebaut haben mit dem Podcasts in Gerät, haben das einen erklärt, was wir machen wollen, haben auch schon angefangen mit potenziellen. Es wollen so einen zu reden, ob die Lust haben,</p></details>
+        <div class="actions">
+          <button data-action="like">Gostei</button>
+          <button data-action="discard">Descartar</button>
+        </div>
+      </div>
+    </article></main>
+  <script>window.CUTTED_DATA = {"moments": [{"rank": 1, "start": 35.42, "end": 47.42, "peak": 41.92, "score": 5.9, "title": "Jeder auf seiner Art? Wir auf seiner Art, genau", "reason": "Usable candidate; review the cut before exporting.", "transcript": "um Podcast bemüht haben in den letzten vielen Jahren. Jeder auf seiner Art? Wir auf seiner Art, genau. Aber beide haben wir auf jeden Fall mal damit angefangen, Podcast zu machen.", "peak_text": "Jeder auf seiner Art? Wir auf seiner Art, genau.", "clip_file": "clips/clip-001.mp4", "frame_file": "frames/clip-001.jpg"}, {"rank": 2, "start": 43.42, "end": 57.42, "peak": 55.92, "score": 7.06, "title": "Seit 2010? 2010", "reason": "Good candidate with a clear spoken peak.", "transcript": "Aber beide haben wir auf jeden Fall mal damit angefangen, Podcast zu machen. Ja. Und ich weiß gar nicht genau, wann es bei dir los ging. Kannst du das? Seit 2010? 2010?", "peak_text": "Seit 2010? 2010?", "clip_file": "clips/clip-002.mp4", "frame_file": "frames/clip-002.jpg"}, {"rank": 3, "start": 53.42, "end": 66.42, "peak": 55.92, "score": 6.62, "title": "Seit 2010? 2010", "reason": "Good candidate with a clear spoken peak.", "transcript": "Kannst du das? Seit 2010? 2010? 2010? 2010? Dass du konkret einen gemacht hast? Genau. Und was hat dich dazu verleitet, einen zu machen?", "peak_text": "Seit 2010? 2010?", "clip_file": "clips/clip-003.mp4", "frame_file": "frames/clip-003.jpg"}, {"rank": 4, "start": 62.42, "end": 75.42, "peak": 64.42, "score": 5.7, "title": "Und was hat dich dazu verleitet, einen zu machen", "reason": "Usable candidate; review the cut before exporting.", "transcript": "Und was hat dich dazu verleitet, einen zu machen? Dass ich anderen dabei zu gehört habe und dass du das kann ich auch. Was hast du denn gehört? Zell du Leute?", "peak_text": "Und was hat dich dazu verleitet, einen zu machen?", "clip_file": "clips/clip-004.mp4", "frame_file": "frames/clip-004.jpg"}, {"rank": 5, "start": 127.42, "end": 140.42, "peak": 138.42, "score": 5.37, "title": "Und der hat mir dann davon erzählt, dass sie dann", "reason": "Usable candidate; review the cut before exporting.", "transcript": "Und ich habe gesagt, hier hört es mal, damit ich mir das nicht anhören muss. Und ich wusste auch gar nicht, dass ich dann gerade ein Podcast oder das war einfach so eine Audio MP3. Und der hat mir dann davon erzählt, dass sie dann noch mehr so", "peak_text": "Und der hat mir dann davon erzählt, dass sie dann noch mehr so", "clip_file": "clips/clip-005.mp4", "frame_file": "frames/clip-005.jpg"}, {"rank": 6, "start": 143.42, "end": 156.42, "peak": 152.42, "score": 5.5, "title": "Und bin lang als auch noch gedauert, bis zum eigenen", "reason": "Usable candidate; review the cut before exporting.", "transcript": "Und das ist erst mal. Weil im Podcast haben sie es Podcast genannt. Da war ich dann das erst mal sozusagen. Okay. Bin ich drüber gestolpert. Genau. Und bin lang als auch noch gedauert, bis zum eigenen Podcast. Also ich würde jetzt... Ich bin mir jetzt nicht genau sicher, welche es hier hat.", "peak_text": "Und bin lang als auch noch gedauert, bis zum eigenen Podcast.", "clip_file": "clips/clip-006.mp4", "frame_file": "frames/clip-006.jpg"}, {"rank": 7, "start": 318.42, "end": 330.42, "peak": 328.42, "score": 5.09, "title": "Weil ich meine abgesehen habe, dass das einfach eure Geschichten", "reason": "Usable candidate; review the cut before exporting.", "transcript": "Ich weiß nicht. Jetzt die ganze Zeit nur Nutella um die Lippen. Aber es muss jetzt mal sein. Ist auch so über ihr könnt ihr nicht reinhören. Gucken abstint. Ja. Weil ich meine abgesehen habe, dass das einfach eure Geschichten lustig waren.", "peak_text": "Weil ich meine abgesehen habe, dass das einfach eure Geschichten lustig waren.", "clip_file": "clips/clip-007.mp4", "frame_file": "frames/clip-007.jpg"}, {"rank": 8, "start": 357.42, "end": 371.42, "peak": 359.92, "score": 5.34, "title": "Und da hält es am, ob man schlüpft, einfach sofort", "reason": "Usable candidate; review the cut before exporting.", "transcript": "So mal einfach super. Und da hält es am, ob man schlüpft, einfach sofort mit unter die Decke. Es war einfach, man fühlt es sich einfach sofort irgendwie in diesem privaten Raum, den ihr da aufgezogen habt, mal. Und wie dabei und das macht dann natürlich diese Faszination so aus.", "peak_text": "Und da hält es am, ob man schlüpft, einfach sofort mit unter die Decke.", "clip_file": "clips/clip-008.mp4", "frame_file": "frames/clip-008.jpg"}, {"rank": 9, "start": 396.42, "end": 409.42, "peak": 402.92, "score": 5.6, "title": "Das heißt nicht, dass er jetzt immer mit privaten Geschichten", "reason": "Usable candidate; review the cut before exporting.", "transcript": "Ich finde ein Podcast funktioniert immer dann wirklich sehr gut, wenn er eben es schafft. So ein privaten Raum aufzumachen. Das heißt nicht, dass er jetzt immer mit privaten Geschichten gefüllt werden muss. Oder wenn man ihn als privaten findet. Ja. Also so dieses hat man anderen Talk auch so gesagt.", "peak_text": "Das heißt nicht, dass er jetzt immer mit privaten Geschichten gefüllt werden muss.", "clip_file": "clips/clip-009.mp4", "frame_file": "frames/clip-009.jpg"}, {"rank": 10, "start": 428.42, "end": 440.42, "peak": 436.42, "score": 5.02, "title": "Ich bin auch manchmal zurückgehalten, wenn mich Leute fragen, was", "reason": "Usable candidate; review the cut before exporting.", "transcript": "Also wenn man meine Podcastsliste kennt, dann ist man mir sehr nah. Das ist dies nur meine. Ich bin auch manchmal zurückgehalten, wenn mich Leute fragen, was ich so höre. Ja, es gibt so die 4, die man sagen kann.", "peak_text": "Ich bin auch manchmal zurückgehalten, wenn mich Leute fragen, was ich so höre.", "clip_file": "clips/clip-010.mp4", "frame_file": "frames/clip-010.jpg"}, {"rank": 11, "start": 458.42, "end": 471.42, "peak": 468.92, "score": 4.99, "title": "Oder was", "reason": "Usable candidate; review the cut before exporting.", "transcript": "Kann man mal sagen, so ist Podcast Business. Ja. Ein steig. Realativ früh, ich weiß ja mal ganz genau, was war das. Nicht lange danach. Ja. Also. Oder was? 13.", "peak_text": "Oder was?", "clip_file": "clips/clip-011.mp4", "frame_file": "frames/clip-011.jpg"}, {"rank": 12, "start": 468.42, "end": 480.42, "peak": 479.42, "score": 5.05, "title": "Was war da noch mal die Idee", "reason": "Usable candidate; review the cut before exporting.", "transcript": "Oder was? 13. Ja. Ja. Ja. Und das hast du mit einem Kollegen zusammen gemacht. Genau. Was war da noch mal die Idee?", "peak_text": "Was war da noch mal die Idee?", "clip_file": "clips/clip-012.mp4", "frame_file": "frames/clip-012.jpg"}, {"rank": 13, "start": 478.42, "end": 491.42, "peak": 479.42, "score": 5.98, "title": "Was war da noch mal die Idee", "reason": "Usable candidate; review the cut before exporting.", "transcript": "Was war da noch mal die Idee? Also die Idee war krass zu nauten war. Ich hatte vorher schon ein bisschen als selbstständige Produceden gearbeitet. Quasi Leute, Freunde, Bekannte und dann auch Leute, die ich nicht kannte.", "peak_text": "Was war da noch mal die Idee?", "clip_file": "clips/clip-013.mp4", "frame_file": "frames/clip-013.jpg"}, {"rank": 14, "start": 602.42, "end": 616.42, "peak": 614.92, "score": 5.5, "title": "Und dachte, noch geht er, müssen wir das halt immer", "reason": "Usable candidate; review the cut before exporting.", "transcript": "die da drin dann Werbung schalten wollen. Wir hatten das in den amerikanischen Podcast schon gehört. Das ist schon viel mehr passiert. Und in Deutschland gab es noch nicht so. Wir sah es dann auch mit zu Werberagenten, sondern die behaupten nicht wussten, von wir reden. Und dachte, noch geht er, müssen wir das halt immer versuchen.", "peak_text": "Und dachte, noch geht er, müssen wir das halt immer versuchen.", "clip_file": "clips/clip-014.mp4", "frame_file": "frames/clip-014.jpg"}, {"rank": 15, "start": 619.42, "end": 633.42, "peak": 620.92, "score": 5.14, "title": "Was man dann eben zu macht, über so ein halbes", "reason": "Usable candidate; review the cut before exporting.", "transcript": "Was man dann eben zu macht, über so ein halbes Dreifeljahr oder so ganzes Jahr halten, Logo. Und alles so aufgebaut haben mit dem Podcasts in Gerät, haben das einen erklärt, was wir machen wollen, haben auch schon angefangen mit potenziellen. Es wollen so einen zu reden, ob die Lust haben,", "peak_text": "Was man dann eben zu macht, über so ein halbes Dreifeljahr", "clip_file": "clips/clip-015.mp4", "frame_file": "frames/clip-015.jpg"}]};</script>
+  <script>
+const state = JSON.parse(localStorage.getItem("cutted-state") || "{}");
+function save(){ localStorage.setItem("cutted-state", JSON.stringify(state)); }
+function paint(card){ const r=card.dataset.rank; card.classList.toggle("liked",state[r]==="liked"); card.classList.toggle("discarded",state[r]==="discarded"); }
+document.querySelectorAll(".card").forEach(card => {
+  paint(card);
+  card.querySelectorAll("button[data-action]").forEach(btn => btn.addEventListener("click", () => {
+    state[card.dataset.rank] = btn.dataset.action === "like" ? "liked" : "discarded";
+    save(); paint(card);
+  }));
+});
+document.getElementById("export").addEventListener("click", async () => {
+  const data = window.CUTTED_DATA;
+  data.selected = data.moments.filter(m => state[String(m.rank)] === "liked");
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "selected-clips.json"; a.click();
+});
+</script>
+</body>
+</html>
