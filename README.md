@@ -1,6 +1,6 @@
-# Cuted
+# CUTED
 
-Cuted is an early AI-assisted video clipping workspace.
+CUTED is an early AI-assisted video clipping workspace.
 
 This repository currently stores generated samples, review pages, rendered clips,
 caption artifacts, and brand assets used to validate the product workflow before
