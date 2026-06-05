@@ -28,5 +28,11 @@ the local server because the browser cannot run FFmpeg by itself.
 ## Current Stage
 
 Prototype with a local render loop. The current focus is validating the
-end-to-end clipping, effects, calls-to-action, captions, and final video review
-workflow before extracting a fuller application structure.
+end-to-end clipping, per-video camera reframing, effects, calls-to-action,
+captions, and final video review workflow before extracting a fuller application
+structure.
+
+The current camera MVP uses local FFmpeg crop/scale presets only. OpenCV itself
+does not add API cost; future cost would come only from optional cloud APIs or
+paid model hosting if automatic face/speaker detection moves outside the local
+machine.
