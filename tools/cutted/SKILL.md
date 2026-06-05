@@ -72,17 +72,18 @@ Each card includes:
 - per-clip platform tags for TikTok, Shorts, Instagram, Facebook, and YouTube next to the trim controls;
 - a final timing summary.
 
-The `Camera` tab sits after `Cortes e formatos` and before `Efeitos`. It applies one reframe preset per selected cut/platform before subtitles, effects, and calls-to-action:
+The `Camera` tab sits after `Cortes e formatos` and before `Efeitos`. It applies a three-part camera line per selected cut/platform before subtitles, effects, and calls-to-action. Each selected output has `Inicio`, `Meio`, and `Fim` camera slots:
 
 - `Centro seguro`: default centered crop.
 - `Rosto no centro`: slight punch toward a central speaker.
 - `Rosto a esquerda`: prioritize the left side of a podcast/table layout.
 - `Rosto a direita`: prioritize the right side of a podcast/table layout.
 - `Alternar focos`: slow pan between left and right.
+- `Corte entre focos`: hard jump between left and right without a slow pan.
 - `Zoom sutil`: steady closer framing.
 - `Punch-in`: stronger close crop for emphasis.
 
-The MVP camera presets are deterministic FFmpeg scale/crop filters and do not require OpenCV, paid APIs, or cloud processing. OpenCV can be added later for automatic face anchors without changing the exported `camera` object shape.
+The MVP camera presets are deterministic FFmpeg scale/crop filters and do not require OpenCV, paid APIs, or cloud processing. Three-slot camera lines render through FFmpeg `filter_complex`, splitting the clip into thirds, applying the chosen reframe to each part, and concatenating the video before captions/effects/overlays. OpenCV can be added later for automatic face anchors without changing the exported `camera.segments` object shape.
 
 The `Efeitos` tab sits after `Camera` and before `Chamadas`. It applies one MVP look per selected cut:
 
@@ -104,7 +105,7 @@ The `Chamadas` tab sits after `Efeitos` and before `Final`. It applies one dragg
 
 The browser preview stores the chosen card position, width, and opacity as relative values, so the final FFmpeg render can burn it into each platform size.
 
-The exported `caption-queue.json` and `selected-clips.json` include a `camera` object with `key`, `label`, and `strength`, an `effect` object with `key`, `label`, and `intensity`, and an `overlay` object with `key`, `label`, `x`, `y`, `width`, and `opacity`.
+The exported `caption-queue.json` and `selected-clips.json` include a `camera` object with `key`, `label`, and `segments` for the camera line, an `effect` object with `key`, `label`, and `intensity`, and an `overlay` object with `key`, `label`, `x`, `y`, `width`, and `opacity`. Older single-preset `camera` objects remain supported.
 
 The trim sliders are stored in browser `localStorage`. The exported JSON includes:
 

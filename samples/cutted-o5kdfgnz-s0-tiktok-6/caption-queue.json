@@ -107,20 +107,43 @@
       "adjusted_end": 100.85,
       "adjusted_duration": 40.27,
       "camera": {
-        "key": "face-left",
-        "label": "Rosto a esquerda",
-        "strength": 60
+        "key": "sequence",
+        "label": "Linha de camera",
+        "strength": 60,
+        "segments": [
+          {
+            "part": "start",
+            "part_label": "Inicio",
+            "key": "jump-cut",
+            "label": "Corte entre focos",
+            "strength": 60
+          },
+          {
+            "part": "middle",
+            "part_label": "Meio",
+            "key": "soft-zoom",
+            "label": "Zoom sutil",
+            "strength": 60
+          },
+          {
+            "part": "end",
+            "part_label": "Fim",
+            "key": "face-right",
+            "label": "Rosto a direita",
+            "strength": 60
+          }
+        ]
       },
       "effect": {
-        "key": "old-film",
-        "label": "Filme Antigo",
-        "intensity": 65
+        "key": "none",
+        "label": "Sem efeito",
+        "intensity": 0
       },
       "overlay": {
-        "key": "like-share",
-        "label": "Curta e compartilhe",
-        "x": 0.6040420653907496,
-        "y": 0.7612221803093172,
+        "key": "none",
+        "label": "Sem chamada",
+        "x": 0.62,
+        "y": 0.78,
         "width": 0.34,
         "opacity": 95
       }
@@ -192,20 +215,43 @@
       "adjusted_end": 131.34,
       "adjusted_duration": 43.13,
       "camera": {
-        "key": "center",
-        "label": "Centro seguro",
-        "strength": 60
+        "key": "sequence",
+        "label": "Linha de camera",
+        "strength": 60,
+        "segments": [
+          {
+            "part": "start",
+            "part_label": "Inicio",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          },
+          {
+            "part": "middle",
+            "part_label": "Meio",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          },
+          {
+            "part": "end",
+            "part_label": "Fim",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          }
+        ]
       },
       "effect": {
-        "key": "light-grain",
-        "label": "Chuvisco Leve",
-        "intensity": 65
+        "key": "none",
+        "label": "Sem efeito",
+        "intensity": 0
       },
       "overlay": {
-        "key": "subscribe",
-        "label": "Inscreva-se",
-        "x": 0.6120165470494418,
-        "y": 0.04903809883062995,
+        "key": "none",
+        "label": "Sem chamada",
+        "x": 0.62,
+        "y": 0.78,
         "width": 0.34,
         "opacity": 95
       }
@@ -282,9 +328,32 @@
       "adjusted_end": 252.17,
       "adjusted_duration": 44.92,
       "camera": {
-        "key": "center",
-        "label": "Centro seguro",
-        "strength": 60
+        "key": "sequence",
+        "label": "Linha de camera",
+        "strength": 60,
+        "segments": [
+          {
+            "part": "start",
+            "part_label": "Inicio",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          },
+          {
+            "part": "middle",
+            "part_label": "Meio",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          },
+          {
+            "part": "end",
+            "part_label": "Fim",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          }
+        ]
       },
       "effect": {
         "key": "none",
@@ -367,9 +436,32 @@
       "adjusted_end": 288.259,
       "adjusted_duration": 45.05,
       "camera": {
-        "key": "center",
-        "label": "Centro seguro",
-        "strength": 60
+        "key": "sequence",
+        "label": "Linha de camera",
+        "strength": 60,
+        "segments": [
+          {
+            "part": "start",
+            "part_label": "Inicio",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          },
+          {
+            "part": "middle",
+            "part_label": "Meio",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          },
+          {
+            "part": "end",
+            "part_label": "Fim",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          }
+        ]
       },
       "effect": {
         "key": "none",
@@ -447,9 +539,32 @@
       "adjusted_end": 327.9,
       "adjusted_duration": 45.111,
       "camera": {
-        "key": "center",
-        "label": "Centro seguro",
-        "strength": 60
+        "key": "sequence",
+        "label": "Linha de camera",
+        "strength": 60,
+        "segments": [
+          {
+            "part": "start",
+            "part_label": "Inicio",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          },
+          {
+            "part": "middle",
+            "part_label": "Meio",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          },
+          {
+            "part": "end",
+            "part_label": "Fim",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          }
+        ]
       },
       "effect": {
         "key": "none",
@@ -532,9 +647,32 @@
       "adjusted_end": 359.59,
       "adjusted_duration": 46.07,
       "camera": {
-        "key": "center",
-        "label": "Centro seguro",
-        "strength": 60
+        "key": "sequence",
+        "label": "Linha de camera",
+        "strength": 60,
+        "segments": [
+          {
+            "part": "start",
+            "part_label": "Inicio",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          },
+          {
+            "part": "middle",
+            "part_label": "Meio",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          },
+          {
+            "part": "end",
+            "part_label": "Fim",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          }
+        ]
       },
       "effect": {
         "key": "none",
@@ -660,20 +798,43 @@
       "adjusted_end": 100.85,
       "adjusted_duration": 40.27,
       "camera": {
-        "key": "face-left",
-        "label": "Rosto a esquerda",
-        "strength": 60
+        "key": "sequence",
+        "label": "Linha de camera",
+        "strength": 60,
+        "segments": [
+          {
+            "part": "start",
+            "part_label": "Inicio",
+            "key": "jump-cut",
+            "label": "Corte entre focos",
+            "strength": 60
+          },
+          {
+            "part": "middle",
+            "part_label": "Meio",
+            "key": "soft-zoom",
+            "label": "Zoom sutil",
+            "strength": 60
+          },
+          {
+            "part": "end",
+            "part_label": "Fim",
+            "key": "face-right",
+            "label": "Rosto a direita",
+            "strength": 60
+          }
+        ]
       },
       "effect": {
-        "key": "old-film",
-        "label": "Filme Antigo",
-        "intensity": 65
+        "key": "none",
+        "label": "Sem efeito",
+        "intensity": 0
       },
       "overlay": {
-        "key": "like-share",
-        "label": "Curta e compartilhe",
-        "x": 0.6040420653907496,
-        "y": 0.7612221803093172,
+        "key": "none",
+        "label": "Sem chamada",
+        "x": 0.62,
+        "y": 0.78,
         "width": 0.34,
         "opacity": 95
       }
@@ -745,20 +906,43 @@
       "adjusted_end": 131.34,
       "adjusted_duration": 43.13,
       "camera": {
-        "key": "center",
-        "label": "Centro seguro",
-        "strength": 60
+        "key": "sequence",
+        "label": "Linha de camera",
+        "strength": 60,
+        "segments": [
+          {
+            "part": "start",
+            "part_label": "Inicio",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          },
+          {
+            "part": "middle",
+            "part_label": "Meio",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          },
+          {
+            "part": "end",
+            "part_label": "Fim",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          }
+        ]
       },
       "effect": {
-        "key": "light-grain",
-        "label": "Chuvisco Leve",
-        "intensity": 65
+        "key": "none",
+        "label": "Sem efeito",
+        "intensity": 0
       },
       "overlay": {
-        "key": "subscribe",
-        "label": "Inscreva-se",
-        "x": 0.6120165470494418,
-        "y": 0.04903809883062995,
+        "key": "none",
+        "label": "Sem chamada",
+        "x": 0.62,
+        "y": 0.78,
         "width": 0.34,
         "opacity": 95
       }
@@ -789,20 +973,43 @@
       "adjusted_end": 100.85,
       "adjusted_duration": 40.27,
       "camera": {
-        "key": "face-left",
-        "label": "Rosto a esquerda",
-        "strength": 60
+        "key": "sequence",
+        "label": "Linha de camera",
+        "strength": 60,
+        "segments": [
+          {
+            "part": "start",
+            "part_label": "Inicio",
+            "key": "jump-cut",
+            "label": "Corte entre focos",
+            "strength": 60
+          },
+          {
+            "part": "middle",
+            "part_label": "Meio",
+            "key": "soft-zoom",
+            "label": "Zoom sutil",
+            "strength": 60
+          },
+          {
+            "part": "end",
+            "part_label": "Fim",
+            "key": "face-right",
+            "label": "Rosto a direita",
+            "strength": 60
+          }
+        ]
       },
       "effect": {
-        "key": "old-film",
-        "label": "Filme Antigo",
-        "intensity": 65
+        "key": "none",
+        "label": "Sem efeito",
+        "intensity": 0
       },
       "overlay": {
-        "key": "like-share",
-        "label": "Curta e compartilhe",
-        "x": 0.6040420653907496,
-        "y": 0.7612221803093172,
+        "key": "none",
+        "label": "Sem chamada",
+        "x": 0.62,
+        "y": 0.78,
         "width": 0.34,
         "opacity": 95
       },
@@ -922,20 +1129,43 @@
       "adjusted_end": 131.34,
       "adjusted_duration": 43.13,
       "camera": {
-        "key": "center",
-        "label": "Centro seguro",
-        "strength": 60
+        "key": "sequence",
+        "label": "Linha de camera",
+        "strength": 60,
+        "segments": [
+          {
+            "part": "start",
+            "part_label": "Inicio",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          },
+          {
+            "part": "middle",
+            "part_label": "Meio",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          },
+          {
+            "part": "end",
+            "part_label": "Fim",
+            "key": "center",
+            "label": "Centro seguro",
+            "strength": 60
+          }
+        ]
       },
       "effect": {
-        "key": "light-grain",
-        "label": "Chuvisco Leve",
-        "intensity": 65
+        "key": "none",
+        "label": "Sem efeito",
+        "intensity": 0
       },
       "overlay": {
-        "key": "subscribe",
-        "label": "Inscreva-se",
-        "x": 0.6120165470494418,
-        "y": 0.04903809883062995,
+        "key": "none",
+        "label": "Sem chamada",
+        "x": 0.62,
+        "y": 0.78,
         "width": 0.34,
         "opacity": 95
       },
