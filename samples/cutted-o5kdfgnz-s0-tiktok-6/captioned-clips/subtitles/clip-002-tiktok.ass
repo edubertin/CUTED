@@ -1,0 +1,21 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,72,&H00FFFFFF,&H0000FFFF,&H00000000,&H99000000,-1,0,0,0,100,100,0,0,1,7,0,2,80,80,250,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:03.45,Default,,0,0,0,,dinheiro carai bicho\Nmentiroso a pouco
+Dialogue: 0,0:00:03.49,0:00:05.79,Default,,0,0,0,,mais de uma dor de barriga\Nnão tenho
+Dialogue: 0,0:00:05.83,0:00:08.61,Default,,0,0,0,,real o mundo vai acabar\Nmesmo filha toma
+Dialogue: 0,0:00:08.65,0:00:11.10,Default,,0,0,0,,toma toma um cafezinho\Nobrigado você não
+Dialogue: 0,0:00:11.14,0:00:24.86,Default,,0,0,0,,tem um cafezinho certeza é\N21
+Dialogue: 0,0:00:24.90,0:00:27.72,Default,,0,0,0,,eu ficava na calçada é
+Dialogue: 0,0:00:27.76,0:00:31.05,Default,,0,0,0,,e agr é é o que colocar na\Ncalçada lá
+Dialogue: 0,0:00:31.09,0:00:32.33,Default,,0,0,0,,embaixo se pá
+Dialogue: 0,0:00:32.37,0:00:41.63,Default,,0,0,0,,a irmã no Face estou real 1

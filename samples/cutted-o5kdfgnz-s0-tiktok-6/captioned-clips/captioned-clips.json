@@ -1,0 +1,79 @@
+{
+  "source_caption_queue": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-o5kdfgnz-s0-tiktok-6\\caption-queue.json",
+  "captioned": [
+    {
+      "rank": 1,
+      "platform": "tiktok",
+      "label": "TikTok",
+      "width": 1080,
+      "height": 1920,
+      "file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-o5kdfgnz-s0-tiktok-6\\captioned-clips\\clip-001-tiktok-captioned.mp4",
+      "subtitle_file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-o5kdfgnz-s0-tiktok-6\\captioned-clips\\subtitles\\clip-001-tiktok.ass",
+      "adjusted_start": 60.58,
+      "adjusted_end": 100.85,
+      "adjusted_duration": 40.27,
+      "publish_metadata": {
+        "hashtags": [
+          "#IA",
+          "#InteligenciaArtificial",
+          "#Podcast",
+          "#Dinheiro",
+          "#Comer",
+          "#Ele"
+        ],
+        "caption_hint": "reunião não ele tem dinheiro o bigode\n\n#IA #InteligenciaArtificial #Podcast #Dinheiro #Comer #Ele",
+        "strategy": "Usar poucos hashtags relevantes; validar tendencias no TikTok Creative Center antes de publicar."
+      },
+      "effect": {
+        "key": "old-film",
+        "label": "Filme Antigo",
+        "intensity": 65.0
+      },
+      "overlay": {
+        "key": "like-share",
+        "label": "Curta e compartilhe",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95.0
+      }
+    },
+    {
+      "rank": 2,
+      "platform": "tiktok",
+      "label": "TikTok",
+      "width": 1080,
+      "height": 1920,
+      "file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-o5kdfgnz-s0-tiktok-6\\captioned-clips\\clip-002-tiktok-captioned.mp4",
+      "subtitle_file": "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\samples\\cutted-o5kdfgnz-s0-tiktok-6\\captioned-clips\\subtitles\\clip-002-tiktok.ass",
+      "adjusted_start": 88.21,
+      "adjusted_end": 131.34,
+      "adjusted_duration": 43.13,
+      "publish_metadata": {
+        "hashtags": [
+          "#IA",
+          "#InteligenciaArtificial",
+          "#Podcast",
+          "#Mentiroso",
+          "#Dinheiro",
+          "#Carai"
+        ],
+        "caption_hint": "dinheiro carai bicho mentiroso a pouco\n\n#IA #InteligenciaArtificial #Podcast #Mentiroso #Dinheiro #Carai",
+        "strategy": "Usar poucos hashtags relevantes; validar tendencias no TikTok Creative Center antes de publicar."
+      },
+      "effect": {
+        "key": "light-grain",
+        "label": "Chuvisco Leve",
+        "intensity": 65.0
+      },
+      "overlay": {
+        "key": "subscribe",
+        "label": "Inscreva-se",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95.0
+      }
+    }
+  ]
+}

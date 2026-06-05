@@ -1,16 +1,4 @@
 {
-  "source": "BALESTRIN MONTOU NUM TOURO ? O DONO DA GROWTH FICOU MALUCO !!!",
-  "duration": 0,
-  "config": {
-    "clips": 10,
-    "min_duration": 30,
-    "max_duration": 70,
-    "target_duration": 42,
-    "smart_boundaries": true,
-    "lead_in": 1,
-    "tail_out": 1.5,
-    "preset": "tiktok"
-  },
   "moments": [
     {
       "rank": 1,
@@ -205,7 +193,27 @@
           "end": 250.76,
           "text": ">> Qual que é o seu número?"
         }
-      ]
+      ],
+      "status": "liked",
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 195.28,
+      "adjusted_end": 252.26,
+      "adjusted_duration": 56.98,
+      "effect": {
+        "key": "old-film",
+        "label": "Filme Antigo",
+        "intensity": 65
+      },
+      "overlay": {
+        "key": "like-share",
+        "label": "Curta e compartilhe",
+        "x": 0.539576802507837,
+        "y": 0.44200626959247646,
+        "width": 0.43902439024390244,
+        "opacity": 95
+      }
     },
     {
       "rank": 2,
@@ -365,7 +373,27 @@
           "end": 363,
           "text": ">> É um mais bonito que o outro, hein?"
         }
-      ]
+      ],
+      "status": "liked",
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 306.639,
+      "adjusted_end": 364.5,
+      "adjusted_duration": 57.861,
+      "effect": {
+        "key": "light-grain",
+        "label": "Chuvisco Leve",
+        "intensity": 65
+      },
+      "overlay": {
+        "key": "subscribe",
+        "label": "Inscreva-se",
+        "x": 0.6492293625914316,
+        "y": 0.44189016602809705,
+        "width": 0.34,
+        "opacity": 95
+      }
     },
     {
       "rank": 3,
@@ -525,7 +553,27 @@
           "end": 436.319,
           "text": ">> Qual que é o seu melhor tempo?"
         }
-      ]
+      ],
+      "status": null,
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 374.16,
+      "adjusted_end": 437.819,
+      "adjusted_duration": 63.659,
+      "effect": {
+        "key": "none",
+        "label": "Sem efeito",
+        "intensity": 0
+      },
+      "overlay": {
+        "key": "none",
+        "label": "Sem chamada",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95
+      }
     },
     {
       "rank": 4,
@@ -695,7 +743,27 @@
           "end": 483.759,
           "text": ">> As aberta, sabe? Primeiro dia tem o GP"
         }
-      ]
+      ],
+      "status": null,
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 423.639,
+      "adjusted_end": 485.259,
+      "adjusted_duration": 61.62,
+      "effect": {
+        "key": "none",
+        "label": "Sem efeito",
+        "intensity": 0
+      },
+      "overlay": {
+        "key": "none",
+        "label": "Sem chamada",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95
+      }
     },
     {
       "rank": 5,
@@ -900,7 +968,27 @@
           "end": 693.92,
           "text": "quanto? Que que você tá buscando? Que"
         }
-      ]
+      ],
+      "status": null,
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 625.72,
+      "adjusted_end": 695.42,
+      "adjusted_duration": 69.7,
+      "effect": {
+        "key": "none",
+        "label": "Sem efeito",
+        "intensity": 0
+      },
+      "overlay": {
+        "key": "none",
+        "label": "Sem chamada",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95
+      }
     },
     {
       "rank": 6,
@@ -1055,7 +1143,27 @@
           "end": 730.6,
           "text": ">> o bicho tá pele músculo, viu as fotos?"
         }
-      ]
+      ],
+      "status": null,
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 680.959,
+      "adjusted_end": 732.1,
+      "adjusted_duration": 51.141,
+      "effect": {
+        "key": "none",
+        "label": "Sem efeito",
+        "intensity": 0
+      },
+      "overlay": {
+        "key": "none",
+        "label": "Sem chamada",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95
+      }
     },
     {
       "rank": 7,
@@ -1220,7 +1328,27 @@
           "end": 810.199,
           "text": ">> Que isso, pai? Pera aí, Julião. Nós"
         }
-      ]
+      ],
+      "status": null,
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 760.079,
+      "adjusted_end": 811.699,
+      "adjusted_duration": 51.62,
+      "effect": {
+        "key": "none",
+        "label": "Sem efeito",
+        "intensity": 0
+      },
+      "overlay": {
+        "key": "none",
+        "label": "Sem chamada",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95
+      }
     },
     {
       "rank": 8,
@@ -1355,7 +1483,27 @@
           "end": 1223.28,
           "text": "acontecendo? acaba comercializando, seja"
         }
-      ]
+      ],
+      "status": null,
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 1171.44,
+      "adjusted_end": 1224.78,
+      "adjusted_duration": 53.34,
+      "effect": {
+        "key": "none",
+        "label": "Sem efeito",
+        "intensity": 0
+      },
+      "overlay": {
+        "key": "none",
+        "label": "Sem chamada",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95
+      }
     },
     {
       "rank": 9,
@@ -1475,7 +1623,27 @@
           "end": 1362.4,
           "text": ">> Isso. Não, só ele. Aí vira vocês dois"
         }
-      ]
+      ],
+      "status": null,
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 1318.52,
+      "adjusted_end": 1363.9,
+      "adjusted_duration": 45.38,
+      "effect": {
+        "key": "none",
+        "label": "Sem efeito",
+        "intensity": 0
+      },
+      "overlay": {
+        "key": "none",
+        "label": "Sem chamada",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95
+      }
     },
     {
       "rank": 10,
@@ -1605,7 +1773,27 @@
           "end": 1593.24,
           "text": "para mostrar para vocês que tem que ter"
         }
-      ]
+      ],
+      "status": null,
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 1551.399,
+      "adjusted_end": 1594.74,
+      "adjusted_duration": 43.341,
+      "effect": {
+        "key": "none",
+        "label": "Sem efeito",
+        "intensity": 0
+      },
+      "overlay": {
+        "key": "none",
+        "label": "Sem chamada",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95
+      }
     }
   ],
   "export_format": "youtube",
@@ -1810,7 +1998,20 @@
       "trim_end_seconds": 0,
       "adjusted_start": 195.28,
       "adjusted_end": 252.26,
-      "adjusted_duration": 56.98
+      "adjusted_duration": 56.98,
+      "effect": {
+        "key": "old-film",
+        "label": "Filme Antigo",
+        "intensity": 65
+      },
+      "overlay": {
+        "key": "like-share",
+        "label": "Curta e compartilhe",
+        "x": 0.539576802507837,
+        "y": 0.44200626959247646,
+        "width": 0.43902439024390244,
+        "opacity": 95
+      }
     },
     {
       "rank": 2,
@@ -1977,7 +2178,20 @@
       "trim_end_seconds": 0,
       "adjusted_start": 306.639,
       "adjusted_end": 364.5,
-      "adjusted_duration": 57.861
+      "adjusted_duration": 57.861,
+      "effect": {
+        "key": "light-grain",
+        "label": "Chuvisco Leve",
+        "intensity": 65
+      },
+      "overlay": {
+        "key": "subscribe",
+        "label": "Inscreva-se",
+        "x": 0.6492293625914316,
+        "y": 0.44189016602809705,
+        "width": 0.34,
+        "opacity": 95
+      }
     }
   ],
   "caption_queue": [
@@ -1987,7 +2201,16 @@
       "platform_label": "YouTube",
       "width": 1920,
       "height": 1080,
-      "publish_metadata": {},
+      "publish_metadata": {
+        "hashtags": [
+          "#IA",
+          "#InteligenciaArtificial",
+          "#Tecnologia",
+          "#Tempo"
+        ],
+        "caption_hint": ">> não? E tem que e tem que ser tem que tem\n\n#IA #InteligenciaArtificial #Tecnologia #Tempo",
+        "strategy": "Usar hashtags como contexto, sem exagero; evitar excesso de hashtags."
+      },
       "trim_start_seconds": 0,
       "trim_end_seconds": 0,
       "adjusted_start": 195.28,
@@ -1996,14 +2219,14 @@
       "effect": {
         "key": "old-film",
         "label": "Filme Antigo",
-        "intensity": 85
+        "intensity": 65
       },
       "overlay": {
         "key": "like-share",
         "label": "Curta e compartilhe",
-        "x": 0.5959744854202401,
-        "y": 0.5146750524109015,
-        "width": 0.377733704974271,
+        "x": 0.539576802507837,
+        "y": 0.44200626959247646,
+        "width": 0.43902439024390244,
         "opacity": 95
       },
       "clip_file": "clips/clip-001.mp4",
@@ -2199,7 +2422,16 @@
       "platform_label": "YouTube",
       "width": 1920,
       "height": 1080,
-      "publish_metadata": {},
+      "publish_metadata": {
+        "hashtags": [
+          "#IA",
+          "#InteligenciaArtificial",
+          "#Tecnologia",
+          "#Pode"
+        ],
+        "caption_hint": "margem para erro, né? Então você se\n\n#IA #InteligenciaArtificial #Tecnologia #Pode",
+        "strategy": "Usar hashtags como contexto, sem exagero; evitar excesso de hashtags."
+      },
       "trim_start_seconds": 0,
       "trim_end_seconds": 0,
       "adjusted_start": 306.639,
@@ -2208,15 +2440,15 @@
       "effect": {
         "key": "light-grain",
         "label": "Chuvisco Leve",
-        "intensity": 100
+        "intensity": 65
       },
       "overlay": {
         "key": "subscribe",
         "label": "Inscreva-se",
-        "x": 0.6405713979416809,
-        "y": 0.5634648370497427,
+        "x": 0.6492293625914316,
+        "y": 0.44189016602809705,
         "width": 0.34,
-        "opacity": 70
+        "opacity": 95
       },
       "clip_file": "clips/clip-002.mp4",
       "title": "margem para erro, né? Então você se",

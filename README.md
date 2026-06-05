@@ -11,8 +11,22 @@ the main application code is organized here.
 - `assets/brand/`: brand images for channel/profile use.
 - `samples/`: generated clipping experiments with review HTML, frames, clips,
   caption queues, subtitles, and rendered outputs.
+- `tools/cutted/`: versioned copy of the local CUTED skill used to generate
+  galleries, serve the local finalize API, and render captioned outputs.
+
+## Local Gallery Server
+
+Use the CUTED server when testing the interactive final render flow:
+
+```powershell
+python tools/cutted/scripts/cutted.py serve --dir "samples/<sample-folder>" --port 8779
+```
+
+The static `index.html` still works for review, but `Finalizar videos` requires
+the local server because the browser cannot run FFmpeg by itself.
 
 ## Current Stage
 
-Prototype snapshot. The repository is ready to version the idea and consolidate
-the pipeline, documentation, and application code in follow-up work.
+Prototype with a local render loop. The current focus is validating the
+end-to-end clipping, effects, calls-to-action, captions, and final video review
+workflow before extracting a fuller application structure.

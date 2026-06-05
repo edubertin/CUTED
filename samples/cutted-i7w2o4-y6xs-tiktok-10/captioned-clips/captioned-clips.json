@@ -12,18 +12,27 @@
       "adjusted_start": 195.28,
       "adjusted_end": 252.26,
       "adjusted_duration": 56.98,
-      "publish_metadata": {},
+      "publish_metadata": {
+        "hashtags": [
+          "#IA",
+          "#InteligenciaArtificial",
+          "#Tecnologia",
+          "#Tempo"
+        ],
+        "caption_hint": ">> não? E tem que e tem que ser tem que tem\n\n#IA #InteligenciaArtificial #Tecnologia #Tempo",
+        "strategy": "Usar hashtags como contexto, sem exagero; evitar excesso de hashtags."
+      },
       "effect": {
         "key": "old-film",
         "label": "Filme Antigo",
-        "intensity": 85.0
+        "intensity": 65.0
       },
       "overlay": {
         "key": "like-share",
         "label": "Curta e compartilhe",
-        "x": 0.5959744854202401,
-        "y": 0.5146750524109015,
-        "width": 0.377733704974271,
+        "x": 0.539576802507837,
+        "y": 0.44200626959247646,
+        "width": 0.43902439024390244,
         "opacity": 95.0
       }
     },
@@ -38,19 +47,28 @@
       "adjusted_start": 306.639,
       "adjusted_end": 364.5,
       "adjusted_duration": 57.861,
-      "publish_metadata": {},
+      "publish_metadata": {
+        "hashtags": [
+          "#IA",
+          "#InteligenciaArtificial",
+          "#Tecnologia",
+          "#Pode"
+        ],
+        "caption_hint": "margem para erro, né? Então você se\n\n#IA #InteligenciaArtificial #Tecnologia #Pode",
+        "strategy": "Usar hashtags como contexto, sem exagero; evitar excesso de hashtags."
+      },
       "effect": {
         "key": "light-grain",
         "label": "Chuvisco Leve",
-        "intensity": 100.0
+        "intensity": 65.0
       },
       "overlay": {
         "key": "subscribe",
         "label": "Inscreva-se",
-        "x": 0.6405713979416809,
-        "y": 0.5634648370497427,
+        "x": 0.6492293625914316,
+        "y": 0.44189016602809705,
         "width": 0.34,
-        "opacity": 70.0
+        "opacity": 95.0
       }
     }
   ]

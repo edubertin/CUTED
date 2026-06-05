@@ -1,0 +1,945 @@
+{
+  "moments": [
+    {
+      "rank": 1,
+      "start": 60.58,
+      "end": 100.85000000000001,
+      "peak": 86.72,
+      "score": 10.48,
+      "title": "reunião não ele tem dinheiro o bigode",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "rapaz aqui falou com teu real para comer pega não vou pagar o almoço dele lá para nós maquininha de cartão como você sai para comer não tem um réu cara que você tá louco passa para mim não bebe lá pode passar no grupo lá vai trazer a maquininha colocar sei que tô vendo que come todo mundo como é que você sair dá para comer na rua não tem o réu que você tá doido velho mas vai botar você para lavar os pratos aí para mim comer Ah então está mentindo para mim pagar por reunião não ele tem dinheiro o bigode então rapaz ele falou que não tinha dinheiro carai bicho mentiroso a pouco mais de uma dor de barriga não tenho real o mundo vai acabar mesmo filha toma",
+      "peak_text": "reunião não ele tem dinheiro o bigode",
+      "clip_file": "clips/clip-001.mp4",
+      "frame_file": "frames/clip-001.jpg",
+      "caption_segments": [
+        {
+          "start": 61.58,
+          "end": 65.51,
+          "text": "rapaz aqui falou com teu real para comer"
+        },
+        {
+          "start": 63.47,
+          "end": 67.94,
+          "text": "pega não vou pagar o almoço dele lá para"
+        },
+        {
+          "start": 65.51,
+          "end": 69.23,
+          "text": "nós maquininha de cartão como você sai"
+        },
+        {
+          "start": 67.94,
+          "end": 71.42,
+          "text": "para comer não tem um réu cara que você"
+        },
+        {
+          "start": 69.23,
+          "end": 72.95,
+          "text": "tá louco passa para mim não bebe lá pode"
+        },
+        {
+          "start": 71.42,
+          "end": 74.3,
+          "text": "passar no grupo lá vai trazer a"
+        },
+        {
+          "start": 72.95,
+          "end": 75.92,
+          "text": "maquininha colocar sei que tô vendo que"
+        },
+        {
+          "start": 74.3,
+          "end": 77.69,
+          "text": "come todo mundo como é que você sair dá"
+        },
+        {
+          "start": 75.92,
+          "end": 79.55,
+          "text": "para comer na rua não tem o réu que você"
+        },
+        {
+          "start": 77.69,
+          "end": 81.56,
+          "text": "tá doido velho mas vai botar você para"
+        },
+        {
+          "start": 79.55,
+          "end": 84.229,
+          "text": "lavar os pratos aí para mim comer Ah"
+        },
+        {
+          "start": 81.56,
+          "end": 86.3,
+          "text": "então está mentindo para mim pagar por"
+        },
+        {
+          "start": 84.229,
+          "end": 89.21,
+          "text": "reunião não ele tem dinheiro o bigode"
+        },
+        {
+          "start": 86.3,
+          "end": 91.7,
+          "text": "então rapaz ele falou que não tinha"
+        },
+        {
+          "start": 89.21,
+          "end": 94.03999999999999,
+          "text": "dinheiro carai bicho mentiroso a pouco"
+        },
+        {
+          "start": 91.7,
+          "end": 96.86,
+          "text": "mais de uma dor de barriga não tenho"
+        },
+        {
+          "start": 94.04,
+          "end": 99.35000000000001,
+          "text": "real o mundo vai acabar mesmo filha toma"
+        }
+      ],
+      "status": "liked",
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 60.58,
+      "adjusted_end": 100.85,
+      "adjusted_duration": 40.27,
+      "effect": {
+        "key": "old-film",
+        "label": "Filme Antigo",
+        "intensity": 65
+      },
+      "overlay": {
+        "key": "like-share",
+        "label": "Curta e compartilhe",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95
+      }
+    },
+    {
+      "rank": 2,
+      "start": 88.21,
+      "end": 131.34,
+      "peak": 91.62,
+      "score": 8.39,
+      "title": "dinheiro carai bicho mentiroso a pouco",
+      "reason": "Bom candidato, com pico de fala claro.",
+      "transcript": "dinheiro carai bicho mentiroso a pouco mais de uma dor de barriga não tenho real o mundo vai acabar mesmo filha toma toma toma um cafezinho obrigado você não tem um cafezinho certeza é 21 eu ficava na calçada é e agr é é o que colocar na calçada lá embaixo se pá a irmã no Face estou real 1",
+      "peak_text": "dinheiro carai bicho mentiroso a pouco",
+      "clip_file": "clips/clip-002.mp4",
+      "frame_file": "frames/clip-002.jpg",
+      "caption_segments": [
+        {
+          "start": 89.21,
+          "end": 94.03999999999999,
+          "text": "dinheiro carai bicho mentiroso a pouco"
+        },
+        {
+          "start": 91.7,
+          "end": 96.86,
+          "text": "mais de uma dor de barriga não tenho"
+        },
+        {
+          "start": 94.04,
+          "end": 99.35000000000001,
+          "text": "real o mundo vai acabar mesmo filha toma"
+        },
+        {
+          "start": 96.86,
+          "end": 113.11,
+          "text": "toma toma um cafezinho obrigado você não"
+        },
+        {
+          "start": 99.35,
+          "end": 115.97,
+          "text": "tem um cafezinho certeza é 21"
+        },
+        {
+          "start": 113.11,
+          "end": 119.3,
+          "text": "eu ficava na calçada é"
+        },
+        {
+          "start": 115.97,
+          "end": 120.58,
+          "text": "e agr é é o que colocar na calçada lá"
+        },
+        {
+          "start": 119.3,
+          "end": 127.75,
+          "text": "embaixo se pá"
+        },
+        {
+          "start": 120.58,
+          "end": 129.84,
+          "text": "a irmã no Face estou real 1"
+        }
+      ],
+      "status": "liked",
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 88.21,
+      "adjusted_end": 131.34,
+      "adjusted_duration": 43.13,
+      "effect": {
+        "key": "light-grain",
+        "label": "Chuvisco Leve",
+        "intensity": 65
+      },
+      "overlay": {
+        "key": "subscribe",
+        "label": "Inscreva-se",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95
+      }
+    },
+    {
+      "rank": 3,
+      "start": 207.25,
+      "end": 252.17000000000002,
+      "peak": 241.3,
+      "score": 11.03,
+      "title": "lugar com ele dinheiro de verdade também",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "obrigado obrigado aqui é o Itaú e essa pela inteira do Itaú Oi carai velho All moving outro dia mas para cliente cinco estrelas assim como dinheiro na conta né acabou outro dia mano não sai fora só o preço não pegar sua filha e eu vou arrancar embaixo das em segundo lugar com ele dinheiro de verdade também você me dá um abraço para 100reais se eu",
+      "peak_text": "lugar com ele dinheiro de verdade também",
+      "clip_file": "clips/clip-003.mp4",
+      "frame_file": "frames/clip-003.jpg",
+      "caption_segments": [
+        {
+          "start": 208.25,
+          "end": 216.84,
+          "text": "obrigado obrigado aqui é o Itaú"
+        },
+        {
+          "start": 214.06,
+          "end": 220.379,
+          "text": "e essa pela inteira do Itaú"
+        },
+        {
+          "start": 216.84,
+          "end": 222.239,
+          "text": "Oi carai velho All moving outro dia mas"
+        },
+        {
+          "start": 220.379,
+          "end": 225,
+          "text": "para cliente cinco estrelas assim como"
+        },
+        {
+          "start": 222.239,
+          "end": 228.45000000000002,
+          "text": "dinheiro na conta né acabou outro dia"
+        },
+        {
+          "start": 225,
+          "end": 231.53,
+          "text": "mano não sai fora só o preço não pegar"
+        },
+        {
+          "start": 228.45,
+          "end": 234.61999999999998,
+          "text": "sua filha e"
+        },
+        {
+          "start": 231.53,
+          "end": 244.209,
+          "text": "eu vou arrancar embaixo das em segundo"
+        },
+        {
+          "start": 234.62,
+          "end": 247.97,
+          "text": "lugar com ele dinheiro de verdade também"
+        },
+        {
+          "start": 244.209,
+          "end": 250.67000000000002,
+          "text": "você me dá um abraço para 100reais se eu"
+        }
+      ],
+      "status": null,
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 207.25,
+      "adjusted_end": 252.17,
+      "adjusted_duration": 44.92,
+      "effect": {
+        "key": "none",
+        "label": "Sem efeito",
+        "intensity": 0
+      },
+      "overlay": {
+        "key": "none",
+        "label": "Sem chamada",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95
+      }
+    },
+    {
+      "rank": 4,
+      "start": 243.209,
+      "end": 288.25899999999996,
+      "peak": 247.44,
+      "score": 6.29,
+      "title": "você me dá um abraço para 100reais se eu",
+      "reason": "Bom candidato, com pico de fala claro.",
+      "transcript": "você me dá um abraço para 100reais se eu tivesse resto do abraço é interesseira né oi oi foi um abraço não abrace não né dinheirinho não tenho real reino não vai acabar mesmo somente aqui ó tomar um cafezinho para você quanto que é de 42 é 1043 com 10 caprichado se você vende quatro vezes um corpinho Ah tá eu pensei",
+      "peak_text": "você me dá um abraço para 100reais se eu",
+      "clip_file": "clips/clip-004.mp4",
+      "frame_file": "frames/clip-004.jpg",
+      "caption_segments": [
+        {
+          "start": 244.209,
+          "end": 250.67000000000002,
+          "text": "você me dá um abraço para 100reais se eu"
+        },
+        {
+          "start": 247.97,
+          "end": 253.39,
+          "text": "tivesse resto do abraço é interesseira"
+        },
+        {
+          "start": 250.67,
+          "end": 253.39,
+          "text": "né"
+        },
+        {
+          "start": 254.54,
+          "end": 265.84999999999997,
+          "text": "oi oi foi um abraço não abrace não né"
+        },
+        {
+          "start": 262.539,
+          "end": 270.11,
+          "text": "dinheirinho não tenho real reino não vai"
+        },
+        {
+          "start": 265.85,
+          "end": 274.87,
+          "text": "acabar mesmo somente aqui ó tomar um"
+        },
+        {
+          "start": 270.11,
+          "end": 278.41900000000004,
+          "text": "cafezinho para você quanto que é de 42 é"
+        },
+        {
+          "start": 274.87,
+          "end": 283.789,
+          "text": "1043 com 10 caprichado se você vende"
+        },
+        {
+          "start": 278.419,
+          "end": 286.75899999999996,
+          "text": "quatro vezes um corpinho Ah tá eu pensei"
+        }
+      ],
+      "status": null,
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 243.209,
+      "adjusted_end": 288.259,
+      "adjusted_duration": 45.05,
+      "effect": {
+        "key": "none",
+        "label": "Sem efeito",
+        "intensity": 0
+      },
+      "overlay": {
+        "key": "none",
+        "label": "Sem chamada",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95
+      }
+    },
+    {
+      "rank": 5,
+      "start": 282.789,
+      "end": 327.9,
+      "peak": 323.94,
+      "score": 8.43,
+      "title": "tomar banho vai tomar banho é porque não",
+      "reason": "Bom candidato, com pico de fala claro.",
+      "transcript": "que você vinha de quatro a gente 84 não vende Vem de Quatro Vem de Quatro abençoe você tá bom obrigado Deus abençoe valeu é nós já tô sozinha rapaz é eu não tenho real fazer vai acabar mesmo né velho é o seguinte a prova então vai tomar banho vai tomar banho é porque não",
+      "peak_text": "tomar banho vai tomar banho é porque não",
+      "clip_file": "clips/clip-005.mp4",
+      "frame_file": "frames/clip-005.jpg",
+      "caption_segments": [
+        {
+          "start": 283.789,
+          "end": 291.82,
+          "text": "que você vinha de quatro a gente 84 não"
+        },
+        {
+          "start": 286.759,
+          "end": 291.82,
+          "text": "vende Vem de Quatro Vem de Quatro"
+        },
+        {
+          "start": 292.78,
+          "end": 306.15999999999997,
+          "text": "abençoe você tá bom obrigado Deus"
+        },
+        {
+          "start": 302.81,
+          "end": 309.16,
+          "text": "abençoe valeu é nós já tô sozinha rapaz"
+        },
+        {
+          "start": 306.16,
+          "end": 309.16,
+          "text": "é"
+        },
+        {
+          "start": 314.52,
+          "end": 321.479,
+          "text": "eu não tenho real fazer vai acabar mesmo"
+        },
+        {
+          "start": 318.66,
+          "end": 323.94,
+          "text": "né velho é o seguinte a prova então vai"
+        },
+        {
+          "start": 321.479,
+          "end": 326.4,
+          "text": "tomar banho vai tomar banho é porque não"
+        }
+      ],
+      "status": null,
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 282.789,
+      "adjusted_end": 327.9,
+      "adjusted_duration": 45.111,
+      "effect": {
+        "key": "none",
+        "label": "Sem efeito",
+        "intensity": 0
+      },
+      "overlay": {
+        "key": "none",
+        "label": "Sem chamada",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95
+      }
+    },
+    {
+      "rank": 6,
+      "start": 313.52,
+      "end": 359.59000000000003,
+      "peak": 323.94,
+      "score": 8.65,
+      "title": "tomar banho vai tomar banho é porque não",
+      "reason": "Bom candidato, com pico de fala claro.",
+      "transcript": "eu não tenho real fazer vai acabar mesmo né velho é o seguinte a prova então vai tomar banho vai tomar banho é porque não tem um real não tem uma mente pura você vai ter uma me perguntar o E ai before me in é da hora de fazer uma pergunta mãe desculpa atrapalhar' sua refeição que eu sei que o mundo é sagrado você tem um",
+      "peak_text": "tomar banho vai tomar banho é porque não",
+      "clip_file": "clips/clip-006.mp4",
+      "frame_file": "frames/clip-006.jpg",
+      "caption_segments": [
+        {
+          "start": 314.52,
+          "end": 321.479,
+          "text": "eu não tenho real fazer vai acabar mesmo"
+        },
+        {
+          "start": 318.66,
+          "end": 323.94,
+          "text": "né velho é o seguinte a prova então vai"
+        },
+        {
+          "start": 321.479,
+          "end": 326.4,
+          "text": "tomar banho vai tomar banho é porque não"
+        },
+        {
+          "start": 323.94,
+          "end": 330.96,
+          "text": "tem um real não tem uma mente pura você"
+        },
+        {
+          "start": 326.4,
+          "end": 339.60999999999996,
+          "text": "vai ter uma me perguntar o"
+        },
+        {
+          "start": 330.96,
+          "end": 344.349,
+          "text": "E ai before me in"
+        },
+        {
+          "start": 339.61,
+          "end": 345.639,
+          "text": "é da hora de fazer uma pergunta mãe"
+        },
+        {
+          "start": 344.349,
+          "end": 347.289,
+          "text": "desculpa atrapalhar' sua refeição que eu"
+        },
+        {
+          "start": 345.639,
+          "end": 358.09000000000003,
+          "text": "sei que o mundo é sagrado você tem um"
+        }
+      ],
+      "status": null,
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 313.52,
+      "adjusted_end": 359.59,
+      "adjusted_duration": 46.07,
+      "effect": {
+        "key": "none",
+        "label": "Sem efeito",
+        "intensity": 0
+      },
+      "overlay": {
+        "key": "none",
+        "label": "Sem chamada",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95
+      }
+    }
+  ],
+  "export_format": "tiktok",
+  "selected": [
+    {
+      "rank": 1,
+      "start": 60.58,
+      "end": 100.85000000000001,
+      "peak": 86.72,
+      "score": 10.48,
+      "title": "reunião não ele tem dinheiro o bigode",
+      "reason": "Gancho forte, fala densa e bom contexto isolado.",
+      "transcript": "rapaz aqui falou com teu real para comer pega não vou pagar o almoço dele lá para nós maquininha de cartão como você sai para comer não tem um réu cara que você tá louco passa para mim não bebe lá pode passar no grupo lá vai trazer a maquininha colocar sei que tô vendo que come todo mundo como é que você sair dá para comer na rua não tem o réu que você tá doido velho mas vai botar você para lavar os pratos aí para mim comer Ah então está mentindo para mim pagar por reunião não ele tem dinheiro o bigode então rapaz ele falou que não tinha dinheiro carai bicho mentiroso a pouco mais de uma dor de barriga não tenho real o mundo vai acabar mesmo filha toma",
+      "peak_text": "reunião não ele tem dinheiro o bigode",
+      "clip_file": "clips/clip-001.mp4",
+      "frame_file": "frames/clip-001.jpg",
+      "caption_segments": [
+        {
+          "start": 61.58,
+          "end": 65.51,
+          "text": "rapaz aqui falou com teu real para comer"
+        },
+        {
+          "start": 63.47,
+          "end": 67.94,
+          "text": "pega não vou pagar o almoço dele lá para"
+        },
+        {
+          "start": 65.51,
+          "end": 69.23,
+          "text": "nós maquininha de cartão como você sai"
+        },
+        {
+          "start": 67.94,
+          "end": 71.42,
+          "text": "para comer não tem um réu cara que você"
+        },
+        {
+          "start": 69.23,
+          "end": 72.95,
+          "text": "tá louco passa para mim não bebe lá pode"
+        },
+        {
+          "start": 71.42,
+          "end": 74.3,
+          "text": "passar no grupo lá vai trazer a"
+        },
+        {
+          "start": 72.95,
+          "end": 75.92,
+          "text": "maquininha colocar sei que tô vendo que"
+        },
+        {
+          "start": 74.3,
+          "end": 77.69,
+          "text": "come todo mundo como é que você sair dá"
+        },
+        {
+          "start": 75.92,
+          "end": 79.55,
+          "text": "para comer na rua não tem o réu que você"
+        },
+        {
+          "start": 77.69,
+          "end": 81.56,
+          "text": "tá doido velho mas vai botar você para"
+        },
+        {
+          "start": 79.55,
+          "end": 84.229,
+          "text": "lavar os pratos aí para mim comer Ah"
+        },
+        {
+          "start": 81.56,
+          "end": 86.3,
+          "text": "então está mentindo para mim pagar por"
+        },
+        {
+          "start": 84.229,
+          "end": 89.21,
+          "text": "reunião não ele tem dinheiro o bigode"
+        },
+        {
+          "start": 86.3,
+          "end": 91.7,
+          "text": "então rapaz ele falou que não tinha"
+        },
+        {
+          "start": 89.21,
+          "end": 94.03999999999999,
+          "text": "dinheiro carai bicho mentiroso a pouco"
+        },
+        {
+          "start": 91.7,
+          "end": 96.86,
+          "text": "mais de uma dor de barriga não tenho"
+        },
+        {
+          "start": 94.04,
+          "end": 99.35000000000001,
+          "text": "real o mundo vai acabar mesmo filha toma"
+        }
+      ],
+      "status": "liked",
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 60.58,
+      "adjusted_end": 100.85,
+      "adjusted_duration": 40.27,
+      "effect": {
+        "key": "old-film",
+        "label": "Filme Antigo",
+        "intensity": 65
+      },
+      "overlay": {
+        "key": "like-share",
+        "label": "Curta e compartilhe",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95
+      }
+    },
+    {
+      "rank": 2,
+      "start": 88.21,
+      "end": 131.34,
+      "peak": 91.62,
+      "score": 8.39,
+      "title": "dinheiro carai bicho mentiroso a pouco",
+      "reason": "Bom candidato, com pico de fala claro.",
+      "transcript": "dinheiro carai bicho mentiroso a pouco mais de uma dor de barriga não tenho real o mundo vai acabar mesmo filha toma toma toma um cafezinho obrigado você não tem um cafezinho certeza é 21 eu ficava na calçada é e agr é é o que colocar na calçada lá embaixo se pá a irmã no Face estou real 1",
+      "peak_text": "dinheiro carai bicho mentiroso a pouco",
+      "clip_file": "clips/clip-002.mp4",
+      "frame_file": "frames/clip-002.jpg",
+      "caption_segments": [
+        {
+          "start": 89.21,
+          "end": 94.03999999999999,
+          "text": "dinheiro carai bicho mentiroso a pouco"
+        },
+        {
+          "start": 91.7,
+          "end": 96.86,
+          "text": "mais de uma dor de barriga não tenho"
+        },
+        {
+          "start": 94.04,
+          "end": 99.35000000000001,
+          "text": "real o mundo vai acabar mesmo filha toma"
+        },
+        {
+          "start": 96.86,
+          "end": 113.11,
+          "text": "toma toma um cafezinho obrigado você não"
+        },
+        {
+          "start": 99.35,
+          "end": 115.97,
+          "text": "tem um cafezinho certeza é 21"
+        },
+        {
+          "start": 113.11,
+          "end": 119.3,
+          "text": "eu ficava na calçada é"
+        },
+        {
+          "start": 115.97,
+          "end": 120.58,
+          "text": "e agr é é o que colocar na calçada lá"
+        },
+        {
+          "start": 119.3,
+          "end": 127.75,
+          "text": "embaixo se pá"
+        },
+        {
+          "start": 120.58,
+          "end": 129.84,
+          "text": "a irmã no Face estou real 1"
+        }
+      ],
+      "status": "liked",
+      "platforms": [],
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 88.21,
+      "adjusted_end": 131.34,
+      "adjusted_duration": 43.13,
+      "effect": {
+        "key": "light-grain",
+        "label": "Chuvisco Leve",
+        "intensity": 65
+      },
+      "overlay": {
+        "key": "subscribe",
+        "label": "Inscreva-se",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95
+      }
+    }
+  ],
+  "caption_queue": [
+    {
+      "rank": 1,
+      "platform": "tiktok",
+      "platform_label": "TikTok",
+      "width": 1080,
+      "height": 1920,
+      "publish_metadata": {
+        "hashtags": [
+          "#IA",
+          "#InteligenciaArtificial",
+          "#Podcast",
+          "#Dinheiro",
+          "#Comer",
+          "#Ele"
+        ],
+        "caption_hint": "reunião não ele tem dinheiro o bigode\n\n#IA #InteligenciaArtificial #Podcast #Dinheiro #Comer #Ele",
+        "strategy": "Usar poucos hashtags relevantes; validar tendencias no TikTok Creative Center antes de publicar."
+      },
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 60.58,
+      "adjusted_end": 100.85,
+      "adjusted_duration": 40.27,
+      "effect": {
+        "key": "old-film",
+        "label": "Filme Antigo",
+        "intensity": 65
+      },
+      "overlay": {
+        "key": "like-share",
+        "label": "Curta e compartilhe",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95
+      },
+      "clip_file": "clips/clip-001.mp4",
+      "title": "reunião não ele tem dinheiro o bigode",
+      "peak_text": "reunião não ele tem dinheiro o bigode",
+      "transcript": "rapaz aqui falou com teu real para comer pega não vou pagar o almoço dele lá para nós maquininha de cartão como você sai para comer não tem um réu cara que você tá louco passa para mim não bebe lá pode passar no grupo lá vai trazer a maquininha colocar sei que tô vendo que come todo mundo como é que você sair dá para comer na rua não tem o réu que você tá doido velho mas vai botar você para lavar os pratos aí para mim comer Ah então está mentindo para mim pagar por reunião não ele tem dinheiro o bigode então rapaz ele falou que não tinha dinheiro carai bicho mentiroso a pouco mais de uma dor de barriga não tenho real o mundo vai acabar mesmo filha toma",
+      "caption_segments": [
+        {
+          "start": 61.58,
+          "end": 65.51,
+          "text": "rapaz aqui falou com teu real para comer"
+        },
+        {
+          "start": 63.47,
+          "end": 67.94,
+          "text": "pega não vou pagar o almoço dele lá para"
+        },
+        {
+          "start": 65.51,
+          "end": 69.23,
+          "text": "nós maquininha de cartão como você sai"
+        },
+        {
+          "start": 67.94,
+          "end": 71.42,
+          "text": "para comer não tem um réu cara que você"
+        },
+        {
+          "start": 69.23,
+          "end": 72.95,
+          "text": "tá louco passa para mim não bebe lá pode"
+        },
+        {
+          "start": 71.42,
+          "end": 74.3,
+          "text": "passar no grupo lá vai trazer a"
+        },
+        {
+          "start": 72.95,
+          "end": 75.92,
+          "text": "maquininha colocar sei que tô vendo que"
+        },
+        {
+          "start": 74.3,
+          "end": 77.69,
+          "text": "come todo mundo como é que você sair dá"
+        },
+        {
+          "start": 75.92,
+          "end": 79.55,
+          "text": "para comer na rua não tem o réu que você"
+        },
+        {
+          "start": 77.69,
+          "end": 81.56,
+          "text": "tá doido velho mas vai botar você para"
+        },
+        {
+          "start": 79.55,
+          "end": 84.229,
+          "text": "lavar os pratos aí para mim comer Ah"
+        },
+        {
+          "start": 81.56,
+          "end": 86.3,
+          "text": "então está mentindo para mim pagar por"
+        },
+        {
+          "start": 84.229,
+          "end": 89.21,
+          "text": "reunião não ele tem dinheiro o bigode"
+        },
+        {
+          "start": 86.3,
+          "end": 91.7,
+          "text": "então rapaz ele falou que não tinha"
+        },
+        {
+          "start": 89.21,
+          "end": 94.03999999999999,
+          "text": "dinheiro carai bicho mentiroso a pouco"
+        },
+        {
+          "start": 91.7,
+          "end": 96.86,
+          "text": "mais de uma dor de barriga não tenho"
+        },
+        {
+          "start": 94.04,
+          "end": 99.35000000000001,
+          "text": "real o mundo vai acabar mesmo filha toma"
+        }
+      ]
+    },
+    {
+      "rank": 2,
+      "platform": "tiktok",
+      "platform_label": "TikTok",
+      "width": 1080,
+      "height": 1920,
+      "publish_metadata": {
+        "hashtags": [
+          "#IA",
+          "#InteligenciaArtificial",
+          "#Podcast",
+          "#Mentiroso",
+          "#Dinheiro",
+          "#Carai"
+        ],
+        "caption_hint": "dinheiro carai bicho mentiroso a pouco\n\n#IA #InteligenciaArtificial #Podcast #Mentiroso #Dinheiro #Carai",
+        "strategy": "Usar poucos hashtags relevantes; validar tendencias no TikTok Creative Center antes de publicar."
+      },
+      "trim_start_seconds": 0,
+      "trim_end_seconds": 0,
+      "adjusted_start": 88.21,
+      "adjusted_end": 131.34,
+      "adjusted_duration": 43.13,
+      "effect": {
+        "key": "light-grain",
+        "label": "Chuvisco Leve",
+        "intensity": 65
+      },
+      "overlay": {
+        "key": "subscribe",
+        "label": "Inscreva-se",
+        "x": 0.62,
+        "y": 0.78,
+        "width": 0.34,
+        "opacity": 95
+      },
+      "clip_file": "clips/clip-002.mp4",
+      "title": "dinheiro carai bicho mentiroso a pouco",
+      "peak_text": "dinheiro carai bicho mentiroso a pouco",
+      "transcript": "dinheiro carai bicho mentiroso a pouco mais de uma dor de barriga não tenho real o mundo vai acabar mesmo filha toma toma toma um cafezinho obrigado você não tem um cafezinho certeza é 21 eu ficava na calçada é e agr é é o que colocar na calçada lá embaixo se pá a irmã no Face estou real 1",
+      "caption_segments": [
+        {
+          "start": 89.21,
+          "end": 94.03999999999999,
+          "text": "dinheiro carai bicho mentiroso a pouco"
+        },
+        {
+          "start": 91.7,
+          "end": 96.86,
+          "text": "mais de uma dor de barriga não tenho"
+        },
+        {
+          "start": 94.04,
+          "end": 99.35000000000001,
+          "text": "real o mundo vai acabar mesmo filha toma"
+        },
+        {
+          "start": 96.86,
+          "end": 113.11,
+          "text": "toma toma um cafezinho obrigado você não"
+        },
+        {
+          "start": 99.35,
+          "end": 115.97,
+          "text": "tem um cafezinho certeza é 21"
+        },
+        {
+          "start": 113.11,
+          "end": 119.3,
+          "text": "eu ficava na calçada é"
+        },
+        {
+          "start": 115.97,
+          "end": 120.58,
+          "text": "e agr é é o que colocar na calçada lá"
+        },
+        {
+          "start": 119.3,
+          "end": 127.75,
+          "text": "embaixo se pá"
+        },
+        {
+          "start": 120.58,
+          "end": 129.84,
+          "text": "a irmã no Face estou real 1"
+        }
+      ]
+    }
+  ]
+}
