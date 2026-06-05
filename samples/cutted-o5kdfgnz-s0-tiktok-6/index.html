@@ -1192,32 +1192,34 @@ function primaryOverlayForRank(rank, platform = activePlatformForRank(rank)){
   const layers = overlayLayersForRank(rank, platform).filter(layer => layer.kind !== "image");
   return layers[0] || defaultOverlay();
 }
-function setOverlayLayersForRank(rank, layers, rerender = true){
-  const platform = activePlatformForRank(rank);
+function overlayPlatformForItem(item){
+  return validPlatform(item?.dataset?.platform || item?.dataset?.previewFormat || activePlatformForRank(item?.dataset?.rank));
+}
+function setOverlayLayersForRank(rank, layers, rerender = true, platform = activePlatformForRank(rank)){
   const normalized = normalizeOverlayLayers(layers, defaultOverlay());
   setPlatformEditForRank(rank, platform, { overlays: normalized, overlay: normalized.find(layer => layer.kind !== "image") || defaultOverlay() });
   const card = cardForRank(rank);
   if (card && rerender) updateOverlayUi(card);
   renderFinalStage();
 }
-function addOverlayLayerForRank(rank, layer){
-  setOverlayLayersForRank(rank, [...overlayLayersForRank(rank), normalizeOverlayLayer(layer)]);
+function addOverlayLayerForRank(rank, layer, platform = activePlatformForRank(rank)){
+  setOverlayLayersForRank(rank, [...overlayLayersForRank(rank, platform), normalizeOverlayLayer(layer)], true, platform);
 }
-function patchOverlayLayerForRank(rank, id, patch, rerender = true){
-  const layers = overlayLayersForRank(rank).map(layer => layer.id === id ? normalizeOverlayLayer(Object.assign({}, layer, patch)) : layer);
-  setOverlayLayersForRank(rank, layers, rerender);
+function patchOverlayLayerForRank(rank, id, patch, rerender = true, platform = activePlatformForRank(rank)){
+  const layers = overlayLayersForRank(rank, platform).map(layer => layer.id === id ? normalizeOverlayLayer(Object.assign({}, layer, patch)) : layer);
+  setOverlayLayersForRank(rank, layers, rerender, platform);
 }
-function removeOverlayLayerForRank(rank, id){
-  setOverlayLayersForRank(rank, overlayLayersForRank(rank).filter(layer => layer.id !== id));
+function removeOverlayLayerForRank(rank, id, platform = activePlatformForRank(rank)){
+  setOverlayLayersForRank(rank, overlayLayersForRank(rank, platform).filter(layer => layer.id !== id), true, platform);
 }
-function setOverlayForRank(rank, patch, rerender = true){
-  const layers = overlayLayersForRank(rank);
+function setOverlayForRank(rank, patch, rerender = true, platform = activePlatformForRank(rank)){
+  const layers = overlayLayersForRank(rank, platform);
   const first = layers.find(layer => layer.kind !== "image");
   if (first) {
-    patchOverlayLayerForRank(rank, first.id, patch, rerender);
+    patchOverlayLayerForRank(rank, first.id, patch, rerender, platform);
     return;
   }
-  setOverlayLayersForRank(rank, [normalizeOverlay(Object.assign({}, defaultOverlay(), patch))], rerender);
+  setOverlayLayersForRank(rank, [normalizeOverlay(Object.assign({}, defaultOverlay(), patch))], rerender, platform);
 }
 function overlayLabel(overlay){
   const current = normalizeOverlayLayer(overlay);
@@ -1478,7 +1480,7 @@ function addImageOverlayFromInput(card, input){
       opacity: 100
     });
     card.dataset.selectedOverlayLayer = layer.id;
-    addOverlayLayerForRank(card.dataset.rank, layer);
+    addOverlayLayerForRank(card.dataset.rank, layer, overlayPlatformForItem(card));
     const surface = card.querySelector("[data-overlay-surface]");
     if (surface) {
       showOverlayInspectorForLayer(card, layer.id, layer.x * surface.clientWidth, layer.y * surface.clientHeight);
@@ -1596,7 +1598,7 @@ function showOverlayAddMenu(card, left, top){
     layer.x = Number(card.dataset.overlayMenuX || .36);
     layer.y = Number(card.dataset.overlayMenuY || .34);
     card.dataset.selectedOverlayLayer = layer.id;
-    addOverlayLayerForRank(card.dataset.rank, layer);
+    addOverlayLayerForRank(card.dataset.rank, layer, overlayPlatformForItem(card));
     showOverlayInspectorForLayer(card, layer.id, left, top);
   });
   menu.querySelector("[data-overlay-place-image]")?.addEventListener("click", event => {
@@ -1616,12 +1618,13 @@ function showOverlayInspectorForLayer(card, layerId, left = null, top = null){
   const surface = card.querySelector("[data-overlay-surface]");
   const menu = card.querySelector("[data-overlay-menu]");
   if (!surface || !menu) return;
-  const layer = overlayLayersForRank(card.dataset.rank).find(item => item.id === layerId);
+  const platform = overlayPlatformForItem(card);
+  const layer = overlayLayersForRank(card.dataset.rank, platform).find(item => item.id === layerId);
   if (!layer) return;
   card.dataset.selectedOverlayLayer = layer.id;
   menu.innerHTML = overlayInspectorHtml(layer);
   bindOverlayMenuBasics(card);
-  bindOverlayInspectorControls(card, layer);
+  bindOverlayInspectorControls(card, layer, platform);
   const box = card.querySelector(`[data-overlay-layer="${CSS.escape(layer.id)}"]`);
   menu.hidden = false;
   if (box) {
@@ -1629,7 +1632,7 @@ function showOverlayInspectorForLayer(card, layerId, left = null, top = null){
   } else {
     positionOverlayMenu(surface, menu, Number(left ?? 8), Number(top ?? 8));
   }
-  renderOverlayLayerBoxes(card, overlayLayersForRank(card.dataset.rank));
+  renderOverlayLayerBoxes(card, overlayLayersForRank(card.dataset.rank, platform));
   bindOverlayDrag(card);
 }
 function positionOverlayInspectorNearLayer(surface, menu, box){
@@ -1668,9 +1671,9 @@ function bindOverlayMenuBasics(card){
   menu.querySelector("[data-overlay-close]")?.addEventListener("click", () => closeOverlayMenu(card));
   bindOverlayMenuDrag(surface, menu);
 }
-function bindOverlayInspectorControls(card, layer){
+function bindOverlayInspectorControls(card, layer, platform = overlayPlatformForItem(card)){
   const rank = card.dataset.rank;
-  const patch = (value, rerender = true) => patchOverlayLayerForRank(rank, layer.id, value, rerender);
+  const patch = (value, rerender = true) => patchOverlayLayerForRank(rank, layer.id, value, rerender, platform);
   const text = card.querySelector("[data-layer-text]");
   if (text) text.addEventListener("input", () => patch({ text: text.value, label: text.value }));
   const fontSize = card.querySelector("[data-layer-font-size]");
@@ -1688,7 +1691,7 @@ function bindOverlayInspectorControls(card, layer){
   const backgroundOpacity = card.querySelector("[data-layer-background-opacity]");
   if (backgroundOpacity) backgroundOpacity.addEventListener("input", () => patch({ background_opacity: Number(backgroundOpacity.value) }));
   card.querySelector("[data-layer-remove]")?.addEventListener("click", () => {
-    removeOverlayLayerForRank(rank, layer.id);
+    removeOverlayLayerForRank(rank, layer.id, platform);
     delete card.dataset.selectedOverlayLayer;
     closeOverlayMenu(card);
   });
@@ -2234,12 +2237,14 @@ function bindOverlayPreviewControls(){
   document.querySelectorAll("[data-overlay-preview] .caption-item video").forEach(video => {
     video.volume = defaultPreviewVolume;
   });
+  document.querySelectorAll("[data-overlay-preview] .caption-item").forEach(item => bindOverlayDrag(item));
 }
 function bindOverlayDrag(item){
   const surface = item.querySelector("[data-overlay-surface]");
   if (!surface) return;
   item.querySelectorAll("[data-overlay-drag]").forEach(box => {
     if (box.dataset.overlayKey === "none") return;
+    const platform = overlayPlatformForItem(item);
     let drag = null;
     const startDrag = event => {
       if (event.type === "mousedown" && drag) return;
@@ -2260,7 +2265,7 @@ function bindOverlayDrag(item){
       };
       if (item.classList.contains("card")) {
         item.dataset.selectedOverlayLayer = box.dataset.overlayLayer;
-        renderLayerStrip(item, overlayLayersForRank(item.dataset.rank));
+        renderLayerStrip(item, overlayLayersForRank(item.dataset.rank, platform));
       }
       if (event.pointerId !== undefined && box.setPointerCapture) box.setPointerCapture(event.pointerId);
       document.addEventListener("pointermove", moveDrag);
@@ -2293,7 +2298,7 @@ function bindOverlayDrag(item){
         box.style.setProperty("--overlay-x", patch.x);
         box.style.setProperty("--overlay-y", patch.y);
       }
-      patchOverlayLayerForRank(item.dataset.rank, box.dataset.overlayLayer, patch, false);
+      patchOverlayLayerForRank(item.dataset.rank, box.dataset.overlayLayer, patch, false, platform);
       event.preventDefault();
       event.stopPropagation();
     };
@@ -2308,7 +2313,8 @@ function bindOverlayDrag(item){
       document.removeEventListener("pointerup", endDrag);
       document.removeEventListener("pointercancel", endDrag);
       document.removeEventListener("mouseup", endDrag);
-      updateOverlayUi(item);
+      if (item.classList.contains("card")) updateOverlayUi(item);
+      else renderFinalStage();
       if (moved && item.classList.contains("card")) {
         item.dataset.overlaySuppressClick = "1";
         box.dataset.overlayJustDragged = "1";
