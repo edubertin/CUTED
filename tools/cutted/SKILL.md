@@ -97,7 +97,7 @@ The local `Efeitos` panel applies one MVP look per selected cut:
 
 The local format strip below each video is the active edit preset selector. TikTok, Shorts, Instagram, Facebook, and YouTube each keep their own camera line, effects, call-to-action layers, image layers, and saved positions. The `Export` dock only controls which platform presets enter the render queue.
 
-The local `Chamadas` panel turns the preview into a composition canvas. The video only plays through the explicit preview bar, defaults to 20% volume, and has a local mute toggle, so clicks on the canvas can place layers without starting playback. Clicking the preview opens a dismissible and draggable call-to-action menu at that point before the user chooses, drags, or resizes a card. A cut can hold multiple call-to-action cards, and the panel also accepts transparent PNG/WebP/JPEG uploads as image layers. The local `Legenda` panel holds the caption line/width controls used by the final render:
+The local `Chamadas` panel turns the preview into a composition canvas. The video only plays through the compact preview dock, defaults to 20% volume, and has local mute plus small volume step controls, so clicks on the canvas can place layers without starting playback. Clicking the preview opens a dismissible and draggable call-to-action menu at that point before the user chooses, drags, or resizes a card. A cut can hold multiple call-to-action cards, and the panel also accepts transparent PNG/WebP/JPEG uploads as image layers. The local `Legenda` panel holds the caption line/width controls used by the final render:
 
 - `Sem chamada`: clean output.
 - `Inscreva-se`: subscribe-style CTA.
