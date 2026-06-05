@@ -1,0 +1,4 @@
+samples/**/cutted-serve-*.log
+samples/**/cutted-serve-*.err.log
+__pycache__/
+*.pyc
