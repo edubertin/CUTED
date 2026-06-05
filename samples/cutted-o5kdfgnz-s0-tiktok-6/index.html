@@ -9,7 +9,7 @@
 header{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;gap:16px;align-items:center;padding:16px 22px;background:#050505;border-bottom:1px solid #202020}.header-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 h1{margin:0;font-size:22px;letter-spacing:0}header p{margin:3px 0 0;color:#9a9a9a}.tabs{position:sticky;top:70px;z-index:4;display:flex;gap:8px;padding:10px 22px;background:#060606;border-bottom:1px solid #1f1f1f}.tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 12px}.tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}.config{position:sticky;top:119px;z-index:3;display:flex;justify-content:space-between;gap:14px;align-items:center;padding:12px 22px;background:#080808;border-bottom:1px solid #202020}.config strong{display:block;font-size:13px}.config span{color:#9a9a9a;font-size:12px}.segments{display:flex;gap:6px;flex-wrap:wrap}.segments button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.segments button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}
 main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px}.card{border:1px solid #272727;border-radius:8px;background:#0d0d0d;overflow:hidden}.card[open]{border-color:#3b3b3b;background:#101010}.card.liked{border-color:#24d17e}.card.discarded{opacity:.46}.clip-summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;min-height:62px;padding:12px 14px;cursor:pointer;list-style:none}.clip-summary::-webkit-details-marker{display:none}.clip-rank{color:#8f8f8f;font-weight:700}.clip-title{display:grid;gap:2px;min-width:0}.clip-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}.clip-title small{color:#9c9c9c}.clip-status{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.clip-status span,.format-previews span{display:inline-flex;align-items:center;min-height:26px;padding:4px 8px;border-radius:999px;background:#242424;color:#ddd;font-size:12px}
-.editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;gap:10px}.media{position:relative;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000;pointer-events:none}.placeholder{display:grid;place-items:center;height:100%;color:#777}.preview-play{position:absolute;z-index:5;left:10px;bottom:10px;min-width:68px;padding:7px 10px;background:rgba(244,244,244,.92);color:#050505;border:1px solid rgba(255,255,255,.35);box-shadow:0 8px 24px rgba(0,0,0,.32)}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip,.card-tabs{display:flex;gap:6px;flex-wrap:wrap}.preview-strip button,.card-tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.preview-strip button.active,.card-tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}
+.editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;gap:10px}.media{position:relative;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000;pointer-events:none}.placeholder{display:grid;place-items:center;height:100%;color:#777}.preview-bar{display:grid;gap:8px;padding:8px;border:1px solid #252525;border-radius:8px;background:#0a0a0a}.preview-controls{display:flex;gap:6px;align-items:center}.preview-play,.preview-volume{min-width:72px;background:#f4f4f4;color:#050505;border:1px solid #f4f4f4}.preview-volume{background:#191919;color:#ddd;border-color:#333}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip,.card-tabs{display:flex;gap:6px;flex-wrap:wrap}.preview-strip button,.card-tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.preview-strip button.active,.card-tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-panel{display:none;border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:12px}.tool-panel.active{display:block}.tool-summary{margin-bottom:10px;color:#d8d8d8}.timeline-editor{padding:0}.timeline-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.timeline-head output{color:#f4f4f4;text-align:right}.timeline{position:relative;height:34px;margin-top:8px}.timeline-track{position:absolute;left:0;right:0;top:14px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:#f4f4f4;border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:34px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{display:flex;justify-content:space-between;color:#aaa;font-size:12px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .export-dock{display:grid;gap:8px;margin-top:2px;padding:12px;border:1px solid #303030;border-radius:8px;background:#111}.export-dock strong{display:block;font-size:13px}.export-dock span{color:#a8a8a8;font-size:12px}
 .platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:#191919;color:#ddd;border:1px solid #333;text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:#f4f4f4;border-color:#24d17e}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:#aaa;font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:#24d17e}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:#050505;color:#f4f4f4;border:1px solid #333;border-radius:6px;padding:8px}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:160px 180px;gap:12px;max-width:380px}
@@ -81,14 +81,19 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
             <div class="camera-reticle"></div>
             <div data-overlay-layer-list></div>
             <div class="overlay-menu" data-overlay-menu hidden></div>
-            <button class="preview-play" data-preview-play type="button">Play</button>
           </div>
-          <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
-            <button data-card-format-preview="tiktok" class="active">TikTok</button>
-            <button data-card-format-preview="shorts">Shorts</button>
-            <button data-card-format-preview="instagram">Instagram</button>
-            <button data-card-format-preview="facebook">Facebook</button>
-            <button data-card-format-preview="youtube">YouTube</button>
+          <div class="preview-bar">
+            <div class="preview-controls">
+              <button class="preview-play" data-preview-play type="button">Play</button>
+              <button class="preview-volume" data-preview-volume type="button">Vol 20%</button>
+            </div>
+            <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
+              <button data-card-format-preview="tiktok" class="active">TikTok</button>
+              <button data-card-format-preview="shorts">Shorts</button>
+              <button data-card-format-preview="instagram">Instagram</button>
+              <button data-card-format-preview="facebook">Facebook</button>
+              <button data-card-format-preview="youtube">YouTube</button>
+            </div>
           </div>
         </div>
         <div class="editor-tools">
@@ -192,14 +197,19 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
             <div class="camera-reticle"></div>
             <div data-overlay-layer-list></div>
             <div class="overlay-menu" data-overlay-menu hidden></div>
-            <button class="preview-play" data-preview-play type="button">Play</button>
           </div>
-          <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
-            <button data-card-format-preview="tiktok" class="active">TikTok</button>
-            <button data-card-format-preview="shorts">Shorts</button>
-            <button data-card-format-preview="instagram">Instagram</button>
-            <button data-card-format-preview="facebook">Facebook</button>
-            <button data-card-format-preview="youtube">YouTube</button>
+          <div class="preview-bar">
+            <div class="preview-controls">
+              <button class="preview-play" data-preview-play type="button">Play</button>
+              <button class="preview-volume" data-preview-volume type="button">Vol 20%</button>
+            </div>
+            <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
+              <button data-card-format-preview="tiktok" class="active">TikTok</button>
+              <button data-card-format-preview="shorts">Shorts</button>
+              <button data-card-format-preview="instagram">Instagram</button>
+              <button data-card-format-preview="facebook">Facebook</button>
+              <button data-card-format-preview="youtube">YouTube</button>
+            </div>
           </div>
         </div>
         <div class="editor-tools">
@@ -303,14 +313,19 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
             <div class="camera-reticle"></div>
             <div data-overlay-layer-list></div>
             <div class="overlay-menu" data-overlay-menu hidden></div>
-            <button class="preview-play" data-preview-play type="button">Play</button>
           </div>
-          <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
-            <button data-card-format-preview="tiktok" class="active">TikTok</button>
-            <button data-card-format-preview="shorts">Shorts</button>
-            <button data-card-format-preview="instagram">Instagram</button>
-            <button data-card-format-preview="facebook">Facebook</button>
-            <button data-card-format-preview="youtube">YouTube</button>
+          <div class="preview-bar">
+            <div class="preview-controls">
+              <button class="preview-play" data-preview-play type="button">Play</button>
+              <button class="preview-volume" data-preview-volume type="button">Vol 20%</button>
+            </div>
+            <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
+              <button data-card-format-preview="tiktok" class="active">TikTok</button>
+              <button data-card-format-preview="shorts">Shorts</button>
+              <button data-card-format-preview="instagram">Instagram</button>
+              <button data-card-format-preview="facebook">Facebook</button>
+              <button data-card-format-preview="youtube">YouTube</button>
+            </div>
           </div>
         </div>
         <div class="editor-tools">
@@ -414,14 +429,19 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
             <div class="camera-reticle"></div>
             <div data-overlay-layer-list></div>
             <div class="overlay-menu" data-overlay-menu hidden></div>
-            <button class="preview-play" data-preview-play type="button">Play</button>
           </div>
-          <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
-            <button data-card-format-preview="tiktok" class="active">TikTok</button>
-            <button data-card-format-preview="shorts">Shorts</button>
-            <button data-card-format-preview="instagram">Instagram</button>
-            <button data-card-format-preview="facebook">Facebook</button>
-            <button data-card-format-preview="youtube">YouTube</button>
+          <div class="preview-bar">
+            <div class="preview-controls">
+              <button class="preview-play" data-preview-play type="button">Play</button>
+              <button class="preview-volume" data-preview-volume type="button">Vol 20%</button>
+            </div>
+            <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
+              <button data-card-format-preview="tiktok" class="active">TikTok</button>
+              <button data-card-format-preview="shorts">Shorts</button>
+              <button data-card-format-preview="instagram">Instagram</button>
+              <button data-card-format-preview="facebook">Facebook</button>
+              <button data-card-format-preview="youtube">YouTube</button>
+            </div>
           </div>
         </div>
         <div class="editor-tools">
@@ -525,14 +545,19 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
             <div class="camera-reticle"></div>
             <div data-overlay-layer-list></div>
             <div class="overlay-menu" data-overlay-menu hidden></div>
-            <button class="preview-play" data-preview-play type="button">Play</button>
           </div>
-          <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
-            <button data-card-format-preview="tiktok" class="active">TikTok</button>
-            <button data-card-format-preview="shorts">Shorts</button>
-            <button data-card-format-preview="instagram">Instagram</button>
-            <button data-card-format-preview="facebook">Facebook</button>
-            <button data-card-format-preview="youtube">YouTube</button>
+          <div class="preview-bar">
+            <div class="preview-controls">
+              <button class="preview-play" data-preview-play type="button">Play</button>
+              <button class="preview-volume" data-preview-volume type="button">Vol 20%</button>
+            </div>
+            <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
+              <button data-card-format-preview="tiktok" class="active">TikTok</button>
+              <button data-card-format-preview="shorts">Shorts</button>
+              <button data-card-format-preview="instagram">Instagram</button>
+              <button data-card-format-preview="facebook">Facebook</button>
+              <button data-card-format-preview="youtube">YouTube</button>
+            </div>
           </div>
         </div>
         <div class="editor-tools">
@@ -636,14 +661,19 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
             <div class="camera-reticle"></div>
             <div data-overlay-layer-list></div>
             <div class="overlay-menu" data-overlay-menu hidden></div>
-            <button class="preview-play" data-preview-play type="button">Play</button>
           </div>
-          <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
-            <button data-card-format-preview="tiktok" class="active">TikTok</button>
-            <button data-card-format-preview="shorts">Shorts</button>
-            <button data-card-format-preview="instagram">Instagram</button>
-            <button data-card-format-preview="facebook">Facebook</button>
-            <button data-card-format-preview="youtube">YouTube</button>
+          <div class="preview-bar">
+            <div class="preview-controls">
+              <button class="preview-play" data-preview-play type="button">Play</button>
+              <button class="preview-volume" data-preview-volume type="button">Vol 20%</button>
+            </div>
+            <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
+              <button data-card-format-preview="tiktok" class="active">TikTok</button>
+              <button data-card-format-preview="shorts">Shorts</button>
+              <button data-card-format-preview="instagram">Instagram</button>
+              <button data-card-format-preview="facebook">Facebook</button>
+              <button data-card-format-preview="youtube">YouTube</button>
+            </div>
           </div>
         </div>
         <div class="editor-tools">
@@ -764,6 +794,7 @@ const platformMeta = {
   facebook: { label: "Facebook", width: 1080, height: 1350 },
   youtube: { label: "YouTube", width: 1920, height: 1080 }
 };
+const previewVolume = 0.2;
 const effectMeta = {
   none: { label: "Sem efeito", note: "Preview limpo" },
   "light-grain": { label: "Chuvisco Leve", note: "Granulado sutil" },
@@ -1346,12 +1377,17 @@ function togglePreviewPlayback(card){
   const video = card.querySelector("video");
   if (!video) return;
   loadCardVideo(card);
+  applyPreviewVolume(video);
   if (video.paused) {
     const playback = video.play();
     if (playback && typeof playback.catch === "function") playback.catch(() => syncPreviewPlayButton(card));
     return;
   }
   video.pause();
+}
+function applyPreviewVolume(video){
+  if (!video) return;
+  video.volume = previewVolume;
 }
 function syncPreviewPlayButton(card){
   const button = card.querySelector("[data-preview-play]");
@@ -1364,12 +1400,32 @@ function syncPreviewPlayButton(card){
   button.hidden = false;
   button.textContent = video.paused ? "Play" : "Pause";
 }
+function togglePreviewVolume(card){
+  const video = card.querySelector("video");
+  if (!video) return;
+  applyPreviewVolume(video);
+  video.muted = !video.muted;
+  syncPreviewVolumeButton(card);
+}
+function syncPreviewVolumeButton(card){
+  const button = card.querySelector("[data-preview-volume]");
+  const video = card.querySelector("video");
+  if (!button) return;
+  if (!video) {
+    button.hidden = true;
+    return;
+  }
+  button.hidden = false;
+  button.textContent = video.muted ? "Mudo" : "Vol 20%";
+}
 function loadCardVideo(card){
   const video = card.querySelector("video[data-src]");
   if (!video || video.getAttribute("src")) return;
   video.setAttribute("src", video.dataset.src);
+  applyPreviewVolume(video);
   video.load();
   syncPreviewPlayButton(card);
+  syncPreviewVolumeButton(card);
 }
 function unloadCardVideo(card){
   const video = card.querySelector("video[data-src]");
@@ -1378,6 +1434,7 @@ function unloadCardVideo(card){
   video.removeAttribute("src");
   video.load();
   syncPreviewPlayButton(card);
+  syncPreviewVolumeButton(card);
 }
 function activateCard(card){
   document.querySelectorAll(".card[open]").forEach(item => {
@@ -1974,8 +2031,17 @@ document.querySelectorAll(".card").forEach(card => {
       togglePreviewPlayback(card);
     });
   }
+  const volumeButton = card.querySelector("[data-preview-volume]");
+  if (volumeButton) {
+    volumeButton.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      togglePreviewVolume(card);
+    });
+  }
   const video = card.querySelector("video");
   if (video) {
+    applyPreviewVolume(video);
     video.addEventListener("play", () => {
       const values = trimValues(card);
       if (video.currentTime < values.trimStart || video.currentTime >= values.duration - values.trimEnd) {
@@ -1986,6 +2052,9 @@ document.querySelectorAll(".card").forEach(card => {
     video.addEventListener("pause", () => {
       syncPreviewPlayButton(card);
     });
+    video.addEventListener("volumechange", () => {
+      syncPreviewVolumeButton(card);
+    });
     video.addEventListener("timeupdate", () => {
       const values = trimValues(card);
       if (video.currentTime >= values.duration - values.trimEnd) {
@@ -1995,6 +2064,7 @@ document.querySelectorAll(".card").forEach(card => {
     });
   }
   syncPreviewPlayButton(card);
+  syncPreviewVolumeButton(card);
   card.querySelectorAll("[data-trim]").forEach(input => input.addEventListener("input", () => {
     const current = cardState(card.dataset.rank);
     const duration = Number(card.dataset.duration);
