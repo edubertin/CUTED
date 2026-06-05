@@ -129,9 +129,13 @@ CAMERA_PRESETS = {
     "face-left": CameraPreset("face-left", "Rosto a esquerda", "Prioriza quem esta do lado esquerdo"),
     "face-right": CameraPreset("face-right", "Rosto a direita", "Prioriza quem esta do lado direito"),
     "alternate": CameraPreset("alternate", "Alternar focos", "Movimento suave entre lados"),
+    "jump-cut": CameraPreset("jump-cut", "Corte entre focos", "Troca seca entre lados, sem pan"),
     "soft-zoom": CameraPreset("soft-zoom", "Zoom sutil", "Aproxima o enquadramento sem mudar o lado"),
     "punch-in": CameraPreset("punch-in", "Punch-in", "Corte mais fechado para dar energia"),
 }
+
+CAMERA_SEGMENT_PARTS = ("start", "middle", "end")
+CAMERA_SEGMENT_LABELS = {"start": "Inicio", "middle": "Meio", "end": "Fim"}
 
 OVERLAY_PRESETS = {
     "none": OverlayPreset("none", "Sem chamada", "", "", "0x000000"),
@@ -602,21 +606,26 @@ def render_captioned_clip(
     input_path: Path, output_path: Path, subtitle_path: Path, row: dict[str, object],
     preset: PlatformPreset, out_dir: Path, ffmpeg: str
 ) -> None:
-    filters = [camera_filter(preset, row), f"ass={subtitle_filter_path(subtitle_path, out_dir)}"]
+    filters = [f"ass={subtitle_filter_path(subtitle_path, out_dir)}"]
     effect = effect_filter(row)
     if effect:
         filters.append(effect)
     overlay = overlay_filter(row, preset)
     if overlay:
         filters.append(overlay)
-    filter_arg = ",".join(filters)
-    command = [
-        ffmpeg, "-y", "-ss", fmt_time(caption_trim_start(row)), "-i", str(input_path),
-        "-t", fmt_time(caption_duration(row)), "-vf", filter_arg,
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", video_crf(row),
-        "-c:a", "aac", "-movflags", "+faststart", str(output_path),
-    ]
+    command = captioned_ffmpeg_command(input_path, output_path, row, preset, ffmpeg, filters)
     subprocess.run(command, check=True, capture_output=True, text=True, cwd=str(out_dir))
+
+
+def captioned_ffmpeg_command(
+    input_path: Path, output_path: Path, row: dict[str, object], preset: PlatformPreset,
+    ffmpeg: str, filters: list[str]
+) -> list[str]:
+    base = [
+        ffmpeg, "-y", "-ss", fmt_time(caption_trim_start(row)), "-i", str(input_path),
+        "-t", fmt_time(caption_duration(row)),
+    ]
+    return render_command(base, output_path, row, preset, filters, caption_duration(row))
 
 
 def caption_trim_start(row: dict[str, object]) -> float:
@@ -665,13 +674,31 @@ def render_platform_clip(
     input_path: Path, output_path: Path, start: float, duration: float,
     preset: PlatformPreset, row: dict[str, object], ffmpeg: str
 ) -> None:
-    filter_arg = video_filter(preset, row)
-    command = [
+    filters = post_camera_filters(preset, row)
+    base = [
         ffmpeg, "-y", "-ss", fmt_time(start), "-i", str(input_path), "-t", fmt_time(duration),
-        "-vf", filter_arg, "-c:v", "libx264", "-preset", "veryfast", "-crf", video_crf(row),
+    ]
+    command = render_command(base, output_path, row, preset, filters, duration)
+    subprocess.run(command, check=True, capture_output=True, text=True)
+
+
+def render_command(
+    base: list[str], output_path: Path, row: dict[str, object], preset: PlatformPreset,
+    filters: list[str], duration: float
+) -> list[str]:
+    if camera_is_sequence(row):
+        filter_arg = camera_sequence_filter(preset, row, duration, filters)
+        return [
+            *base, "-filter_complex", filter_arg, "-map", "[vout]", "-map", "0:a?",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", video_crf(row),
+            "-c:a", "aac", "-movflags", "+faststart", str(output_path),
+        ]
+    filter_arg = ",".join([camera_filter(preset, row), *filters])
+    return [
+        *base, "-vf", filter_arg,
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", video_crf(row),
         "-c:a", "aac", "-movflags", "+faststart", str(output_path),
     ]
-    subprocess.run(command, check=True, capture_output=True, text=True)
 
 
 def platform_filter(preset: PlatformPreset) -> str:
@@ -680,17 +707,29 @@ def platform_filter(preset: PlatformPreset) -> str:
 
 def video_filter(preset: PlatformPreset, row: dict[str, object]) -> str:
     filters = [camera_filter(preset, row)]
+    filters.extend(post_camera_filters(preset, row))
+    return ",".join(filters)
+
+
+def post_camera_filters(preset: PlatformPreset, row: dict[str, object]) -> list[str]:
+    filters = []
     effect = effect_filter(row)
     if effect:
         filters.append(effect)
     overlay = overlay_filter(row, preset)
     if overlay:
         filters.append(overlay)
-    return ",".join(filters)
+    return filters
 
 
 def camera_filter(preset: PlatformPreset, row: dict[str, object]) -> str:
     camera = camera_from_row(row)
+    if camera["key"] == "sequence":
+        camera = default_camera()
+    return camera_filter_from_camera(preset, camera)
+
+
+def camera_filter_from_camera(preset: PlatformPreset, camera: dict[str, object]) -> str:
     zoom = camera_zoom(camera)
     target_w = int(round(preset.width * zoom))
     target_h = int(round(preset.height * zoom))
@@ -711,6 +750,10 @@ def camera_crop_x(camera: dict[str, object]) -> str:
     if key == "alternate":
         amplitude = 0.12 + (strength / 100.0) * 0.22
         return f"(iw-ow)*(0.5+{amplitude:.3f}*sin(2*PI*t/6))"
+    if key == "jump-cut":
+        left = 0.22 - strength * 0.0012
+        right = 0.78 + strength * 0.0012
+        return f"if(lt(mod(t\\,6)\\,3)\\,(iw-ow)*{clamp(left, 0.0, 1.0):.3f}\\,(iw-ow)*{clamp(right, 0.0, 1.0):.3f})"
     return crop_ratio_expr(0.5)
 
 
@@ -734,6 +777,8 @@ def camera_from_row(row: dict[str, object]) -> dict[str, object]:
     raw = row.get("camera")
     if not isinstance(raw, dict):
         return default_camera()
+    if raw.get("key") == "sequence" or isinstance(raw.get("segments"), list):
+        return sequence_camera_from_raw(raw)
     key = str(raw.get("key") or "center")
     preset = CAMERA_PRESETS.get(key, CAMERA_PRESETS["center"])
     strength = clamp(float(raw.get("strength") if raw.get("strength") is not None else 60.0), 0.0, 100.0)
@@ -742,6 +787,59 @@ def camera_from_row(row: dict[str, object]) -> dict[str, object]:
 
 def default_camera() -> dict[str, object]:
     return {"key": "center", "label": CAMERA_PRESETS["center"].label, "strength": 60}
+
+
+def sequence_camera_from_raw(raw: dict[str, object]) -> dict[str, object]:
+    source = raw.get("segments") if isinstance(raw.get("segments"), list) else []
+    segments = [camera_segment_from_source(source, part) for part in CAMERA_SEGMENT_PARTS]
+    return {"key": "sequence", "label": "Linha de camera", "strength": 60, "segments": segments}
+
+
+def camera_segment_from_source(source: object, part: str) -> dict[str, object]:
+    raw = {}
+    if isinstance(source, list):
+        raw = next((item for item in source if isinstance(item, dict) and item.get("part") == part), {})
+    key = str(raw.get("key") or "center")
+    preset = CAMERA_PRESETS.get(key, CAMERA_PRESETS["center"])
+    strength = clamp(float(raw.get("strength") if raw.get("strength") is not None else 60.0), 0.0, 100.0)
+    return {"part": part, "part_label": CAMERA_SEGMENT_LABELS[part], "key": preset.key, "label": preset.label, "strength": strength}
+
+
+def camera_is_sequence(row: dict[str, object]) -> bool:
+    return camera_from_row(row).get("key") == "sequence"
+
+
+def camera_sequence_filter(
+    preset: PlatformPreset, row: dict[str, object], duration: float, filters: list[str]
+) -> str:
+    camera = camera_from_row(row)
+    segments = camera.get("segments") if isinstance(camera.get("segments"), list) else []
+    split_filters = camera_split_filters(preset, segments, duration)
+    tail = ",".join(filters)
+    concat = "".join(f"[cv{index}]" for index in range(3)) + "concat=n=3:v=1:a=0"
+    if tail:
+        concat = f"{concat},{tail}"
+    return ";".join([*split_filters, f"{concat}[vout]"])
+
+
+def camera_split_filters(preset: PlatformPreset, segments: object, duration: float) -> list[str]:
+    filters = []
+    bounds = camera_segment_bounds(duration)
+    safe_segments = segments if isinstance(segments, list) else []
+    for index, (start, end) in enumerate(bounds):
+        segment = safe_segments[index] if index < len(safe_segments) and isinstance(safe_segments[index], dict) else default_camera()
+        filters.append(
+            f"[0:v]trim=start={start:.3f}:end={end:.3f},setpts=PTS-STARTPTS,"
+            f"{camera_filter_from_camera(preset, segment)}[cv{index}]"
+        )
+    return filters
+
+
+def camera_segment_bounds(duration: float) -> list[tuple[float, float]]:
+    safe_duration = max(duration, 0.3)
+    first = safe_duration / 3.0
+    second = first * 2.0
+    return [(0.0, first), (first, second), (second, safe_duration)]
 
 
 def effect_filter(row: dict[str, object]) -> str:
@@ -1500,7 +1598,7 @@ body[data-format=tiktok] .media,body[data-format=shorts] .media,body[data-format
 p{color:#bebebe}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}
 .timeline-editor{padding:10px 14px 12px;background:#090909;border-top:1px solid #1e1e1e;border-bottom:1px solid #222}.timeline-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.timeline-head output{color:#f4f4f4;text-align:right}.timeline{position:relative;height:34px;margin-top:8px}.timeline-track{position:absolute;left:0;right:0;top:14px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:#f4f4f4;border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:34px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{display:flex;justify-content:space-between;color:#aaa;font-size:12px}
 .format-editor{display:block;padding:12px 14px;background:#090909;border-bottom:1px solid #222}.format-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.format-head output{color:#f4f4f4;text-align:right}.platform-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.platform-tags button{background:#191919;color:#ddd;border:1px solid #333}.platform-tags button.active{background:#24d17e;color:#04130b;border-color:#24d17e}.camera-stage,.effect-stage,.overlay-stage{display:none;margin:18px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.camera-stage p,.effect-stage p,.overlay-stage p{margin:4px 0 0}.caption-settings{display:grid;grid-template-columns:160px 180px;gap:12px;margin-top:16px;max-width:380px}.caption-settings label{display:grid;gap:6px;color:#aaa}.caption-settings select,.caption-settings input{width:100%;background:#050505;color:#f4f4f4;border:1px solid #333;border-radius:6px;padding:9px}.camera-summary,.effect-summary,.overlay-summary{margin-top:12px;color:#aaa}.caption-item{border:1px solid #2a2a2a;border-radius:8px;background:#0a0a0a;overflow:hidden}.caption-preview{position:relative;display:flex;justify-content:center;background:#000;overflow:hidden}.caption-preview video,.caption-preview img{width:100%;max-height:64vh;object-fit:cover;background:#000}.caption-item[data-platform=tiktok] video,.caption-item[data-platform=shorts] video,.caption-item[data-platform=instagram] video{aspect-ratio:9/16}.caption-item[data-platform=facebook] video{aspect-ratio:4/5}.caption-item[data-platform=youtube] video{aspect-ratio:16/9}.caption-item-body{padding:12px}.caption-item strong{display:block}.caption-item span{display:inline-flex;margin:8px 8px 0 0;padding:4px 8px;border-radius:999px;background:#242424;color:#ddd;font-size:12px}.caption-item dl{margin-top:10px}
-.camera-preview,.effect-preview,.overlay-preview{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin-top:16px;align-items:start}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px;margin-top:12px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:#191919;color:#ddd;border:1px solid #333;text-align:left}.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;border-color:#24d17e}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label{display:grid;gap:6px;color:#aaa;font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:#24d17e}.camera-empty,.effect-empty,.overlay-empty{padding:18px;border:1px dashed #333;border-radius:8px;color:#aaa}.camera-surface video{object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%}.camera-surface[data-camera-key=alternate] video{animation:camera-pan 6s ease-in-out infinite alternate}@keyframes camera-pan{0%{object-position:22% 50%}100%{object-position:78% 50%}}.camera-reticle{position:absolute;inset:14% 22%;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,#24d17e);border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-resize{position:absolute;right:5px;bottom:5px;width:14px;height:14px;padding:0;border:1px solid rgba(255,255,255,.42);border-radius:3px;background:rgba(255,255,255,.18);cursor:nwse-resize}
+.camera-preview,.effect-preview,.overlay-preview{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin-top:16px;align-items:start}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px;margin-top:12px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:#191919;color:#ddd;border:1px solid #333;text-align:left}.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;border-color:#24d17e}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label{display:grid;gap:6px;color:#aaa;font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:#24d17e}.camera-card-controls select{width:100%;background:#050505;color:#f4f4f4;border:1px solid #333;border-radius:6px;padding:8px}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.camera-empty,.effect-empty,.overlay-empty{padding:18px;border:1px dashed #333;border-radius:8px;color:#aaa}.camera-surface video{object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%}.camera-surface[data-camera-key=alternate] video{animation:camera-pan 6s ease-in-out infinite alternate}.camera-surface[data-camera-key=jump-cut] video{animation:camera-jump 3s steps(1,end) infinite alternate}@keyframes camera-pan{0%{object-position:22% 50%}100%{object-position:78% 50%}}@keyframes camera-jump{0%{object-position:22% 50%}50%{object-position:78% 50%}100%{object-position:78% 50%}}.camera-reticle{position:absolute;inset:14% 22%;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,#24d17e);border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-resize{position:absolute;right:5px;bottom:5px;width:14px;height:14px;padding:0;border:1px solid rgba(255,255,255,.42);border-radius:3px;background:rgba(255,255,255,.18);cursor:nwse-resize}
 body[data-tab=camera] main,body[data-tab=camera] .config,body[data-tab=camera] .effect-stage,body[data-tab=camera] .overlay-stage,body[data-tab=camera] .final-stage{display:none}body[data-tab=camera] .camera-stage{display:block}
 body[data-tab=effects] main,body[data-tab=effects] .config,body[data-tab=effects] .camera-stage,body[data-tab=effects] .overlay-stage,body[data-tab=effects] .final-stage{display:none}body[data-tab=effects] .effect-stage{display:block}
 body[data-tab=overlays] main,body[data-tab=overlays] .config,body[data-tab=overlays] .camera-stage,body[data-tab=overlays] .effect-stage,body[data-tab=overlays] .final-stage{display:none}body[data-tab=overlays] .overlay-stage{display:block}
@@ -1508,7 +1606,7 @@ body[data-tab=final] main,body[data-tab=final] .config,body[data-tab=final] .cam
 details{border-top:1px solid #242424;margin-top:12px;padding-top:10px}summary{cursor:pointer;color:#ddd}.actions{display:flex;gap:8px;margin-top:12px}
 button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 12px;cursor:pointer}#reset-ui,button[data-action=discard]{background:#242424;color:#ddd}
 button[data-action=reset-trim]{background:#191919;color:#ddd;border:1px solid #333}
-@media(max-width:760px){.tabs{top:94px;overflow:auto}.config{top:144px;align-items:flex-start;flex-direction:column}.segments button{font-size:12px;padding:7px 9px}main{grid-template-columns:1fr;padding:12px}.camera-preview,.effect-preview,.overlay-preview,.caption-settings,.result-body{grid-template-columns:1fr}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}}
+@media(max-width:760px){.tabs{top:94px;overflow:auto}.config{top:144px;align-items:flex-start;flex-direction:column}.segments button{font-size:12px;padding:7px 9px}main{grid-template-columns:1fr;padding:12px}.camera-preview,.effect-preview,.overlay-preview,.caption-settings,.result-body,.camera-segments{grid-template-columns:1fr}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}}
 """
 
 
@@ -1560,9 +1658,15 @@ const cameraMeta = {
   "face-left": { label: "Rosto a esquerda", note: "Prioriza a pessoa da esquerda", x: 22, scale: 1 },
   "face-right": { label: "Rosto a direita", note: "Prioriza a pessoa da direita", x: 78, scale: 1 },
   alternate: { label: "Alternar focos", note: "Pan suave entre lados", x: 50, scale: 1 },
+  "jump-cut": { label: "Corte entre focos", note: "Troca seca entre lados", x: 50, scale: 1 },
   "soft-zoom": { label: "Zoom sutil", note: "Aproxima sem trocar o foco", x: 50, scale: 1.12 },
   "punch-in": { label: "Punch-in", note: "Mais fechado e energetico", x: 50, scale: 1.22 }
 };
+const cameraParts = [
+  { key: "start", label: "Inicio" },
+  { key: "middle", label: "Meio" },
+  { key: "end", label: "Fim" }
+];
 const overlayMeta = {
   none: { label: "Sem chamada", title: "", subtitle: "", accent: "#000000" },
   subscribe: { label: "Inscreva-se", title: "Inscreva-se", subtitle: "Novos cortes toda semana", accent: "#ff3b30" },
@@ -1598,28 +1702,53 @@ function applyTab(tab){
 function platformLabel(key){
   return (platformMeta[key] || { label: key }).label;
 }
-function defaultCamera(){ return { key: "center", label: cameraMeta.center.label, strength: 60 }; }
+function defaultCamera(){ return cameraSequence(cameraParts.map(part => defaultCameraSegment(part.key))); }
+function defaultCameraSegment(part){ return { part, part_label: cameraPartLabel(part), key: "center", label: cameraMeta.center.label, strength: 60 }; }
+function cameraPartLabel(part){ return (cameraParts.find(item => item.key === part) || { label: part }).label; }
+function cameraSequence(segments){ return { key: "sequence", label: "Linha de camera", strength: 60, segments }; }
 function normalizeCamera(camera){
+  if (camera?.key === "sequence" || Array.isArray(camera?.segments)) {
+    const source = Array.isArray(camera?.segments) ? camera.segments : [];
+    return cameraSequence(cameraParts.map(part => normalizeCameraSegment(source.find(item => item?.part === part.key), part.key)));
+  }
+  const base = normalizeSingleCamera(camera);
+  return cameraSequence(cameraParts.map(part => Object.assign({ part: part.key, part_label: part.label }, base)));
+}
+function cameraLabel(camera){
+  const current = normalizeCamera(camera);
+  const active = current.segments.filter(segment => segment.key !== "center");
+  if (!active.length) return cameraMeta.center.label;
+  return active.map(segment => `${segment.part_label}: ${segment.label}`).join(" | ");
+}
+function cameraForRank(rank){ return normalizeCamera(cardState(String(rank)).camera); }
+function setCameraSegmentForRank(rank, part, patch){
+  const current = cardState(String(rank));
+  const camera = normalizeCamera(current.camera);
+  const segments = camera.segments.map(segment => {
+    if (segment.part !== part) return segment;
+    return normalizeCameraSegment(Object.assign({}, segment, patch), part);
+  });
+  setCardState(String(rank), { camera: cameraSequence(segments) });
+  renderCameraPreview();
+  renderFinalStage();
+}
+function normalizeSingleCamera(camera){
   const key = cameraMeta[camera?.key] ? camera.key : "center";
   const strength = Math.max(0, Math.min(Number(camera?.strength ?? 60), 100));
   return { key, label: cameraMeta[key].label, strength };
 }
-function cameraLabel(camera){
-  const current = normalizeCamera(camera);
-  return current.key === "center" ? current.label : `${current.label} - ${current.strength}%`;
+function normalizeCameraSegment(segment, part){
+  const current = normalizeSingleCamera(segment);
+  return Object.assign({ part, part_label: cameraPartLabel(part) }, current);
 }
-function cameraForRank(rank){ return normalizeCamera(cardState(String(rank)).camera); }
-function setCameraForRank(rank, patch){
-  const current = cardState(String(rank));
-  setCardState(String(rank), { camera: normalizeCamera(Object.assign({}, current.camera, patch)) });
-  renderCameraPreview();
-  renderFinalStage();
+function cameraHasMovement(camera){
+  return normalizeCamera(camera).segments.some(segment => segment.key !== "center");
 }
 function cameraStyle(camera){
-  const current = normalizeCamera(camera);
+  const current = normalizeSingleCamera(camera);
   const meta = cameraMeta[current.key] || cameraMeta.center;
   const strengthScale = current.key === "punch-in" ? current.strength / 500 : current.strength / 900;
-  const scale = current.key === "center" || current.key === "face-left" || current.key === "face-right" || current.key === "alternate"
+  const scale = current.key === "center" || current.key === "face-left" || current.key === "face-right" || current.key === "alternate" || current.key === "jump-cut"
     ? meta.scale
     : meta.scale + strengthScale;
   return `--camera-x:${meta.x}%;--camera-scale:${scale}`;
@@ -1880,9 +2009,10 @@ function renderCameraPreview(){
 }
 function cameraPreviewItemHtml(item){
   const camera = normalizeCamera(item.camera);
+  const previewSegment = camera.segments.find(segment => segment.key !== "center") || camera.segments[0] || defaultCameraSegment("start");
   const src = cacheBustedPreview(item.clip_file || "", `camera-${item.rank}-${item.adjusted_start}-${item.adjusted_end}`);
   return `<article class="caption-item" data-rank="${escapeAttr(item.rank)}" data-platform="${escapeAttr(item.platform)}">
-    <div class="caption-preview camera-surface" data-camera-key="${escapeAttr(camera.key)}" style="${escapeAttr(cameraStyle(camera))}">
+    <div class="caption-preview camera-surface" data-camera-key="${escapeAttr(previewSegment.key)}" style="${escapeAttr(cameraStyle(previewSegment))}">
       <video controls preload="metadata" src="${escapeAttr(src)}"></video>
       <div class="camera-reticle"></div>
     </div>
@@ -1890,33 +2020,40 @@ function cameraPreviewItemHtml(item){
       <strong>Preview #${String(item.rank).padStart(2, "0")} ${escapeHtml(item.title || "")}</strong>
       <span>${escapeHtml(item.platform_label)}</span><span data-camera-current>${escapeHtml(cameraLabel(camera))}</span>
       <div class="camera-card-controls">
-        <div class="camera-card-buttons" role="group" aria-label="Camera do corte ${escapeAttr(item.rank)}">
-          ${cameraButtonsHtml(camera)}
-        </div>
-        <label>Forca do enquadramento
-          <input data-preview-camera-strength type="range" min="0" max="100" step="5" value="${camera.strength}">
-        </label>
+        ${cameraSegmentsHtml(camera)}
       </div>
     </div>
   </article>`;
 }
-function cameraButtonsHtml(current){
+function cameraSegmentsHtml(camera){
+  return `<div class="camera-segments">${cameraParts.map(part => {
+    const segment = camera.segments.find(item => item.part === part.key) || defaultCameraSegment(part.key);
+    return `<div class="camera-segment" data-camera-part="${escapeAttr(part.key)}">
+      <strong>${escapeHtml(part.label)}</strong>
+      <select data-preview-camera-segment="${escapeAttr(part.key)}">${cameraOptionsHtml(segment.key)}</select>
+      <label>Forca
+        <input data-preview-camera-strength="${escapeAttr(part.key)}" type="range" min="0" max="100" step="5" value="${segment.strength}">
+      </label>
+    </div>`;
+  }).join("")}</div>`;
+}
+function cameraOptionsHtml(selectedKey){
   return Object.entries(cameraMeta).map(([key, meta]) => {
-    const active = current.key === key ? " active" : "";
-    return `<button data-preview-camera="${escapeAttr(key)}" class="${active}">${escapeHtml(meta.label)}</button>`;
+    const selected = selectedKey === key ? " selected" : "";
+    return `<option value="${escapeAttr(key)}"${selected}>${escapeHtml(meta.label)}</option>`;
   }).join("");
 }
 function bindCameraPreviewControls(){
   document.querySelectorAll("[data-camera-preview] .caption-item").forEach(item => {
     const rank = item.dataset.rank;
-    item.querySelectorAll("[data-preview-camera]").forEach(button => {
-      button.addEventListener("click", () => setCameraForRank(rank, { key: button.dataset.previewCamera }));
+    item.querySelectorAll("[data-preview-camera-segment]").forEach(select => {
+      select.addEventListener("change", () => setCameraSegmentForRank(rank, select.dataset.previewCameraSegment, { key: select.value }));
     });
-    const strength = item.querySelector("[data-preview-camera-strength]");
-    if (strength) {
-      strength.addEventListener("input", () => setCameraForRank(rank, { strength: Number(strength.value) }));
-      strength.addEventListener("change", () => setCameraForRank(rank, { strength: Number(strength.value) }));
-    }
+    item.querySelectorAll("[data-preview-camera-strength]").forEach(strength => {
+      const update = () => setCameraSegmentForRank(rank, strength.dataset.previewCameraStrength, { strength: Number(strength.value) });
+      strength.addEventListener("input", update);
+      strength.addEventListener("change", update);
+    });
   });
 }
 function renderEffectPreview(){
@@ -2096,7 +2233,7 @@ function renderFinalStage(){
   const queue = buildExportData().caption_queue || [];
   const summary = document.querySelector("[data-final-summary]");
   if (summary) {
-    const cameraCount = queue.filter(item => normalizeCamera(item.camera).key !== "center").length;
+    const cameraCount = queue.filter(item => cameraHasMovement(item.camera)).length;
     const effectCount = queue.filter(item => normalizeEffect(item.effect).key !== "none").length;
     const overlayCount = queue.filter(item => normalizeOverlay(item.overlay).key !== "none").length;
     summary.textContent = queue.length
@@ -2158,7 +2295,7 @@ function renderFinalizeResults(files){
     const meta = [
       file.width && file.height ? `${file.width}x${file.height}` : "",
       file.adjusted_duration ? fixed(file.adjusted_duration) : "",
-      camera.key !== "center" ? camera.label : "",
+      cameraHasMovement(camera) ? cameraLabel(camera) : "",
       effect.key !== "none" ? effect.label : "",
       overlay.key !== "none" ? overlay.label : ""
     ].filter(Boolean).join(" - ");
@@ -2172,7 +2309,7 @@ function renderFinalizeResults(files){
           <dl>
             <dt>Formato</dt><dd>${escapeHtml(file.label || file.platform || "-")}</dd>
             <dt>Duracao</dt><dd>${escapeHtml(file.adjusted_duration ? fixed(file.adjusted_duration) : "-")}</dd>
-            <dt>Camera</dt><dd>${escapeHtml(camera.label)}</dd>
+            <dt>Camera</dt><dd>${escapeHtml(cameraLabel(camera))}</dd>
             <dt>Efeito</dt><dd>${escapeHtml(effect.label)}</dd>
             <dt>Chamada</dt><dd>${escapeHtml(overlay.label)}</dd>
           </dl>
