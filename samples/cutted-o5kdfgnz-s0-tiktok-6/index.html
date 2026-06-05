@@ -9,13 +9,13 @@
 header{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;gap:16px;align-items:center;padding:16px 22px;background:#050505;border-bottom:1px solid #202020}.header-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 h1{margin:0;font-size:22px;letter-spacing:0}header p{margin:3px 0 0;color:#9a9a9a}.tabs{position:sticky;top:70px;z-index:4;display:flex;gap:8px;padding:10px 22px;background:#060606;border-bottom:1px solid #1f1f1f}.tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 12px}.tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}.config{position:sticky;top:119px;z-index:3;display:flex;justify-content:space-between;gap:14px;align-items:center;padding:12px 22px;background:#080808;border-bottom:1px solid #202020}.config strong{display:block;font-size:13px}.config span{color:#9a9a9a;font-size:12px}.segments{display:flex;gap:6px;flex-wrap:wrap}.segments button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.segments button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}
 main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px}.card{border:1px solid #272727;border-radius:8px;background:#0d0d0d;overflow:hidden}.card[open]{border-color:#3b3b3b;background:#101010}.card.liked{border-color:#24d17e}.card.discarded{opacity:.46}.clip-summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;min-height:62px;padding:12px 14px;cursor:pointer;list-style:none}.clip-summary::-webkit-details-marker{display:none}.clip-rank{color:#8f8f8f;font-weight:700}.clip-title{display:grid;gap:2px;min-width:0}.clip-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}.clip-title small{color:#9c9c9c}.clip-status{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.clip-status span,.format-previews span{display:inline-flex;align-items:center;min-height:26px;padding:4px 8px;border-radius:999px;background:#242424;color:#ddd;font-size:12px}
-.editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;gap:10px}.media{position:relative;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000}.placeholder{display:grid;place-items:center;height:100%;color:#777}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip,.card-tabs{display:flex;gap:6px;flex-wrap:wrap}.preview-strip button,.card-tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.preview-strip button.active,.card-tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}
+.editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;gap:10px}.media{position:relative;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000;pointer-events:none}.placeholder{display:grid;place-items:center;height:100%;color:#777}.preview-play{position:absolute;z-index:5;left:10px;bottom:10px;min-width:68px;padding:7px 10px;background:rgba(244,244,244,.92);color:#050505;border:1px solid rgba(255,255,255,.35);box-shadow:0 8px 24px rgba(0,0,0,.32)}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip,.card-tabs{display:flex;gap:6px;flex-wrap:wrap}.preview-strip button,.card-tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.preview-strip button.active,.card-tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-panel{display:none;border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:12px}.tool-panel.active{display:block}.tool-summary{margin-bottom:10px;color:#d8d8d8}.timeline-editor{padding:0}.timeline-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.timeline-head output{color:#f4f4f4;text-align:right}.timeline{position:relative;height:34px;margin-top:8px}.timeline-track{position:absolute;left:0;right:0;top:14px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:#f4f4f4;border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:34px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{display:flex;justify-content:space-between;color:#aaa;font-size:12px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .export-dock{display:grid;gap:8px;margin-top:2px;padding:12px;border:1px solid #303030;border-radius:8px;background:#111}.export-dock strong{display:block;font-size:13px}.export-dock span{color:#a8a8a8;font-size:12px}
 .platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:#191919;color:#ddd;border:1px solid #333;text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:#f4f4f4;border-color:#24d17e}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:#aaa;font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:#24d17e}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:#050505;color:#f4f4f4;border:1px solid #333;border-radius:6px;padding:8px}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:160px 180px;gap:12px;max-width:380px}
 .camera-surface video{object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%}.camera-surface[data-camera-key=alternate] video{animation:camera-pan 6s ease-in-out infinite alternate}.camera-surface[data-camera-key=jump-cut] video{animation:camera-jump 3s steps(1,end) infinite alternate}@keyframes camera-pan{0%{object-position:22% 50%}100%{object-position:78% 50%}}@keyframes camera-jump{0%{object-position:22% 50%}50%{object-position:78% 50%}100%{object-position:78% 50%}}.camera-reticle{position:absolute;inset:14% 22%;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}
 .card[data-effect=light-grain] .media video,.card[data-effect=light-grain] .media img{filter:contrast(1.08) brightness(1.02)}.card[data-effect=old-film] .media video,.card[data-effect=old-film] .media img{filter:sepia(.48) contrast(1.2) saturate(.62) brightness(.92)}.card[data-effect=vhs] .media video,.card[data-effect=vhs] .media img{filter:saturate(.62) contrast(1.22) brightness(.9) hue-rotate(-7deg)}.card[data-effect=bw-old] .media video,.card[data-effect=bw-old] .media img{filter:grayscale(1) contrast(1.22) brightness(.9)}.card[data-effect=light-grain] .media:after,.card[data-effect=old-film] .media:after,.card[data-effect=vhs] .media:after,.card[data-effect=bw-old] .media:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--effect-opacity,.24);background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 70% 65%,rgba(0,0,0,.95) 0 1px,transparent 1.8px);background-size:4px 4px,6px 6px;mix-blend-mode:overlay}.card[data-effect=old-film] .media:before,.card[data-effect=bw-old] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at center,transparent 44%,rgba(0,0,0,.46) 100%)}.card[data-effect=vhs] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 4px);mix-blend-mode:overlay}
-.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,#24d17e);border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-image-box{min-width:48px;min-height:48px;padding:0;border:0;background:transparent;box-shadow:none}.overlay-image-box img{display:block;width:100%;height:auto;min-height:48px;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none}.overlay-resize{position:absolute;right:5px;bottom:5px;width:14px;height:14px;padding:0;border:1px solid rgba(255,255,255,.42);border-radius:3px;background:rgba(255,255,255,.18);cursor:nwse-resize}.overlay-menu{position:absolute;z-index:4;display:grid;gap:8px;width:min(360px,94%);padding:8px;border:1px solid #333;border-radius:8px;background:#101010;box-shadow:0 14px 42px rgba(0,0,0,.5)}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:#ddd;border:1px solid #333}.image-upload{padding:10px;border:1px dashed #333;border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:#ddd;border:1px solid #333}.overlay-empty{padding:10px;border:1px dashed #333;border-radius:8px;color:#aaa}
+.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,#24d17e);border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none;pointer-events:auto}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-image-box{display:grid;place-items:center;min-width:72px;min-height:72px;padding:6px;border:1px dashed rgba(255,255,255,.42);background:rgba(0,0,0,.12);box-shadow:0 8px 24px rgba(0,0,0,.22)}.overlay-image-box img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none;background:transparent}.overlay-resize{position:absolute;right:5px;bottom:5px;width:14px;height:14px;padding:0;border:1px solid rgba(255,255,255,.42);border-radius:3px;background:rgba(255,255,255,.18);cursor:nwse-resize}.overlay-menu{position:absolute;z-index:6;display:grid;gap:8px;width:min(360px,94%);padding:8px;border:1px solid #333;border-radius:8px;background:#101010;box-shadow:0 14px 42px rgba(0,0,0,.5);touch-action:none}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px;cursor:move}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:#ddd;border:1px solid #333}.image-upload{padding:10px;border:1px dashed #333;border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:#ddd;border:1px solid #333}.overlay-empty{padding:10px;border:1px dashed #333;border-radius:8px;color:#aaa}
 p{color:#bebebe}.peak{color:#fff;font-size:16px}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}.transcript-panel details{border-top:1px solid #242424;margin-top:12px;padding-top:10px}.transcript-panel summary{cursor:pointer;color:#ddd}
 body[data-tab=final] main,body[data-tab=final] .config{display:none}body[data-tab=final] .final-stage{display:block}.final-stage{display:none;margin:18px auto;max-width:1240px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.render-status{margin-top:12px;color:#aaa}.render-results{display:grid;gap:12px;margin-top:14px}.result-item{border:1px solid #303030;border-radius:8px;background:#090909;overflow:hidden}.result-item[open]{border-color:#3b3b3b}.result-item summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;border:0;color:#f4f4f4}.result-item summary strong{font-size:14px}.result-item summary span{color:#aaa;font-size:12px}.result-body{display:grid;grid-template-columns:minmax(260px,420px) minmax(240px,1fr);gap:14px;padding:0 14px 14px}.result-body video{width:100%;max-height:70vh;background:#000;border-radius:6px;object-fit:contain}.result-meta{display:grid;align-content:start;gap:10px}.result-meta dl{margin:0}.result-actions{display:flex;gap:8px;flex-wrap:wrap}.result-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:#f4f4f4;color:#050505;text-decoration:none}.result-actions a.secondary{background:#242424;color:#ddd;border:1px solid #333}
 button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 12px;cursor:pointer}#reset-ui,button[data-action=discard]{background:#242424;color:#ddd}button[data-action=reset-trim],button[data-action=next-card]{background:#191919;color:#ddd;border:1px solid #333}
@@ -77,10 +77,11 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
       <div class="editor-shell">
         <div class="editor-preview">
           <div class="media camera-surface" data-overlay-surface>
-            <video controls playsinline preload="none" loading="lazy" poster="frames/clip-001.jpg?v=1-60580-100850" data-src="clips/clip-001.mp4?v=1-60580-100850"></video>
+            <video playsinline preload="none" loading="lazy" poster="frames/clip-001.jpg?v=1-60580-100850" data-src="clips/clip-001.mp4?v=1-60580-100850"></video>
             <div class="camera-reticle"></div>
             <div data-overlay-layer-list></div>
             <div class="overlay-menu" data-overlay-menu hidden></div>
+            <button class="preview-play" data-preview-play type="button">Play</button>
           </div>
           <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
             <button data-card-format-preview="tiktok" class="active">TikTok</button>
@@ -187,10 +188,11 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
       <div class="editor-shell">
         <div class="editor-preview">
           <div class="media camera-surface" data-overlay-surface>
-            <video controls playsinline preload="none" loading="lazy" poster="frames/clip-002.jpg?v=2-88210-131340" data-src="clips/clip-002.mp4?v=2-88210-131340"></video>
+            <video playsinline preload="none" loading="lazy" poster="frames/clip-002.jpg?v=2-88210-131340" data-src="clips/clip-002.mp4?v=2-88210-131340"></video>
             <div class="camera-reticle"></div>
             <div data-overlay-layer-list></div>
             <div class="overlay-menu" data-overlay-menu hidden></div>
+            <button class="preview-play" data-preview-play type="button">Play</button>
           </div>
           <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
             <button data-card-format-preview="tiktok" class="active">TikTok</button>
@@ -297,10 +299,11 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
       <div class="editor-shell">
         <div class="editor-preview">
           <div class="media camera-surface" data-overlay-surface>
-            <video controls playsinline preload="none" loading="lazy" poster="frames/clip-003.jpg?v=3-207250-252170" data-src="clips/clip-003.mp4?v=3-207250-252170"></video>
+            <video playsinline preload="none" loading="lazy" poster="frames/clip-003.jpg?v=3-207250-252170" data-src="clips/clip-003.mp4?v=3-207250-252170"></video>
             <div class="camera-reticle"></div>
             <div data-overlay-layer-list></div>
             <div class="overlay-menu" data-overlay-menu hidden></div>
+            <button class="preview-play" data-preview-play type="button">Play</button>
           </div>
           <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
             <button data-card-format-preview="tiktok" class="active">TikTok</button>
@@ -407,10 +410,11 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
       <div class="editor-shell">
         <div class="editor-preview">
           <div class="media camera-surface" data-overlay-surface>
-            <video controls playsinline preload="none" loading="lazy" poster="frames/clip-004.jpg?v=4-243209-288258" data-src="clips/clip-004.mp4?v=4-243209-288258"></video>
+            <video playsinline preload="none" loading="lazy" poster="frames/clip-004.jpg?v=4-243209-288258" data-src="clips/clip-004.mp4?v=4-243209-288258"></video>
             <div class="camera-reticle"></div>
             <div data-overlay-layer-list></div>
             <div class="overlay-menu" data-overlay-menu hidden></div>
+            <button class="preview-play" data-preview-play type="button">Play</button>
           </div>
           <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
             <button data-card-format-preview="tiktok" class="active">TikTok</button>
@@ -517,10 +521,11 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
       <div class="editor-shell">
         <div class="editor-preview">
           <div class="media camera-surface" data-overlay-surface>
-            <video controls playsinline preload="none" loading="lazy" poster="frames/clip-005.jpg?v=5-282789-327900" data-src="clips/clip-005.mp4?v=5-282789-327900"></video>
+            <video playsinline preload="none" loading="lazy" poster="frames/clip-005.jpg?v=5-282789-327900" data-src="clips/clip-005.mp4?v=5-282789-327900"></video>
             <div class="camera-reticle"></div>
             <div data-overlay-layer-list></div>
             <div class="overlay-menu" data-overlay-menu hidden></div>
+            <button class="preview-play" data-preview-play type="button">Play</button>
           </div>
           <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
             <button data-card-format-preview="tiktok" class="active">TikTok</button>
@@ -627,10 +632,11 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
       <div class="editor-shell">
         <div class="editor-preview">
           <div class="media camera-surface" data-overlay-surface>
-            <video controls playsinline preload="none" loading="lazy" poster="frames/clip-006.jpg?v=6-313520-359590" data-src="clips/clip-006.mp4?v=6-313520-359590"></video>
+            <video playsinline preload="none" loading="lazy" poster="frames/clip-006.jpg?v=6-313520-359590" data-src="clips/clip-006.mp4?v=6-313520-359590"></video>
             <div class="camera-reticle"></div>
             <div data-overlay-layer-list></div>
             <div class="overlay-menu" data-overlay-menu hidden></div>
+            <button class="preview-play" data-preview-play type="button">Play</button>
           </div>
           <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
             <button data-card-format-preview="tiktok" class="active">TikTok</button>
@@ -1150,7 +1156,7 @@ function overlayPlaceButtonsHtml(){
   const actions = Object.entries(overlayMeta).filter(([key]) => key !== "none").map(([key, meta]) => {
     return `<button data-overlay-place="${escapeAttr(key)}">${escapeHtml(meta.label)}</button>`;
   }).join("");
-  return `<div class="overlay-menu-head"><strong>Chamada</strong><button data-overlay-close>Fechar</button></div><div class="overlay-menu-actions">${actions}</div>`;
+  return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>Chamada</strong><button data-overlay-close>Fechar</button></div><div class="overlay-menu-actions">${actions}</div>`;
 }
 function bindCardOverlayControls(card){
   const rank = card.dataset.rank;
@@ -1190,8 +1196,8 @@ function addImageOverlayFromInput(card, input){
       key: "image",
       label: file.name,
       image_data_url: String(reader.result || ""),
-      x: .56,
-      y: .66,
+      x: .36,
+      y: .34,
       width: .28,
       opacity: 100
     });
@@ -1206,15 +1212,15 @@ function bindOverlayPlacement(card){
   menu.innerHTML = overlayPlaceButtonsHtml();
   const closeMenu = () => { menu.hidden = true; };
   menu.querySelector("[data-overlay-close]")?.addEventListener("click", closeMenu);
+  bindOverlayMenuDrag(surface, menu);
   surface.onclick = event => {
-    if (event.target.closest("[data-overlay-drag]") || event.target.closest("[data-overlay-menu]")) return;
+    if (event.target.closest("[data-overlay-drag]") || event.target.closest("[data-overlay-menu]") || event.target.closest("[data-preview-play]")) return;
     const rect = surface.getBoundingClientRect();
     const x = clampNumber((event.clientX - rect.left) / rect.width, 0, 1);
     const y = clampNumber((event.clientY - rect.top) / rect.height, 0, 1);
     menu.dataset.x = x;
     menu.dataset.y = y;
-    menu.style.left = `${Math.min(Math.max(event.clientX - rect.left, 8), Math.max(rect.width - 260, 8))}px`;
-    menu.style.top = `${Math.min(Math.max(event.clientY - rect.top, 8), Math.max(rect.height - 150, 8))}px`;
+    positionOverlayMenu(surface, menu, event.clientX - rect.left, event.clientY - rect.top);
     menu.hidden = false;
   };
   menu.querySelectorAll("[data-overlay-place]").forEach(button => {
@@ -1230,6 +1236,55 @@ function bindOverlayPlacement(card){
   document.addEventListener("keydown", event => {
     if (event.key === "Escape") closeMenu();
   });
+}
+function bindOverlayMenuDrag(surface, menu){
+  const handle = menu.querySelector("[data-overlay-menu-drag]");
+  if (!handle) return;
+  let drag = null;
+  const start = event => {
+    if (event.type === "mousedown" && drag) return;
+    if (event.target.closest("button")) return;
+    const surfaceRect = surface.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    drag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startLeft: menuRect.left - surfaceRect.left,
+      startTop: menuRect.top - surfaceRect.top
+    };
+    if (event.pointerId !== undefined && handle.setPointerCapture) handle.setPointerCapture(event.pointerId);
+    if (event.type === "mousedown") {
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", end, { once: true });
+    }
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const move = event => {
+    if (!drag || (event.pointerId !== undefined && event.pointerId !== drag.pointerId)) return;
+    positionOverlayMenu(surface, menu, drag.startLeft + event.clientX - drag.startX, drag.startTop + event.clientY - drag.startY);
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const end = event => {
+    if (!drag || (event.pointerId !== undefined && event.pointerId !== drag.pointerId)) return;
+    drag = null;
+    document.removeEventListener("mousemove", move);
+    event.stopPropagation();
+  };
+  handle.onpointerdown = start;
+  handle.onpointermove = move;
+  handle.onpointerup = end;
+  handle.onpointercancel = end;
+  handle.onmousedown = start;
+}
+function positionOverlayMenu(surface, menu, left, top){
+  const rect = surface.getBoundingClientRect();
+  const menuWidth = menu.offsetWidth || Math.min(360, rect.width * .94);
+  const menuHeight = menu.offsetHeight || 150;
+  menu.style.left = `${clampNumber(left, 8, Math.max(rect.width - menuWidth - 8, 8))}px`;
+  menu.style.top = `${clampNumber(top, 8, Math.max(rect.height - menuHeight - 8, 8))}px`;
 }
 function updatePlatformUi(card){
   const current = cardState(card.dataset.rank);
@@ -1287,11 +1342,34 @@ function seekPreview(card){
   const values = trimValues(card);
   video.currentTime = values.trimStart;
 }
+function togglePreviewPlayback(card){
+  const video = card.querySelector("video");
+  if (!video) return;
+  loadCardVideo(card);
+  if (video.paused) {
+    const playback = video.play();
+    if (playback && typeof playback.catch === "function") playback.catch(() => syncPreviewPlayButton(card));
+    return;
+  }
+  video.pause();
+}
+function syncPreviewPlayButton(card){
+  const button = card.querySelector("[data-preview-play]");
+  const video = card.querySelector("video");
+  if (!button) return;
+  if (!video) {
+    button.hidden = true;
+    return;
+  }
+  button.hidden = false;
+  button.textContent = video.paused ? "Play" : "Pause";
+}
 function loadCardVideo(card){
   const video = card.querySelector("video[data-src]");
   if (!video || video.getAttribute("src")) return;
   video.setAttribute("src", video.dataset.src);
   video.load();
+  syncPreviewPlayButton(card);
 }
 function unloadCardVideo(card){
   const video = card.querySelector("video[data-src]");
@@ -1299,6 +1377,7 @@ function unloadCardVideo(card){
   video.pause();
   video.removeAttribute("src");
   video.load();
+  syncPreviewPlayButton(card);
 }
 function activateCard(card){
   document.querySelectorAll(".card[open]").forEach(item => {
@@ -1655,6 +1734,7 @@ function bindOverlayDrag(item){
     if (box.dataset.overlayKey === "none") return;
     let drag = null;
     const startDrag = event => {
+      if (event.type === "mousedown" && drag) return;
       const resizing = event.target?.hasAttribute?.("data-overlay-resize");
       const surfaceRect = surface.getBoundingClientRect();
       const boxRect = box.getBoundingClientRect();
@@ -1669,11 +1749,16 @@ function bindOverlayDrag(item){
         surfaceWidth: surfaceRect.width,
         surfaceHeight: surfaceRect.height
       };
-      box.setPointerCapture(event.pointerId);
+      if (event.pointerId !== undefined && box.setPointerCapture) box.setPointerCapture(event.pointerId);
+      if (event.type === "mousedown") {
+        document.addEventListener("mousemove", moveDrag);
+        document.addEventListener("mouseup", endDrag, { once: true });
+      }
       event.preventDefault();
+      event.stopPropagation();
     };
     const moveDrag = event => {
-      if (!drag || event.pointerId !== drag.pointerId) return;
+      if (!drag || (event.pointerId !== undefined && event.pointerId !== drag.pointerId)) return;
       const dx = event.clientX - drag.startX;
       const dy = event.clientY - drag.startY;
       const patch = {};
@@ -1694,16 +1779,21 @@ function bindOverlayDrag(item){
         box.style.setProperty("--overlay-y", patch.y);
       }
       patchOverlayLayerForRank(item.dataset.rank, box.dataset.overlayLayer, patch, false);
+      event.preventDefault();
+      event.stopPropagation();
     };
     const endDrag = event => {
-      if (!drag || event.pointerId !== drag.pointerId) return;
+      if (!drag || (event.pointerId !== undefined && event.pointerId !== drag.pointerId)) return;
       drag = null;
+      document.removeEventListener("mousemove", moveDrag);
       updateOverlayUi(item);
+      event.stopPropagation();
     };
     box.onpointerdown = startDrag;
     box.onpointermove = moveDrag;
     box.onpointerup = endDrag;
     box.onpointercancel = endDrag;
+    box.onmousedown = startDrag;
   });
 }
 function renderFinalStage(){
@@ -1876,6 +1966,14 @@ document.querySelectorAll(".card").forEach(card => {
       renderFinalStage();
     });
   });
+  const playButton = card.querySelector("[data-preview-play]");
+  if (playButton) {
+    playButton.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      togglePreviewPlayback(card);
+    });
+  }
   const video = card.querySelector("video");
   if (video) {
     video.addEventListener("play", () => {
@@ -1883,6 +1981,10 @@ document.querySelectorAll(".card").forEach(card => {
       if (video.currentTime < values.trimStart || video.currentTime >= values.duration - values.trimEnd) {
         video.currentTime = values.trimStart;
       }
+      syncPreviewPlayButton(card);
+    });
+    video.addEventListener("pause", () => {
+      syncPreviewPlayButton(card);
     });
     video.addEventListener("timeupdate", () => {
       const values = trimValues(card);
@@ -1892,6 +1994,7 @@ document.querySelectorAll(".card").forEach(card => {
       }
     });
   }
+  syncPreviewPlayButton(card);
   card.querySelectorAll("[data-trim]").forEach(input => input.addEventListener("input", () => {
     const current = cardState(card.dataset.rank);
     const duration = Number(card.dataset.duration);
