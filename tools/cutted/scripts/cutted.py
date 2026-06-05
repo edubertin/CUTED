@@ -85,6 +85,13 @@ class EffectPreset:
 
 
 @dataclass(frozen=True)
+class CameraPreset:
+    key: str
+    label: str
+    note: str
+
+
+@dataclass(frozen=True)
 class OverlayPreset:
     key: str
     label: str
@@ -114,6 +121,16 @@ EFFECT_PRESETS = {
     "old-film": EffectPreset("old-film", "Filme Antigo", "Cor vintage, vinheta e textura de filme"),
     "vhs": EffectPreset("vhs", "VHS / TV Antiga", "Ruido mais forte e contraste analogico"),
     "bw-old": EffectPreset("bw-old", "Preto e Branco Antigo", "P&B com grao e vinheta"),
+}
+
+CAMERA_PRESETS = {
+    "center": CameraPreset("center", "Centro seguro", "Crop limpo no centro do quadro"),
+    "face-center": CameraPreset("face-center", "Rosto no centro", "Zoom leve para destacar uma pessoa central"),
+    "face-left": CameraPreset("face-left", "Rosto a esquerda", "Prioriza quem esta do lado esquerdo"),
+    "face-right": CameraPreset("face-right", "Rosto a direita", "Prioriza quem esta do lado direito"),
+    "alternate": CameraPreset("alternate", "Alternar focos", "Movimento suave entre lados"),
+    "soft-zoom": CameraPreset("soft-zoom", "Zoom sutil", "Aproxima o enquadramento sem mudar o lado"),
+    "punch-in": CameraPreset("punch-in", "Punch-in", "Corte mais fechado para dar energia"),
 }
 
 OVERLAY_PRESETS = {
@@ -585,7 +602,7 @@ def render_captioned_clip(
     input_path: Path, output_path: Path, subtitle_path: Path, row: dict[str, object],
     preset: PlatformPreset, out_dir: Path, ffmpeg: str
 ) -> None:
-    filters = [platform_filter(preset), f"ass={subtitle_filter_path(subtitle_path, out_dir)}"]
+    filters = [camera_filter(preset, row), f"ass={subtitle_filter_path(subtitle_path, out_dir)}"]
     effect = effect_filter(row)
     if effect:
         filters.append(effect)
@@ -627,6 +644,7 @@ def captioned_row(
         "adjusted_end": row.get("adjusted_end"),
         "adjusted_duration": caption_duration(row),
         "publish_metadata": row.get("publish_metadata") if isinstance(row.get("publish_metadata"), dict) else {},
+        "camera": camera_from_row(row),
         "effect": effect_from_row(row),
         "overlay": overlay_from_row(row),
     }
@@ -657,14 +675,11 @@ def render_platform_clip(
 
 
 def platform_filter(preset: PlatformPreset) -> str:
-    return (
-        f"scale={preset.width}:{preset.height}:force_original_aspect_ratio=increase,"
-        f"crop={preset.width}:{preset.height},setsar=1"
-    )
+    return camera_filter(preset, {})
 
 
 def video_filter(preset: PlatformPreset, row: dict[str, object]) -> str:
-    filters = [platform_filter(preset)]
+    filters = [camera_filter(preset, row)]
     effect = effect_filter(row)
     if effect:
         filters.append(effect)
@@ -672,6 +687,61 @@ def video_filter(preset: PlatformPreset, row: dict[str, object]) -> str:
     if overlay:
         filters.append(overlay)
     return ",".join(filters)
+
+
+def camera_filter(preset: PlatformPreset, row: dict[str, object]) -> str:
+    camera = camera_from_row(row)
+    zoom = camera_zoom(camera)
+    target_w = int(round(preset.width * zoom))
+    target_h = int(round(preset.height * zoom))
+    return ",".join([
+        f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase",
+        f"crop={preset.width}:{preset.height}:x='{camera_crop_x(camera)}':y='(ih-oh)/2'",
+        "setsar=1",
+    ])
+
+
+def camera_crop_x(camera: dict[str, object]) -> str:
+    key = str(camera["key"])
+    strength = float(camera["strength"])
+    if key == "face-left":
+        return crop_ratio_expr(0.22 - strength * 0.0012)
+    if key == "face-right":
+        return crop_ratio_expr(0.78 + strength * 0.0012)
+    if key == "alternate":
+        amplitude = 0.12 + (strength / 100.0) * 0.22
+        return f"(iw-ow)*(0.5+{amplitude:.3f}*sin(2*PI*t/6))"
+    return crop_ratio_expr(0.5)
+
+
+def crop_ratio_expr(ratio: float) -> str:
+    return f"(iw-ow)*{clamp(ratio, 0.0, 1.0):.3f}"
+
+
+def camera_zoom(camera: dict[str, object]) -> float:
+    key = str(camera["key"])
+    strength = float(camera["strength"])
+    if key == "face-center":
+        return 1.06 + (strength / 100.0) * 0.08
+    if key == "soft-zoom":
+        return 1.04 + (strength / 100.0) * 0.10
+    if key == "punch-in":
+        return 1.12 + (strength / 100.0) * 0.16
+    return 1.0
+
+
+def camera_from_row(row: dict[str, object]) -> dict[str, object]:
+    raw = row.get("camera")
+    if not isinstance(raw, dict):
+        return default_camera()
+    key = str(raw.get("key") or "center")
+    preset = CAMERA_PRESETS.get(key, CAMERA_PRESETS["center"])
+    strength = clamp(float(raw.get("strength") if raw.get("strength") is not None else 60.0), 0.0, 100.0)
+    return {"key": preset.key, "label": preset.label, "strength": strength}
+
+
+def default_camera() -> dict[str, object]:
+    return {"key": "center", "label": CAMERA_PRESETS["center"].label, "strength": 60}
 
 
 def effect_filter(row: dict[str, object]) -> str:
@@ -796,6 +866,7 @@ def rendered_row(row: dict[str, object], preset: PlatformPreset, output_path: Pa
         "adjusted_start": row.get("adjusted_start"),
         "adjusted_end": row.get("adjusted_end"),
         "adjusted_duration": row.get("adjusted_duration"),
+        "camera": camera_from_row(row),
         "effect": effect_from_row(row),
         "overlay": overlay_from_row(row),
     }
@@ -1326,9 +1397,10 @@ def page_html(source_label: str, cards: str, data: str) -> str:
   </header>
   <nav class="tabs" aria-label="Fluxo">
     <button data-tab="edit" class="active">1. Cortes e formatos</button>
-    <button data-tab="effects">2. Efeitos</button>
-    <button data-tab="overlays">3. Chamadas</button>
-    <button data-tab="final">4. Final</button>
+    <button data-tab="camera">2. Camera</button>
+    <button data-tab="effects">3. Efeitos</button>
+    <button data-tab="overlays">4. Chamadas</button>
+    <button data-tab="final">5. Final</button>
   </nav>
   <section class="config" aria-label="Configuracao de formato">
     <div>
@@ -1342,6 +1414,17 @@ def page_html(source_label: str, cards: str, data: str) -> str:
       <button data-format="instagram">Instagram</button>
       <button data-format="facebook">Facebook</button>
     </div>
+  </section>
+  <section class="camera-stage">
+    <div class="stage-head">
+      <div>
+        <strong>Camera</strong>
+        <p>Escolha um enquadramento por corte antes dos efeitos.</p>
+      </div>
+      <button id="continue-effects">Continuar para efeitos</button>
+    </div>
+    <div class="camera-summary" data-camera-summary>Nenhum corte marcado ainda.</div>
+    <div class="camera-preview" data-camera-preview></div>
   </section>
   <section class="effect-stage">
     <div class="stage-head">
@@ -1416,15 +1499,16 @@ body[data-format=tiktok] .media,body[data-format=shorts] .media,body[data-format
 .body{padding:14px}.top{display:flex;gap:10px;align-items:center}.top span{color:#888}.top strong{font-size:15px}.peak{color:#fff;font-size:16px}
 p{color:#bebebe}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}
 .timeline-editor{padding:10px 14px 12px;background:#090909;border-top:1px solid #1e1e1e;border-bottom:1px solid #222}.timeline-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.timeline-head output{color:#f4f4f4;text-align:right}.timeline{position:relative;height:34px;margin-top:8px}.timeline-track{position:absolute;left:0;right:0;top:14px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:#f4f4f4;border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:34px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{display:flex;justify-content:space-between;color:#aaa;font-size:12px}
-.format-editor{display:block;padding:12px 14px;background:#090909;border-bottom:1px solid #222}.format-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.format-head output{color:#f4f4f4;text-align:right}.platform-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.platform-tags button{background:#191919;color:#ddd;border:1px solid #333}.platform-tags button.active{background:#24d17e;color:#04130b;border-color:#24d17e}.effect-stage,.overlay-stage{display:none;margin:18px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.effect-stage p,.overlay-stage p{margin:4px 0 0}.caption-settings{display:grid;grid-template-columns:160px 180px;gap:12px;margin-top:16px;max-width:380px}.caption-settings label{display:grid;gap:6px;color:#aaa}.caption-settings select,.caption-settings input{width:100%;background:#050505;color:#f4f4f4;border:1px solid #333;border-radius:6px;padding:9px}.effect-summary,.overlay-summary{margin-top:12px;color:#aaa}.caption-item{border:1px solid #2a2a2a;border-radius:8px;background:#0a0a0a;overflow:hidden}.caption-preview{position:relative;display:flex;justify-content:center;background:#000;overflow:hidden}.caption-preview video,.caption-preview img{width:100%;max-height:64vh;object-fit:cover;background:#000}.caption-item[data-platform=tiktok] video,.caption-item[data-platform=shorts] video,.caption-item[data-platform=instagram] video{aspect-ratio:9/16}.caption-item[data-platform=facebook] video{aspect-ratio:4/5}.caption-item[data-platform=youtube] video{aspect-ratio:16/9}.caption-item-body{padding:12px}.caption-item strong{display:block}.caption-item span{display:inline-flex;margin:8px 8px 0 0;padding:4px 8px;border-radius:999px;background:#242424;color:#ddd;font-size:12px}.caption-item dl{margin-top:10px}
-.effect-preview,.overlay-preview{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin-top:16px;align-items:start}.effect-card-controls,.overlay-card-controls{display:grid;gap:10px;margin-top:12px}.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.effect-card-buttons button,.overlay-card-buttons button{background:#191919;color:#ddd;border:1px solid #333;text-align:left}.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;border-color:#24d17e}.effect-card-controls label,.overlay-card-controls label{display:grid;gap:6px;color:#aaa;font-size:12px}.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:#24d17e}.effect-empty,.overlay-empty{padding:18px;border:1px dashed #333;border-radius:8px;color:#aaa}.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,#24d17e);border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-resize{position:absolute;right:5px;bottom:5px;width:14px;height:14px;padding:0;border:1px solid rgba(255,255,255,.42);border-radius:3px;background:rgba(255,255,255,.18);cursor:nwse-resize}
-body[data-tab=effects] main,body[data-tab=effects] .config,body[data-tab=effects] .overlay-stage,body[data-tab=effects] .final-stage{display:none}body[data-tab=effects] .effect-stage{display:block}
-body[data-tab=overlays] main,body[data-tab=overlays] .config,body[data-tab=overlays] .effect-stage,body[data-tab=overlays] .final-stage{display:none}body[data-tab=overlays] .overlay-stage{display:block}
-body[data-tab=final] main,body[data-tab=final] .config,body[data-tab=final] .effect-stage,body[data-tab=final] .overlay-stage{display:none}body[data-tab=final] .final-stage{display:block}.final-stage{display:none;margin:18px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.render-status{margin-top:12px;color:#aaa}.render-results{display:grid;gap:12px;margin-top:14px}.result-item{border:1px solid #303030;border-radius:8px;background:#090909;overflow:hidden}.result-item[open]{border-color:#3b3b3b}.result-item summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;border:0;color:#f4f4f4}.result-item summary strong{font-size:14px}.result-item summary span{color:#aaa;font-size:12px}.result-body{display:grid;grid-template-columns:minmax(260px,420px) minmax(240px,1fr);gap:14px;padding:0 14px 14px}.result-body video{width:100%;max-height:70vh;background:#000;border-radius:6px;object-fit:contain}.result-meta{display:grid;align-content:start;gap:10px}.result-meta dl{margin:0}.result-actions{display:flex;gap:8px;flex-wrap:wrap}.result-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:#f4f4f4;color:#050505;text-decoration:none}.result-actions a.secondary{background:#242424;color:#ddd;border:1px solid #333}
+.format-editor{display:block;padding:12px 14px;background:#090909;border-bottom:1px solid #222}.format-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.format-head output{color:#f4f4f4;text-align:right}.platform-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.platform-tags button{background:#191919;color:#ddd;border:1px solid #333}.platform-tags button.active{background:#24d17e;color:#04130b;border-color:#24d17e}.camera-stage,.effect-stage,.overlay-stage{display:none;margin:18px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.camera-stage p,.effect-stage p,.overlay-stage p{margin:4px 0 0}.caption-settings{display:grid;grid-template-columns:160px 180px;gap:12px;margin-top:16px;max-width:380px}.caption-settings label{display:grid;gap:6px;color:#aaa}.caption-settings select,.caption-settings input{width:100%;background:#050505;color:#f4f4f4;border:1px solid #333;border-radius:6px;padding:9px}.camera-summary,.effect-summary,.overlay-summary{margin-top:12px;color:#aaa}.caption-item{border:1px solid #2a2a2a;border-radius:8px;background:#0a0a0a;overflow:hidden}.caption-preview{position:relative;display:flex;justify-content:center;background:#000;overflow:hidden}.caption-preview video,.caption-preview img{width:100%;max-height:64vh;object-fit:cover;background:#000}.caption-item[data-platform=tiktok] video,.caption-item[data-platform=shorts] video,.caption-item[data-platform=instagram] video{aspect-ratio:9/16}.caption-item[data-platform=facebook] video{aspect-ratio:4/5}.caption-item[data-platform=youtube] video{aspect-ratio:16/9}.caption-item-body{padding:12px}.caption-item strong{display:block}.caption-item span{display:inline-flex;margin:8px 8px 0 0;padding:4px 8px;border-radius:999px;background:#242424;color:#ddd;font-size:12px}.caption-item dl{margin-top:10px}
+.camera-preview,.effect-preview,.overlay-preview{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin-top:16px;align-items:start}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px;margin-top:12px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:#191919;color:#ddd;border:1px solid #333;text-align:left}.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;border-color:#24d17e}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label{display:grid;gap:6px;color:#aaa;font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:#24d17e}.camera-empty,.effect-empty,.overlay-empty{padding:18px;border:1px dashed #333;border-radius:8px;color:#aaa}.camera-surface video{object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%}.camera-surface[data-camera-key=alternate] video{animation:camera-pan 6s ease-in-out infinite alternate}@keyframes camera-pan{0%{object-position:22% 50%}100%{object-position:78% 50%}}.camera-reticle{position:absolute;inset:14% 22%;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,#24d17e);border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-resize{position:absolute;right:5px;bottom:5px;width:14px;height:14px;padding:0;border:1px solid rgba(255,255,255,.42);border-radius:3px;background:rgba(255,255,255,.18);cursor:nwse-resize}
+body[data-tab=camera] main,body[data-tab=camera] .config,body[data-tab=camera] .effect-stage,body[data-tab=camera] .overlay-stage,body[data-tab=camera] .final-stage{display:none}body[data-tab=camera] .camera-stage{display:block}
+body[data-tab=effects] main,body[data-tab=effects] .config,body[data-tab=effects] .camera-stage,body[data-tab=effects] .overlay-stage,body[data-tab=effects] .final-stage{display:none}body[data-tab=effects] .effect-stage{display:block}
+body[data-tab=overlays] main,body[data-tab=overlays] .config,body[data-tab=overlays] .camera-stage,body[data-tab=overlays] .effect-stage,body[data-tab=overlays] .final-stage{display:none}body[data-tab=overlays] .overlay-stage{display:block}
+body[data-tab=final] main,body[data-tab=final] .config,body[data-tab=final] .camera-stage,body[data-tab=final] .effect-stage,body[data-tab=final] .overlay-stage{display:none}body[data-tab=final] .final-stage{display:block}.final-stage{display:none;margin:18px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.render-status{margin-top:12px;color:#aaa}.render-results{display:grid;gap:12px;margin-top:14px}.result-item{border:1px solid #303030;border-radius:8px;background:#090909;overflow:hidden}.result-item[open]{border-color:#3b3b3b}.result-item summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;border:0;color:#f4f4f4}.result-item summary strong{font-size:14px}.result-item summary span{color:#aaa;font-size:12px}.result-body{display:grid;grid-template-columns:minmax(260px,420px) minmax(240px,1fr);gap:14px;padding:0 14px 14px}.result-body video{width:100%;max-height:70vh;background:#000;border-radius:6px;object-fit:contain}.result-meta{display:grid;align-content:start;gap:10px}.result-meta dl{margin:0}.result-actions{display:flex;gap:8px;flex-wrap:wrap}.result-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:#f4f4f4;color:#050505;text-decoration:none}.result-actions a.secondary{background:#242424;color:#ddd;border:1px solid #333}
 details{border-top:1px solid #242424;margin-top:12px;padding-top:10px}summary{cursor:pointer;color:#ddd}.actions{display:flex;gap:8px;margin-top:12px}
 button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 12px;cursor:pointer}#reset-ui,button[data-action=discard]{background:#242424;color:#ddd}
 button[data-action=reset-trim]{background:#191919;color:#ddd;border:1px solid #333}
-@media(max-width:760px){.tabs{top:94px;overflow:auto}.config{top:144px;align-items:flex-start;flex-direction:column}.segments button{font-size:12px;padding:7px 9px}main{grid-template-columns:1fr;padding:12px}.effect-preview,.overlay-preview,.caption-settings,.result-body{grid-template-columns:1fr}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}}
+@media(max-width:760px){.tabs{top:94px;overflow:auto}.config{top:144px;align-items:flex-start;flex-direction:column}.segments button{font-size:12px;padding:7px 9px}main{grid-template-columns:1fr;padding:12px}.camera-preview,.effect-preview,.overlay-preview,.caption-settings,.result-body{grid-template-columns:1fr}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}}
 """
 
 
@@ -1440,8 +1524,9 @@ const state = JSON.parse(localStorage.getItem("cutted-state") || "{}");
 function save(){ localStorage.setItem("cutted-state", JSON.stringify(state)); }
 function cardState(rank){
   const raw = state[rank];
-  if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [], effect: defaultEffect(), overlay: defaultOverlay() };
-  const next = Object.assign({ status: null, trimStart: 0, trimEnd: 0, platforms: [], effect: defaultEffect(), overlay: defaultOverlay() }, raw || {});
+  if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay() };
+  const next = Object.assign({ status: null, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay() }, raw || {});
+  next.camera = normalizeCamera(next.camera);
   next.effect = normalizeEffect(next.effect);
   next.overlay = normalizeOverlay(next.overlay);
   return next;
@@ -1469,6 +1554,15 @@ const effectMeta = {
   vhs: { label: "VHS / TV Antiga", note: "Ruido analogico" },
   "bw-old": { label: "Preto e Branco Antigo", note: "P&B com grao" }
 };
+const cameraMeta = {
+  center: { label: "Centro seguro", note: "Crop limpo no centro", x: 50, scale: 1 },
+  "face-center": { label: "Rosto no centro", note: "Zoom leve no centro", x: 50, scale: 1.1 },
+  "face-left": { label: "Rosto a esquerda", note: "Prioriza a pessoa da esquerda", x: 22, scale: 1 },
+  "face-right": { label: "Rosto a direita", note: "Prioriza a pessoa da direita", x: 78, scale: 1 },
+  alternate: { label: "Alternar focos", note: "Pan suave entre lados", x: 50, scale: 1 },
+  "soft-zoom": { label: "Zoom sutil", note: "Aproxima sem trocar o foco", x: 50, scale: 1.12 },
+  "punch-in": { label: "Punch-in", note: "Mais fechado e energetico", x: 50, scale: 1.22 }
+};
 const overlayMeta = {
   none: { label: "Sem chamada", title: "", subtitle: "", accent: "#000000" },
   subscribe: { label: "Inscreva-se", title: "Inscreva-se", subtitle: "Novos cortes toda semana", accent: "#ff3b30" },
@@ -1490,18 +1584,45 @@ function applyFormat(format){
   renderCaptionQueue();
 }
 function applyTab(tab){
-  const next = ["edit", "effects", "overlays", "final"].includes(tab) ? tab : "edit";
+  const next = ["edit", "camera", "effects", "overlays", "final"].includes(tab) ? tab : "edit";
   document.body.dataset.tab = next;
   localStorage.setItem("cutted-tab", next);
   document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.tab === next);
   });
+  renderCameraPreview();
   renderEffectPreview();
   renderOverlayPreview();
   renderFinalStage();
 }
 function platformLabel(key){
   return (platformMeta[key] || { label: key }).label;
+}
+function defaultCamera(){ return { key: "center", label: cameraMeta.center.label, strength: 60 }; }
+function normalizeCamera(camera){
+  const key = cameraMeta[camera?.key] ? camera.key : "center";
+  const strength = Math.max(0, Math.min(Number(camera?.strength ?? 60), 100));
+  return { key, label: cameraMeta[key].label, strength };
+}
+function cameraLabel(camera){
+  const current = normalizeCamera(camera);
+  return current.key === "center" ? current.label : `${current.label} - ${current.strength}%`;
+}
+function cameraForRank(rank){ return normalizeCamera(cardState(String(rank)).camera); }
+function setCameraForRank(rank, patch){
+  const current = cardState(String(rank));
+  setCardState(String(rank), { camera: normalizeCamera(Object.assign({}, current.camera, patch)) });
+  renderCameraPreview();
+  renderFinalStage();
+}
+function cameraStyle(camera){
+  const current = normalizeCamera(camera);
+  const meta = cameraMeta[current.key] || cameraMeta.center;
+  const strengthScale = current.key === "punch-in" ? current.strength / 500 : current.strength / 900;
+  const scale = current.key === "center" || current.key === "face-left" || current.key === "face-right" || current.key === "alternate"
+    ? meta.scale
+    : meta.scale + strengthScale;
+  return `--camera-x:${meta.x}%;--camera-scale:${scale}`;
 }
 function defaultEffect(){ return { key: "none", label: effectMeta.none.label, intensity: 0 }; }
 function normalizeEffect(effect){
@@ -1618,6 +1739,7 @@ function adjustedMoment(moment){
     adjusted_start: Number((moment.start + trimStart).toFixed(3)),
     adjusted_end: Number((moment.end - trimEnd).toFixed(3)),
     adjusted_duration: Number((moment.end - trimEnd - moment.start - trimStart).toFixed(3)),
+    camera: cameraForRank(moment.rank),
     effect: effectForRank(moment.rank),
     overlay: overlayForRank(moment.rank)
   });
@@ -1640,6 +1762,7 @@ function buildExportData(){
     adjusted_start: moment.adjusted_start,
     adjusted_end: moment.adjusted_end,
     adjusted_duration: moment.adjusted_duration,
+    camera: moment.camera,
     effect: moment.effect,
     overlay: moment.overlay,
     clip_file: moment.clip_file,
@@ -1736,9 +1859,65 @@ function downloadJson(data, filename){
   a.click();
 }
 function renderCaptionQueue(){
+  renderCameraPreview();
   renderEffectPreview();
   renderOverlayPreview();
   renderFinalStage();
+}
+function renderCameraPreview(){
+  const preview = document.querySelector("[data-camera-preview]");
+  const summary = document.querySelector("[data-camera-summary]");
+  if (!preview) return;
+  const queue = buildExportData().caption_queue || [];
+  if (!queue.length) {
+    if (summary) summary.textContent = "Marque cortes como Gostei ou escolha destinos para liberar a camera.";
+    preview.innerHTML = '<div class="camera-empty">Nenhum corte selecionado ainda.</div>';
+    return;
+  }
+  if (summary) summary.textContent = `${queue.length} saidas selecionadas. Escolha um enquadramento em cada uma.`;
+  preview.innerHTML = queue.map(cameraPreviewItemHtml).join("");
+  bindCameraPreviewControls();
+}
+function cameraPreviewItemHtml(item){
+  const camera = normalizeCamera(item.camera);
+  const src = cacheBustedPreview(item.clip_file || "", `camera-${item.rank}-${item.adjusted_start}-${item.adjusted_end}`);
+  return `<article class="caption-item" data-rank="${escapeAttr(item.rank)}" data-platform="${escapeAttr(item.platform)}">
+    <div class="caption-preview camera-surface" data-camera-key="${escapeAttr(camera.key)}" style="${escapeAttr(cameraStyle(camera))}">
+      <video controls preload="metadata" src="${escapeAttr(src)}"></video>
+      <div class="camera-reticle"></div>
+    </div>
+    <div class="caption-item-body">
+      <strong>Preview #${String(item.rank).padStart(2, "0")} ${escapeHtml(item.title || "")}</strong>
+      <span>${escapeHtml(item.platform_label)}</span><span data-camera-current>${escapeHtml(cameraLabel(camera))}</span>
+      <div class="camera-card-controls">
+        <div class="camera-card-buttons" role="group" aria-label="Camera do corte ${escapeAttr(item.rank)}">
+          ${cameraButtonsHtml(camera)}
+        </div>
+        <label>Forca do enquadramento
+          <input data-preview-camera-strength type="range" min="0" max="100" step="5" value="${camera.strength}">
+        </label>
+      </div>
+    </div>
+  </article>`;
+}
+function cameraButtonsHtml(current){
+  return Object.entries(cameraMeta).map(([key, meta]) => {
+    const active = current.key === key ? " active" : "";
+    return `<button data-preview-camera="${escapeAttr(key)}" class="${active}">${escapeHtml(meta.label)}</button>`;
+  }).join("");
+}
+function bindCameraPreviewControls(){
+  document.querySelectorAll("[data-camera-preview] .caption-item").forEach(item => {
+    const rank = item.dataset.rank;
+    item.querySelectorAll("[data-preview-camera]").forEach(button => {
+      button.addEventListener("click", () => setCameraForRank(rank, { key: button.dataset.previewCamera }));
+    });
+    const strength = item.querySelector("[data-preview-camera-strength]");
+    if (strength) {
+      strength.addEventListener("input", () => setCameraForRank(rank, { strength: Number(strength.value) }));
+      strength.addEventListener("change", () => setCameraForRank(rank, { strength: Number(strength.value) }));
+    }
+  });
 }
 function renderEffectPreview(){
   const preview = document.querySelector("[data-effect-preview]");
@@ -1917,10 +2096,11 @@ function renderFinalStage(){
   const queue = buildExportData().caption_queue || [];
   const summary = document.querySelector("[data-final-summary]");
   if (summary) {
+    const cameraCount = queue.filter(item => normalizeCamera(item.camera).key !== "center").length;
     const effectCount = queue.filter(item => normalizeEffect(item.effect).key !== "none").length;
     const overlayCount = queue.filter(item => normalizeOverlay(item.overlay).key !== "none").length;
     summary.textContent = queue.length
-      ? `${queue.length} video(s) na fila; ${effectCount} com efeito; ${overlayCount} com chamada.`
+      ? `${queue.length} video(s) na fila; ${cameraCount} com camera; ${effectCount} com efeito; ${overlayCount} com chamada.`
       : "Selecione cortes antes de renderizar.";
   }
 }
@@ -1971,12 +2151,14 @@ function renderFinalizeResults(files){
     return;
   }
   results.innerHTML = files.map((file, index) => {
+    const camera = normalizeCamera(file.camera);
     const effect = normalizeEffect(file.effect);
     const overlay = normalizeOverlay(file.overlay);
     const title = `#${String(file.rank || "").padStart(2, "0")} ${file.label || file.platform || "video"}`;
     const meta = [
       file.width && file.height ? `${file.width}x${file.height}` : "",
       file.adjusted_duration ? fixed(file.adjusted_duration) : "",
+      camera.key !== "center" ? camera.label : "",
       effect.key !== "none" ? effect.label : "",
       overlay.key !== "none" ? overlay.label : ""
     ].filter(Boolean).join(" - ");
@@ -1990,6 +2172,7 @@ function renderFinalizeResults(files){
           <dl>
             <dt>Formato</dt><dd>${escapeHtml(file.label || file.platform || "-")}</dd>
             <dt>Duracao</dt><dd>${escapeHtml(file.adjusted_duration ? fixed(file.adjusted_duration) : "-")}</dd>
+            <dt>Camera</dt><dd>${escapeHtml(camera.label)}</dd>
             <dt>Efeito</dt><dd>${escapeHtml(effect.label)}</dd>
             <dt>Chamada</dt><dd>${escapeHtml(overlay.label)}</dd>
           </dl>
@@ -2104,6 +2287,9 @@ document.getElementById("reset-ui").addEventListener("click", () => {
   localStorage.removeItem("cutted-format");
   localStorage.removeItem("cutted-tab");
   location.reload();
+});
+document.getElementById("continue-effects").addEventListener("click", async () => {
+  applyTab("effects");
 });
 document.getElementById("continue-overlays").addEventListener("click", async () => {
   applyTab("overlays");

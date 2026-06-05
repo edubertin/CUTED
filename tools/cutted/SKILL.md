@@ -65,14 +65,26 @@ Each card includes:
 
 - a playable video preview;
 - a global format selector for TikTok, Shorts, YouTube, Instagram, and Facebook previews;
-- workflow tabs for editing/export setup, effects, calls-to-action, and final render queue;
+- workflow tabs for editing/export setup, camera reframing, effects, calls-to-action, and final render queue;
 - the peak phrase and transcript;
 - `Gostei`, `Descartar`, and `Resetar corte` controls;
 - a visual two-handle timeline close to the video preview;
 - per-clip platform tags for TikTok, Shorts, Instagram, Facebook, and YouTube next to the trim controls;
 - a final timing summary.
 
-The `Efeitos` tab sits after `Cortes e formatos` and before `Chamadas`. It applies one MVP look per selected cut:
+The `Camera` tab sits after `Cortes e formatos` and before `Efeitos`. It applies one reframe preset per selected cut/platform before subtitles, effects, and calls-to-action:
+
+- `Centro seguro`: default centered crop.
+- `Rosto no centro`: slight punch toward a central speaker.
+- `Rosto a esquerda`: prioritize the left side of a podcast/table layout.
+- `Rosto a direita`: prioritize the right side of a podcast/table layout.
+- `Alternar focos`: slow pan between left and right.
+- `Zoom sutil`: steady closer framing.
+- `Punch-in`: stronger close crop for emphasis.
+
+The MVP camera presets are deterministic FFmpeg scale/crop filters and do not require OpenCV, paid APIs, or cloud processing. OpenCV can be added later for automatic face anchors without changing the exported `camera` object shape.
+
+The `Efeitos` tab sits after `Camera` and before `Chamadas`. It applies one MVP look per selected cut:
 
 - `Sem efeito`: clean output.
 - `Chuvisco Leve`: subtle grain/noise.
@@ -92,7 +104,7 @@ The `Chamadas` tab sits after `Efeitos` and before `Final`. It applies one dragg
 
 The browser preview stores the chosen card position, width, and opacity as relative values, so the final FFmpeg render can burn it into each platform size.
 
-The exported `caption-queue.json` and `selected-clips.json` include an `effect` object with `key`, `label`, and `intensity`, and an `overlay` object with `key`, `label`, `x`, `y`, `width`, and `opacity`.
+The exported `caption-queue.json` and `selected-clips.json` include a `camera` object with `key`, `label`, and `strength`, an `effect` object with `key`, `label`, and `intensity`, and an `overlay` object with `key`, `label`, `x`, `y`, `width`, and `opacity`.
 
 The trim sliders are stored in browser `localStorage`. The exported JSON includes:
 
@@ -105,6 +117,7 @@ The trim sliders are stored in browser `localStorage`. The exported JSON include
 - `export_format`;
 - `platforms`;
 - `caption_queue`;
+- `camera`;
 - `effect`;
 - `overlay`;
 - `status`.
@@ -150,7 +163,7 @@ captioned-clips/
 
 The caption renderer uses FFmpeg and ASS subtitles locally. It does not call an AI model when the queue already has transcript text.
 
-When an exported queue contains an `effect`, `caption-selected` applies the selected effect after subtitles in the final filter chain. When it contains an `overlay`, the renderer burns the selected CTA card after the effect, using the saved relative position and platform dimensions. Grain strengths are intentionally modest so short-form outputs stay small enough for quick MVP testing.
+When an exported queue contains a `camera`, `caption-selected` applies the selected reframe before subtitles in the final filter chain. When it contains an `effect`, the renderer applies the selected effect after subtitles. When it contains an `overlay`, the renderer burns the selected CTA card after the effect, using the saved relative position and platform dimensions. Grain strengths are intentionally modest so short-form outputs stay small enough for quick MVP testing.
 
 Caption quality behavior:
 
@@ -253,6 +266,6 @@ The output folder contains:
 Keep the tool local-first. Next upgrades should be:
 
 - word-level timestamps with WhisperX for cleaner phrase boundaries;
-- optional vertical 9:16 crop/reframe;
+- optional automatic face-anchor detection for the camera/reframe presets;
 - LLM scoring for hook/context/ending quality;
 - per-word animated captions on top of final rendered clips.

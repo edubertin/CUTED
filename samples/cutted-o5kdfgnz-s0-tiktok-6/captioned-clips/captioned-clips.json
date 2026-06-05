@@ -24,6 +24,11 @@
         "caption_hint": "reunião não ele tem dinheiro o bigode\n\n#IA #InteligenciaArtificial #Podcast #Dinheiro #Comer #Ele",
         "strategy": "Usar poucos hashtags relevantes; validar tendencias no TikTok Creative Center antes de publicar."
       },
+      "camera": {
+        "key": "face-left",
+        "label": "Rosto a esquerda",
+        "strength": 60.0
+      },
       "effect": {
         "key": "old-film",
         "label": "Filme Antigo",
@@ -32,8 +37,8 @@
       "overlay": {
         "key": "like-share",
         "label": "Curta e compartilhe",
-        "x": 0.62,
-        "y": 0.78,
+        "x": 0.6040420653907496,
+        "y": 0.7612221803093172,
         "width": 0.34,
         "opacity": 95.0
       }
@@ -61,6 +66,11 @@
         "caption_hint": "dinheiro carai bicho mentiroso a pouco\n\n#IA #InteligenciaArtificial #Podcast #Mentiroso #Dinheiro #Carai",
         "strategy": "Usar poucos hashtags relevantes; validar tendencias no TikTok Creative Center antes de publicar."
       },
+      "camera": {
+        "key": "center",
+        "label": "Centro seguro",
+        "strength": 60.0
+      },
       "effect": {
         "key": "light-grain",
         "label": "Chuvisco Leve",
@@ -69,8 +79,8 @@
       "overlay": {
         "key": "subscribe",
         "label": "Inscreva-se",
-        "x": 0.62,
-        "y": 0.78,
+        "x": 0.6120165470494418,
+        "y": 0.04903809883062995,
         "width": 0.34,
         "opacity": 95.0
       }

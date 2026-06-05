@@ -21,15 +21,16 @@ body[data-format=tiktok] .media,body[data-format=shorts] .media,body[data-format
 .body{padding:14px}.top{display:flex;gap:10px;align-items:center}.top span{color:#888}.top strong{font-size:15px}.peak{color:#fff;font-size:16px}
 p{color:#bebebe}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}
 .timeline-editor{padding:10px 14px 12px;background:#090909;border-top:1px solid #1e1e1e;border-bottom:1px solid #222}.timeline-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.timeline-head output{color:#f4f4f4;text-align:right}.timeline{position:relative;height:34px;margin-top:8px}.timeline-track{position:absolute;left:0;right:0;top:14px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:#f4f4f4;border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:34px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{display:flex;justify-content:space-between;color:#aaa;font-size:12px}
-.format-editor{display:block;padding:12px 14px;background:#090909;border-bottom:1px solid #222}.format-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.format-head output{color:#f4f4f4;text-align:right}.platform-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.platform-tags button{background:#191919;color:#ddd;border:1px solid #333}.platform-tags button.active{background:#24d17e;color:#04130b;border-color:#24d17e}.effect-stage,.overlay-stage{display:none;margin:18px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.effect-stage p,.overlay-stage p{margin:4px 0 0}.caption-settings{display:grid;grid-template-columns:160px 180px;gap:12px;margin-top:16px;max-width:380px}.caption-settings label{display:grid;gap:6px;color:#aaa}.caption-settings select,.caption-settings input{width:100%;background:#050505;color:#f4f4f4;border:1px solid #333;border-radius:6px;padding:9px}.effect-summary,.overlay-summary{margin-top:12px;color:#aaa}.caption-item{border:1px solid #2a2a2a;border-radius:8px;background:#0a0a0a;overflow:hidden}.caption-preview{position:relative;display:flex;justify-content:center;background:#000;overflow:hidden}.caption-preview video,.caption-preview img{width:100%;max-height:64vh;object-fit:cover;background:#000}.caption-item[data-platform=tiktok] video,.caption-item[data-platform=shorts] video,.caption-item[data-platform=instagram] video{aspect-ratio:9/16}.caption-item[data-platform=facebook] video{aspect-ratio:4/5}.caption-item[data-platform=youtube] video{aspect-ratio:16/9}.caption-item-body{padding:12px}.caption-item strong{display:block}.caption-item span{display:inline-flex;margin:8px 8px 0 0;padding:4px 8px;border-radius:999px;background:#242424;color:#ddd;font-size:12px}.caption-item dl{margin-top:10px}
-.effect-preview,.overlay-preview{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin-top:16px;align-items:start}.effect-card-controls,.overlay-card-controls{display:grid;gap:10px;margin-top:12px}.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.effect-card-buttons button,.overlay-card-buttons button{background:#191919;color:#ddd;border:1px solid #333;text-align:left}.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;border-color:#24d17e}.effect-card-controls label,.overlay-card-controls label{display:grid;gap:6px;color:#aaa;font-size:12px}.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:#24d17e}.effect-empty,.overlay-empty{padding:18px;border:1px dashed #333;border-radius:8px;color:#aaa}.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,#24d17e);border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-resize{position:absolute;right:5px;bottom:5px;width:14px;height:14px;padding:0;border:1px solid rgba(255,255,255,.42);border-radius:3px;background:rgba(255,255,255,.18);cursor:nwse-resize}
-body[data-tab=effects] main,body[data-tab=effects] .config,body[data-tab=effects] .overlay-stage,body[data-tab=effects] .final-stage{display:none}body[data-tab=effects] .effect-stage{display:block}
-body[data-tab=overlays] main,body[data-tab=overlays] .config,body[data-tab=overlays] .effect-stage,body[data-tab=overlays] .final-stage{display:none}body[data-tab=overlays] .overlay-stage{display:block}
-body[data-tab=final] main,body[data-tab=final] .config,body[data-tab=final] .effect-stage,body[data-tab=final] .overlay-stage{display:none}body[data-tab=final] .final-stage{display:block}.final-stage{display:none;margin:18px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.render-status{margin-top:12px;color:#aaa}.render-results{display:grid;gap:12px;margin-top:14px}.result-item{border:1px solid #303030;border-radius:8px;background:#090909;overflow:hidden}.result-item[open]{border-color:#3b3b3b}.result-item summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;border:0;color:#f4f4f4}.result-item summary strong{font-size:14px}.result-item summary span{color:#aaa;font-size:12px}.result-body{display:grid;grid-template-columns:minmax(260px,420px) minmax(240px,1fr);gap:14px;padding:0 14px 14px}.result-body video{width:100%;max-height:70vh;background:#000;border-radius:6px;object-fit:contain}.result-meta{display:grid;align-content:start;gap:10px}.result-meta dl{margin:0}.result-actions{display:flex;gap:8px;flex-wrap:wrap}.result-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:#f4f4f4;color:#050505;text-decoration:none}.result-actions a.secondary{background:#242424;color:#ddd;border:1px solid #333}
+.format-editor{display:block;padding:12px 14px;background:#090909;border-bottom:1px solid #222}.format-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.format-head output{color:#f4f4f4;text-align:right}.platform-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.platform-tags button{background:#191919;color:#ddd;border:1px solid #333}.platform-tags button.active{background:#24d17e;color:#04130b;border-color:#24d17e}.camera-stage,.effect-stage,.overlay-stage{display:none;margin:18px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.camera-stage p,.effect-stage p,.overlay-stage p{margin:4px 0 0}.caption-settings{display:grid;grid-template-columns:160px 180px;gap:12px;margin-top:16px;max-width:380px}.caption-settings label{display:grid;gap:6px;color:#aaa}.caption-settings select,.caption-settings input{width:100%;background:#050505;color:#f4f4f4;border:1px solid #333;border-radius:6px;padding:9px}.camera-summary,.effect-summary,.overlay-summary{margin-top:12px;color:#aaa}.caption-item{border:1px solid #2a2a2a;border-radius:8px;background:#0a0a0a;overflow:hidden}.caption-preview{position:relative;display:flex;justify-content:center;background:#000;overflow:hidden}.caption-preview video,.caption-preview img{width:100%;max-height:64vh;object-fit:cover;background:#000}.caption-item[data-platform=tiktok] video,.caption-item[data-platform=shorts] video,.caption-item[data-platform=instagram] video{aspect-ratio:9/16}.caption-item[data-platform=facebook] video{aspect-ratio:4/5}.caption-item[data-platform=youtube] video{aspect-ratio:16/9}.caption-item-body{padding:12px}.caption-item strong{display:block}.caption-item span{display:inline-flex;margin:8px 8px 0 0;padding:4px 8px;border-radius:999px;background:#242424;color:#ddd;font-size:12px}.caption-item dl{margin-top:10px}
+.camera-preview,.effect-preview,.overlay-preview{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin-top:16px;align-items:start}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px;margin-top:12px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:#191919;color:#ddd;border:1px solid #333;text-align:left}.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;border-color:#24d17e}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label{display:grid;gap:6px;color:#aaa;font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:#24d17e}.camera-empty,.effect-empty,.overlay-empty{padding:18px;border:1px dashed #333;border-radius:8px;color:#aaa}.camera-surface video{object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%}.camera-surface[data-camera-key=alternate] video{animation:camera-pan 6s ease-in-out infinite alternate}@keyframes camera-pan{0%{object-position:22% 50%}100%{object-position:78% 50%}}.camera-reticle{position:absolute;inset:14% 22%;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,#24d17e);border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-resize{position:absolute;right:5px;bottom:5px;width:14px;height:14px;padding:0;border:1px solid rgba(255,255,255,.42);border-radius:3px;background:rgba(255,255,255,.18);cursor:nwse-resize}
+body[data-tab=camera] main,body[data-tab=camera] .config,body[data-tab=camera] .effect-stage,body[data-tab=camera] .overlay-stage,body[data-tab=camera] .final-stage{display:none}body[data-tab=camera] .camera-stage{display:block}
+body[data-tab=effects] main,body[data-tab=effects] .config,body[data-tab=effects] .camera-stage,body[data-tab=effects] .overlay-stage,body[data-tab=effects] .final-stage{display:none}body[data-tab=effects] .effect-stage{display:block}
+body[data-tab=overlays] main,body[data-tab=overlays] .config,body[data-tab=overlays] .camera-stage,body[data-tab=overlays] .effect-stage,body[data-tab=overlays] .final-stage{display:none}body[data-tab=overlays] .overlay-stage{display:block}
+body[data-tab=final] main,body[data-tab=final] .config,body[data-tab=final] .camera-stage,body[data-tab=final] .effect-stage,body[data-tab=final] .overlay-stage{display:none}body[data-tab=final] .final-stage{display:block}.final-stage{display:none;margin:18px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.render-status{margin-top:12px;color:#aaa}.render-results{display:grid;gap:12px;margin-top:14px}.result-item{border:1px solid #303030;border-radius:8px;background:#090909;overflow:hidden}.result-item[open]{border-color:#3b3b3b}.result-item summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;border:0;color:#f4f4f4}.result-item summary strong{font-size:14px}.result-item summary span{color:#aaa;font-size:12px}.result-body{display:grid;grid-template-columns:minmax(260px,420px) minmax(240px,1fr);gap:14px;padding:0 14px 14px}.result-body video{width:100%;max-height:70vh;background:#000;border-radius:6px;object-fit:contain}.result-meta{display:grid;align-content:start;gap:10px}.result-meta dl{margin:0}.result-actions{display:flex;gap:8px;flex-wrap:wrap}.result-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:#f4f4f4;color:#050505;text-decoration:none}.result-actions a.secondary{background:#242424;color:#ddd;border:1px solid #333}
 details{border-top:1px solid #242424;margin-top:12px;padding-top:10px}summary{cursor:pointer;color:#ddd}.actions{display:flex;gap:8px;margin-top:12px}
 button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 12px;cursor:pointer}#reset-ui,button[data-action=discard]{background:#242424;color:#ddd}
 button[data-action=reset-trim]{background:#191919;color:#ddd;border:1px solid #333}
-@media(max-width:760px){.tabs{top:94px;overflow:auto}.config{top:144px;align-items:flex-start;flex-direction:column}.segments button{font-size:12px;padding:7px 9px}main{grid-template-columns:1fr;padding:12px}.effect-preview,.overlay-preview,.caption-settings,.result-body{grid-template-columns:1fr}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}}
+@media(max-width:760px){.tabs{top:94px;overflow:auto}.config{top:144px;align-items:flex-start;flex-direction:column}.segments button{font-size:12px;padding:7px 9px}main{grid-template-columns:1fr;padding:12px}.camera-preview,.effect-preview,.overlay-preview,.caption-settings,.result-body{grid-template-columns:1fr}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}}
 </style>
 </head>
 <body data-format="tiktok" data-tab="edit">
@@ -42,9 +43,10 @@ button[data-action=reset-trim]{background:#191919;color:#ddd;border:1px solid #3
   </header>
   <nav class="tabs" aria-label="Fluxo">
     <button data-tab="edit" class="active">1. Cortes e formatos</button>
-    <button data-tab="effects">2. Efeitos</button>
-    <button data-tab="overlays">3. Chamadas</button>
-    <button data-tab="final">4. Final</button>
+    <button data-tab="camera">2. Camera</button>
+    <button data-tab="effects">3. Efeitos</button>
+    <button data-tab="overlays">4. Chamadas</button>
+    <button data-tab="final">5. Final</button>
   </nav>
   <section class="config" aria-label="Configuracao de formato">
     <div>
@@ -58,6 +60,17 @@ button[data-action=reset-trim]{background:#191919;color:#ddd;border:1px solid #3
       <button data-format="instagram">Instagram</button>
       <button data-format="facebook">Facebook</button>
     </div>
+  </section>
+  <section class="camera-stage">
+    <div class="stage-head">
+      <div>
+        <strong>Camera</strong>
+        <p>Escolha um enquadramento por corte antes dos efeitos.</p>
+      </div>
+      <button id="continue-effects">Continuar para efeitos</button>
+    </div>
+    <div class="camera-summary" data-camera-summary>Nenhum corte marcado ainda.</div>
+    <div class="camera-preview" data-camera-preview></div>
   </section>
   <section class="effect-stage">
     <div class="stage-head">
@@ -383,7 +396,7 @@ button[data-action=reset-trim]{background:#191919;color:#ddd;border:1px solid #3
         </div>
       </div>
     </article></main>
-  <script>window.CUTTED_DATA = {"moments": [{"rank": 1, "start": 60.58, "end": 100.85000000000001, "peak": 86.72, "score": 10.48, "title": "reunião não ele tem dinheiro o bigode", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "rapaz aqui falou com teu real para comer pega não vou pagar o almoço dele lá para nós maquininha de cartão como você sai para comer não tem um réu cara que você tá louco passa para mim não bebe lá pode passar no grupo lá vai trazer a maquininha colocar sei que tô vendo que come todo mundo como é que você sair dá para comer na rua não tem o réu que você tá doido velho mas vai botar você para lavar os pratos aí para mim comer Ah então está mentindo para mim pagar por reunião não ele tem dinheiro o bigode então rapaz ele falou que não tinha dinheiro carai bicho mentiroso a pouco mais de uma dor de barriga não tenho real o mundo vai acabar mesmo filha toma", "peak_text": "reunião não ele tem dinheiro o bigode", "clip_file": "clips/clip-001.mp4", "frame_file": "frames/clip-001.jpg", "caption_segments": [{"start": 61.58, "end": 65.51, "text": "rapaz aqui falou com teu real para comer"}, {"start": 63.47, "end": 67.94, "text": "pega não vou pagar o almoço dele lá para"}, {"start": 65.51, "end": 69.23, "text": "nós maquininha de cartão como você sai"}, {"start": 67.94, "end": 71.42, "text": "para comer não tem um réu cara que você"}, {"start": 69.23, "end": 72.95, "text": "tá louco passa para mim não bebe lá pode"}, {"start": 71.42, "end": 74.3, "text": "passar no grupo lá vai trazer a"}, {"start": 72.95, "end": 75.92, "text": "maquininha colocar sei que tô vendo que"}, {"start": 74.3, "end": 77.69, "text": "come todo mundo como é que você sair dá"}, {"start": 75.92, "end": 79.55, "text": "para comer na rua não tem o réu que você"}, {"start": 77.69, "end": 81.56, "text": "tá doido velho mas vai botar você para"}, {"start": 79.55, "end": 84.229, "text": "lavar os pratos aí para mim comer Ah"}, {"start": 81.56, "end": 86.3, "text": "então está mentindo para mim pagar por"}, {"start": 84.229, "end": 89.21, "text": "reunião não ele tem dinheiro o bigode"}, {"start": 86.3, "end": 91.7, "text": "então rapaz ele falou que não tinha"}, {"start": 89.21, "end": 94.03999999999999, "text": "dinheiro carai bicho mentiroso a pouco"}, {"start": 91.7, "end": 96.86, "text": "mais de uma dor de barriga não tenho"}, {"start": 94.04, "end": 99.35000000000001, "text": "real o mundo vai acabar mesmo filha toma"}]}, {"rank": 2, "start": 88.21, "end": 131.34, "peak": 91.62, "score": 8.39, "title": "dinheiro carai bicho mentiroso a pouco", "reason": "Bom candidato, com pico de fala claro.", "transcript": "dinheiro carai bicho mentiroso a pouco mais de uma dor de barriga não tenho real o mundo vai acabar mesmo filha toma toma toma um cafezinho obrigado você não tem um cafezinho certeza é 21 eu ficava na calçada é e agr é é o que colocar na calçada lá embaixo se pá a irmã no Face estou real 1", "peak_text": "dinheiro carai bicho mentiroso a pouco", "clip_file": "clips/clip-002.mp4", "frame_file": "frames/clip-002.jpg", "caption_segments": [{"start": 89.21, "end": 94.03999999999999, "text": "dinheiro carai bicho mentiroso a pouco"}, {"start": 91.7, "end": 96.86, "text": "mais de uma dor de barriga não tenho"}, {"start": 94.04, "end": 99.35000000000001, "text": "real o mundo vai acabar mesmo filha toma"}, {"start": 96.86, "end": 113.11, "text": "toma toma um cafezinho obrigado você não"}, {"start": 99.35, "end": 115.97, "text": "tem um cafezinho certeza é 21"}, {"start": 113.11, "end": 119.3, "text": "eu ficava na calçada é"}, {"start": 115.97, "end": 120.58, "text": "e agr é é o que colocar na calçada lá"}, {"start": 119.3, "end": 127.75, "text": "embaixo se pá"}, {"start": 120.58, "end": 129.84, "text": "a irmã no Face estou real 1"}]}, {"rank": 3, "start": 207.25, "end": 252.17000000000002, "peak": 241.3, "score": 11.03, "title": "lugar com ele dinheiro de verdade também", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "obrigado obrigado aqui é o Itaú e essa pela inteira do Itaú Oi carai velho All moving outro dia mas para cliente cinco estrelas assim como dinheiro na conta né acabou outro dia mano não sai fora só o preço não pegar sua filha e eu vou arrancar embaixo das em segundo lugar com ele dinheiro de verdade também você me dá um abraço para 100reais se eu", "peak_text": "lugar com ele dinheiro de verdade também", "clip_file": "clips/clip-003.mp4", "frame_file": "frames/clip-003.jpg", "caption_segments": [{"start": 208.25, "end": 216.84, "text": "obrigado obrigado aqui é o Itaú"}, {"start": 214.06, "end": 220.379, "text": "e essa pela inteira do Itaú"}, {"start": 216.84, "end": 222.239, "text": "Oi carai velho All moving outro dia mas"}, {"start": 220.379, "end": 225.0, "text": "para cliente cinco estrelas assim como"}, {"start": 222.239, "end": 228.45000000000002, "text": "dinheiro na conta né acabou outro dia"}, {"start": 225.0, "end": 231.53, "text": "mano não sai fora só o preço não pegar"}, {"start": 228.45, "end": 234.61999999999998, "text": "sua filha e"}, {"start": 231.53, "end": 244.209, "text": "eu vou arrancar embaixo das em segundo"}, {"start": 234.62, "end": 247.97, "text": "lugar com ele dinheiro de verdade também"}, {"start": 244.209, "end": 250.67000000000002, "text": "você me dá um abraço para 100reais se eu"}]}, {"rank": 4, "start": 243.209, "end": 288.25899999999996, "peak": 247.44, "score": 6.29, "title": "você me dá um abraço para 100reais se eu", "reason": "Bom candidato, com pico de fala claro.", "transcript": "você me dá um abraço para 100reais se eu tivesse resto do abraço é interesseira né oi oi foi um abraço não abrace não né dinheirinho não tenho real reino não vai acabar mesmo somente aqui ó tomar um cafezinho para você quanto que é de 42 é 1043 com 10 caprichado se você vende quatro vezes um corpinho Ah tá eu pensei", "peak_text": "você me dá um abraço para 100reais se eu", "clip_file": "clips/clip-004.mp4", "frame_file": "frames/clip-004.jpg", "caption_segments": [{"start": 244.209, "end": 250.67000000000002, "text": "você me dá um abraço para 100reais se eu"}, {"start": 247.97, "end": 253.39, "text": "tivesse resto do abraço é interesseira"}, {"start": 250.67, "end": 253.39, "text": "né"}, {"start": 254.54, "end": 265.84999999999997, "text": "oi oi foi um abraço não abrace não né"}, {"start": 262.539, "end": 270.11, "text": "dinheirinho não tenho real reino não vai"}, {"start": 265.85, "end": 274.87, "text": "acabar mesmo somente aqui ó tomar um"}, {"start": 270.11, "end": 278.41900000000004, "text": "cafezinho para você quanto que é de 42 é"}, {"start": 274.87, "end": 283.789, "text": "1043 com 10 caprichado se você vende"}, {"start": 278.419, "end": 286.75899999999996, "text": "quatro vezes um corpinho Ah tá eu pensei"}]}, {"rank": 5, "start": 282.789, "end": 327.9, "peak": 323.94, "score": 8.43, "title": "tomar banho vai tomar banho é porque não", "reason": "Bom candidato, com pico de fala claro.", "transcript": "que você vinha de quatro a gente 84 não vende Vem de Quatro Vem de Quatro abençoe você tá bom obrigado Deus abençoe valeu é nós já tô sozinha rapaz é eu não tenho real fazer vai acabar mesmo né velho é o seguinte a prova então vai tomar banho vai tomar banho é porque não", "peak_text": "tomar banho vai tomar banho é porque não", "clip_file": "clips/clip-005.mp4", "frame_file": "frames/clip-005.jpg", "caption_segments": [{"start": 283.789, "end": 291.82, "text": "que você vinha de quatro a gente 84 não"}, {"start": 286.759, "end": 291.82, "text": "vende Vem de Quatro Vem de Quatro"}, {"start": 292.78, "end": 306.15999999999997, "text": "abençoe você tá bom obrigado Deus"}, {"start": 302.81, "end": 309.16, "text": "abençoe valeu é nós já tô sozinha rapaz"}, {"start": 306.16, "end": 309.16, "text": "é"}, {"start": 314.52, "end": 321.479, "text": "eu não tenho real fazer vai acabar mesmo"}, {"start": 318.66, "end": 323.94, "text": "né velho é o seguinte a prova então vai"}, {"start": 321.479, "end": 326.4, "text": "tomar banho vai tomar banho é porque não"}]}, {"rank": 6, "start": 313.52, "end": 359.59000000000003, "peak": 323.94, "score": 8.65, "title": "tomar banho vai tomar banho é porque não", "reason": "Bom candidato, com pico de fala claro.", "transcript": "eu não tenho real fazer vai acabar mesmo né velho é o seguinte a prova então vai tomar banho vai tomar banho é porque não tem um real não tem uma mente pura você vai ter uma me perguntar o E ai before me in é da hora de fazer uma pergunta mãe desculpa atrapalhar' sua refeição que eu sei que o mundo é sagrado você tem um", "peak_text": "tomar banho vai tomar banho é porque não", "clip_file": "clips/clip-006.mp4", "frame_file": "frames/clip-006.jpg", "caption_segments": [{"start": 314.52, "end": 321.479, "text": "eu não tenho real fazer vai acabar mesmo"}, {"start": 318.66, "end": 323.94, "text": "né velho é o seguinte a prova então vai"}, {"start": 321.479, "end": 326.4, "text": "tomar banho vai tomar banho é porque não"}, {"start": 323.94, "end": 330.96, "text": "tem um real não tem uma mente pura você"}, {"start": 326.4, "end": 339.60999999999996, "text": "vai ter uma me perguntar o"}, {"start": 330.96, "end": 344.349, "text": "E ai before me in"}, {"start": 339.61, "end": 345.639, "text": "é da hora de fazer uma pergunta mãe"}, {"start": 344.349, "end": 347.289, "text": "desculpa atrapalhar' sua refeição que eu"}, {"start": 345.639, "end": 358.09000000000003, "text": "sei que o mundo é sagrado você tem um"}]}]}; window.CUTTED_SCRIPT = "C:\\Users\\edube\\.codex\\skills\\cutted\\scripts\\cutted.py";</script>
+  <script>window.CUTTED_DATA = {"moments": [{"rank": 1, "start": 60.58, "end": 100.85000000000001, "peak": 86.72, "score": 10.48, "title": "reunião não ele tem dinheiro o bigode", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "rapaz aqui falou com teu real para comer pega não vou pagar o almoço dele lá para nós maquininha de cartão como você sai para comer não tem um réu cara que você tá louco passa para mim não bebe lá pode passar no grupo lá vai trazer a maquininha colocar sei que tô vendo que come todo mundo como é que você sair dá para comer na rua não tem o réu que você tá doido velho mas vai botar você para lavar os pratos aí para mim comer Ah então está mentindo para mim pagar por reunião não ele tem dinheiro o bigode então rapaz ele falou que não tinha dinheiro carai bicho mentiroso a pouco mais de uma dor de barriga não tenho real o mundo vai acabar mesmo filha toma", "peak_text": "reunião não ele tem dinheiro o bigode", "clip_file": "clips/clip-001.mp4", "frame_file": "frames/clip-001.jpg", "caption_segments": [{"start": 61.58, "end": 65.51, "text": "rapaz aqui falou com teu real para comer"}, {"start": 63.47, "end": 67.94, "text": "pega não vou pagar o almoço dele lá para"}, {"start": 65.51, "end": 69.23, "text": "nós maquininha de cartão como você sai"}, {"start": 67.94, "end": 71.42, "text": "para comer não tem um réu cara que você"}, {"start": 69.23, "end": 72.95, "text": "tá louco passa para mim não bebe lá pode"}, {"start": 71.42, "end": 74.3, "text": "passar no grupo lá vai trazer a"}, {"start": 72.95, "end": 75.92, "text": "maquininha colocar sei que tô vendo que"}, {"start": 74.3, "end": 77.69, "text": "come todo mundo como é que você sair dá"}, {"start": 75.92, "end": 79.55, "text": "para comer na rua não tem o réu que você"}, {"start": 77.69, "end": 81.56, "text": "tá doido velho mas vai botar você para"}, {"start": 79.55, "end": 84.229, "text": "lavar os pratos aí para mim comer Ah"}, {"start": 81.56, "end": 86.3, "text": "então está mentindo para mim pagar por"}, {"start": 84.229, "end": 89.21, "text": "reunião não ele tem dinheiro o bigode"}, {"start": 86.3, "end": 91.7, "text": "então rapaz ele falou que não tinha"}, {"start": 89.21, "end": 94.03999999999999, "text": "dinheiro carai bicho mentiroso a pouco"}, {"start": 91.7, "end": 96.86, "text": "mais de uma dor de barriga não tenho"}, {"start": 94.04, "end": 99.35000000000001, "text": "real o mundo vai acabar mesmo filha toma"}]}, {"rank": 2, "start": 88.21, "end": 131.34, "peak": 91.62, "score": 8.39, "title": "dinheiro carai bicho mentiroso a pouco", "reason": "Bom candidato, com pico de fala claro.", "transcript": "dinheiro carai bicho mentiroso a pouco mais de uma dor de barriga não tenho real o mundo vai acabar mesmo filha toma toma toma um cafezinho obrigado você não tem um cafezinho certeza é 21 eu ficava na calçada é e agr é é o que colocar na calçada lá embaixo se pá a irmã no Face estou real 1", "peak_text": "dinheiro carai bicho mentiroso a pouco", "clip_file": "clips/clip-002.mp4", "frame_file": "frames/clip-002.jpg", "caption_segments": [{"start": 89.21, "end": 94.03999999999999, "text": "dinheiro carai bicho mentiroso a pouco"}, {"start": 91.7, "end": 96.86, "text": "mais de uma dor de barriga não tenho"}, {"start": 94.04, "end": 99.35000000000001, "text": "real o mundo vai acabar mesmo filha toma"}, {"start": 96.86, "end": 113.11, "text": "toma toma um cafezinho obrigado você não"}, {"start": 99.35, "end": 115.97, "text": "tem um cafezinho certeza é 21"}, {"start": 113.11, "end": 119.3, "text": "eu ficava na calçada é"}, {"start": 115.97, "end": 120.58, "text": "e agr é é o que colocar na calçada lá"}, {"start": 119.3, "end": 127.75, "text": "embaixo se pá"}, {"start": 120.58, "end": 129.84, "text": "a irmã no Face estou real 1"}]}, {"rank": 3, "start": 207.25, "end": 252.17000000000002, "peak": 241.3, "score": 11.03, "title": "lugar com ele dinheiro de verdade também", "reason": "Gancho forte, fala densa e bom contexto isolado.", "transcript": "obrigado obrigado aqui é o Itaú e essa pela inteira do Itaú Oi carai velho All moving outro dia mas para cliente cinco estrelas assim como dinheiro na conta né acabou outro dia mano não sai fora só o preço não pegar sua filha e eu vou arrancar embaixo das em segundo lugar com ele dinheiro de verdade também você me dá um abraço para 100reais se eu", "peak_text": "lugar com ele dinheiro de verdade também", "clip_file": "clips/clip-003.mp4", "frame_file": "frames/clip-003.jpg", "caption_segments": [{"start": 208.25, "end": 216.84, "text": "obrigado obrigado aqui é o Itaú"}, {"start": 214.06, "end": 220.379, "text": "e essa pela inteira do Itaú"}, {"start": 216.84, "end": 222.239, "text": "Oi carai velho All moving outro dia mas"}, {"start": 220.379, "end": 225.0, "text": "para cliente cinco estrelas assim como"}, {"start": 222.239, "end": 228.45000000000002, "text": "dinheiro na conta né acabou outro dia"}, {"start": 225.0, "end": 231.53, "text": "mano não sai fora só o preço não pegar"}, {"start": 228.45, "end": 234.61999999999998, "text": "sua filha e"}, {"start": 231.53, "end": 244.209, "text": "eu vou arrancar embaixo das em segundo"}, {"start": 234.62, "end": 247.97, "text": "lugar com ele dinheiro de verdade também"}, {"start": 244.209, "end": 250.67000000000002, "text": "você me dá um abraço para 100reais se eu"}]}, {"rank": 4, "start": 243.209, "end": 288.25899999999996, "peak": 247.44, "score": 6.29, "title": "você me dá um abraço para 100reais se eu", "reason": "Bom candidato, com pico de fala claro.", "transcript": "você me dá um abraço para 100reais se eu tivesse resto do abraço é interesseira né oi oi foi um abraço não abrace não né dinheirinho não tenho real reino não vai acabar mesmo somente aqui ó tomar um cafezinho para você quanto que é de 42 é 1043 com 10 caprichado se você vende quatro vezes um corpinho Ah tá eu pensei", "peak_text": "você me dá um abraço para 100reais se eu", "clip_file": "clips/clip-004.mp4", "frame_file": "frames/clip-004.jpg", "caption_segments": [{"start": 244.209, "end": 250.67000000000002, "text": "você me dá um abraço para 100reais se eu"}, {"start": 247.97, "end": 253.39, "text": "tivesse resto do abraço é interesseira"}, {"start": 250.67, "end": 253.39, "text": "né"}, {"start": 254.54, "end": 265.84999999999997, "text": "oi oi foi um abraço não abrace não né"}, {"start": 262.539, "end": 270.11, "text": "dinheirinho não tenho real reino não vai"}, {"start": 265.85, "end": 274.87, "text": "acabar mesmo somente aqui ó tomar um"}, {"start": 270.11, "end": 278.41900000000004, "text": "cafezinho para você quanto que é de 42 é"}, {"start": 274.87, "end": 283.789, "text": "1043 com 10 caprichado se você vende"}, {"start": 278.419, "end": 286.75899999999996, "text": "quatro vezes um corpinho Ah tá eu pensei"}]}, {"rank": 5, "start": 282.789, "end": 327.9, "peak": 323.94, "score": 8.43, "title": "tomar banho vai tomar banho é porque não", "reason": "Bom candidato, com pico de fala claro.", "transcript": "que você vinha de quatro a gente 84 não vende Vem de Quatro Vem de Quatro abençoe você tá bom obrigado Deus abençoe valeu é nós já tô sozinha rapaz é eu não tenho real fazer vai acabar mesmo né velho é o seguinte a prova então vai tomar banho vai tomar banho é porque não", "peak_text": "tomar banho vai tomar banho é porque não", "clip_file": "clips/clip-005.mp4", "frame_file": "frames/clip-005.jpg", "caption_segments": [{"start": 283.789, "end": 291.82, "text": "que você vinha de quatro a gente 84 não"}, {"start": 286.759, "end": 291.82, "text": "vende Vem de Quatro Vem de Quatro"}, {"start": 292.78, "end": 306.15999999999997, "text": "abençoe você tá bom obrigado Deus"}, {"start": 302.81, "end": 309.16, "text": "abençoe valeu é nós já tô sozinha rapaz"}, {"start": 306.16, "end": 309.16, "text": "é"}, {"start": 314.52, "end": 321.479, "text": "eu não tenho real fazer vai acabar mesmo"}, {"start": 318.66, "end": 323.94, "text": "né velho é o seguinte a prova então vai"}, {"start": 321.479, "end": 326.4, "text": "tomar banho vai tomar banho é porque não"}]}, {"rank": 6, "start": 313.52, "end": 359.59000000000003, "peak": 323.94, "score": 8.65, "title": "tomar banho vai tomar banho é porque não", "reason": "Bom candidato, com pico de fala claro.", "transcript": "eu não tenho real fazer vai acabar mesmo né velho é o seguinte a prova então vai tomar banho vai tomar banho é porque não tem um real não tem uma mente pura você vai ter uma me perguntar o E ai before me in é da hora de fazer uma pergunta mãe desculpa atrapalhar' sua refeição que eu sei que o mundo é sagrado você tem um", "peak_text": "tomar banho vai tomar banho é porque não", "clip_file": "clips/clip-006.mp4", "frame_file": "frames/clip-006.jpg", "caption_segments": [{"start": 314.52, "end": 321.479, "text": "eu não tenho real fazer vai acabar mesmo"}, {"start": 318.66, "end": 323.94, "text": "né velho é o seguinte a prova então vai"}, {"start": 321.479, "end": 326.4, "text": "tomar banho vai tomar banho é porque não"}, {"start": 323.94, "end": 330.96, "text": "tem um real não tem uma mente pura você"}, {"start": 326.4, "end": 339.60999999999996, "text": "vai ter uma me perguntar o"}, {"start": 330.96, "end": 344.349, "text": "E ai before me in"}, {"start": 339.61, "end": 345.639, "text": "é da hora de fazer uma pergunta mãe"}, {"start": 344.349, "end": 347.289, "text": "desculpa atrapalhar' sua refeição que eu"}, {"start": 345.639, "end": 358.09000000000003, "text": "sei que o mundo é sagrado você tem um"}]}]}; window.CUTTED_SCRIPT = "C:\\Users\\edube\\OneDrive\\Documentos\\Cuted\\tools\\cutted\\scripts\\cutted.py";</script>
   <script>
 if (new URLSearchParams(location.search).has("reset")) {
   localStorage.removeItem("cutted-state");
@@ -395,8 +408,9 @@ const state = JSON.parse(localStorage.getItem("cutted-state") || "{}");
 function save(){ localStorage.setItem("cutted-state", JSON.stringify(state)); }
 function cardState(rank){
   const raw = state[rank];
-  if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [], effect: defaultEffect(), overlay: defaultOverlay() };
-  const next = Object.assign({ status: null, trimStart: 0, trimEnd: 0, platforms: [], effect: defaultEffect(), overlay: defaultOverlay() }, raw || {});
+  if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay() };
+  const next = Object.assign({ status: null, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay() }, raw || {});
+  next.camera = normalizeCamera(next.camera);
   next.effect = normalizeEffect(next.effect);
   next.overlay = normalizeOverlay(next.overlay);
   return next;
@@ -424,6 +438,15 @@ const effectMeta = {
   vhs: { label: "VHS / TV Antiga", note: "Ruido analogico" },
   "bw-old": { label: "Preto e Branco Antigo", note: "P&B com grao" }
 };
+const cameraMeta = {
+  center: { label: "Centro seguro", note: "Crop limpo no centro", x: 50, scale: 1 },
+  "face-center": { label: "Rosto no centro", note: "Zoom leve no centro", x: 50, scale: 1.1 },
+  "face-left": { label: "Rosto a esquerda", note: "Prioriza a pessoa da esquerda", x: 22, scale: 1 },
+  "face-right": { label: "Rosto a direita", note: "Prioriza a pessoa da direita", x: 78, scale: 1 },
+  alternate: { label: "Alternar focos", note: "Pan suave entre lados", x: 50, scale: 1 },
+  "soft-zoom": { label: "Zoom sutil", note: "Aproxima sem trocar o foco", x: 50, scale: 1.12 },
+  "punch-in": { label: "Punch-in", note: "Mais fechado e energetico", x: 50, scale: 1.22 }
+};
 const overlayMeta = {
   none: { label: "Sem chamada", title: "", subtitle: "", accent: "#000000" },
   subscribe: { label: "Inscreva-se", title: "Inscreva-se", subtitle: "Novos cortes toda semana", accent: "#ff3b30" },
@@ -445,18 +468,45 @@ function applyFormat(format){
   renderCaptionQueue();
 }
 function applyTab(tab){
-  const next = ["edit", "effects", "overlays", "final"].includes(tab) ? tab : "edit";
+  const next = ["edit", "camera", "effects", "overlays", "final"].includes(tab) ? tab : "edit";
   document.body.dataset.tab = next;
   localStorage.setItem("cutted-tab", next);
   document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.tab === next);
   });
+  renderCameraPreview();
   renderEffectPreview();
   renderOverlayPreview();
   renderFinalStage();
 }
 function platformLabel(key){
   return (platformMeta[key] || { label: key }).label;
+}
+function defaultCamera(){ return { key: "center", label: cameraMeta.center.label, strength: 60 }; }
+function normalizeCamera(camera){
+  const key = cameraMeta[camera?.key] ? camera.key : "center";
+  const strength = Math.max(0, Math.min(Number(camera?.strength ?? 60), 100));
+  return { key, label: cameraMeta[key].label, strength };
+}
+function cameraLabel(camera){
+  const current = normalizeCamera(camera);
+  return current.key === "center" ? current.label : `${current.label} - ${current.strength}%`;
+}
+function cameraForRank(rank){ return normalizeCamera(cardState(String(rank)).camera); }
+function setCameraForRank(rank, patch){
+  const current = cardState(String(rank));
+  setCardState(String(rank), { camera: normalizeCamera(Object.assign({}, current.camera, patch)) });
+  renderCameraPreview();
+  renderFinalStage();
+}
+function cameraStyle(camera){
+  const current = normalizeCamera(camera);
+  const meta = cameraMeta[current.key] || cameraMeta.center;
+  const strengthScale = current.key === "punch-in" ? current.strength / 500 : current.strength / 900;
+  const scale = current.key === "center" || current.key === "face-left" || current.key === "face-right" || current.key === "alternate"
+    ? meta.scale
+    : meta.scale + strengthScale;
+  return `--camera-x:${meta.x}%;--camera-scale:${scale}`;
 }
 function defaultEffect(){ return { key: "none", label: effectMeta.none.label, intensity: 0 }; }
 function normalizeEffect(effect){
@@ -573,6 +623,7 @@ function adjustedMoment(moment){
     adjusted_start: Number((moment.start + trimStart).toFixed(3)),
     adjusted_end: Number((moment.end - trimEnd).toFixed(3)),
     adjusted_duration: Number((moment.end - trimEnd - moment.start - trimStart).toFixed(3)),
+    camera: cameraForRank(moment.rank),
     effect: effectForRank(moment.rank),
     overlay: overlayForRank(moment.rank)
   });
@@ -595,6 +646,7 @@ function buildExportData(){
     adjusted_start: moment.adjusted_start,
     adjusted_end: moment.adjusted_end,
     adjusted_duration: moment.adjusted_duration,
+    camera: moment.camera,
     effect: moment.effect,
     overlay: moment.overlay,
     clip_file: moment.clip_file,
@@ -691,9 +743,65 @@ function downloadJson(data, filename){
   a.click();
 }
 function renderCaptionQueue(){
+  renderCameraPreview();
   renderEffectPreview();
   renderOverlayPreview();
   renderFinalStage();
+}
+function renderCameraPreview(){
+  const preview = document.querySelector("[data-camera-preview]");
+  const summary = document.querySelector("[data-camera-summary]");
+  if (!preview) return;
+  const queue = buildExportData().caption_queue || [];
+  if (!queue.length) {
+    if (summary) summary.textContent = "Marque cortes como Gostei ou escolha destinos para liberar a camera.";
+    preview.innerHTML = '<div class="camera-empty">Nenhum corte selecionado ainda.</div>';
+    return;
+  }
+  if (summary) summary.textContent = `${queue.length} saidas selecionadas. Escolha um enquadramento em cada uma.`;
+  preview.innerHTML = queue.map(cameraPreviewItemHtml).join("");
+  bindCameraPreviewControls();
+}
+function cameraPreviewItemHtml(item){
+  const camera = normalizeCamera(item.camera);
+  const src = cacheBustedPreview(item.clip_file || "", `camera-${item.rank}-${item.adjusted_start}-${item.adjusted_end}`);
+  return `<article class="caption-item" data-rank="${escapeAttr(item.rank)}" data-platform="${escapeAttr(item.platform)}">
+    <div class="caption-preview camera-surface" data-camera-key="${escapeAttr(camera.key)}" style="${escapeAttr(cameraStyle(camera))}">
+      <video controls preload="metadata" src="${escapeAttr(src)}"></video>
+      <div class="camera-reticle"></div>
+    </div>
+    <div class="caption-item-body">
+      <strong>Preview #${String(item.rank).padStart(2, "0")} ${escapeHtml(item.title || "")}</strong>
+      <span>${escapeHtml(item.platform_label)}</span><span data-camera-current>${escapeHtml(cameraLabel(camera))}</span>
+      <div class="camera-card-controls">
+        <div class="camera-card-buttons" role="group" aria-label="Camera do corte ${escapeAttr(item.rank)}">
+          ${cameraButtonsHtml(camera)}
+        </div>
+        <label>Forca do enquadramento
+          <input data-preview-camera-strength type="range" min="0" max="100" step="5" value="${camera.strength}">
+        </label>
+      </div>
+    </div>
+  </article>`;
+}
+function cameraButtonsHtml(current){
+  return Object.entries(cameraMeta).map(([key, meta]) => {
+    const active = current.key === key ? " active" : "";
+    return `<button data-preview-camera="${escapeAttr(key)}" class="${active}">${escapeHtml(meta.label)}</button>`;
+  }).join("");
+}
+function bindCameraPreviewControls(){
+  document.querySelectorAll("[data-camera-preview] .caption-item").forEach(item => {
+    const rank = item.dataset.rank;
+    item.querySelectorAll("[data-preview-camera]").forEach(button => {
+      button.addEventListener("click", () => setCameraForRank(rank, { key: button.dataset.previewCamera }));
+    });
+    const strength = item.querySelector("[data-preview-camera-strength]");
+    if (strength) {
+      strength.addEventListener("input", () => setCameraForRank(rank, { strength: Number(strength.value) }));
+      strength.addEventListener("change", () => setCameraForRank(rank, { strength: Number(strength.value) }));
+    }
+  });
 }
 function renderEffectPreview(){
   const preview = document.querySelector("[data-effect-preview]");
@@ -872,10 +980,11 @@ function renderFinalStage(){
   const queue = buildExportData().caption_queue || [];
   const summary = document.querySelector("[data-final-summary]");
   if (summary) {
+    const cameraCount = queue.filter(item => normalizeCamera(item.camera).key !== "center").length;
     const effectCount = queue.filter(item => normalizeEffect(item.effect).key !== "none").length;
     const overlayCount = queue.filter(item => normalizeOverlay(item.overlay).key !== "none").length;
     summary.textContent = queue.length
-      ? `${queue.length} video(s) na fila; ${effectCount} com efeito; ${overlayCount} com chamada.`
+      ? `${queue.length} video(s) na fila; ${cameraCount} com camera; ${effectCount} com efeito; ${overlayCount} com chamada.`
       : "Selecione cortes antes de renderizar.";
   }
 }
@@ -926,12 +1035,14 @@ function renderFinalizeResults(files){
     return;
   }
   results.innerHTML = files.map((file, index) => {
+    const camera = normalizeCamera(file.camera);
     const effect = normalizeEffect(file.effect);
     const overlay = normalizeOverlay(file.overlay);
     const title = `#${String(file.rank || "").padStart(2, "0")} ${file.label || file.platform || "video"}`;
     const meta = [
       file.width && file.height ? `${file.width}x${file.height}` : "",
       file.adjusted_duration ? fixed(file.adjusted_duration) : "",
+      camera.key !== "center" ? camera.label : "",
       effect.key !== "none" ? effect.label : "",
       overlay.key !== "none" ? overlay.label : ""
     ].filter(Boolean).join(" - ");
@@ -945,6 +1056,7 @@ function renderFinalizeResults(files){
           <dl>
             <dt>Formato</dt><dd>${escapeHtml(file.label || file.platform || "-")}</dd>
             <dt>Duracao</dt><dd>${escapeHtml(file.adjusted_duration ? fixed(file.adjusted_duration) : "-")}</dd>
+            <dt>Camera</dt><dd>${escapeHtml(camera.label)}</dd>
             <dt>Efeito</dt><dd>${escapeHtml(effect.label)}</dd>
             <dt>Chamada</dt><dd>${escapeHtml(overlay.label)}</dd>
           </dl>
@@ -1059,6 +1171,9 @@ document.getElementById("reset-ui").addEventListener("click", () => {
   localStorage.removeItem("cutted-format");
   localStorage.removeItem("cutted-tab");
   location.reload();
+});
+document.getElementById("continue-effects").addEventListener("click", async () => {
+  applyTab("effects");
 });
 document.getElementById("continue-overlays").addEventListener("click", async () => {
   applyTab("overlays");
