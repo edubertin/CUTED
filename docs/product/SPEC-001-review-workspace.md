@@ -1,0 +1,101 @@
+# SPEC-001: Review Workspace
+
+## Objective
+
+Define the current browser editing workspace used by generated CUTED samples.
+This spec captures the expected MVP behavior before the workspace is extracted
+into a dedicated app.
+
+## Scope
+
+- Collapsible clip cards.
+- Single active video preview per expanded card.
+- Trim/timeline editing.
+- Platform preset editing for TikTok, Shorts, Instagram, Facebook, and YouTube.
+- Camera, effects, captions, transcript review, text overlays, image overlays,
+  layer movement, layer resizing, opacity, and export queue selection.
+- Final tab handoff to the local render API.
+
+## Out of Scope
+
+- Cloud job orchestration.
+- Authenticated users.
+- Publishing integrations.
+- Collaborative editing.
+- Full design-system extraction.
+
+## Layout Rules
+
+- The first screen is the main editing workspace.
+- Each clip is represented as a dropdown card.
+- Only the active card should load and play its video preview.
+- Preview playback controls should live below the video, not on top of the
+  composition canvas.
+- Platform edit tags sit below the compact playback controls and are centered
+  relative to the preview width.
+- The controls container should respond to the video preview width.
+
+## Preview Interaction Rules
+
+- Clicking the video canvas must not start playback.
+- Playback starts only from the explicit play control.
+- Volume defaults to 20 percent for every opened video.
+- The preview supports mute and small volume step controls.
+- Canvas clicks create or open the layer insertion menu only when the target is
+  the canvas, not an existing layer.
+- Existing layers can be selected, moved, resized, edited, and deleted without
+  creating a new layer.
+
+## Platform Preset Rules
+
+Each platform preset owns its own edit state:
+
+- `camera`
+- `effect`
+- text overlays
+- image overlays
+- layer positions
+- layer dimensions
+- layer opacity
+- caption settings when applicable
+
+When the user switches from TikTok to Facebook and edits a layer, the Facebook
+state must not overwrite the TikTok state. When the user returns to TikTok, the
+TikTok-specific state must be restored.
+
+## Export Dock Rules
+
+- Platform tags below the preview select the active edit preset.
+- The export dock controls which presets enter the final render queue.
+- The final render must read the latest state at finalization time, even if the
+  platform was added to export before later edits.
+- A clip with no explicit export destination falls back to the active/global
+  format only when the selection rule requires a default.
+
+## Layer Rules
+
+Text layers:
+
+- User-provided text, not fixed CTA buttons.
+- Optional background.
+- Optional opacity per item.
+- Resizable bounding box.
+- No permanent decorative border in the rendered output.
+- Editing handles can be visible in the browser UI but must not render.
+
+Image layers:
+
+- User-uploaded image layer.
+- PNG and WebP transparency should be preserved in render.
+- JPEG is supported but has no alpha channel.
+- Image position and size are stored as relative values.
+- Image upload should materialize to local `overlay-assets/` before render.
+
+## Acceptance Criteria
+
+- A user can add more than one text layer to a clip.
+- A user can add at least one image layer to a clip.
+- Clicking an existing layer selects it instead of opening the add-layer menu.
+- Double-clicking and closing the edit box does not break later layer movement.
+- Switching platform presets restores the correct saved layers for each preset.
+- Final render receives all active per-platform edits.

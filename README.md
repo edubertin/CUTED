@@ -13,6 +13,13 @@ the main application code is organized here.
   caption queues, subtitles, and rendered outputs.
 - `tools/cutted/`: versioned copy of the local CUTED skill used to generate
   galleries, serve the local finalize API, and render captioned outputs.
+- `docs/`: product, architecture, QA, and local operations documentation for
+  the current MVP and planned app migration.
+
+## Documentation
+
+Start with [`docs/README.md`](docs/README.md) for the project documentation
+index.
 
 ## Local Gallery Server
 
