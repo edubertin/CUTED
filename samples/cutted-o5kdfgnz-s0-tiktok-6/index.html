@@ -9,6 +9,8 @@
 header{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;gap:16px;align-items:center;padding:16px 22px;background:#050505;border-bottom:1px solid #202020}.header-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 h1{margin:0;font-size:22px;letter-spacing:0}header p{margin:3px 0 0;color:#9a9a9a}.tabs{position:sticky;top:70px;z-index:4;display:flex;gap:8px;padding:10px 22px;background:#060606;border-bottom:1px solid #1f1f1f}.tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 12px}.tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}.config{position:sticky;top:119px;z-index:3;display:flex;justify-content:space-between;gap:14px;align-items:center;padding:12px 22px;background:#080808;border-bottom:1px solid #202020}.config strong{display:block;font-size:13px}.config span{color:#9a9a9a;font-size:12px}.segments{display:flex;gap:6px;flex-wrap:wrap}.segments button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.segments button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}
 main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px}.card{border:1px solid #272727;border-radius:8px;background:#0d0d0d;overflow:hidden}.card[open]{border-color:#3b3b3b;background:#101010}.card.liked{border-color:#24d17e}.card.discarded{opacity:.46}.clip-summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;min-height:62px;padding:12px 14px;cursor:pointer;list-style:none}.clip-summary::-webkit-details-marker{display:none}.clip-rank{color:#8f8f8f;font-weight:700}.clip-title{display:grid;gap:2px;min-width:0}.clip-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}.clip-title small{color:#9c9c9c}.clip-status{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.clip-status span,.format-previews span{display:inline-flex;align-items:center;min-height:26px;padding:4px 8px;border-radius:999px;background:#242424;color:#ddd;font-size:12px}
+.app-notice{position:sticky;top:0;z-index:30;margin:0;padding:10px 14px;background:#2b1717;color:#ffd7d7;border-bottom:1px solid #6d2b2b;font-size:13px;text-align:center}.app-notice[hidden]{display:none}
+.layer-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:100%;min-height:0}.layer-strip:empty{display:none}.layer-chip{display:inline-flex;gap:6px;align-items:center;max-width:100%;min-height:30px;padding:4px 5px 4px 9px;border:1px solid #303030;border-radius:999px;background:#151515;color:#ddd;font-size:12px}.layer-chip.is-selected{border-color:#f5b03d;background:#211b10;color:#f4f4f4}.layer-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.layer-chip button{display:inline-grid;place-items:center;width:22px;height:22px;min-width:22px;padding:0;border:1px solid #3a3a3a;border-radius:999px;background:#242424;color:#ddd;font-size:14px;line-height:1}
 .editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;justify-items:center;gap:10px}.preview-frame{display:grid;gap:10px;width:100%;max-width:520px}.media{position:relative;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000;pointer-events:none}.placeholder{display:grid;place-items:center;height:100%;color:#777}.preview-bar{display:grid;grid-template-columns:1fr;gap:8px;justify-items:center;width:100%;padding:8px;border:1px solid #252525;border-radius:8px;background:#0a0a0a}.preview-controls,.preview-volume-group{display:flex;gap:6px;align-items:center}.preview-controls{justify-content:center;padding:4px;border:1px solid #202020;border-radius:999px;background:#111}.preview-volume-group{padding-left:4px;border-left:1px solid #2d2d2d}.preview-icon,.preview-step{display:inline-grid;place-items:center;width:32px;height:32px;min-width:32px;padding:0;border:1px solid #333;border-radius:999px;background:#191919;color:#ddd}.preview-play{background:#f4f4f4;color:#050505;border-color:#f4f4f4}.preview-icon svg{width:16px;height:16px;display:block;stroke:currentColor}.preview-step{width:26px;height:26px;min-width:26px;font-weight:700}.preview-volume-group output{min-width:32px;color:#d8d8d8;font-size:12px;text-align:center}.card[data-preview-format=tiktok] .preview-frame,.card[data-preview-format=shorts] .preview-frame,.card[data-preview-format=instagram] .preview-frame{max-width:min(100%,calc(72vh * 9 / 16))}.card[data-preview-format=facebook] .preview-frame{max-width:min(100%,calc(72vh * 4 / 5))}.card[data-preview-format=youtube] .preview-frame{max-width:min(100%,520px)}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip,.card-tabs{display:flex;gap:6px;flex-wrap:wrap}.preview-strip{justify-content:center;overflow:visible;padding-bottom:1px}.preview-strip button,.card-tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.preview-strip button{min-height:34px;border-radius:999px;white-space:nowrap}.preview-strip button.active,.card-tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-panel{display:none;border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:12px}.tool-panel.active{display:block}.tool-summary{margin-bottom:10px;color:#d8d8d8}.timeline-editor{padding:0}.timeline-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.timeline-head output{color:#f4f4f4;text-align:right}.timeline{position:relative;height:34px;margin-top:8px}.timeline-track{position:absolute;left:0;right:0;top:14px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:#f4f4f4;border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:34px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{display:flex;justify-content:space-between;color:#aaa;font-size:12px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .export-dock{display:grid;gap:8px;margin-top:2px;padding:12px;border:1px solid #303030;border-radius:8px;background:#111}.export-dock strong{display:block;font-size:13px}.export-dock span{color:#a8a8a8;font-size:12px}
@@ -102,6 +104,7 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
                 <button data-card-format-preview="youtube">YouTube</button>
               </div>
             </div>
+            <div class="layer-strip" data-layer-strip></div>
           </div>
         </div>
         <div class="editor-tools">
@@ -221,6 +224,7 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
                 <button data-card-format-preview="youtube">YouTube</button>
               </div>
             </div>
+            <div class="layer-strip" data-layer-strip></div>
           </div>
         </div>
         <div class="editor-tools">
@@ -340,6 +344,7 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
                 <button data-card-format-preview="youtube">YouTube</button>
               </div>
             </div>
+            <div class="layer-strip" data-layer-strip></div>
           </div>
         </div>
         <div class="editor-tools">
@@ -459,6 +464,7 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
                 <button data-card-format-preview="youtube">YouTube</button>
               </div>
             </div>
+            <div class="layer-strip" data-layer-strip></div>
           </div>
         </div>
         <div class="editor-tools">
@@ -578,6 +584,7 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
                 <button data-card-format-preview="youtube">YouTube</button>
               </div>
             </div>
+            <div class="layer-strip" data-layer-strip></div>
           </div>
         </div>
         <div class="editor-tools">
@@ -697,6 +704,7 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
                 <button data-card-format-preview="youtube">YouTube</button>
               </div>
             </div>
+            <div class="layer-strip" data-layer-strip></div>
           </div>
         </div>
         <div class="editor-tools">
@@ -784,7 +792,35 @@ if (new URLSearchParams(location.search).has("reset")) {
   history.replaceState(null, "", location.pathname);
 }
 const state = JSON.parse(localStorage.getItem("cutted-state") || "{}");
-function save(){ localStorage.setItem("cutted-state", JSON.stringify(state)); }
+const maxOverlayImageBytes = 1800000;
+const maxOverlayImageSourceBytes = 6000000;
+const maxOverlayImagePixels = 1600;
+function save(){
+  try {
+    localStorage.setItem("cutted-state", JSON.stringify(state));
+    clearAppNotice();
+    return true;
+  } catch (error) {
+    showAppNotice("A imagem ficou pesada demais para salvar nesta tela. Remova ou use uma versao menor antes de continuar.");
+    console.warn("CUTED state was not saved", error);
+    return false;
+  }
+}
+function showAppNotice(message){
+  let notice = document.querySelector("[data-app-notice]");
+  if (!notice) {
+    notice = document.createElement("div");
+    notice.dataset.appNotice = "";
+    notice.className = "app-notice";
+    document.body.prepend(notice);
+  }
+  notice.textContent = message;
+  notice.hidden = false;
+}
+function clearAppNotice(){
+  const notice = document.querySelector("[data-app-notice]");
+  if (notice) notice.hidden = true;
+}
 function cardState(rank){
   const raw = state[rank];
   if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], platformEdits: {} };
@@ -1204,8 +1240,47 @@ function updateOverlayUi(card){
 }
 function renderOverlayLayerBoxes(card, layers){
   const list = card.querySelector("[data-overlay-layer-list]");
-  if (!list) return;
-  list.innerHTML = layers.map(overlayLayerBoxHtml).join("");
+  if (list) {
+    list.innerHTML = layers.map(overlayLayerBoxHtml).join("");
+  }
+  renderLayerStrip(card, layers);
+}
+function renderLayerStrip(card, layers){
+  const strip = card.querySelector("[data-layer-strip]");
+  if (!strip) return;
+  const selectedId = card.dataset.selectedOverlayLayer || "";
+  strip.innerHTML = layers.map(layer => {
+    const selected = layer.id === selectedId ? " is-selected" : "";
+    return `<span class="layer-chip${selected}" data-layer-chip="${escapeAttr(layer.id)}">
+      <span>${escapeHtml(layerStripLabel(layer))}</span>
+      <button data-layer-strip-remove="${escapeAttr(layer.id)}" type="button" title="Remover camada" aria-label="Remover camada">x</button>
+    </span>`;
+  }).join("");
+  bindLayerStripControls(card, strip);
+}
+function layerStripLabel(layer){
+  if (layer.kind === "image") return layer.label || "Imagem";
+  if (layer.kind === "text") return layer.text || layer.label || "Texto";
+  return overlayMeta[layer.key]?.label || layer.label || "Camada";
+}
+function bindLayerStripControls(card, strip){
+  if (strip.dataset.layerStripBound) return;
+  strip.dataset.layerStripBound = "1";
+  strip.addEventListener("click", event => {
+    const removeButton = event.target.closest("[data-layer-strip-remove]");
+    if (removeButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      removeOverlayLayerForRank(card.dataset.rank, removeButton.dataset.layerStripRemove);
+      delete card.dataset.selectedOverlayLayer;
+      closeOverlayMenu(card);
+      return;
+    }
+    const chip = event.target.closest("[data-layer-chip]");
+    if (!chip) return;
+    card.dataset.selectedOverlayLayer = chip.dataset.layerChip;
+    showOverlayInspectorForLayer(card, chip.dataset.layerChip);
+  });
 }
 function overlayLayerBoxHtml(layer){
   const selected = document.querySelector(`.card[data-rank="${CSS.escape(String(activeRankForLayer(layer)))}"]`)?.dataset.selectedOverlayLayer === layer.id;
@@ -1288,7 +1363,10 @@ function overlayInspectorHtml(layer){
 }
 function bindCardOverlayControls(card){
   const imageInput = card.querySelector("[data-overlay-image]");
-  if (imageInput) imageInput.addEventListener("change", () => addImageOverlayFromInput(card, imageInput));
+  if (imageInput && !imageInput.dataset.overlayImageBound) {
+    imageInput.dataset.overlayImageBound = "1";
+    imageInput.addEventListener("change", () => addImageOverlayFromInput(card, imageInput));
+  }
   bindOverlayDrag(card);
   bindOverlayPlacement(card);
 }
@@ -1297,14 +1375,13 @@ function addImageOverlayFromInput(card, input){
   if (!file) return;
   const x = Number(input.dataset.overlayX || .36);
   const y = Number(input.dataset.overlayY || .34);
-  const reader = new FileReader();
-  reader.onload = () => {
+  overlayImageDataUrl(file).then(dataUrl => {
     const layer = normalizeImageOverlay({
       id: overlayId(),
       kind: "image",
       key: "image",
       label: file.name,
-      image_data_url: String(reader.result || ""),
+      image_data_url: dataUrl,
       x,
       y,
       width: .28,
@@ -1316,9 +1393,76 @@ function addImageOverlayFromInput(card, input){
     if (surface) {
       showOverlayInspectorForLayer(card, layer.id, layer.x * surface.clientWidth, layer.y * surface.clientHeight);
     }
+    clearAppNotice();
+  }).catch(error => {
+    showAppNotice(error.message || "Nao foi possivel usar esta imagem. Tente uma versao menor.");
+    console.warn("CUTED image overlay was rejected", error);
+  }).finally(() => {
     input.value = "";
-  };
-  reader.readAsDataURL(file);
+  });
+}
+function overlayImageDataUrl(file){
+  if (!["image/png", "image/webp", "image/jpeg"].includes(file.type)) {
+    return Promise.reject(new Error("Use PNG, WebP ou JPG para a camada de imagem."));
+  }
+  if (file.size > maxOverlayImageSourceBytes) {
+    return Promise.reject(new Error("Imagem muito pesada. Use uma versao de ate 6 MB para nao travar o editor."));
+  }
+  return readFileAsDataUrl(file).then(dataUrl => {
+    if (dataUrl.length <= maxOverlayImageBytes) return dataUrl;
+    return downscaleImageDataUrl(dataUrl, file.type);
+  }).then(dataUrl => {
+    if (dataUrl.length > maxOverlayImageBytes) {
+      throw new Error("Imagem ainda ficou pesada depois da otimizacao. Use uma versao menor.");
+    }
+    return dataUrl;
+  });
+}
+function readFileAsDataUrl(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Falha ao ler a imagem."));
+    reader.readAsDataURL(file);
+  });
+}
+function downscaleImageDataUrl(dataUrl, sourceType){
+  return loadImageForOverlay(dataUrl).then(image => {
+    const scale = Math.min(1, maxOverlayImagePixels / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height, 1));
+    const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+    const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Nao foi possivel otimizar a imagem.");
+    context.clearRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+    const outputType = sourceType === "image/jpeg" ? "image/jpeg" : "image/png";
+    return canvasToDataUrl(canvas, outputType, outputType === "image/jpeg" ? .86 : undefined);
+  });
+}
+function loadImageForOverlay(dataUrl){
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Imagem invalida ou corrompida."));
+    image.src = dataUrl;
+  });
+}
+function canvasToDataUrl(canvas, type, quality){
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (!blob) {
+        reject(new Error("Nao foi possivel otimizar a imagem."));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Falha ao preparar a imagem."));
+      reader.readAsDataURL(blob);
+    }, type, quality);
+  });
 }
 function bindOverlayPlacement(card){
   const surface = card.querySelector("[data-overlay-surface]");
