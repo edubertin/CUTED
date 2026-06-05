@@ -66,7 +66,8 @@ Each card includes:
 - a playable video preview;
 - a global format selector for TikTok, Shorts, YouTube, Instagram, and Facebook previews;
 - a collapsible per-clip editor that keeps only the active preview loaded;
-- per-clip panels for trim/export setup, camera reframing, effects, calls-to-action, captions, and transcript review;
+- per-clip panels for trim setup, camera reframing, effects, calls-to-action, captions, and transcript review;
+- a persistent per-clip `Export` dock that adds or removes TikTok, Shorts, Instagram, Facebook, and YouTube destinations from the final queue;
 - the peak phrase and transcript;
 - `Gostei`, `Descartar`, and `Resetar corte` controls;
 - a visual two-handle timeline close to the video preview;
@@ -94,7 +95,9 @@ The local `Efeitos` panel applies one MVP look per selected cut:
 - `VHS / TV Antiga`: stronger analog-style noise and contrast.
 - `Preto e Branco Antigo`: black-and-white grain with vignette.
 
-The local `Chamadas` panel applies one draggable card per selected cut. Clicking the preview can place a call-to-action card at that point before the user drags or resizes it. The local `Legenda` panel holds the caption line/width controls used by the final render:
+The local format strip below each video is the active edit preset selector. TikTok, Shorts, Instagram, Facebook, and YouTube each keep their own camera line, effects, call-to-action layers, image layers, and saved positions. The `Export` dock only controls which platform presets enter the render queue.
+
+The local `Chamadas` panel applies draggable layers per selected platform preset. Clicking the preview opens a dismissible call-to-action menu at that point before the user chooses, drags, or resizes a card. A cut can hold multiple call-to-action cards, and the panel also accepts transparent PNG/WebP/JPEG uploads as image layers. The local `Legenda` panel holds the caption line/width controls used by the final render:
 
 - `Sem chamada`: clean output.
 - `Inscreva-se`: subscribe-style CTA.
@@ -103,10 +106,11 @@ The local `Chamadas` panel applies one draggable card per selected cut. Clicking
 - `Curta e compartilhe`: engagement CTA.
 - `Comentario fixado`: pinned-comment CTA.
 - `Marca d'agua`: subtle CUTED watermark.
+- `Imagem`: a transparent PNG/WebP/JPEG layer shown in the browser preview and stored in the exported queue.
 
-The browser preview stores the chosen card position, width, and opacity as relative values, so the final FFmpeg render can burn it into each platform size.
+The browser preview stores each layer position, width, and opacity as relative values for the active platform preset. FFmpeg burns multiple text call-to-action cards into each platform size. Local render mode materializes uploaded image layers into `overlay-assets/` and composes them with `overlay=format=auto`, preserving PNG/WebP transparency for logos and stickers.
 
-The exported `caption-queue.json` and `selected-clips.json` include a `camera` object with `key`, `label`, and `segments` for the camera line, an `effect` object with `key`, `label`, and `intensity`, and an `overlay` object with `key`, `label`, `x`, `y`, `width`, and `opacity`. Older single-preset `camera` objects remain supported.
+The exported `caption-queue.json` and `selected-clips.json` include a `camera` object with `key`, `label`, and `segments` for the output platform's camera line, an `effect` object with `key`, `label`, and `intensity`, a legacy `overlay` object for compatibility, an `overlays` array for multiple call-to-action or image layers, and `platform_edits` on selected moments for per-platform editing state. Older single-preset `camera` and `overlay` objects remain supported.
 
 The trim sliders are stored in browser `localStorage`. The exported JSON includes:
 
@@ -122,6 +126,8 @@ The trim sliders are stored in browser `localStorage`. The exported JSON include
 - `camera`;
 - `effect`;
 - `overlay`;
+- `overlays`;
+- `platform_edits`;
 - `status`.
 
 The `Final` tab is the local render/results gallery. When opened through `cutted.py serve`, rendering goes through `/api/finalize`. Results appear as one dropdown per rendered video, each with an inline player, an open-in-new-tab link, and a direct MP4 download link. It can still export the queue as `caption-queue.json` for manual/debug workflows.
@@ -165,7 +171,7 @@ captioned-clips/
 
 The caption renderer uses FFmpeg and ASS subtitles locally. It does not call an AI model when the queue already has transcript text.
 
-When an exported queue contains a `camera`, `caption-selected` applies the selected reframe before subtitles in the final filter chain. When it contains an `effect`, the renderer applies the selected effect after subtitles. When it contains an `overlay`, the renderer burns the selected CTA card after the effect, using the saved relative position and platform dimensions. Grain strengths are intentionally modest so short-form outputs stay small enough for quick MVP testing.
+When an exported queue contains a `camera`, `caption-selected` applies the selected reframe before subtitles in the final filter chain. When it contains an `effect`, the renderer applies the selected effect after subtitles. When it contains `overlays`, the renderer burns text CTA layers after the effect, using saved relative positions and platform dimensions. Grain strengths are intentionally modest so short-form outputs stay small enough for quick MVP testing.
 
 Caption quality behavior:
 
