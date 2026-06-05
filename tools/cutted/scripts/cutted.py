@@ -1406,52 +1406,127 @@ def write_html(path: Path, moments: list[Moment], source_label: str) -> None:
 def card_html(moment: Moment) -> str:
     video_tag = media_html(moment)
     duration = max(0.0, moment.end - moment.start)
+    open_attr = " open" if moment.rank == 1 else ""
     return f"""
-    <article class="card" data-rank="{moment.rank}" data-start="{moment.start:.3f}" data-end="{moment.end:.3f}" data-duration="{duration:.3f}">
-      <div class="media">{video_tag}</div>
-      <div class="timeline-editor">
-        <div class="timeline-head">
-          <span>Ajuste fino</span>
-          <output data-trim-summary>Final: {moment.start:.1f}s - {moment.end:.1f}s ({duration:.1f}s)</output>
-        </div>
-        <div class="timeline" aria-label="Ajuste visual de corte">
-          <div class="timeline-track">
-            <div class="timeline-fill" data-trim-fill></div>
+    <details class="card" data-rank="{moment.rank}" data-start="{moment.start:.3f}" data-end="{moment.end:.3f}" data-duration="{duration:.3f}" data-preview-format="tiktok"{open_attr}>
+      <summary class="clip-summary">
+        <span class="clip-rank">#{moment.rank:02d}</span>
+        <span class="clip-title">
+          <strong>{html.escape(moment.title)}</strong>
+          <small data-card-summary>Final: {moment.start:.1f}s - {moment.end:.1f}s ({duration:.1f}s)</small>
+        </span>
+        <span class="clip-status">
+          <span data-platform-summary>Nenhum destino marcado</span>
+          <span data-status-pill>Pendente</span>
+        </span>
+      </summary>
+      <div class="editor-shell">
+        <div class="editor-preview">
+          <div class="media camera-surface" data-overlay-surface>
+            {video_tag}
+            <div class="camera-reticle"></div>
+            <div class="overlay-box" data-overlay-drag data-overlay-key="none">
+              <strong></strong>
+              <em></em>
+              <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
+            </div>
+            <div class="overlay-menu" data-overlay-menu hidden></div>
           </div>
-          <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="{duration:.1f}" step="0.1" value="0">
-          <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="{duration:.1f}" step="0.1" value="{duration:.1f}">
+          <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
+            <button data-card-format-preview="tiktok" class="active">TikTok</button>
+            <button data-card-format-preview="shorts">Shorts</button>
+            <button data-card-format-preview="instagram">Instagram</button>
+            <button data-card-format-preview="facebook">Facebook</button>
+            <button data-card-format-preview="youtube">YouTube</button>
+          </div>
         </div>
-        <div class="timeline-values">
-          <span>Inicio +<output data-output="start">0.0s</output></span>
-          <span>Fim -<output data-output="end">0.0s</output></span>
+        <div class="editor-tools">
+          <nav class="card-tabs" aria-label="Ferramentas do corte">
+            <button data-card-panel="cut" class="active">Corte</button>
+            <button data-card-panel="formats">Formatos</button>
+            <button data-card-panel="camera">Camera</button>
+            <button data-card-panel="effects">Efeitos</button>
+            <button data-card-panel="overlays">Chamadas</button>
+            <button data-card-panel="captions">Legenda</button>
+            <button data-card-panel="transcript">Transcript</button>
+          </nav>
+          <section class="tool-panel active" data-panel="cut">
+            <div class="timeline-editor">
+              <div class="timeline-head">
+                <span>Ajuste fino</span>
+                <output data-trim-summary>Final: {moment.start:.1f}s - {moment.end:.1f}s ({duration:.1f}s)</output>
+              </div>
+              <div class="timeline" aria-label="Ajuste visual de corte">
+                <div class="timeline-track">
+                  <div class="timeline-fill" data-trim-fill></div>
+                </div>
+                <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="{duration:.1f}" step="0.1" value="0">
+                <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="{duration:.1f}" step="0.1" value="{duration:.1f}">
+              </div>
+              <div class="timeline-values">
+                <span>Inicio +<output data-output="start">0.0s</output></span>
+                <span>Fim -<output data-output="end">0.0s</output></span>
+              </div>
+            </div>
+            <div class="actions">
+              <button data-action="like">Gostei</button>
+              <button data-action="discard">Descartar</button>
+              <button data-action="reset-trim">Resetar corte</button>
+              <button data-action="next-card">OK / Proximo</button>
+            </div>
+          </section>
+          <section class="tool-panel" data-panel="formats">
+            <div class="format-editor">
+              <div class="format-head">
+                <span>Destinos deste corte</span>
+                <output data-platform-summary>Nenhum destino marcado</output>
+              </div>
+              <div class="platform-tags" role="group" aria-label="Destinos do clip">
+                <button data-platform="tiktok">TikTok</button>
+                <button data-platform="shorts">Shorts</button>
+                <button data-platform="instagram">Instagram</button>
+                <button data-platform="facebook">Facebook</button>
+                <button data-platform="youtube">YouTube</button>
+              </div>
+              <div class="format-previews" aria-label="Molduras de exportacao">
+                <span>9:16</span><span>4:5</span><span>16:9</span>
+              </div>
+            </div>
+          </section>
+          <section class="tool-panel" data-panel="camera">
+            <div class="tool-summary" data-camera-current>Centro seguro</div>
+            <div data-card-camera></div>
+          </section>
+          <section class="tool-panel" data-panel="effects">
+            <div class="tool-summary" data-effect-current>Sem efeito</div>
+            <div data-card-effect></div>
+          </section>
+          <section class="tool-panel" data-panel="overlays">
+            <div class="tool-summary" data-overlay-current>Sem chamada</div>
+            <div data-card-overlay></div>
+          </section>
+          <section class="tool-panel" data-panel="captions">
+            <div class="caption-settings" aria-label="Configuracao de legenda">
+              <label>Linhas
+                <select data-caption-lines>
+                  <option value="2" selected>2 linhas</option>
+                  <option value="1">1 linha</option>
+                  <option value="3">3 linhas</option>
+                </select>
+              </label>
+              <label>Largura
+                <input data-caption-width type="number" min="18" max="42" value="28">
+              </label>
+            </div>
+          </section>
+          <section class="tool-panel transcript-panel" data-panel="transcript">
+            <p class="peak">{html.escape(moment.peak_text)}</p>
+            <dl><dt>Score</dt><dd>{moment.score}</dd><dt>Inicio</dt><dd>{moment.start:.1f}s</dd><dt>Fim</dt><dd>{moment.end:.1f}s</dd></dl>
+            <details><summary>Transcript</summary><p>{html.escape(moment.transcript)}</p></details>
+          </section>
+          </div>
         </div>
-      </div>
-      <div class="format-editor">
-        <div class="format-head">
-          <span>Destinos deste corte</span>
-          <output data-platform-summary>Nenhum destino marcado</output>
-        </div>
-        <div class="platform-tags" role="group" aria-label="Destinos do clip">
-          <button data-platform="tiktok">TikTok</button>
-          <button data-platform="shorts">Shorts</button>
-          <button data-platform="instagram">Instagram</button>
-          <button data-platform="facebook">Facebook</button>
-          <button data-platform="youtube">YouTube</button>
-        </div>
-      </div>
-      <div class="body">
-        <div class="top"><span>#{moment.rank:02d}</span><strong>{html.escape(moment.title)}</strong></div>
-        <p class="peak">{html.escape(moment.peak_text)}</p>
-        <p>{html.escape(moment.reason)}</p>
-        <dl><dt>Score</dt><dd>{moment.score}</dd><dt>Inicio</dt><dd>{moment.start:.1f}s</dd><dt>Fim</dt><dd>{moment.end:.1f}s</dd></dl>
-        <details><summary>Transcript</summary><p>{html.escape(moment.transcript)}</p></details>
-        <div class="actions">
-          <button data-action="like">Gostei</button>
-          <button data-action="discard">Descartar</button>
-          <button data-action="reset-trim">Resetar corte</button>
-        </div>
-      </div>
-    </article>"""
+    </details>"""
 
 
 def media_html(moment: Moment) -> str:
@@ -1459,7 +1534,7 @@ def media_html(moment: Moment) -> str:
     poster = html.escape(cache_busted_url(moment.frame_file, token))
     clip = html.escape(cache_busted_url(moment.clip_file, token))
     if clip:
-        return f'<video controls preload="metadata" poster="{poster}" src="{clip}"></video>'
+        return f'<video controls playsinline preload="none" loading="lazy" poster="{poster}" data-src="{clip}"></video>'
     if poster:
         return f'<img src="{poster}" alt="Peak frame for clip {moment.rank}">'
     return '<div class="placeholder">Preview pulado</div>'
@@ -1494,11 +1569,8 @@ def page_html(source_label: str, cards: str, data: str) -> str:
     </div>
   </header>
   <nav class="tabs" aria-label="Fluxo">
-    <button data-tab="edit" class="active">1. Cortes e formatos</button>
-    <button data-tab="camera">2. Camera</button>
-    <button data-tab="effects">3. Efeitos</button>
-    <button data-tab="overlays">4. Chamadas</button>
-    <button data-tab="final">5. Final</button>
+    <button data-tab="edit" class="active">1. Editar cortes</button>
+    <button data-tab="final">2. Final</button>
   </nav>
   <section class="config" aria-label="Configuracao de formato">
     <div>
@@ -1513,56 +1585,11 @@ def page_html(source_label: str, cards: str, data: str) -> str:
       <button data-format="facebook">Facebook</button>
     </div>
   </section>
-  <section class="camera-stage">
-    <div class="stage-head">
-      <div>
-        <strong>Camera</strong>
-        <p>Escolha um enquadramento por corte antes dos efeitos.</p>
-      </div>
-      <button id="continue-effects">Continuar para efeitos</button>
-    </div>
-    <div class="camera-summary" data-camera-summary>Nenhum corte marcado ainda.</div>
-    <div class="camera-preview" data-camera-preview></div>
-  </section>
-  <section class="effect-stage">
-    <div class="stage-head">
-      <div>
-        <strong>Efeitos</strong>
-        <p>Aplique um look por corte antes do render final.</p>
-      </div>
-      <button id="continue-overlays">Continuar para chamadas</button>
-    </div>
-    <div class="effect-summary" data-effect-summary>Nenhum corte marcado ainda.</div>
-    <div class="effect-preview" data-effect-preview></div>
-  </section>
-  <section class="overlay-stage">
-    <div class="stage-head">
-      <div>
-        <strong>Chamadas</strong>
-        <p>Escolha um card por corte, ajuste legenda e fixe tudo no render final.</p>
-      </div>
-      <button id="continue-final">Continuar para final</button>
-    </div>
-    <div class="caption-settings" aria-label="Configuracao de legenda">
-      <label>Linhas
-        <select data-caption-lines>
-          <option value="2" selected>2 linhas</option>
-          <option value="1">1 linha</option>
-          <option value="3">3 linhas</option>
-        </select>
-      </label>
-      <label>Largura
-        <input data-caption-width type="number" min="18" max="42" value="28">
-      </label>
-    </div>
-    <div class="overlay-summary" data-overlay-summary>Nenhum corte marcado ainda.</div>
-    <div class="overlay-preview" data-overlay-preview></div>
-  </section>
   <section class="final-stage">
     <div class="stage-head">
       <div>
         <strong>Resultados</strong>
-        <p data-final-summary>Continue da aba Chamadas para renderizar os videos.</p>
+        <p data-final-summary>Selecione cortes antes de renderizar.</p>
       </div>
       <div class="header-actions">
         <button id="finalize-videos">Renderizar novamente</button>
@@ -1582,31 +1609,19 @@ def page_html(source_label: str, cards: str, data: str) -> str:
 def css() -> str:
     return """
 *{box-sizing:border-box}body{margin:0;background:#050505;color:#f4f4f4;font:14px/1.45 Arial,sans-serif}
-header{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;gap:16px;align-items:center;padding:18px 22px;background:#050505;border-bottom:1px solid #202020}.header-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-h1{margin:0;font-size:22px}header p{margin:3px 0 0;color:#9a9a9a}.tabs{position:sticky;top:75px;z-index:3;display:flex;gap:8px;padding:10px 22px;background:#060606;border-bottom:1px solid #1f1f1f}.tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 12px}.tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}.config{position:sticky;top:126px;z-index:2;display:flex;justify-content:space-between;gap:14px;align-items:center;padding:12px 22px;background:#080808;border-bottom:1px solid #202020}.config strong{display:block;font-size:13px}.config span{color:#9a9a9a;font-size:12px}.segments{display:flex;gap:6px;flex-wrap:wrap}.segments button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.segments button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}main{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;padding:18px;align-items:start}
-.card{background:#111;border:1px solid #272727;border-radius:8px;overflow:hidden}.card.liked{border-color:#24d17e}.card.discarded{opacity:.42}
-.media{position:relative;aspect-ratio:16/9;background:#000;max-height:58vh;transition:aspect-ratio .2s ease;overflow:hidden}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block}.placeholder{display:grid;place-items:center;height:100%;color:#777}
-body[data-format=tiktok] .media,body[data-format=shorts] .media,body[data-format=instagram] .media{aspect-ratio:9/16}body[data-format=facebook] .media{aspect-ratio:4/5}body[data-format=youtube] .media{aspect-ratio:16/9}
-.caption-item[data-effect=light-grain] .caption-preview video,.caption-item[data-effect=light-grain] .caption-preview img{filter:contrast(1.08) brightness(1.02)}
-.caption-item[data-effect=old-film] .caption-preview video,.caption-item[data-effect=old-film] .caption-preview img{filter:sepia(.48) contrast(1.2) saturate(.62) brightness(.92)}
-.caption-item[data-effect=vhs] .caption-preview video,.caption-item[data-effect=vhs] .caption-preview img{filter:saturate(.62) contrast(1.22) brightness(.9) hue-rotate(-7deg)}
-.caption-item[data-effect=bw-old] .caption-preview video,.caption-item[data-effect=bw-old] .caption-preview img{filter:grayscale(1) contrast(1.22) brightness(.9)}
-.caption-item[data-effect=light-grain] .caption-preview:after,.caption-item[data-effect=old-film] .caption-preview:after,.caption-item[data-effect=vhs] .caption-preview:after,.caption-item[data-effect=bw-old] .caption-preview:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--effect-opacity,.24);background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 70% 65%,rgba(0,0,0,.95) 0 1px,transparent 1.8px);background-size:4px 4px,6px 6px;mix-blend-mode:overlay}
-.caption-item[data-effect=old-film] .caption-preview:before,.caption-item[data-effect=bw-old] .caption-preview:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at center,transparent 44%,rgba(0,0,0,.46) 100%)}
-.caption-item[data-effect=vhs] .caption-preview:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 4px);mix-blend-mode:overlay}
-.body{padding:14px}.top{display:flex;gap:10px;align-items:center}.top span{color:#888}.top strong{font-size:15px}.peak{color:#fff;font-size:16px}
-p{color:#bebebe}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}
-.timeline-editor{padding:10px 14px 12px;background:#090909;border-top:1px solid #1e1e1e;border-bottom:1px solid #222}.timeline-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.timeline-head output{color:#f4f4f4;text-align:right}.timeline{position:relative;height:34px;margin-top:8px}.timeline-track{position:absolute;left:0;right:0;top:14px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:#f4f4f4;border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:34px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{display:flex;justify-content:space-between;color:#aaa;font-size:12px}
-.format-editor{display:block;padding:12px 14px;background:#090909;border-bottom:1px solid #222}.format-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.format-head output{color:#f4f4f4;text-align:right}.platform-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.platform-tags button{background:#191919;color:#ddd;border:1px solid #333}.platform-tags button.active{background:#24d17e;color:#04130b;border-color:#24d17e}.camera-stage,.effect-stage,.overlay-stage{display:none;margin:18px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.camera-stage p,.effect-stage p,.overlay-stage p{margin:4px 0 0}.caption-settings{display:grid;grid-template-columns:160px 180px;gap:12px;margin-top:16px;max-width:380px}.caption-settings label{display:grid;gap:6px;color:#aaa}.caption-settings select,.caption-settings input{width:100%;background:#050505;color:#f4f4f4;border:1px solid #333;border-radius:6px;padding:9px}.camera-summary,.effect-summary,.overlay-summary{margin-top:12px;color:#aaa}.caption-item{border:1px solid #2a2a2a;border-radius:8px;background:#0a0a0a;overflow:hidden}.caption-preview{position:relative;display:flex;justify-content:center;background:#000;overflow:hidden}.caption-preview video,.caption-preview img{width:100%;max-height:64vh;object-fit:cover;background:#000}.caption-item[data-platform=tiktok] video,.caption-item[data-platform=shorts] video,.caption-item[data-platform=instagram] video{aspect-ratio:9/16}.caption-item[data-platform=facebook] video{aspect-ratio:4/5}.caption-item[data-platform=youtube] video{aspect-ratio:16/9}.caption-item-body{padding:12px}.caption-item strong{display:block}.caption-item span{display:inline-flex;margin:8px 8px 0 0;padding:4px 8px;border-radius:999px;background:#242424;color:#ddd;font-size:12px}.caption-item dl{margin-top:10px}
-.camera-preview,.effect-preview,.overlay-preview{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin-top:16px;align-items:start}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px;margin-top:12px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:#191919;color:#ddd;border:1px solid #333;text-align:left}.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;border-color:#24d17e}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label{display:grid;gap:6px;color:#aaa;font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:#24d17e}.camera-card-controls select{width:100%;background:#050505;color:#f4f4f4;border:1px solid #333;border-radius:6px;padding:8px}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.camera-empty,.effect-empty,.overlay-empty{padding:18px;border:1px dashed #333;border-radius:8px;color:#aaa}.camera-surface video{object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%}.camera-surface[data-camera-key=alternate] video{animation:camera-pan 6s ease-in-out infinite alternate}.camera-surface[data-camera-key=jump-cut] video{animation:camera-jump 3s steps(1,end) infinite alternate}@keyframes camera-pan{0%{object-position:22% 50%}100%{object-position:78% 50%}}@keyframes camera-jump{0%{object-position:22% 50%}50%{object-position:78% 50%}100%{object-position:78% 50%}}.camera-reticle{position:absolute;inset:14% 22%;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,#24d17e);border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-resize{position:absolute;right:5px;bottom:5px;width:14px;height:14px;padding:0;border:1px solid rgba(255,255,255,.42);border-radius:3px;background:rgba(255,255,255,.18);cursor:nwse-resize}
-body[data-tab=camera] main,body[data-tab=camera] .config,body[data-tab=camera] .effect-stage,body[data-tab=camera] .overlay-stage,body[data-tab=camera] .final-stage{display:none}body[data-tab=camera] .camera-stage{display:block}
-body[data-tab=effects] main,body[data-tab=effects] .config,body[data-tab=effects] .camera-stage,body[data-tab=effects] .overlay-stage,body[data-tab=effects] .final-stage{display:none}body[data-tab=effects] .effect-stage{display:block}
-body[data-tab=overlays] main,body[data-tab=overlays] .config,body[data-tab=overlays] .camera-stage,body[data-tab=overlays] .effect-stage,body[data-tab=overlays] .final-stage{display:none}body[data-tab=overlays] .overlay-stage{display:block}
-body[data-tab=final] main,body[data-tab=final] .config,body[data-tab=final] .camera-stage,body[data-tab=final] .effect-stage,body[data-tab=final] .overlay-stage{display:none}body[data-tab=final] .final-stage{display:block}.final-stage{display:none;margin:18px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.render-status{margin-top:12px;color:#aaa}.render-results{display:grid;gap:12px;margin-top:14px}.result-item{border:1px solid #303030;border-radius:8px;background:#090909;overflow:hidden}.result-item[open]{border-color:#3b3b3b}.result-item summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;border:0;color:#f4f4f4}.result-item summary strong{font-size:14px}.result-item summary span{color:#aaa;font-size:12px}.result-body{display:grid;grid-template-columns:minmax(260px,420px) minmax(240px,1fr);gap:14px;padding:0 14px 14px}.result-body video{width:100%;max-height:70vh;background:#000;border-radius:6px;object-fit:contain}.result-meta{display:grid;align-content:start;gap:10px}.result-meta dl{margin:0}.result-actions{display:flex;gap:8px;flex-wrap:wrap}.result-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:#f4f4f4;color:#050505;text-decoration:none}.result-actions a.secondary{background:#242424;color:#ddd;border:1px solid #333}
-details{border-top:1px solid #242424;margin-top:12px;padding-top:10px}summary{cursor:pointer;color:#ddd}.actions{display:flex;gap:8px;margin-top:12px}
-button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 12px;cursor:pointer}#reset-ui,button[data-action=discard]{background:#242424;color:#ddd}
-button[data-action=reset-trim]{background:#191919;color:#ddd;border:1px solid #333}
-@media(max-width:760px){.tabs{top:94px;overflow:auto}.config{top:144px;align-items:flex-start;flex-direction:column}.segments button{font-size:12px;padding:7px 9px}main{grid-template-columns:1fr;padding:12px}.camera-preview,.effect-preview,.overlay-preview,.caption-settings,.result-body,.camera-segments{grid-template-columns:1fr}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}}
+header{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;gap:16px;align-items:center;padding:16px 22px;background:#050505;border-bottom:1px solid #202020}.header-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+h1{margin:0;font-size:22px;letter-spacing:0}header p{margin:3px 0 0;color:#9a9a9a}.tabs{position:sticky;top:70px;z-index:4;display:flex;gap:8px;padding:10px 22px;background:#060606;border-bottom:1px solid #1f1f1f}.tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 12px}.tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}.config{position:sticky;top:119px;z-index:3;display:flex;justify-content:space-between;gap:14px;align-items:center;padding:12px 22px;background:#080808;border-bottom:1px solid #202020}.config strong{display:block;font-size:13px}.config span{color:#9a9a9a;font-size:12px}.segments{display:flex;gap:6px;flex-wrap:wrap}.segments button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.segments button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}
+main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px}.card{border:1px solid #272727;border-radius:8px;background:#0d0d0d;overflow:hidden}.card[open]{border-color:#3b3b3b;background:#101010}.card.liked{border-color:#24d17e}.card.discarded{opacity:.46}.clip-summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;min-height:62px;padding:12px 14px;cursor:pointer;list-style:none}.clip-summary::-webkit-details-marker{display:none}.clip-rank{color:#8f8f8f;font-weight:700}.clip-title{display:grid;gap:2px;min-width:0}.clip-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}.clip-title small{color:#9c9c9c}.clip-status{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.clip-status span,.format-previews span{display:inline-flex;align-items:center;min-height:26px;padding:4px 8px;border-radius:999px;background:#242424;color:#ddd;font-size:12px}
+.editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;gap:10px}.media{position:relative;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000}.placeholder{display:grid;place-items:center;height:100%;color:#777}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip,.card-tabs{display:flex;gap:6px;flex-wrap:wrap}.preview-strip button,.card-tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.preview-strip button.active,.card-tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}
+.editor-tools{display:grid;align-content:start;gap:12px}.tool-panel{display:none;border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:12px}.tool-panel.active{display:block}.tool-summary{margin-bottom:10px;color:#d8d8d8}.timeline-editor{padding:0}.timeline-head,.format-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.timeline-head output,.format-head output{color:#f4f4f4;text-align:right}.timeline{position:relative;height:34px;margin-top:8px}.timeline-track{position:absolute;left:0;right:0;top:14px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:#f4f4f4;border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:34px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{display:flex;justify-content:space-between;color:#aaa;font-size:12px}.actions,.platform-tags,.format-previews{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:#191919;color:#ddd;border:1px solid #333;text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:#f4f4f4;border-color:#24d17e}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:#aaa;font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:#24d17e}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:#050505;color:#f4f4f4;border:1px solid #333;border-radius:6px;padding:8px}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:160px 180px;gap:12px;max-width:380px}
+.camera-surface video{object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%}.camera-surface[data-camera-key=alternate] video{animation:camera-pan 6s ease-in-out infinite alternate}.camera-surface[data-camera-key=jump-cut] video{animation:camera-jump 3s steps(1,end) infinite alternate}@keyframes camera-pan{0%{object-position:22% 50%}100%{object-position:78% 50%}}@keyframes camera-jump{0%{object-position:22% 50%}50%{object-position:78% 50%}100%{object-position:78% 50%}}.camera-reticle{position:absolute;inset:14% 22%;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}
+.card[data-effect=light-grain] .media video,.card[data-effect=light-grain] .media img{filter:contrast(1.08) brightness(1.02)}.card[data-effect=old-film] .media video,.card[data-effect=old-film] .media img{filter:sepia(.48) contrast(1.2) saturate(.62) brightness(.92)}.card[data-effect=vhs] .media video,.card[data-effect=vhs] .media img{filter:saturate(.62) contrast(1.22) brightness(.9) hue-rotate(-7deg)}.card[data-effect=bw-old] .media video,.card[data-effect=bw-old] .media img{filter:grayscale(1) contrast(1.22) brightness(.9)}.card[data-effect=light-grain] .media:after,.card[data-effect=old-film] .media:after,.card[data-effect=vhs] .media:after,.card[data-effect=bw-old] .media:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--effect-opacity,.24);background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 70% 65%,rgba(0,0,0,.95) 0 1px,transparent 1.8px);background-size:4px 4px,6px 6px;mix-blend-mode:overlay}.card[data-effect=old-film] .media:before,.card[data-effect=bw-old] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at center,transparent 44%,rgba(0,0,0,.46) 100%)}.card[data-effect=vhs] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 4px);mix-blend-mode:overlay}
+.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,#24d17e);border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-resize{position:absolute;right:5px;bottom:5px;width:14px;height:14px;padding:0;border:1px solid rgba(255,255,255,.42);border-radius:3px;background:rgba(255,255,255,.18);cursor:nwse-resize}.overlay-menu{position:absolute;z-index:4;display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px;max-width:min(360px,94%);padding:8px;border:1px solid #333;border-radius:8px;background:#101010;box-shadow:0 14px 42px rgba(0,0,0,.5)}.overlay-menu[hidden]{display:none}.overlay-menu button{background:#242424;color:#ddd;border:1px solid #333}
+p{color:#bebebe}.peak{color:#fff;font-size:16px}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}.transcript-panel details{border-top:1px solid #242424;margin-top:12px;padding-top:10px}.transcript-panel summary{cursor:pointer;color:#ddd}
+body[data-tab=final] main,body[data-tab=final] .config{display:none}body[data-tab=final] .final-stage{display:block}.final-stage{display:none;margin:18px auto;max-width:1240px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.render-status{margin-top:12px;color:#aaa}.render-results{display:grid;gap:12px;margin-top:14px}.result-item{border:1px solid #303030;border-radius:8px;background:#090909;overflow:hidden}.result-item[open]{border-color:#3b3b3b}.result-item summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;border:0;color:#f4f4f4}.result-item summary strong{font-size:14px}.result-item summary span{color:#aaa;font-size:12px}.result-body{display:grid;grid-template-columns:minmax(260px,420px) minmax(240px,1fr);gap:14px;padding:0 14px 14px}.result-body video{width:100%;max-height:70vh;background:#000;border-radius:6px;object-fit:contain}.result-meta{display:grid;align-content:start;gap:10px}.result-meta dl{margin:0}.result-actions{display:flex;gap:8px;flex-wrap:wrap}.result-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:#f4f4f4;color:#050505;text-decoration:none}.result-actions a.secondary{background:#242424;color:#ddd;border:1px solid #333}
+button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 12px;cursor:pointer}#reset-ui,button[data-action=discard]{background:#242424;color:#ddd}button[data-action=reset-trim],button[data-action=next-card]{background:#191919;color:#ddd;border:1px solid #333}
+@media(max-width:860px){header{position:relative;align-items:flex-start;flex-direction:column}.tabs{top:0;overflow:auto}.config{top:49px;align-items:flex-start;flex-direction:column}.segments button,.preview-strip button,.card-tabs button{font-size:12px;padding:7px 9px}main{padding:12px}.clip-summary{grid-template-columns:auto minmax(0,1fr);align-items:start}.clip-status{grid-column:1/-1;justify-content:flex-start}.editor-shell,.result-body,.camera-segments,.caption-settings{grid-template-columns:1fr}.media{max-height:none}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons,.overlay-menu{grid-template-columns:1fr}}
 """
 
 
@@ -1684,19 +1699,19 @@ function applyFormat(format){
   document.querySelectorAll(".segments [data-format]").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.format === next);
   });
-  document.querySelectorAll(".card").forEach(updatePlatformUi);
-  renderCaptionQueue();
+  document.querySelectorAll(".card").forEach(card => {
+    if (!card.dataset.previewTouched) setCardPreviewFormat(card, next);
+    updatePlatformUi(card);
+  });
+  renderFinalStage();
 }
 function applyTab(tab){
-  const next = ["edit", "camera", "effects", "overlays", "final"].includes(tab) ? tab : "edit";
+  const next = ["edit", "final"].includes(tab) ? tab : "edit";
   document.body.dataset.tab = next;
   localStorage.setItem("cutted-tab", next);
   document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.tab === next);
   });
-  renderCameraPreview();
-  renderEffectPreview();
-  renderOverlayPreview();
   renderFinalStage();
 }
 function platformLabel(key){
@@ -1729,7 +1744,8 @@ function setCameraSegmentForRank(rank, part, patch){
     return normalizeCameraSegment(Object.assign({}, segment, patch), part);
   });
   setCardState(String(rank), { camera: cameraSequence(segments) });
-  renderCameraPreview();
+  const card = cardForRank(rank);
+  if (card) updateCameraUi(card);
   renderFinalStage();
 }
 function normalizeSingleCamera(camera){
@@ -1767,7 +1783,8 @@ function effectForRank(rank){ return normalizeEffect(cardState(String(rank)).eff
 function setEffectForRank(rank, patch){
   const current = cardState(String(rank));
   setCardState(String(rank), { effect: normalizeEffect(Object.assign({}, current.effect, patch)) });
-  renderEffectPreview();
+  const card = cardForRank(rank);
+  if (card) updateEffectUi(card);
   renderFinalStage();
 }
 function effectOpacity(effect){
@@ -1791,7 +1808,8 @@ function overlayForRank(rank){ return normalizeOverlay(cardState(String(rank)).o
 function setOverlayForRank(rank, patch, rerender = true){
   const current = cardState(String(rank));
   setCardState(String(rank), { overlay: normalizeOverlay(Object.assign({}, current.overlay, patch)) });
-  if (rerender) renderOverlayPreview();
+  const card = cardForRank(rank);
+  if (card && rerender) updateOverlayUi(card);
   renderFinalStage();
 }
 function overlayLabel(overlay){
@@ -1808,6 +1826,146 @@ function clampNumber(value, min, max){
   if (!Number.isFinite(next)) return min;
   return Math.min(Math.max(next, min), max);
 }
+function cardForRank(rank){
+  return document.querySelector(`.card[data-rank="${CSS.escape(String(rank))}"]`);
+}
+function statusLabel(status){
+  if (status === "liked") return "Aprovado";
+  if (status === "discarded") return "Descartado";
+  return "Pendente";
+}
+function setCardPreviewFormat(card, format){
+  const next = platformMeta[format] ? format : "tiktok";
+  card.dataset.previewFormat = next;
+  card.querySelectorAll("[data-card-format-preview]").forEach(button => {
+    button.classList.toggle("active", button.dataset.cardFormatPreview === next);
+  });
+}
+function updateCardTools(card){
+  updateCameraUi(card);
+  updateEffectUi(card);
+  updateOverlayUi(card);
+}
+function updateCameraUi(card){
+  const camera = cameraForRank(card.dataset.rank);
+  const active = camera.segments.find(segment => segment.key !== "center") || camera.segments[0] || defaultCameraSegment("start");
+  const surface = card.querySelector(".camera-surface");
+  if (surface) {
+    surface.dataset.cameraKey = active.key;
+    surface.setAttribute("style", cameraStyle(active));
+  }
+  const summary = card.querySelector("[data-camera-current]");
+  if (summary) summary.textContent = cameraLabel(camera);
+  const container = card.querySelector("[data-card-camera]");
+  if (!container) return;
+  container.innerHTML = `<div class="camera-card-controls">${cameraSegmentsHtml(camera)}</div>`;
+  bindCardCameraControls(card);
+}
+function bindCardCameraControls(card){
+  const rank = card.dataset.rank;
+  card.querySelectorAll("[data-preview-camera-segment]").forEach(select => {
+    select.addEventListener("change", () => setCameraSegmentForRank(rank, select.dataset.previewCameraSegment, { key: select.value }));
+  });
+  card.querySelectorAll("[data-preview-camera-strength]").forEach(strength => {
+    const update = () => setCameraSegmentForRank(rank, strength.dataset.previewCameraStrength, { strength: Number(strength.value) });
+    strength.addEventListener("input", update);
+    strength.addEventListener("change", update);
+  });
+}
+function updateEffectUi(card){
+  const effect = effectForRank(card.dataset.rank);
+  card.dataset.effect = effect.key;
+  card.style.setProperty("--effect-opacity", effectOpacity(effect));
+  const summary = card.querySelector("[data-effect-current]");
+  if (summary) summary.textContent = effectLabel(effect);
+  const container = card.querySelector("[data-card-effect]");
+  if (!container) return;
+  container.innerHTML = `<div class="effect-card-controls">
+    <div class="effect-card-buttons" role="group" aria-label="Efeito do corte ${escapeAttr(card.dataset.rank)}">${effectButtonsHtml(effect)}</div>
+    <label>Intensidade
+      <input data-preview-effect-intensity type="range" min="0" max="100" step="5" value="${effect.intensity}">
+    </label>
+  </div>`;
+  bindCardEffectControls(card);
+}
+function bindCardEffectControls(card){
+  const rank = card.dataset.rank;
+  card.querySelectorAll("[data-preview-effect]").forEach(button => {
+    button.addEventListener("click", () => setEffectForRank(rank, { key: button.dataset.previewEffect }));
+  });
+  const intensity = card.querySelector("[data-preview-effect-intensity]");
+  if (!intensity) return;
+  intensity.addEventListener("input", () => setEffectForRank(rank, { intensity: Number(intensity.value) }));
+  intensity.addEventListener("change", () => setEffectForRank(rank, { intensity: Number(intensity.value) }));
+}
+function updateOverlayUi(card){
+  const overlay = overlayForRank(card.dataset.rank);
+  const meta = overlayMeta[overlay.key] || overlayMeta.none;
+  const summary = card.querySelector("[data-overlay-current]");
+  if (summary) summary.textContent = overlayLabel(overlay);
+  const box = card.querySelector("[data-overlay-drag]");
+  if (box) {
+    box.dataset.overlayKey = overlay.key;
+    box.setAttribute("style", overlayStyle(overlay));
+    box.querySelector("strong").textContent = meta.title;
+    box.querySelector("em").textContent = meta.subtitle;
+  }
+  const container = card.querySelector("[data-card-overlay]");
+  if (!container) return;
+  container.innerHTML = `<div class="overlay-card-controls">
+    <div class="overlay-card-buttons" role="group" aria-label="Chamada do corte ${escapeAttr(card.dataset.rank)}">${overlayButtonsHtml(overlay)}</div>
+    <div class="overlay-tools">
+      <label>Opacidade
+        <input data-preview-overlay-opacity type="range" min="35" max="100" step="5" value="${overlay.opacity}">
+      </label>
+      <button data-overlay-reset>Resetar posicao</button>
+    </div>
+  </div>`;
+  bindCardOverlayControls(card);
+}
+function overlayPlaceButtonsHtml(){
+  return Object.entries(overlayMeta).filter(([key]) => key !== "none").map(([key, meta]) => {
+    return `<button data-overlay-place="${escapeAttr(key)}">${escapeHtml(meta.label)}</button>`;
+  }).join("");
+}
+function bindCardOverlayControls(card){
+  const rank = card.dataset.rank;
+  card.querySelectorAll("[data-preview-overlay]").forEach(button => {
+    button.addEventListener("click", () => setOverlayForRank(rank, { key: button.dataset.previewOverlay }));
+  });
+  const opacity = card.querySelector("[data-preview-overlay-opacity]");
+  if (opacity) {
+    opacity.addEventListener("input", () => setOverlayForRank(rank, { opacity: Number(opacity.value) }));
+    opacity.addEventListener("change", () => setOverlayForRank(rank, { opacity: Number(opacity.value) }));
+  }
+  const reset = card.querySelector("[data-overlay-reset]");
+  if (reset) reset.addEventListener("click", () => setOverlayForRank(rank, { x: .62, y: .78, width: .34 }));
+  bindOverlayDrag(card);
+  bindOverlayPlacement(card);
+}
+function bindOverlayPlacement(card){
+  const surface = card.querySelector("[data-overlay-surface]");
+  const menu = card.querySelector("[data-overlay-menu]");
+  if (!surface || !menu) return;
+  menu.innerHTML = overlayPlaceButtonsHtml();
+  surface.onclick = event => {
+    if (event.target.closest("[data-overlay-drag]") || event.target.closest("[data-overlay-menu]")) return;
+    const rect = surface.getBoundingClientRect();
+    const x = clampNumber((event.clientX - rect.left) / rect.width, 0, 1);
+    const y = clampNumber((event.clientY - rect.top) / rect.height, 0, 1);
+    menu.dataset.x = x;
+    menu.dataset.y = y;
+    menu.style.left = `${Math.min(Math.max(event.clientX - rect.left, 8), Math.max(rect.width - 260, 8))}px`;
+    menu.style.top = `${Math.min(Math.max(event.clientY - rect.top, 8), Math.max(rect.height - 150, 8))}px`;
+    menu.hidden = false;
+  };
+  menu.querySelectorAll("[data-overlay-place]").forEach(button => {
+    button.addEventListener("click", () => {
+      setOverlayForRank(card.dataset.rank, { key: button.dataset.overlayPlace, x: Number(menu.dataset.x), y: Number(menu.dataset.y) });
+      menu.hidden = true;
+    });
+  });
+}
 function updatePlatformUi(card){
   const current = cardState(card.dataset.rank);
   const platforms = Array.isArray(current.platforms) ? current.platforms : [];
@@ -1818,12 +1976,16 @@ function updatePlatformUi(card){
   const summary = platforms.length
     ? platforms.map(platformLabel).join(", ")
     : (current.status === "liked" ? `Formato atual: ${platformLabel(fallback)}` : "Nenhum destino marcado");
-  card.querySelector("[data-platform-summary]").textContent = summary;
+  card.querySelectorAll("[data-platform-summary]").forEach(item => { item.textContent = summary; });
+  const status = card.querySelector("[data-status-pill]");
+  if (status) status.textContent = statusLabel(current.status);
 }
 function paint(card){
   const current = cardState(card.dataset.rank);
   card.classList.toggle("liked",current.status==="liked");
   card.classList.toggle("discarded",current.status==="discarded");
+  const status = card.querySelector("[data-status-pill]");
+  if (status) status.textContent = statusLabel(current.status);
 }
 function trimValues(card){
   const start = Number(card.dataset.start);
@@ -1844,16 +2006,59 @@ function updateTrimUi(card){
   endInput.value = values.endPos;
   card.querySelector("[data-output=start]").textContent = fixed(values.trimStart);
   card.querySelector("[data-output=end]").textContent = fixed(values.trimEnd);
-  card.querySelector("[data-trim-summary]").textContent = `Final: ${fixed(values.adjustedStart)} - ${fixed(values.adjustedEnd)} (${fixed(values.adjustedEnd - values.adjustedStart)})`;
+  const summary = `Final: ${fixed(values.adjustedStart)} - ${fixed(values.adjustedEnd)} (${fixed(values.adjustedEnd - values.adjustedStart)})`;
+  card.querySelector("[data-trim-summary]").textContent = summary;
+  const cardSummary = card.querySelector("[data-card-summary]");
+  if (cardSummary) cardSummary.textContent = summary;
   const fill = card.querySelector("[data-trim-fill]");
-  fill.style.left = `${(values.startPos / values.duration) * 100}%`;
-  fill.style.right = `${100 - ((values.endPos / values.duration) * 100)}%`;
+  const duration = Math.max(values.duration, .1);
+  fill.style.left = `${(values.startPos / duration) * 100}%`;
+  fill.style.right = `${100 - ((values.endPos / duration) * 100)}%`;
 }
 function seekPreview(card){
   const video = card.querySelector("video");
   if (!video) return;
+  loadCardVideo(card);
   const values = trimValues(card);
   video.currentTime = values.trimStart;
+}
+function loadCardVideo(card){
+  const video = card.querySelector("video[data-src]");
+  if (!video || video.getAttribute("src")) return;
+  video.setAttribute("src", video.dataset.src);
+  video.load();
+}
+function unloadCardVideo(card){
+  const video = card.querySelector("video[data-src]");
+  if (!video || !video.getAttribute("src")) return;
+  video.pause();
+  video.removeAttribute("src");
+  video.load();
+}
+function activateCard(card){
+  document.querySelectorAll(".card[open]").forEach(item => {
+    if (item === card) return;
+    item.open = false;
+    unloadCardVideo(item);
+  });
+  if (card.open) {
+    loadCardVideo(card);
+    updateCardTools(card);
+  } else {
+    unloadCardVideo(card);
+  }
+}
+function openNextCard(card){
+  const cards = Array.from(document.querySelectorAll(".card"));
+  const index = cards.indexOf(card);
+  const next = cards[index + 1];
+  if (next) {
+    next.open = true;
+    next.scrollIntoView({ behavior: "smooth", block: "start" });
+    activateCard(next);
+    return;
+  }
+  applyTab("final");
 }
 function adjustedMoment(moment){
   const current = cardState(String(moment.rank));
@@ -1988,9 +2193,6 @@ function downloadJson(data, filename){
   a.click();
 }
 function renderCaptionQueue(){
-  renderCameraPreview();
-  renderEffectPreview();
-  renderOverlayPreview();
   renderFinalStage();
 }
 function renderCameraPreview(){
@@ -2222,12 +2424,12 @@ function bindOverlayDrag(item){
   const endDrag = event => {
     if (!drag || event.pointerId !== drag.pointerId) return;
     drag = null;
-    renderOverlayPreview();
+    updateOverlayUi(item);
   };
-  box.addEventListener("pointerdown", startDrag);
-  box.addEventListener("pointermove", moveDrag);
-  box.addEventListener("pointerup", endDrag);
-  box.addEventListener("pointercancel", endDrag);
+  box.onpointerdown = startDrag;
+  box.onpointermove = moveDrag;
+  box.onpointerup = endDrag;
+  box.onpointercancel = endDrag;
 }
 function renderFinalStage(){
   const queue = buildExportData().caption_queue || [];
@@ -2241,9 +2443,19 @@ function renderFinalStage(){
       : "Selecione cortes antes de renderizar.";
   }
 }
+function captionLines(){
+  return Number(localStorage.getItem("cutted-caption-lines") || 2);
+}
+function captionWidth(){
+  return Number(localStorage.getItem("cutted-caption-width") || 28);
+}
+function syncCaptionInputs(){
+  document.querySelectorAll("[data-caption-lines]").forEach(input => { input.value = String(captionLines()); });
+  document.querySelectorAll("[data-caption-width]").forEach(input => { input.value = String(captionWidth()); });
+}
 function captionCommand(){
-  const chars = Number(document.querySelector("[data-caption-width]")?.value || 28);
-  const lines = Number(document.querySelector("[data-caption-lines]")?.value || 2);
+  const chars = captionWidth();
+  const lines = captionLines();
   const script = window.CUTTED_SCRIPT || "cutted.py";
   return `python "${script}" caption-selected "caption-queue.json" --out "captioned-clips" --base-dir "." --chars-per-line ${chars} --max-lines ${lines}`;
 }
@@ -2266,8 +2478,8 @@ async function finalizeVideos(){
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         queue: data,
-        chars_per_line: Number(document.querySelector("[data-caption-width]")?.value || 28),
-        max_lines: Number(document.querySelector("[data-caption-lines]")?.value || 2)
+        chars_per_line: captionWidth(),
+        max_lines: captionLines()
       })
     });
     const payload = await response.json();
@@ -2350,6 +2562,7 @@ function escapeHtml(value){
 function escapeAttr(value){ return escapeHtml(value); }
 applyFormat(localStorage.getItem("cutted-format") || "tiktok");
 applyTab(localStorage.getItem("cutted-tab") || "edit");
+syncCaptionInputs();
 document.querySelectorAll(".segments [data-format]").forEach(btn => {
   btn.addEventListener("click", () => applyFormat(btn.dataset.format));
 });
@@ -2360,6 +2573,32 @@ document.querySelectorAll(".card").forEach(card => {
   paint(card);
   updateTrimUi(card);
   updatePlatformUi(card);
+  updateCardTools(card);
+  const summary = card.querySelector(".clip-summary");
+  if (summary) {
+    const toggleCard = event => {
+      event.preventDefault();
+      card.open = !card.open;
+      activateCard(card);
+    };
+    summary.addEventListener("click", toggleCard);
+    summary.addEventListener("keydown", event => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      toggleCard(event);
+    });
+  }
+  card.querySelectorAll("[data-card-panel]").forEach(button => {
+    button.addEventListener("click", () => {
+      card.querySelectorAll("[data-card-panel]").forEach(item => item.classList.toggle("active", item === button));
+      card.querySelectorAll("[data-panel]").forEach(panel => panel.classList.toggle("active", panel.dataset.panel === button.dataset.cardPanel));
+    });
+  });
+  card.querySelectorAll("[data-card-format-preview]").forEach(button => {
+    button.addEventListener("click", () => {
+      card.dataset.previewTouched = "1";
+      setCardPreviewFormat(card, button.dataset.cardFormatPreview);
+    });
+  });
   const video = card.querySelector("video");
   if (video) {
     video.addEventListener("play", () => {
@@ -2409,11 +2648,16 @@ document.querySelectorAll(".card").forEach(card => {
       renderCaptionQueue();
       return;
     }
+    if (btn.dataset.action === "next-card") {
+      openNextCard(card);
+      return;
+    }
     setCardState(card.dataset.rank, { status: btn.dataset.action === "like" ? "liked" : "discarded" });
     paint(card);
     updatePlatformUi(card);
     renderCaptionQueue();
   }));
+  if (card.open) activateCard(card);
 });
 document.getElementById("export").addEventListener("click", async () => {
   downloadJson(buildExportData(), "selected-clips.json");
@@ -2423,25 +2667,23 @@ document.getElementById("reset-ui").addEventListener("click", () => {
   localStorage.removeItem("cutted-state");
   localStorage.removeItem("cutted-format");
   localStorage.removeItem("cutted-tab");
+  localStorage.removeItem("cutted-caption-lines");
+  localStorage.removeItem("cutted-caption-width");
   location.reload();
-});
-document.getElementById("continue-effects").addEventListener("click", async () => {
-  applyTab("effects");
-});
-document.getElementById("continue-overlays").addEventListener("click", async () => {
-  applyTab("overlays");
-});
-document.getElementById("continue-final").addEventListener("click", async () => {
-  applyTab("final");
-  await finalizeVideos();
 });
 document.getElementById("export-final-queue").addEventListener("click", async () => {
   downloadJson(buildExportData(), "caption-queue.json");
 });
 document.getElementById("finalize-videos").addEventListener("click", finalizeVideos);
 document.querySelectorAll("[data-caption-lines],[data-caption-width]").forEach(input => {
-  input.addEventListener("input", renderFinalStage);
-  input.addEventListener("change", renderFinalStage);
+  const update = () => {
+    if (input.matches("[data-caption-lines]")) localStorage.setItem("cutted-caption-lines", input.value);
+    if (input.matches("[data-caption-width]")) localStorage.setItem("cutted-caption-width", input.value);
+    syncCaptionInputs();
+    renderFinalStage();
+  };
+  input.addEventListener("input", update);
+  input.addEventListener("change", update);
 });
 function selectElementText(element){
   if (!element || !window.getSelection || !document.createRange) return;

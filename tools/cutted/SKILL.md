@@ -65,14 +65,15 @@ Each card includes:
 
 - a playable video preview;
 - a global format selector for TikTok, Shorts, YouTube, Instagram, and Facebook previews;
-- workflow tabs for editing/export setup, camera reframing, effects, calls-to-action, and final render queue;
+- a collapsible per-clip editor that keeps only the active preview loaded;
+- per-clip panels for trim/export setup, camera reframing, effects, calls-to-action, captions, and transcript review;
 - the peak phrase and transcript;
 - `Gostei`, `Descartar`, and `Resetar corte` controls;
 - a visual two-handle timeline close to the video preview;
 - per-clip platform tags for TikTok, Shorts, Instagram, Facebook, and YouTube next to the trim controls;
 - a final timing summary.
 
-The `Camera` tab sits after `Cortes e formatos` and before `Efeitos`. It applies a three-part camera line per selected cut/platform before subtitles, effects, and calls-to-action. Each selected output has `Inicio`, `Meio`, and `Fim` camera slots:
+The first screen is now the main editing workspace. Each clip opens as a dropdown, and its local `Camera` panel applies a three-part camera line per selected cut/platform before subtitles, effects, and calls-to-action. Each selected output has `Inicio`, `Meio`, and `Fim` camera slots:
 
 - `Centro seguro`: default centered crop.
 - `Rosto no centro`: slight punch toward a central speaker.
@@ -85,7 +86,7 @@ The `Camera` tab sits after `Cortes e formatos` and before `Efeitos`. It applies
 
 The MVP camera presets are deterministic FFmpeg scale/crop filters and do not require OpenCV, paid APIs, or cloud processing. Three-slot camera lines render through FFmpeg `filter_complex`, splitting the clip into thirds, applying the chosen reframe to each part, and concatenating the video before captions/effects/overlays. OpenCV can be added later for automatic face anchors without changing the exported `camera.segments` object shape.
 
-The `Efeitos` tab sits after `Camera` and before `Chamadas`. It applies one MVP look per selected cut:
+The local `Efeitos` panel applies one MVP look per selected cut:
 
 - `Sem efeito`: clean output.
 - `Chuvisco Leve`: subtle grain/noise.
@@ -93,7 +94,7 @@ The `Efeitos` tab sits after `Camera` and before `Chamadas`. It applies one MVP 
 - `VHS / TV Antiga`: stronger analog-style noise and contrast.
 - `Preto e Branco Antigo`: black-and-white grain with vignette.
 
-The `Chamadas` tab sits after `Efeitos` and before `Final`. It applies one draggable card per selected cut and also holds the caption line/width controls used by the final render:
+The local `Chamadas` panel applies one draggable card per selected cut. Clicking the preview can place a call-to-action card at that point before the user drags or resizes it. The local `Legenda` panel holds the caption line/width controls used by the final render:
 
 - `Sem chamada`: clean output.
 - `Inscreva-se`: subscribe-style CTA.
@@ -123,7 +124,7 @@ The trim sliders are stored in browser `localStorage`. The exported JSON include
 - `overlay`;
 - `status`.
 
-The `Final` tab is the local render/results gallery. When opened through `cutted.py serve`, continuing from `Chamadas` triggers rendering through `/api/finalize`. Results appear as one dropdown per rendered video, each with an inline player, an open-in-new-tab link, and a direct MP4 download link. It can still export the queue as `caption-queue.json` for manual/debug workflows.
+The `Final` tab is the local render/results gallery. When opened through `cutted.py serve`, rendering goes through `/api/finalize`. Results appear as one dropdown per rendered video, each with an inline player, an open-in-new-tab link, and a direct MP4 download link. It can still export the queue as `caption-queue.json` for manual/debug workflows.
 
 Selection rule:
 
