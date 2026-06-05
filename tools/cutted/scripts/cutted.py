@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
 import html
 import http.server
 import json
@@ -230,6 +232,7 @@ def render_selected(args: argparse.Namespace) -> None:
     base_dir = (args.base_dir or selection_path.parent).resolve()
     ffmpeg = find_ffmpeg()
     data = json.loads(selection_path.read_text(encoding="utf-8-sig"))
+    materialize_queue_image_assets(data, out_dir / "overlay-assets")
     rows = data.get("selected") or data.get("moments") or []
     rendered = render_selected_rows(rows, base_dir, out_dir, ffmpeg)
     manifest = {"source_selection": str(selection_path), "rendered": rendered}
@@ -245,6 +248,7 @@ def caption_selected(args: argparse.Namespace) -> None:
     base_dir = (args.base_dir or caption_path.parent).resolve()
     ffmpeg = find_ffmpeg()
     data = json.loads(caption_path.read_text(encoding="utf-8-sig"))
+    materialize_queue_image_assets(data, out_dir / "overlay-assets")
     rows = caption_rows_from_data(data)
     captioned = caption_selected_rows(rows, base_dir, out_dir, ffmpeg, args)
     manifest = {"source_caption_queue": str(caption_path), "captioned": captioned}
@@ -296,6 +300,7 @@ def finalize_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir:
     caption_path = base_dir / "caption-queue.json"
     out_dir = base_dir / "captioned-clips"
     out_dir.mkdir(parents=True, exist_ok=True)
+    materialize_queue_image_assets(queue, base_dir / "overlay-assets")
     caption_path.write_text(json.dumps(queue, ensure_ascii=False, indent=2), encoding="utf-8")
     rows = caption_rows_from_data(queue)
     options = SimpleNamespace(chars_per_line=int(payload.get("chars_per_line") or 28), max_lines=int(payload.get("max_lines") or 2))
@@ -307,7 +312,7 @@ def finalize_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir:
 
 def read_json_body(handler: http.server.BaseHTTPRequestHandler) -> dict[str, object]:
     length = int(handler.headers.get("Content-Length") or "0")
-    if length <= 0 or length > 20_000_000:
+    if length <= 0 or length > 80_000_000:
         raise ValueError("Invalid request body.")
     raw = handler.rfile.read(length)
     data = json.loads(raw.decode("utf-8-sig"))
@@ -343,6 +348,62 @@ def caption_rows_from_data(data: object) -> list[dict[str, object]]:
     if isinstance(queue, list):
         return [row for row in queue if isinstance(row, dict)]
     return selected_rows_to_caption_rows(data.get("selected") or data.get("moments"))
+
+
+def materialize_queue_image_assets(data: object, asset_dir: Path) -> None:
+    rows = queue_rows_for_assets(data)
+    for row in rows:
+        overlays = row.get("overlays")
+        if not isinstance(overlays, list):
+            continue
+        for layer in overlays:
+            if not isinstance(layer, dict) or str(layer.get("kind") or layer.get("key") or "") != "image":
+                continue
+            materialize_image_layer(layer, asset_dir)
+
+
+def queue_rows_for_assets(data: object) -> list[dict[str, object]]:
+    if isinstance(data, list):
+        return [row for row in data if isinstance(row, dict)]
+    if not isinstance(data, dict):
+        return []
+    rows: list[dict[str, object]] = []
+    for key in ("caption_queue", "selected", "moments"):
+        value = data.get(key)
+        if isinstance(value, list):
+            rows.extend(row for row in value if isinstance(row, dict))
+    return rows
+
+
+def materialize_image_layer(layer: dict[str, object], asset_dir: Path) -> None:
+    if str(layer.get("image_file") or ""):
+        return
+    decoded = decode_data_url_image(str(layer.get("image_data_url") or ""))
+    if decoded is None:
+        return
+    image_bytes, extension = decoded
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha256(image_bytes).hexdigest()[:16]
+    path = asset_dir / f"overlay-{digest}.{extension}"
+    if not path.exists():
+        path.write_bytes(image_bytes)
+    layer["image_file"] = str(path)
+    layer["image_data_url"] = ""
+
+
+def decode_data_url_image(value: str) -> tuple[bytes, str] | None:
+    if not value.startswith("data:image/") or ";base64," not in value:
+        return None
+    header, encoded = value.split(";base64,", 1)
+    mime = header.removeprefix("data:").lower()
+    extensions = {"image/png": "png", "image/webp": "webp", "image/jpeg": "jpg", "image/jpg": "jpg"}
+    extension = extensions.get(mime)
+    if extension is None:
+        return None
+    try:
+        return base64.b64decode(encoded, validate=True), extension
+    except ValueError:
+        return None
 
 
 def selected_rows_to_caption_rows(rows: object) -> list[dict[str, object]]:
@@ -656,6 +717,7 @@ def captioned_row(
         "camera": camera_from_row(row),
         "effect": effect_from_row(row),
         "overlay": overlay_from_row(row),
+        "overlays": overlay_layers_from_row(row),
     }
 
 
@@ -686,6 +748,13 @@ def render_command(
     base: list[str], output_path: Path, row: dict[str, object], preset: PlatformPreset,
     filters: list[str], duration: float
 ) -> list[str]:
+    if image_overlay_layers_from_row(row):
+        filter_arg = image_overlay_complex_filter(preset, row, duration, filters)
+        return [
+            *base, "-filter_complex", filter_arg, "-map", "[vout]", "-map", "0:a?",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", video_crf(row),
+            "-c:a", "aac", "-movflags", "+faststart", str(output_path),
+        ]
     if camera_is_sequence(row):
         filter_arg = camera_sequence_filter(preset, row, duration, filters)
         return [
@@ -720,6 +789,54 @@ def post_camera_filters(preset: PlatformPreset, row: dict[str, object]) -> list[
     if overlay:
         filters.append(overlay)
     return filters
+
+
+def image_overlay_complex_filter(
+    preset: PlatformPreset, row: dict[str, object], duration: float, filters: list[str]
+) -> str:
+    parts: list[str] = []
+    tail = ",".join(filters)
+    if camera_is_sequence(row):
+        parts.extend(camera_split_filters(preset, camera_from_row(row).get("segments"), duration))
+        base = "".join(f"[cv{index}]" for index in range(3)) + "concat=n=3:v=1:a=0"
+        if tail:
+            base = f"{base},{tail}"
+        parts.append(f"{base}[vbase]")
+    else:
+        base_filters = ",".join([camera_filter(preset, row), *filters])
+        parts.append(f"[0:v]{base_filters}[vbase]")
+    previous = "vbase"
+    image_layers = image_overlay_layers_from_row(row)
+    for index, layer in enumerate(image_layers):
+        image_label = f"img{index}"
+        output_label = "vout" if index == len(image_layers) - 1 else f"vimg{index}"
+        parts.append(image_overlay_source_filter(layer, preset, image_label))
+        parts.append(image_overlay_compose_filter(layer, preset, previous, image_label, output_label))
+        previous = output_label
+    return ";".join(parts)
+
+
+def image_overlay_layers_from_row(row: dict[str, object]) -> list[dict[str, object]]:
+    return [
+        layer for layer in overlay_layers_from_row(row)
+        if layer.get("kind") == "image" and str(layer.get("image_file") or "")
+    ]
+
+
+def image_overlay_source_filter(overlay: dict[str, object], preset: PlatformPreset, label: str) -> str:
+    width = int(round(preset.width * float(overlay["width"])))
+    opacity = clamp(float(overlay["opacity"]) / 100.0, 0.1, 1.0)
+    path = ffmpeg_filter_path(Path(str(overlay["image_file"])))
+    return f"movie='{path}',scale={width}:-1,format=rgba,colorchannelmixer=aa={opacity:.2f}[{label}]"
+
+
+def image_overlay_compose_filter(
+    overlay: dict[str, object], preset: PlatformPreset, input_label: str, image_label: str, output_label: str
+) -> str:
+    width = int(round(preset.width * float(overlay["width"])))
+    x = min(int(round(preset.width * float(overlay["x"]))), max(preset.width - width, 0))
+    y = min(int(round(preset.height * float(overlay["y"]))), preset.height)
+    return f"[{input_label}][{image_label}]overlay={x}:{y}:format=auto:shortest=1[{output_label}]"
 
 
 def camera_filter(preset: PlatformPreset, row: dict[str, object]) -> str:
@@ -879,9 +996,15 @@ def effect_from_row(row: dict[str, object]) -> dict[str, object]:
 
 
 def overlay_filter(row: dict[str, object], preset: PlatformPreset) -> str:
-    overlay = overlay_from_row(row)
+    filters = [overlay_layer_filter(layer, preset) for layer in overlay_layers_from_row(row) if layer.get("kind") != "image"]
+    return ",".join(item for item in filters if item)
+
+
+def overlay_layer_filter(overlay: dict[str, object], preset: PlatformPreset) -> str:
     if overlay["key"] == "none":
         return ""
+    if overlay.get("kind") == "image":
+        return image_overlay_filter(overlay, preset)
     card = OVERLAY_PRESETS[str(overlay["key"])]
     box_w = int(round(preset.width * float(overlay["width"])))
     box_h = max(int(round(box_w * 0.28)), int(round(preset.height * 0.052)))
@@ -906,15 +1029,52 @@ def overlay_filter(row: dict[str, object], preset: PlatformPreset) -> str:
     ])
 
 
+def image_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> str:
+    image_file = str(overlay.get("image_file") or "")
+    if not image_file:
+        return ""
+    width = int(round(preset.width * float(overlay["width"])))
+    x = min(int(round(preset.width * float(overlay["x"]))), max(preset.width - width, 0))
+    y = min(int(round(preset.height * float(overlay["y"]))), preset.height)
+    opacity = clamp(float(overlay["opacity"]) / 100.0, 0.1, 1.0)
+    path = ffmpeg_filter_path(Path(image_file))
+    return f"movie='{path}',scale={width}:-1,colorchannelmixer=aa={opacity:.2f}[img];[in][img]overlay={x}:{y}:format=auto[out]"
+
+
 def overlay_from_row(row: dict[str, object]) -> dict[str, object]:
+    layers = overlay_layers_from_row(row)
+    for layer in layers:
+        if layer.get("kind") != "image":
+            return layer
     raw = row.get("overlay")
     if not isinstance(raw, dict):
         return default_overlay()
+    return overlay_from_raw(raw)
+
+
+def overlay_layers_from_row(row: dict[str, object]) -> list[dict[str, object]]:
+    raw_layers = row.get("overlays")
+    if isinstance(raw_layers, list):
+        layers = [overlay_layer_from_raw(item) for item in raw_layers if isinstance(item, dict)]
+        return [item for item in layers if item["key"] != "none"]
+    legacy = overlay_from_raw(row.get("overlay") if isinstance(row.get("overlay"), dict) else {})
+    return [] if legacy["key"] == "none" else [legacy]
+
+
+def overlay_layer_from_raw(raw: dict[str, object]) -> dict[str, object]:
+    if str(raw.get("kind") or raw.get("key") or "") == "image":
+        return image_overlay_from_raw(raw)
+    return overlay_from_raw(raw)
+
+
+def overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
     key = str(raw.get("key") or "none")
     preset = OVERLAY_PRESETS.get(key, OVERLAY_PRESETS["none"])
     if preset.key == "none":
         return default_overlay()
     return {
+        "id": str(raw.get("id") or ""),
+        "kind": "cta",
         "key": preset.key,
         "label": preset.label,
         "x": clamp(float(raw.get("x") if raw.get("x") is not None else 0.62), 0.0, 1.0),
@@ -924,8 +1084,27 @@ def overlay_from_row(row: dict[str, object]) -> dict[str, object]:
     }
 
 
+def image_overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
+    image_file = str(raw.get("image_file") or "")
+    image_data_url = str(raw.get("image_data_url") or "")
+    if not image_file and not image_data_url:
+        return default_overlay()
+    return {
+        "id": str(raw.get("id") or ""),
+        "kind": "image",
+        "key": "image",
+        "label": str(raw.get("label") or "Imagem"),
+        "x": clamp(float(raw.get("x") if raw.get("x") is not None else 0.58), 0.0, 1.0),
+        "y": clamp(float(raw.get("y") if raw.get("y") is not None else 0.68), 0.0, 1.0),
+        "width": clamp(float(raw.get("width") if raw.get("width") is not None else 0.28), 0.08, 0.9),
+        "opacity": clamp(float(raw.get("opacity") if raw.get("opacity") is not None else 100.0), 10.0, 100.0),
+        "image_file": image_file,
+        "image_data_url": image_data_url,
+    }
+
+
 def default_overlay() -> dict[str, object]:
-    return {"key": "none", "label": OVERLAY_PRESETS["none"].label, "x": 0.62, "y": 0.78, "width": 0.34, "opacity": 95}
+    return {"id": "", "kind": "cta", "key": "none", "label": OVERLAY_PRESETS["none"].label, "x": 0.62, "y": 0.78, "width": 0.34, "opacity": 95}
 
 
 def find_overlay_font() -> Path:
@@ -967,6 +1146,7 @@ def rendered_row(row: dict[str, object], preset: PlatformPreset, output_path: Pa
         "camera": camera_from_row(row),
         "effect": effect_from_row(row),
         "overlay": overlay_from_row(row),
+        "overlays": overlay_layers_from_row(row),
     }
 
 
@@ -1425,11 +1605,7 @@ def card_html(moment: Moment) -> str:
           <div class="media camera-surface" data-overlay-surface>
             {video_tag}
             <div class="camera-reticle"></div>
-            <div class="overlay-box" data-overlay-drag data-overlay-key="none">
-              <strong></strong>
-              <em></em>
-              <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
-            </div>
+            <div data-overlay-layer-list></div>
             <div class="overlay-menu" data-overlay-menu hidden></div>
           </div>
           <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
@@ -1443,7 +1619,6 @@ def card_html(moment: Moment) -> str:
         <div class="editor-tools">
           <nav class="card-tabs" aria-label="Ferramentas do corte">
             <button data-card-panel="cut" class="active">Corte</button>
-            <button data-card-panel="formats">Formatos</button>
             <button data-card-panel="camera">Camera</button>
             <button data-card-panel="effects">Efeitos</button>
             <button data-card-panel="overlays">Chamadas</button>
@@ -1473,24 +1648,6 @@ def card_html(moment: Moment) -> str:
               <button data-action="discard">Descartar</button>
               <button data-action="reset-trim">Resetar corte</button>
               <button data-action="next-card">OK / Proximo</button>
-            </div>
-          </section>
-          <section class="tool-panel" data-panel="formats">
-            <div class="format-editor">
-              <div class="format-head">
-                <span>Destinos deste corte</span>
-                <output data-platform-summary>Nenhum destino marcado</output>
-              </div>
-              <div class="platform-tags" role="group" aria-label="Destinos do clip">
-                <button data-platform="tiktok">TikTok</button>
-                <button data-platform="shorts">Shorts</button>
-                <button data-platform="instagram">Instagram</button>
-                <button data-platform="facebook">Facebook</button>
-                <button data-platform="youtube">YouTube</button>
-              </div>
-              <div class="format-previews" aria-label="Molduras de exportacao">
-                <span>9:16</span><span>4:5</span><span>16:9</span>
-              </div>
             </div>
           </section>
           <section class="tool-panel" data-panel="camera">
@@ -1524,6 +1681,19 @@ def card_html(moment: Moment) -> str:
             <dl><dt>Score</dt><dd>{moment.score}</dd><dt>Inicio</dt><dd>{moment.start:.1f}s</dd><dt>Fim</dt><dd>{moment.end:.1f}s</dd></dl>
             <details><summary>Transcript</summary><p>{html.escape(moment.transcript)}</p></details>
           </section>
+          <footer class="export-dock" aria-label="Fila de exportacao do corte">
+            <div>
+              <strong>Export</strong>
+              <span data-platform-summary>Nenhum destino marcado</span>
+            </div>
+            <div class="platform-tags" role="group" aria-label="Adicionar destino na fila final">
+              <button data-platform="tiktok">TikTok</button>
+              <button data-platform="shorts">Shorts</button>
+              <button data-platform="instagram">Instagram</button>
+              <button data-platform="facebook">Facebook</button>
+              <button data-platform="youtube">YouTube</button>
+            </div>
+          </footer>
           </div>
         </div>
     </details>"""
@@ -1613,11 +1783,12 @@ header{position:sticky;top:0;z-index:5;display:flex;justify-content:space-betwee
 h1{margin:0;font-size:22px;letter-spacing:0}header p{margin:3px 0 0;color:#9a9a9a}.tabs{position:sticky;top:70px;z-index:4;display:flex;gap:8px;padding:10px 22px;background:#060606;border-bottom:1px solid #1f1f1f}.tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 12px}.tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}.config{position:sticky;top:119px;z-index:3;display:flex;justify-content:space-between;gap:14px;align-items:center;padding:12px 22px;background:#080808;border-bottom:1px solid #202020}.config strong{display:block;font-size:13px}.config span{color:#9a9a9a;font-size:12px}.segments{display:flex;gap:6px;flex-wrap:wrap}.segments button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.segments button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}
 main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px}.card{border:1px solid #272727;border-radius:8px;background:#0d0d0d;overflow:hidden}.card[open]{border-color:#3b3b3b;background:#101010}.card.liked{border-color:#24d17e}.card.discarded{opacity:.46}.clip-summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;min-height:62px;padding:12px 14px;cursor:pointer;list-style:none}.clip-summary::-webkit-details-marker{display:none}.clip-rank{color:#8f8f8f;font-weight:700}.clip-title{display:grid;gap:2px;min-width:0}.clip-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}.clip-title small{color:#9c9c9c}.clip-status{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.clip-status span,.format-previews span{display:inline-flex;align-items:center;min-height:26px;padding:4px 8px;border-radius:999px;background:#242424;color:#ddd;font-size:12px}
 .editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;gap:10px}.media{position:relative;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000}.placeholder{display:grid;place-items:center;height:100%;color:#777}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip,.card-tabs{display:flex;gap:6px;flex-wrap:wrap}.preview-strip button,.card-tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.preview-strip button.active,.card-tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}
-.editor-tools{display:grid;align-content:start;gap:12px}.tool-panel{display:none;border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:12px}.tool-panel.active{display:block}.tool-summary{margin-bottom:10px;color:#d8d8d8}.timeline-editor{padding:0}.timeline-head,.format-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.timeline-head output,.format-head output{color:#f4f4f4;text-align:right}.timeline{position:relative;height:34px;margin-top:8px}.timeline-track{position:absolute;left:0;right:0;top:14px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:#f4f4f4;border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:34px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{display:flex;justify-content:space-between;color:#aaa;font-size:12px}.actions,.platform-tags,.format-previews{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.editor-tools{display:grid;align-content:start;gap:12px}.tool-panel{display:none;border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:12px}.tool-panel.active{display:block}.tool-summary{margin-bottom:10px;color:#d8d8d8}.timeline-editor{padding:0}.timeline-head{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.timeline-head output{color:#f4f4f4;text-align:right}.timeline{position:relative;height:34px;margin-top:8px}.timeline-track{position:absolute;left:0;right:0;top:14px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:#f4f4f4;border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:34px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{display:flex;justify-content:space-between;color:#aaa;font-size:12px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.export-dock{display:grid;gap:8px;margin-top:2px;padding:12px;border:1px solid #303030;border-radius:8px;background:#111}.export-dock strong{display:block;font-size:13px}.export-dock span{color:#a8a8a8;font-size:12px}
 .platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:#191919;color:#ddd;border:1px solid #333;text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:#f4f4f4;border-color:#24d17e}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:#aaa;font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:#24d17e}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:#050505;color:#f4f4f4;border:1px solid #333;border-radius:6px;padding:8px}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:160px 180px;gap:12px;max-width:380px}
 .camera-surface video{object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%}.camera-surface[data-camera-key=alternate] video{animation:camera-pan 6s ease-in-out infinite alternate}.camera-surface[data-camera-key=jump-cut] video{animation:camera-jump 3s steps(1,end) infinite alternate}@keyframes camera-pan{0%{object-position:22% 50%}100%{object-position:78% 50%}}@keyframes camera-jump{0%{object-position:22% 50%}50%{object-position:78% 50%}100%{object-position:78% 50%}}.camera-reticle{position:absolute;inset:14% 22%;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}
 .card[data-effect=light-grain] .media video,.card[data-effect=light-grain] .media img{filter:contrast(1.08) brightness(1.02)}.card[data-effect=old-film] .media video,.card[data-effect=old-film] .media img{filter:sepia(.48) contrast(1.2) saturate(.62) brightness(.92)}.card[data-effect=vhs] .media video,.card[data-effect=vhs] .media img{filter:saturate(.62) contrast(1.22) brightness(.9) hue-rotate(-7deg)}.card[data-effect=bw-old] .media video,.card[data-effect=bw-old] .media img{filter:grayscale(1) contrast(1.22) brightness(.9)}.card[data-effect=light-grain] .media:after,.card[data-effect=old-film] .media:after,.card[data-effect=vhs] .media:after,.card[data-effect=bw-old] .media:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--effect-opacity,.24);background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 70% 65%,rgba(0,0,0,.95) 0 1px,transparent 1.8px);background-size:4px 4px,6px 6px;mix-blend-mode:overlay}.card[data-effect=old-film] .media:before,.card[data-effect=bw-old] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at center,transparent 44%,rgba(0,0,0,.46) 100%)}.card[data-effect=vhs] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 4px);mix-blend-mode:overlay}
-.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,#24d17e);border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-resize{position:absolute;right:5px;bottom:5px;width:14px;height:14px;padding:0;border:1px solid rgba(255,255,255,.42);border-radius:3px;background:rgba(255,255,255,.18);cursor:nwse-resize}.overlay-menu{position:absolute;z-index:4;display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px;max-width:min(360px,94%);padding:8px;border:1px solid #333;border-radius:8px;background:#101010;box-shadow:0 14px 42px rgba(0,0,0,.5)}.overlay-menu[hidden]{display:none}.overlay-menu button{background:#242424;color:#ddd;border:1px solid #333}
+.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,#24d17e);border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-image-box{min-width:48px;min-height:48px;padding:0;border:0;background:transparent;box-shadow:none}.overlay-image-box img{display:block;width:100%;height:auto;min-height:48px;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none}.overlay-resize{position:absolute;right:5px;bottom:5px;width:14px;height:14px;padding:0;border:1px solid rgba(255,255,255,.42);border-radius:3px;background:rgba(255,255,255,.18);cursor:nwse-resize}.overlay-menu{position:absolute;z-index:4;display:grid;gap:8px;width:min(360px,94%);padding:8px;border:1px solid #333;border-radius:8px;background:#101010;box-shadow:0 14px 42px rgba(0,0,0,.5)}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:#ddd;border:1px solid #333}.image-upload{padding:10px;border:1px dashed #333;border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:#ddd;border:1px solid #333}.overlay-empty{padding:10px;border:1px dashed #333;border-radius:8px;color:#aaa}
 p{color:#bebebe}.peak{color:#fff;font-size:16px}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}.transcript-panel details{border-top:1px solid #242424;margin-top:12px;padding-top:10px}.transcript-panel summary{cursor:pointer;color:#ddd}
 body[data-tab=final] main,body[data-tab=final] .config{display:none}body[data-tab=final] .final-stage{display:block}.final-stage{display:none;margin:18px auto;max-width:1240px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.render-status{margin-top:12px;color:#aaa}.render-results{display:grid;gap:12px;margin-top:14px}.result-item{border:1px solid #303030;border-radius:8px;background:#090909;overflow:hidden}.result-item[open]{border-color:#3b3b3b}.result-item summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;border:0;color:#f4f4f4}.result-item summary strong{font-size:14px}.result-item summary span{color:#aaa;font-size:12px}.result-body{display:grid;grid-template-columns:minmax(260px,420px) minmax(240px,1fr);gap:14px;padding:0 14px 14px}.result-body video{width:100%;max-height:70vh;background:#000;border-radius:6px;object-fit:contain}.result-meta{display:grid;align-content:start;gap:10px}.result-meta dl{margin:0}.result-actions{display:flex;gap:8px;flex-wrap:wrap}.result-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:#f4f4f4;color:#050505;text-decoration:none}.result-actions a.secondary{background:#242424;color:#ddd;border:1px solid #333}
 button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 12px;cursor:pointer}#reset-ui,button[data-action=discard]{background:#242424;color:#ddd}button[data-action=reset-trim],button[data-action=next-card]{background:#191919;color:#ddd;border:1px solid #333}
@@ -1637,11 +1808,13 @@ const state = JSON.parse(localStorage.getItem("cutted-state") || "{}");
 function save(){ localStorage.setItem("cutted-state", JSON.stringify(state)); }
 function cardState(rank){
   const raw = state[rank];
-  if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay() };
-  const next = Object.assign({ status: null, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay() }, raw || {});
+  if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], platformEdits: {} };
+  const next = Object.assign({ status: null, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], platformEdits: {} }, raw || {});
   next.camera = normalizeCamera(next.camera);
   next.effect = normalizeEffect(next.effect);
   next.overlay = normalizeOverlay(next.overlay);
+  next.overlays = normalizeOverlayLayers(next.overlays, next.overlay);
+  next.platformEdits = normalizePlatformEdits(next.platformEdits, next);
   return next;
 }
 function setCardState(rank, patch){ state[rank] = Object.assign(cardState(rank), patch); save(); }
@@ -1700,7 +1873,10 @@ function applyFormat(format){
     btn.classList.toggle("active", btn.dataset.format === next);
   });
   document.querySelectorAll(".card").forEach(card => {
-    if (!card.dataset.previewTouched) setCardPreviewFormat(card, next);
+    if (!card.dataset.previewTouched) {
+      setCardPreviewFormat(card, next);
+      if (card.open) updateCardTools(card);
+    }
     updatePlatformUi(card);
   });
   renderFinalStage();
@@ -1716,6 +1892,43 @@ function applyTab(tab){
 }
 function platformLabel(key){
   return (platformMeta[key] || { label: key }).label;
+}
+function validPlatform(format){
+  return platformMeta[format] ? format : "tiktok";
+}
+function activePlatformForRank(rank){
+  const card = cardForRank(rank);
+  return validPlatform(card?.dataset.previewFormat || document.body.dataset.format || "tiktok");
+}
+function normalizePlatformEdit(edit, fallback){
+  const source = edit && typeof edit === "object" ? edit : {};
+  const base = fallback && typeof fallback === "object" ? fallback : {};
+  const overlayFallback = source.overlay || base.overlay || defaultOverlay();
+  const overlays = normalizeOverlayLayers(source.overlays, overlayFallback);
+  return {
+    camera: normalizeCamera(source.camera || base.camera || defaultCamera()),
+    effect: normalizeEffect(source.effect || base.effect || defaultEffect()),
+    overlay: overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
+    overlays
+  };
+}
+function normalizePlatformEdits(edits, fallback){
+  if (!edits || typeof edits !== "object") return {};
+  return Object.fromEntries(Object.entries(edits)
+    .filter(([key]) => platformMeta[key])
+    .map(([key, edit]) => [key, normalizePlatformEdit(edit, fallback)]));
+}
+function platformEditForRank(rank, platform = activePlatformForRank(rank)){
+  const current = cardState(String(rank));
+  return normalizePlatformEdit(current.platformEdits[validPlatform(platform)], current);
+}
+function setPlatformEditForRank(rank, platform, patch){
+  const key = validPlatform(platform);
+  const current = cardState(String(rank));
+  const edit = normalizePlatformEdit(Object.assign({}, platformEditForRank(rank, key), patch), current);
+  setCardState(String(rank), {
+    platformEdits: Object.assign({}, current.platformEdits, { [key]: edit })
+  });
 }
 function defaultCamera(){ return cameraSequence(cameraParts.map(part => defaultCameraSegment(part.key))); }
 function defaultCameraSegment(part){ return { part, part_label: cameraPartLabel(part), key: "center", label: cameraMeta.center.label, strength: 60 }; }
@@ -1735,15 +1948,15 @@ function cameraLabel(camera){
   if (!active.length) return cameraMeta.center.label;
   return active.map(segment => `${segment.part_label}: ${segment.label}`).join(" | ");
 }
-function cameraForRank(rank){ return normalizeCamera(cardState(String(rank)).camera); }
+function cameraForRank(rank, platform = activePlatformForRank(rank)){ return platformEditForRank(rank, platform).camera; }
 function setCameraSegmentForRank(rank, part, patch){
-  const current = cardState(String(rank));
-  const camera = normalizeCamera(current.camera);
+  const platform = activePlatformForRank(rank);
+  const camera = cameraForRank(rank, platform);
   const segments = camera.segments.map(segment => {
     if (segment.part !== part) return segment;
     return normalizeCameraSegment(Object.assign({}, segment, patch), part);
   });
-  setCardState(String(rank), { camera: cameraSequence(segments) });
+  setPlatformEditForRank(rank, platform, { camera: cameraSequence(segments) });
   const card = cardForRank(rank);
   if (card) updateCameraUi(card);
   renderFinalStage();
@@ -1779,10 +1992,11 @@ function effectLabel(effect){
   const current = normalizeEffect(effect);
   return current.key === "none" ? current.label : `${current.label} - ${current.intensity}%`;
 }
-function effectForRank(rank){ return normalizeEffect(cardState(String(rank)).effect); }
+function effectForRank(rank, platform = activePlatformForRank(rank)){ return platformEditForRank(rank, platform).effect; }
 function setEffectForRank(rank, patch){
-  const current = cardState(String(rank));
-  setCardState(String(rank), { effect: normalizeEffect(Object.assign({}, current.effect, patch)) });
+  const platform = activePlatformForRank(rank);
+  const current = effectForRank(rank, platform);
+  setPlatformEditForRank(rank, platform, { effect: normalizeEffect(Object.assign({}, current, patch)) });
   const card = cardForRank(rank);
   if (card) updateEffectUi(card);
   renderFinalStage();
@@ -1792,10 +2006,15 @@ function effectOpacity(effect){
   return current.key === "none" ? 0 : Math.max(.12, current.intensity / 185);
 }
 function defaultOverlay(){ return { key: "none", label: overlayMeta.none.label, x: .62, y: .78, width: .34, opacity: 95 }; }
+function overlayId(){
+  return `layer-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
 function normalizeOverlay(overlay){
   const key = overlayMeta[overlay?.key] ? overlay.key : "none";
   if (key === "none") return defaultOverlay();
   return {
+    id: String(overlay?.id || overlayId()),
+    kind: "cta",
     key,
     label: overlayMeta[key].label,
     x: clampNumber(overlay?.x ?? .62, 0, 1),
@@ -1804,13 +2023,62 @@ function normalizeOverlay(overlay){
     opacity: clampNumber(overlay?.opacity ?? 95, 35, 100)
   };
 }
-function overlayForRank(rank){ return normalizeOverlay(cardState(String(rank)).overlay); }
-function setOverlayForRank(rank, patch, rerender = true){
-  const current = cardState(String(rank));
-  setCardState(String(rank), { overlay: normalizeOverlay(Object.assign({}, current.overlay, patch)) });
+function normalizeImageOverlay(layer){
+  return {
+    id: String(layer?.id || overlayId()),
+    kind: "image",
+    key: "image",
+    label: String(layer?.label || "Imagem"),
+    x: clampNumber(layer?.x ?? .58, 0, 1),
+    y: clampNumber(layer?.y ?? .68, 0, 1),
+    width: clampNumber(layer?.width ?? .28, .08, .9),
+    opacity: clampNumber(layer?.opacity ?? 100, 10, 100),
+    image_data_url: String(layer?.image_data_url || ""),
+    image_file: String(layer?.image_file || "")
+  };
+}
+function normalizeOverlayLayer(layer){
+  if (layer?.kind === "image" || layer?.key === "image") return normalizeImageOverlay(layer);
+  return normalizeOverlay(layer);
+}
+function normalizeOverlayLayers(layers, fallback){
+  const source = Array.isArray(layers) ? layers : [];
+  const normalized = source.map(normalizeOverlayLayer).filter(layer => layer.key !== "none");
+  if (normalized.length) return normalized;
+  const legacy = normalizeOverlay(fallback);
+  return legacy.key === "none" ? [] : [legacy];
+}
+function overlayLayersForRank(rank, platform = activePlatformForRank(rank)){ return platformEditForRank(rank, platform).overlays; }
+function primaryOverlayForRank(rank, platform = activePlatformForRank(rank)){
+  const layers = overlayLayersForRank(rank, platform).filter(layer => layer.kind !== "image");
+  return layers[0] || defaultOverlay();
+}
+function setOverlayLayersForRank(rank, layers, rerender = true){
+  const platform = activePlatformForRank(rank);
+  const normalized = normalizeOverlayLayers(layers, defaultOverlay());
+  setPlatformEditForRank(rank, platform, { overlays: normalized, overlay: normalized.find(layer => layer.kind !== "image") || defaultOverlay() });
   const card = cardForRank(rank);
   if (card && rerender) updateOverlayUi(card);
   renderFinalStage();
+}
+function addOverlayLayerForRank(rank, layer){
+  setOverlayLayersForRank(rank, [...overlayLayersForRank(rank), normalizeOverlayLayer(layer)]);
+}
+function patchOverlayLayerForRank(rank, id, patch, rerender = true){
+  const layers = overlayLayersForRank(rank).map(layer => layer.id === id ? normalizeOverlayLayer(Object.assign({}, layer, patch)) : layer);
+  setOverlayLayersForRank(rank, layers, rerender);
+}
+function removeOverlayLayerForRank(rank, id){
+  setOverlayLayersForRank(rank, overlayLayersForRank(rank).filter(layer => layer.id !== id));
+}
+function setOverlayForRank(rank, patch, rerender = true){
+  const layers = overlayLayersForRank(rank);
+  const first = layers.find(layer => layer.kind !== "image");
+  if (first) {
+    patchOverlayLayerForRank(rank, first.id, patch, rerender);
+    return;
+  }
+  setOverlayLayersForRank(rank, [normalizeOverlay(Object.assign({}, defaultOverlay(), patch))], rerender);
 }
 function overlayLabel(overlay){
   const current = normalizeOverlay(overlay);
@@ -1835,11 +2103,13 @@ function statusLabel(status){
   return "Pendente";
 }
 function setCardPreviewFormat(card, format){
-  const next = platformMeta[format] ? format : "tiktok";
+  const next = validPlatform(format);
   card.dataset.previewFormat = next;
   card.querySelectorAll("[data-card-format-preview]").forEach(button => {
     button.classList.toggle("active", button.dataset.cardFormatPreview === next);
   });
+  const status = card.querySelector("[data-platform-preset-current]");
+  if (status) status.textContent = `Editando preset: ${platformLabel(next)}`;
 }
 function updateCardTools(card){
   updateCameraUi(card);
@@ -1899,55 +2169,118 @@ function bindCardEffectControls(card){
   intensity.addEventListener("change", () => setEffectForRank(rank, { intensity: Number(intensity.value) }));
 }
 function updateOverlayUi(card){
-  const overlay = overlayForRank(card.dataset.rank);
-  const meta = overlayMeta[overlay.key] || overlayMeta.none;
+  const layers = overlayLayersForRank(card.dataset.rank);
   const summary = card.querySelector("[data-overlay-current]");
-  if (summary) summary.textContent = overlayLabel(overlay);
-  const box = card.querySelector("[data-overlay-drag]");
-  if (box) {
-    box.dataset.overlayKey = overlay.key;
-    box.setAttribute("style", overlayStyle(overlay));
-    box.querySelector("strong").textContent = meta.title;
-    box.querySelector("em").textContent = meta.subtitle;
-  }
+  if (summary) summary.textContent = layers.length ? `${layers.length} camada(s)` : "Sem chamada";
+  renderOverlayLayerBoxes(card, layers);
   const container = card.querySelector("[data-card-overlay]");
   if (!container) return;
+  const primary = primaryOverlayForRank(card.dataset.rank);
   container.innerHTML = `<div class="overlay-card-controls">
-    <div class="overlay-card-buttons" role="group" aria-label="Chamada do corte ${escapeAttr(card.dataset.rank)}">${overlayButtonsHtml(overlay)}</div>
+    <div class="overlay-card-buttons" role="group" aria-label="Adicionar chamada no corte ${escapeAttr(card.dataset.rank)}">${overlayButtonsHtml(primary)}</div>
+    <label class="image-upload">Imagem transparente
+      <input data-overlay-image type="file" accept="image/png,image/webp,image/jpeg">
+    </label>
+    <div class="overlay-layer-list" data-overlay-layer-controls>${overlayLayerControlsHtml(layers)}</div>
     <div class="overlay-tools">
       <label>Opacidade
-        <input data-preview-overlay-opacity type="range" min="35" max="100" step="5" value="${overlay.opacity}">
+        <input data-preview-overlay-opacity type="range" min="10" max="100" step="5" value="${(layers[0] || defaultOverlay()).opacity}">
       </label>
       <button data-overlay-reset>Resetar posicao</button>
     </div>
   </div>`;
   bindCardOverlayControls(card);
 }
+function renderOverlayLayerBoxes(card, layers){
+  const list = card.querySelector("[data-overlay-layer-list]");
+  if (!list) return;
+  list.innerHTML = layers.map(overlayLayerBoxHtml).join("");
+}
+function overlayLayerBoxHtml(layer){
+  if (layer.kind === "image") {
+    const src = layer.image_data_url || layer.image_file || "";
+    return `<div class="overlay-box overlay-image-box" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="image" style="${escapeAttr(overlayStyle(layer))}">
+      <img src="${escapeAttr(src)}" alt="${escapeAttr(layer.label)}">
+      <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
+    </div>`;
+  }
+  const meta = overlayMeta[layer.key] || overlayMeta.none;
+  return `<div class="overlay-box" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="${escapeAttr(layer.key)}" style="${escapeAttr(overlayStyle(layer))}">
+    <strong>${escapeHtml(meta.title)}</strong>
+    <em>${escapeHtml(meta.subtitle)}</em>
+    <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
+  </div>`;
+}
+function overlayLayerControlsHtml(layers){
+  if (!layers.length) return '<div class="overlay-empty">Clique no preview ou envie uma imagem.</div>';
+  return layers.map((layer, index) => {
+    const label = layer.kind === "image" ? layer.label : (overlayMeta[layer.key]?.label || layer.label);
+    return `<div class="overlay-layer-row" data-overlay-layer-row="${escapeAttr(layer.id)}">
+      <span>${index + 1}. ${escapeHtml(label)}</span>
+      <button data-overlay-remove="${escapeAttr(layer.id)}">Remover</button>
+    </div>`;
+  }).join("");
+}
 function overlayPlaceButtonsHtml(){
-  return Object.entries(overlayMeta).filter(([key]) => key !== "none").map(([key, meta]) => {
+  const actions = Object.entries(overlayMeta).filter(([key]) => key !== "none").map(([key, meta]) => {
     return `<button data-overlay-place="${escapeAttr(key)}">${escapeHtml(meta.label)}</button>`;
   }).join("");
+  return `<div class="overlay-menu-head"><strong>Chamada</strong><button data-overlay-close>Fechar</button></div><div class="overlay-menu-actions">${actions}</div>`;
 }
 function bindCardOverlayControls(card){
   const rank = card.dataset.rank;
   card.querySelectorAll("[data-preview-overlay]").forEach(button => {
-    button.addEventListener("click", () => setOverlayForRank(rank, { key: button.dataset.previewOverlay }));
+    button.addEventListener("click", () => addOverlayLayerForRank(rank, { key: button.dataset.previewOverlay, x: .62, y: .78 }));
   });
   const opacity = card.querySelector("[data-preview-overlay-opacity]");
   if (opacity) {
-    opacity.addEventListener("input", () => setOverlayForRank(rank, { opacity: Number(opacity.value) }));
-    opacity.addEventListener("change", () => setOverlayForRank(rank, { opacity: Number(opacity.value) }));
+    const update = () => {
+      const first = overlayLayersForRank(rank)[0];
+      if (first) patchOverlayLayerForRank(rank, first.id, { opacity: Number(opacity.value) });
+    };
+    opacity.addEventListener("input", update);
+    opacity.addEventListener("change", update);
   }
   const reset = card.querySelector("[data-overlay-reset]");
-  if (reset) reset.addEventListener("click", () => setOverlayForRank(rank, { x: .62, y: .78, width: .34 }));
+  if (reset) reset.addEventListener("click", () => {
+    const layers = overlayLayersForRank(rank).map(layer => Object.assign({}, layer, { x: .62, y: .78, width: layer.kind === "image" ? .28 : .34 }));
+    setOverlayLayersForRank(rank, layers);
+  });
+  card.querySelectorAll("[data-overlay-remove]").forEach(button => {
+    button.addEventListener("click", () => removeOverlayLayerForRank(rank, button.dataset.overlayRemove));
+  });
+  const imageInput = card.querySelector("[data-overlay-image]");
+  if (imageInput) imageInput.addEventListener("change", () => addImageOverlayFromInput(card, imageInput));
   bindOverlayDrag(card);
   bindOverlayPlacement(card);
+}
+function addImageOverlayFromInput(card, input){
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    addOverlayLayerForRank(card.dataset.rank, {
+      id: overlayId(),
+      kind: "image",
+      key: "image",
+      label: file.name,
+      image_data_url: String(reader.result || ""),
+      x: .56,
+      y: .66,
+      width: .28,
+      opacity: 100
+    });
+    input.value = "";
+  };
+  reader.readAsDataURL(file);
 }
 function bindOverlayPlacement(card){
   const surface = card.querySelector("[data-overlay-surface]");
   const menu = card.querySelector("[data-overlay-menu]");
   if (!surface || !menu) return;
   menu.innerHTML = overlayPlaceButtonsHtml();
+  const closeMenu = () => { menu.hidden = true; };
+  menu.querySelector("[data-overlay-close]")?.addEventListener("click", closeMenu);
   surface.onclick = event => {
     if (event.target.closest("[data-overlay-drag]") || event.target.closest("[data-overlay-menu]")) return;
     const rect = surface.getBoundingClientRect();
@@ -1961,9 +2294,16 @@ function bindOverlayPlacement(card){
   };
   menu.querySelectorAll("[data-overlay-place]").forEach(button => {
     button.addEventListener("click", () => {
-      setOverlayForRank(card.dataset.rank, { key: button.dataset.overlayPlace, x: Number(menu.dataset.x), y: Number(menu.dataset.y) });
-      menu.hidden = true;
+      addOverlayLayerForRank(card.dataset.rank, { key: button.dataset.overlayPlace, x: Number(menu.dataset.x), y: Number(menu.dataset.y) });
+      closeMenu();
     });
+  });
+  document.addEventListener("pointerdown", event => {
+    if (menu.hidden || surface.contains(event.target)) return;
+    closeMenu();
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") closeMenu();
   });
 }
 function updatePlatformUi(card){
@@ -1974,8 +2314,8 @@ function updatePlatformUi(card){
   });
   const fallback = document.body.dataset.format || "tiktok";
   const summary = platforms.length
-    ? platforms.map(platformLabel).join(", ")
-    : (current.status === "liked" ? `Formato atual: ${platformLabel(fallback)}` : "Nenhum destino marcado");
+    ? `Na fila: ${platforms.map(platformLabel).join(", ")}`
+    : (current.status === "liked" ? `Fila usa formato atual: ${platformLabel(fallback)}` : "Fora da fila final");
   card.querySelectorAll("[data-platform-summary]").forEach(item => { item.textContent = summary; });
   const status = card.querySelector("[data-status-pill]");
   if (status) status.textContent = statusLabel(current.status);
@@ -2075,7 +2415,9 @@ function adjustedMoment(moment){
     adjusted_duration: Number((moment.end - trimEnd - moment.start - trimStart).toFixed(3)),
     camera: cameraForRank(moment.rank),
     effect: effectForRank(moment.rank),
-    overlay: overlayForRank(moment.rank)
+    overlay: primaryOverlayForRank(moment.rank),
+    overlays: overlayLayersForRank(moment.rank),
+    platform_edits: current.platformEdits
   });
 }
 function buildExportData(){
@@ -2084,27 +2426,32 @@ function buildExportData(){
   const adjusted = data.moments.map(adjustedMoment);
   data.moments = adjusted;
   data.selected = adjusted.filter(m => m.status === "liked" || m.platforms.length > 0);
-  data.caption_queue = data.selected.flatMap(moment => captionPlatforms(moment, data.export_format).map(platform => ({
-    rank: moment.rank,
-    platform,
-    platform_label: platformLabel(platform),
-    width: platformMeta[platform]?.width || null,
-    height: platformMeta[platform]?.height || null,
-    publish_metadata: publishMetadata(platform, moment),
-    trim_start_seconds: moment.trim_start_seconds,
-    trim_end_seconds: moment.trim_end_seconds,
-    adjusted_start: moment.adjusted_start,
-    adjusted_end: moment.adjusted_end,
-    adjusted_duration: moment.adjusted_duration,
-    camera: moment.camera,
-    effect: moment.effect,
-    overlay: moment.overlay,
-    clip_file: moment.clip_file,
-    title: moment.title,
-    peak_text: moment.peak_text,
-    transcript: moment.transcript,
-    caption_segments: moment.caption_segments || []
-  })));
+  data.caption_queue = data.selected.flatMap(moment => captionPlatforms(moment, data.export_format).map(platform => {
+    const edit = platformEditForRank(moment.rank, platform);
+    const overlays = edit.overlays;
+    return {
+      rank: moment.rank,
+      platform,
+      platform_label: platformLabel(platform),
+      width: platformMeta[platform]?.width || null,
+      height: platformMeta[platform]?.height || null,
+      publish_metadata: publishMetadata(platform, moment),
+      trim_start_seconds: moment.trim_start_seconds,
+      trim_end_seconds: moment.trim_end_seconds,
+      adjusted_start: moment.adjusted_start,
+      adjusted_end: moment.adjusted_end,
+      adjusted_duration: moment.adjusted_duration,
+      camera: edit.camera,
+      effect: edit.effect,
+      overlay: overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
+      overlays,
+      clip_file: moment.clip_file,
+      title: moment.title,
+      peak_text: moment.peak_text,
+      transcript: moment.transcript,
+      caption_segments: moment.caption_segments || []
+    };
+  }));
   return data;
 }
 function captionPlatforms(moment, exportFormat){
@@ -2378,58 +2725,61 @@ function bindOverlayPreviewControls(){
 }
 function bindOverlayDrag(item){
   const surface = item.querySelector("[data-overlay-surface]");
-  const box = item.querySelector("[data-overlay-drag]");
-  if (!surface || !box || box.dataset.overlayKey === "none") return;
-  let drag = null;
-  const startDrag = event => {
-    const resizing = event.target?.hasAttribute?.("data-overlay-resize");
-    const surfaceRect = surface.getBoundingClientRect();
-    const boxRect = box.getBoundingClientRect();
-    drag = {
-      type: resizing ? "resize" : "move",
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      startLeft: boxRect.left - surfaceRect.left,
-      startTop: boxRect.top - surfaceRect.top,
-      startWidth: boxRect.width,
-      surfaceWidth: surfaceRect.width,
-      surfaceHeight: surfaceRect.height
-    };
-    box.setPointerCapture(event.pointerId);
-    event.preventDefault();
-  };
-  const moveDrag = event => {
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    const dx = event.clientX - drag.startX;
-    const dy = event.clientY - drag.startY;
-    const next = overlayForRank(item.dataset.rank);
-    if (drag.type === "resize") {
-      const width = clampNumber((drag.startWidth + dx) / drag.surfaceWidth, .18, .72);
-      box.style.setProperty("--overlay-width", width);
-      next.width = width;
-    } else {
+  if (!surface) return;
+  item.querySelectorAll("[data-overlay-drag]").forEach(box => {
+    if (box.dataset.overlayKey === "none") return;
+    let drag = null;
+    const startDrag = event => {
+      const resizing = event.target?.hasAttribute?.("data-overlay-resize");
+      const surfaceRect = surface.getBoundingClientRect();
       const boxRect = box.getBoundingClientRect();
-      const maxLeft = Math.max(drag.surfaceWidth - boxRect.width, 0);
-      const maxTop = Math.max(drag.surfaceHeight - boxRect.height, 0);
-      const left = clampNumber(drag.startLeft + dx, 0, maxLeft);
-      const top = clampNumber(drag.startTop + dy, 0, maxTop);
-      next.x = drag.surfaceWidth ? left / drag.surfaceWidth : 0;
-      next.y = drag.surfaceHeight ? top / drag.surfaceHeight : 0;
-      box.style.setProperty("--overlay-x", next.x);
-      box.style.setProperty("--overlay-y", next.y);
-    }
-    setOverlayForRank(item.dataset.rank, next, false);
-  };
-  const endDrag = event => {
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    drag = null;
-    updateOverlayUi(item);
-  };
-  box.onpointerdown = startDrag;
-  box.onpointermove = moveDrag;
-  box.onpointerup = endDrag;
-  box.onpointercancel = endDrag;
+      drag = {
+        type: resizing ? "resize" : "move",
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        startLeft: boxRect.left - surfaceRect.left,
+        startTop: boxRect.top - surfaceRect.top,
+        startWidth: boxRect.width,
+        surfaceWidth: surfaceRect.width,
+        surfaceHeight: surfaceRect.height
+      };
+      box.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    };
+    const moveDrag = event => {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      const dx = event.clientX - drag.startX;
+      const dy = event.clientY - drag.startY;
+      const patch = {};
+      if (drag.type === "resize") {
+        const minWidth = box.dataset.overlayKey === "image" ? .08 : .18;
+        const width = clampNumber((drag.startWidth + dx) / drag.surfaceWidth, minWidth, .9);
+        box.style.setProperty("--overlay-width", width);
+        patch.width = width;
+      } else {
+        const boxRect = box.getBoundingClientRect();
+        const maxLeft = Math.max(drag.surfaceWidth - boxRect.width, 0);
+        const maxTop = Math.max(drag.surfaceHeight - boxRect.height, 0);
+        const left = clampNumber(drag.startLeft + dx, 0, maxLeft);
+        const top = clampNumber(drag.startTop + dy, 0, maxTop);
+        patch.x = drag.surfaceWidth ? left / drag.surfaceWidth : 0;
+        patch.y = drag.surfaceHeight ? top / drag.surfaceHeight : 0;
+        box.style.setProperty("--overlay-x", patch.x);
+        box.style.setProperty("--overlay-y", patch.y);
+      }
+      patchOverlayLayerForRank(item.dataset.rank, box.dataset.overlayLayer, patch, false);
+    };
+    const endDrag = event => {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      drag = null;
+      updateOverlayUi(item);
+    };
+    box.onpointerdown = startDrag;
+    box.onpointermove = moveDrag;
+    box.onpointerup = endDrag;
+    box.onpointercancel = endDrag;
+  });
 }
 function renderFinalStage(){
   const queue = buildExportData().caption_queue || [];
@@ -2437,7 +2787,7 @@ function renderFinalStage(){
   if (summary) {
     const cameraCount = queue.filter(item => cameraHasMovement(item.camera)).length;
     const effectCount = queue.filter(item => normalizeEffect(item.effect).key !== "none").length;
-    const overlayCount = queue.filter(item => normalizeOverlay(item.overlay).key !== "none").length;
+    const overlayCount = queue.reduce((count, item) => count + normalizeOverlayLayers(item.overlays, item.overlay).length, 0);
     summary.textContent = queue.length
       ? `${queue.length} video(s) na fila; ${cameraCount} com camera; ${effectCount} com efeito; ${overlayCount} com chamada.`
       : "Selecione cortes antes de renderizar.";
@@ -2597,6 +2947,8 @@ document.querySelectorAll(".card").forEach(card => {
     button.addEventListener("click", () => {
       card.dataset.previewTouched = "1";
       setCardPreviewFormat(card, button.dataset.cardFormatPreview);
+      updateCardTools(card);
+      renderFinalStage();
     });
   });
   const video = card.querySelector("video");
