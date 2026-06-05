@@ -1005,6 +1005,8 @@ def overlay_layer_filter(overlay: dict[str, object], preset: PlatformPreset) -> 
         return ""
     if overlay.get("kind") == "image":
         return image_overlay_filter(overlay, preset)
+    if overlay.get("kind") == "text":
+        return text_overlay_filter(overlay, preset)
     card = OVERLAY_PRESETS[str(overlay["key"])]
     box_w = int(round(preset.width * float(overlay["width"])))
     box_h = max(int(round(box_w * 0.28)), int(round(preset.height * 0.052)))
@@ -1027,6 +1029,33 @@ def overlay_layer_filter(overlay: dict[str, object], preset: PlatformPreset) -> 
         f"drawtext=fontfile='{font}':text='{title}':x={text_x}:y={title_y}:fontsize={title_size}:fontcolor=white",
         f"drawtext=fontfile='{font}':text='{subtitle}':x={text_x}:y={subtitle_y}:fontsize={subtitle_size}:fontcolor=white@0.78",
     ])
+
+
+def text_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> str:
+    text = str(overlay.get("text") or overlay.get("label") or "").strip()
+    if not text:
+        return ""
+    box_w = int(round(preset.width * float(overlay["width"])))
+    font_size = max(18, int(round(float(overlay["font_size"]) * preset.width / 1080.0)))
+    box_h = max(int(round(font_size * 1.65)), int(round(preset.height * 0.04)))
+    x = min(int(round(preset.width * float(overlay["x"]))), max(preset.width - box_w, 0))
+    y = min(int(round(preset.height * float(overlay["y"]))), max(preset.height - box_h, 0))
+    pad = max(10, int(round(font_size * 0.35)))
+    text_y = y + max(6, int(round((box_h - font_size) / 2)))
+    opacity = clamp(float(overlay["opacity"]) / 100.0, 0.1, 1.0)
+    font = ffmpeg_filter_path(find_overlay_font())
+    color = ffmpeg_color(str(overlay.get("color") or "#ffffff"))
+    escaped_text = ffmpeg_text_value(text)
+    filters = []
+    if bool(overlay.get("background_enabled")):
+        background = ffmpeg_color(str(overlay.get("background_color") or "#000000"))
+        background_opacity = clamp(float(overlay.get("background_opacity") or 70.0) / 100.0, 0.0, 1.0)
+        filters.append(f"drawbox=x={x}:y={y}:w={box_w}:h={box_h}:color={background}@{background_opacity:.2f}:t=fill")
+    filters.append(
+        f"drawtext=fontfile='{font}':text='{escaped_text}':x={x + pad}:y={text_y}:"
+        f"fontsize={font_size}:fontcolor={color}@{opacity:.2f}"
+    )
+    return ",".join(filters)
 
 
 def image_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> str:
@@ -1064,6 +1093,8 @@ def overlay_layers_from_row(row: dict[str, object]) -> list[dict[str, object]]:
 def overlay_layer_from_raw(raw: dict[str, object]) -> dict[str, object]:
     if str(raw.get("kind") or raw.get("key") or "") == "image":
         return image_overlay_from_raw(raw)
+    if str(raw.get("kind") or raw.get("key") or "") == "text":
+        return text_overlay_from_raw(raw)
     return overlay_from_raw(raw)
 
 
@@ -1103,6 +1134,33 @@ def image_overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
     }
 
 
+def text_overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
+    text = str(raw.get("text") or raw.get("label") or "").strip()
+    if not text:
+        return default_overlay()
+    return {
+        "id": str(raw.get("id") or ""),
+        "kind": "text",
+        "key": "text",
+        "label": text,
+        "text": text,
+        "x": clamp(float(raw.get("x") if raw.get("x") is not None else 0.36), 0.0, 1.0),
+        "y": clamp(float(raw.get("y") if raw.get("y") is not None else 0.34), 0.0, 1.0),
+        "width": clamp(float(raw.get("width") if raw.get("width") is not None else 0.42), 0.16, 0.9),
+        "opacity": clamp(float(raw.get("opacity") if raw.get("opacity") is not None else 100.0), 10.0, 100.0),
+        "font_size": clamp(float(raw.get("font_size") if raw.get("font_size") is not None else 44.0), 14.0, 96.0),
+        "font_weight": str(raw.get("font_weight") or "700"),
+        "color": safe_hex_color(str(raw.get("color") or "#ffffff"), "#ffffff"),
+        "background_enabled": bool(raw.get("background_enabled", True)),
+        "background_color": safe_hex_color(str(raw.get("background_color") or "#000000"), "#000000"),
+        "background_opacity": clamp(
+            float(raw.get("background_opacity") if raw.get("background_opacity") is not None else 70.0),
+            0.0,
+            100.0,
+        ),
+    }
+
+
 def default_overlay() -> dict[str, object]:
     return {"id": "", "kind": "cta", "key": "none", "label": OVERLAY_PRESETS["none"].label, "x": 0.62, "y": 0.78, "width": 0.34, "opacity": 95}
 
@@ -1126,6 +1184,23 @@ def ffmpeg_filter_path(path: Path) -> str:
 
 def ffmpeg_text_value(value: str) -> str:
     return value.replace("\\", r"\\").replace(":", r"\:").replace("'", r"\'")
+
+
+def safe_hex_color(value: str, fallback: str) -> str:
+    color = value.strip()
+    if len(color) == 7 and color.startswith("#"):
+        digits = color[1:]
+    elif len(color) == 6:
+        digits = color
+    else:
+        return fallback
+    if all(char in "0123456789abcdefABCDEF" for char in digits):
+        return f"#{digits.lower()}"
+    return fallback
+
+
+def ffmpeg_color(value: str) -> str:
+    return "0x" + safe_hex_color(value, "#ffffff").removeprefix("#")
 
 
 def clamp(value: float, minimum: float, maximum: float) -> float:
@@ -1608,6 +1683,7 @@ def card_html(moment: Moment) -> str:
               <div class="camera-reticle"></div>
               <div data-overlay-layer-list></div>
               <div class="overlay-menu" data-overlay-menu hidden></div>
+              <input data-overlay-image type="file" accept="image/png,image/webp,image/jpeg" hidden>
             </div>
             <div class="preview-bar">
               <div class="preview-controls" aria-label="Controles do preview">
@@ -1634,7 +1710,6 @@ def card_html(moment: Moment) -> str:
             <button data-card-panel="cut" class="active">Corte</button>
             <button data-card-panel="camera">Camera</button>
             <button data-card-panel="effects">Efeitos</button>
-            <button data-card-panel="overlays">Chamadas</button>
             <button data-card-panel="captions">Legenda</button>
             <button data-card-panel="transcript">Transcript</button>
           </nav>
@@ -1670,10 +1745,6 @@ def card_html(moment: Moment) -> str:
           <section class="tool-panel" data-panel="effects">
             <div class="tool-summary" data-effect-current>Sem efeito</div>
             <div data-card-effect></div>
-          </section>
-          <section class="tool-panel" data-panel="overlays">
-            <div class="tool-summary" data-overlay-current>Sem chamada</div>
-            <div data-card-overlay></div>
           </section>
           <section class="tool-panel" data-panel="captions">
             <div class="caption-settings" aria-label="Configuracao de legenda">
@@ -1801,7 +1872,7 @@ main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px
 .platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:#191919;color:#ddd;border:1px solid #333;text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:#f4f4f4;border-color:#24d17e}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:#aaa;font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:#24d17e}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:#050505;color:#f4f4f4;border:1px solid #333;border-radius:6px;padding:8px}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:160px 180px;gap:12px;max-width:380px}
 .camera-surface video{object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%}.camera-surface[data-camera-key=alternate] video{animation:camera-pan 6s ease-in-out infinite alternate}.camera-surface[data-camera-key=jump-cut] video{animation:camera-jump 3s steps(1,end) infinite alternate}@keyframes camera-pan{0%{object-position:22% 50%}100%{object-position:78% 50%}}@keyframes camera-jump{0%{object-position:22% 50%}50%{object-position:78% 50%}100%{object-position:78% 50%}}.camera-reticle{position:absolute;inset:14% 22%;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}
 .card[data-effect=light-grain] .media video,.card[data-effect=light-grain] .media img{filter:contrast(1.08) brightness(1.02)}.card[data-effect=old-film] .media video,.card[data-effect=old-film] .media img{filter:sepia(.48) contrast(1.2) saturate(.62) brightness(.92)}.card[data-effect=vhs] .media video,.card[data-effect=vhs] .media img{filter:saturate(.62) contrast(1.22) brightness(.9) hue-rotate(-7deg)}.card[data-effect=bw-old] .media video,.card[data-effect=bw-old] .media img{filter:grayscale(1) contrast(1.22) brightness(.9)}.card[data-effect=light-grain] .media:after,.card[data-effect=old-film] .media:after,.card[data-effect=vhs] .media:after,.card[data-effect=bw-old] .media:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--effect-opacity,.24);background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 70% 65%,rgba(0,0,0,.95) 0 1px,transparent 1.8px);background-size:4px 4px,6px 6px;mix-blend-mode:overlay}.card[data-effect=old-film] .media:before,.card[data-effect=bw-old] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at center,transparent 44%,rgba(0,0,0,.46) 100%)}.card[data-effect=vhs] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 4px);mix-blend-mode:overlay}
-.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,#24d17e);border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none;pointer-events:auto}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-image-box{display:grid;place-items:center;min-width:72px;min-height:72px;padding:6px;border:1px dashed rgba(255,255,255,.42);background:rgba(0,0,0,.12);box-shadow:0 8px 24px rgba(0,0,0,.22)}.overlay-image-box img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none;background:transparent}.overlay-resize{position:absolute;right:5px;bottom:5px;width:14px;height:14px;padding:0;border:1px solid rgba(255,255,255,.42);border-radius:3px;background:rgba(255,255,255,.18);cursor:nwse-resize}.overlay-menu{position:absolute;z-index:6;display:grid;gap:8px;width:min(360px,94%);padding:8px;border:1px solid #333;border-radius:8px;background:#101010;box-shadow:0 14px 42px rgba(0,0,0,.5);touch-action:none}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px;cursor:move}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:#ddd;border:1px solid #333}.image-upload{padding:10px;border:1px dashed #333;border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:#ddd;border:1px solid #333}.overlay-empty{padding:10px;border:1px dashed #333;border-radius:8px;color:#aaa}
+.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,#24d17e);border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none;pointer-events:auto}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-text-box{display:grid;align-items:center;min-width:96px;min-height:34px;padding:8px 12px;border-left:0;background:rgba(var(--overlay-bg-rgb,0,0,0),var(--overlay-bg-opacity,.7));color:var(--overlay-color,#fff);font-weight:700;font-size:clamp(13px,var(--overlay-font-size,20px),36px);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.overlay-text-box[data-overlay-bg=off]{background:transparent;box-shadow:none}.overlay-text-box span{opacity:var(--overlay-opacity,1);overflow:hidden;text-overflow:ellipsis}.overlay-box.is-selected{outline:2px solid #f5b03d;outline-offset:2px}.overlay-image-box{display:grid;place-items:center;min-width:72px;min-height:72px;padding:6px;border:1px dashed rgba(255,255,255,.42);background:rgba(0,0,0,.12);box-shadow:0 8px 24px rgba(0,0,0,.22)}.overlay-image-box img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none;background:transparent}.overlay-resize{position:absolute;right:5px;bottom:5px;width:14px;height:14px;padding:0;border:1px solid rgba(255,255,255,.42);border-radius:3px;background:rgba(255,255,255,.18);cursor:nwse-resize}.overlay-menu{position:absolute;z-index:6;display:grid;gap:8px;width:min(360px,94%);padding:8px;border:1px solid #333;border-radius:8px;background:#101010;box-shadow:0 14px 42px rgba(0,0,0,.5);touch-action:none}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px;cursor:move}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:#ddd;border:1px solid #333}.overlay-inspector{display:grid;gap:8px}.overlay-inspector label{display:grid;gap:5px;color:#aaa;font-size:12px}.overlay-inspector input[type=text],.overlay-inspector input[type=number]{width:100%;background:#050505;color:#f4f4f4;border:1px solid #333;border-radius:6px;padding:8px}.overlay-inspector input[type=color]{width:42px;height:32px;padding:2px;border:1px solid #333;border-radius:6px;background:#050505}.overlay-inspector-row{display:flex;gap:8px;align-items:center}.overlay-inspector-row>*{flex:1}.overlay-inspector-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.overlay-inspector-check input{width:auto}.overlay-danger{color:#ffb3b3!important;border-color:#5b2626!important;background:#251111!important}.image-upload{padding:10px;border:1px dashed #333;border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:#ddd;border:1px solid #333}.overlay-empty{padding:10px;border:1px dashed #333;border-radius:8px;color:#aaa}
 p{color:#bebebe}.peak{color:#fff;font-size:16px}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}.transcript-panel details{border-top:1px solid #242424;margin-top:12px;padding-top:10px}.transcript-panel summary{cursor:pointer;color:#ddd}
 body[data-tab=final] main,body[data-tab=final] .config{display:none}body[data-tab=final] .final-stage{display:block}.final-stage{display:none;margin:18px auto;max-width:1240px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.render-status{margin-top:12px;color:#aaa}.render-results{display:grid;gap:12px;margin-top:14px}.result-item{border:1px solid #303030;border-radius:8px;background:#090909;overflow:hidden}.result-item[open]{border-color:#3b3b3b}.result-item summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;border:0;color:#f4f4f4}.result-item summary strong{font-size:14px}.result-item summary span{color:#aaa;font-size:12px}.result-body{display:grid;grid-template-columns:minmax(260px,420px) minmax(240px,1fr);gap:14px;padding:0 14px 14px}.result-body video{width:100%;max-height:70vh;background:#000;border-radius:6px;object-fit:contain}.result-meta{display:grid;align-content:start;gap:10px}.result-meta dl{margin:0}.result-actions{display:flex;gap:8px;flex-wrap:wrap}.result-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:#f4f4f4;color:#050505;text-decoration:none}.result-actions a.secondary{background:#242424;color:#ddd;border:1px solid #333}
 button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 12px;cursor:pointer}#reset-ui,button[data-action=discard]{background:#242424;color:#ddd}button[data-action=reset-trim],button[data-action=next-card]{background:#191919;color:#ddd;border:1px solid #333}
@@ -2020,22 +2091,53 @@ function effectOpacity(effect){
   const current = normalizeEffect(effect);
   return current.key === "none" ? 0 : Math.max(.12, current.intensity / 185);
 }
-function defaultOverlay(){ return { key: "none", label: overlayMeta.none.label, x: .62, y: .78, width: .34, opacity: 95 }; }
+function defaultOverlay(){ return { id: "", kind: "cta", key: "none", label: overlayMeta.none.label, x: .62, y: .78, width: .34, opacity: 95 }; }
 function overlayId(){
   return `layer-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+function defaultTextOverlay(text = "Digite seu texto"){
+  return {
+    id: overlayId(),
+    kind: "text",
+    key: "text",
+    label: text,
+    text,
+    x: .36,
+    y: .34,
+    width: .42,
+    opacity: 100,
+    font_size: 44,
+    font_weight: "700",
+    color: "#ffffff",
+    background_enabled: true,
+    background_color: "#000000",
+    background_opacity: 70
+  };
 }
 function normalizeOverlay(overlay){
   const key = overlayMeta[overlay?.key] ? overlay.key : "none";
   if (key === "none") return defaultOverlay();
+  const text = String(overlay?.text || overlayMeta[key].title || overlayMeta[key].label);
+  return normalizeTextOverlay(Object.assign({}, overlay, { text, label: text }));
+}
+function normalizeTextOverlay(layer){
+  const text = String(layer?.text || layer?.label || "Digite seu texto").trim() || "Digite seu texto";
   return {
-    id: String(overlay?.id || overlayId()),
-    kind: "cta",
-    key,
-    label: overlayMeta[key].label,
-    x: clampNumber(overlay?.x ?? .62, 0, 1),
-    y: clampNumber(overlay?.y ?? .78, 0, 1),
-    width: clampNumber(overlay?.width ?? .34, .18, .72),
-    opacity: clampNumber(overlay?.opacity ?? 95, 35, 100)
+    id: String(layer?.id || overlayId()),
+    kind: "text",
+    key: "text",
+    label: text,
+    text,
+    x: clampNumber(layer?.x ?? .36, 0, 1),
+    y: clampNumber(layer?.y ?? .34, 0, 1),
+    width: clampNumber(layer?.width ?? .42, .16, .9),
+    opacity: clampNumber(layer?.opacity ?? 100, 10, 100),
+    font_size: clampNumber(layer?.font_size ?? 44, 14, 96),
+    font_weight: String(layer?.font_weight || "700"),
+    color: normalizeHexColor(layer?.color, "#ffffff"),
+    background_enabled: layer?.background_enabled !== false,
+    background_color: normalizeHexColor(layer?.background_color, "#000000"),
+    background_opacity: clampNumber(layer?.background_opacity ?? 70, 0, 100)
   };
 }
 function normalizeImageOverlay(layer){
@@ -2054,6 +2156,7 @@ function normalizeImageOverlay(layer){
 }
 function normalizeOverlayLayer(layer){
   if (layer?.kind === "image" || layer?.key === "image") return normalizeImageOverlay(layer);
+  if (layer?.kind === "text" || layer?.key === "text") return normalizeTextOverlay(layer);
   return normalizeOverlay(layer);
 }
 function normalizeOverlayLayers(layers, fallback){
@@ -2096,13 +2199,27 @@ function setOverlayForRank(rank, patch, rerender = true){
   setOverlayLayersForRank(rank, [normalizeOverlay(Object.assign({}, defaultOverlay(), patch))], rerender);
 }
 function overlayLabel(overlay){
-  const current = normalizeOverlay(overlay);
-  return current.key === "none" ? current.label : `${current.label} - ${Math.round(current.opacity)}%`;
+  const current = normalizeOverlayLayer(overlay);
+  if (current.key === "none") return current.label;
+  return `${current.label} - ${Math.round(current.opacity)}%`;
 }
 function overlayStyle(overlay){
-  const current = normalizeOverlay(overlay);
+  const current = normalizeOverlayLayer(overlay);
   const meta = overlayMeta[current.key] || overlayMeta.none;
-  return `--overlay-x:${current.x};--overlay-y:${current.y};--overlay-width:${current.width};--overlay-opacity:${current.opacity / 100};--overlay-accent:${meta.accent}`;
+  const backgroundRgb = current.kind === "text" ? hexToRgb(current.background_color).join(",") : "0,0,0";
+  const color = current.kind === "text" ? current.color : "#ffffff";
+  const fontSize = current.kind === "text" ? `${current.font_size}px` : "20px";
+  const backgroundOpacity = current.kind === "text" ? current.background_opacity / 100 : .7;
+  return `--overlay-x:${current.x};--overlay-y:${current.y};--overlay-width:${current.width};--overlay-opacity:${current.opacity / 100};--overlay-accent:${meta.accent};--overlay-color:${color};--overlay-font-size:${fontSize};--overlay-bg-rgb:${backgroundRgb};--overlay-bg-opacity:${backgroundOpacity}`;
+}
+function normalizeHexColor(value, fallback){
+  const raw = String(value || "").trim();
+  const hex = raw.startsWith("#") ? raw.slice(1) : raw;
+  return /^[0-9a-fA-F]{6}$/.test(hex) ? `#${hex.toLowerCase()}` : fallback;
+}
+function hexToRgb(value){
+  const hex = normalizeHexColor(value, "#000000").slice(1);
+  return [0, 2, 4].map(index => parseInt(hex.slice(index, index + 2), 16));
 }
 function clampNumber(value, min, max){
   const next = Number(value);
@@ -2188,22 +2305,6 @@ function updateOverlayUi(card){
   const summary = card.querySelector("[data-overlay-current]");
   if (summary) summary.textContent = layers.length ? `${layers.length} camada(s)` : "Sem chamada";
   renderOverlayLayerBoxes(card, layers);
-  const container = card.querySelector("[data-card-overlay]");
-  if (!container) return;
-  const primary = primaryOverlayForRank(card.dataset.rank);
-  container.innerHTML = `<div class="overlay-card-controls">
-    <div class="overlay-card-buttons" role="group" aria-label="Adicionar chamada no corte ${escapeAttr(card.dataset.rank)}">${overlayButtonsHtml(primary)}</div>
-    <label class="image-upload">Imagem transparente
-      <input data-overlay-image type="file" accept="image/png,image/webp,image/jpeg">
-    </label>
-    <div class="overlay-layer-list" data-overlay-layer-controls>${overlayLayerControlsHtml(layers)}</div>
-    <div class="overlay-tools">
-      <label>Opacidade
-        <input data-preview-overlay-opacity type="range" min="10" max="100" step="5" value="${(layers[0] || defaultOverlay()).opacity}">
-      </label>
-      <button data-overlay-reset>Resetar posicao</button>
-    </div>
-  </div>`;
   bindCardOverlayControls(card);
 }
 function renderOverlayLayerBoxes(card, layers){
@@ -2212,58 +2313,85 @@ function renderOverlayLayerBoxes(card, layers){
   list.innerHTML = layers.map(overlayLayerBoxHtml).join("");
 }
 function overlayLayerBoxHtml(layer){
+  const selected = document.querySelector(`.card[data-rank="${CSS.escape(String(activeRankForLayer(layer)))}"]`)?.dataset.selectedOverlayLayer === layer.id;
+  const selectedClass = selected ? " is-selected" : "";
   if (layer.kind === "image") {
     const src = layer.image_data_url || layer.image_file || "";
-    return `<div class="overlay-box overlay-image-box" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="image" style="${escapeAttr(overlayStyle(layer))}">
+    return `<div class="overlay-box overlay-image-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="image" style="${escapeAttr(overlayStyle(layer))}">
       <img src="${escapeAttr(src)}" alt="${escapeAttr(layer.label)}">
       <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
     </div>`;
   }
+  if (layer.kind === "text") {
+    return `<div class="overlay-box overlay-text-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="text" data-overlay-bg="${layer.background_enabled ? "on" : "off"}" style="${escapeAttr(overlayStyle(layer))}">
+      <span>${escapeHtml(layer.text)}</span>
+      <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
+    </div>`;
+  }
   const meta = overlayMeta[layer.key] || overlayMeta.none;
-  return `<div class="overlay-box" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="${escapeAttr(layer.key)}" style="${escapeAttr(overlayStyle(layer))}">
+  return `<div class="overlay-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="${escapeAttr(layer.key)}" style="${escapeAttr(overlayStyle(layer))}">
     <strong>${escapeHtml(meta.title)}</strong>
     <em>${escapeHtml(meta.subtitle)}</em>
     <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
   </div>`;
 }
-function overlayLayerControlsHtml(layers){
-  if (!layers.length) return '<div class="overlay-empty">Clique no preview ou envie uma imagem.</div>';
-  return layers.map((layer, index) => {
-    const label = layer.kind === "image" ? layer.label : (overlayMeta[layer.key]?.label || layer.label);
-    return `<div class="overlay-layer-row" data-overlay-layer-row="${escapeAttr(layer.id)}">
-      <span>${index + 1}. ${escapeHtml(label)}</span>
-      <button data-overlay-remove="${escapeAttr(layer.id)}">Remover</button>
-    </div>`;
-  }).join("");
+function activeRankForLayer(layer){
+  const card = Array.from(document.querySelectorAll(".card")).find(item => overlayLayersForRank(item.dataset.rank).some(current => current.id === layer.id));
+  return card?.dataset.rank || "";
 }
 function overlayPlaceButtonsHtml(){
-  const actions = Object.entries(overlayMeta).filter(([key]) => key !== "none").map(([key, meta]) => {
-    return `<button data-overlay-place="${escapeAttr(key)}">${escapeHtml(meta.label)}</button>`;
-  }).join("");
-  return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>Chamada</strong><button data-overlay-close>Fechar</button></div><div class="overlay-menu-actions">${actions}</div>`;
+  return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>Adicionar camada</strong><button data-overlay-close>Fechar</button></div>
+    <div class="overlay-menu-actions">
+      <button data-overlay-place-text>Texto</button>
+      <button data-overlay-place-image>Imagem transparente</button>
+    </div>`;
+}
+function overlayInspectorHtml(layer){
+  if (!layer) return overlayPlaceButtonsHtml();
+  if (layer.kind === "image") {
+    return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>Imagem</strong><button data-overlay-close>Fechar</button></div>
+      <div class="overlay-inspector">
+        <label>Opacidade
+          <input data-layer-opacity type="range" min="10" max="100" step="5" value="${layer.opacity}">
+        </label>
+        <label>Largura
+          <input data-layer-width type="range" min="8" max="90" step="1" value="${Math.round(layer.width * 100)}">
+        </label>
+        <button class="overlay-danger" data-layer-remove>Remover camada</button>
+      </div>`;
+  }
+  return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>Texto</strong><button data-overlay-close>Fechar</button></div>
+    <div class="overlay-inspector">
+      <label>Conteudo
+        <input data-layer-text type="text" value="${escapeAttr(layer.text || layer.label || "")}">
+      </label>
+      <div class="overlay-inspector-row">
+        <label>Tamanho
+          <input data-layer-font-size type="number" min="14" max="96" step="1" value="${Math.round(layer.font_size || 44)}">
+        </label>
+        <label>Cor
+          <input data-layer-color type="color" value="${escapeAttr(layer.color || "#ffffff")}">
+        </label>
+      </div>
+      <label>Opacidade
+        <input data-layer-opacity type="range" min="10" max="100" step="5" value="${layer.opacity}">
+      </label>
+      <label class="overlay-inspector-check">
+        <input data-layer-background-enabled type="checkbox" ${layer.background_enabled ? "checked" : ""}>
+        Fundo
+      </label>
+      <div class="overlay-inspector-row">
+        <label>Cor do fundo
+          <input data-layer-background-color type="color" value="${escapeAttr(layer.background_color || "#000000")}">
+        </label>
+        <label>Opacidade fundo
+          <input data-layer-background-opacity type="range" min="0" max="100" step="5" value="${layer.background_opacity}">
+        </label>
+      </div>
+      <button class="overlay-danger" data-layer-remove>Remover camada</button>
+    </div>`;
 }
 function bindCardOverlayControls(card){
-  const rank = card.dataset.rank;
-  card.querySelectorAll("[data-preview-overlay]").forEach(button => {
-    button.addEventListener("click", () => addOverlayLayerForRank(rank, { key: button.dataset.previewOverlay, x: .62, y: .78 }));
-  });
-  const opacity = card.querySelector("[data-preview-overlay-opacity]");
-  if (opacity) {
-    const update = () => {
-      const first = overlayLayersForRank(rank)[0];
-      if (first) patchOverlayLayerForRank(rank, first.id, { opacity: Number(opacity.value) });
-    };
-    opacity.addEventListener("input", update);
-    opacity.addEventListener("change", update);
-  }
-  const reset = card.querySelector("[data-overlay-reset]");
-  if (reset) reset.addEventListener("click", () => {
-    const layers = overlayLayersForRank(rank).map(layer => Object.assign({}, layer, { x: .62, y: .78, width: layer.kind === "image" ? .28 : .34 }));
-    setOverlayLayersForRank(rank, layers);
-  });
-  card.querySelectorAll("[data-overlay-remove]").forEach(button => {
-    button.addEventListener("click", () => removeOverlayLayerForRank(rank, button.dataset.overlayRemove));
-  });
   const imageInput = card.querySelector("[data-overlay-image]");
   if (imageInput) imageInput.addEventListener("change", () => addImageOverlayFromInput(card, imageInput));
   bindOverlayDrag(card);
@@ -2272,19 +2400,27 @@ function bindCardOverlayControls(card){
 function addImageOverlayFromInput(card, input){
   const file = input.files && input.files[0];
   if (!file) return;
+  const x = Number(input.dataset.overlayX || .36);
+  const y = Number(input.dataset.overlayY || .34);
   const reader = new FileReader();
   reader.onload = () => {
-    addOverlayLayerForRank(card.dataset.rank, {
+    const layer = normalizeImageOverlay({
       id: overlayId(),
       kind: "image",
       key: "image",
       label: file.name,
       image_data_url: String(reader.result || ""),
-      x: .36,
-      y: .34,
+      x,
+      y,
       width: .28,
       opacity: 100
     });
+    card.dataset.selectedOverlayLayer = layer.id;
+    addOverlayLayerForRank(card.dataset.rank, layer);
+    const surface = card.querySelector("[data-overlay-surface]");
+    if (surface) {
+      showOverlayInspectorForLayer(card, layer.id, layer.x * surface.clientWidth, layer.y * surface.clientHeight);
+    }
     input.value = "";
   };
   reader.readAsDataURL(file);
@@ -2293,32 +2429,107 @@ function bindOverlayPlacement(card){
   const surface = card.querySelector("[data-overlay-surface]");
   const menu = card.querySelector("[data-overlay-menu]");
   if (!surface || !menu) return;
-  menu.innerHTML = overlayPlaceButtonsHtml();
-  const closeMenu = () => { menu.hidden = true; };
-  menu.querySelector("[data-overlay-close]")?.addEventListener("click", closeMenu);
-  bindOverlayMenuDrag(surface, menu);
   surface.onclick = event => {
     if (event.target.closest("[data-overlay-drag]") || event.target.closest("[data-overlay-menu]") || event.target.closest(".preview-bar")) return;
     const rect = surface.getBoundingClientRect();
     const x = clampNumber((event.clientX - rect.left) / rect.width, 0, 1);
     const y = clampNumber((event.clientY - rect.top) / rect.height, 0, 1);
-    menu.dataset.x = x;
-    menu.dataset.y = y;
-    positionOverlayMenu(surface, menu, event.clientX - rect.left, event.clientY - rect.top);
-    menu.hidden = false;
+    card.dataset.overlayMenuX = x;
+    card.dataset.overlayMenuY = y;
+    showOverlayAddMenu(card, event.clientX - rect.left, event.clientY - rect.top);
   };
-  menu.querySelectorAll("[data-overlay-place]").forEach(button => {
-    button.addEventListener("click", () => {
-      addOverlayLayerForRank(card.dataset.rank, { key: button.dataset.overlayPlace, x: Number(menu.dataset.x), y: Number(menu.dataset.y) });
-      closeMenu();
-    });
-  });
   document.addEventListener("pointerdown", event => {
     if (menu.hidden || surface.contains(event.target)) return;
-    closeMenu();
+    closeOverlayMenu(card);
   });
   document.addEventListener("keydown", event => {
-    if (event.key === "Escape") closeMenu();
+    if (event.key === "Escape") closeOverlayMenu(card);
+  });
+}
+function closeOverlayMenu(card){
+  const menu = card.querySelector("[data-overlay-menu]");
+  if (menu) menu.hidden = true;
+}
+function showOverlayAddMenu(card, left, top){
+  const surface = card.querySelector("[data-overlay-surface]");
+  const menu = card.querySelector("[data-overlay-menu]");
+  if (!surface || !menu) return;
+  menu.innerHTML = overlayPlaceButtonsHtml();
+  bindOverlayMenuBasics(card);
+  menu.querySelector("[data-overlay-place-text]")?.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    const layer = defaultTextOverlay();
+    layer.x = Number(card.dataset.overlayMenuX || .36);
+    layer.y = Number(card.dataset.overlayMenuY || .34);
+    card.dataset.selectedOverlayLayer = layer.id;
+    addOverlayLayerForRank(card.dataset.rank, layer);
+    showOverlayInspectorForLayer(card, layer.id, left, top);
+  });
+  menu.querySelector("[data-overlay-place-image]")?.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    const input = card.querySelector("[data-overlay-image]");
+    if (!input) return;
+    input.dataset.overlayX = String(card.dataset.overlayMenuX || .36);
+    input.dataset.overlayY = String(card.dataset.overlayMenuY || .34);
+    closeOverlayMenu(card);
+    input.click();
+  });
+  positionOverlayMenu(surface, menu, left, top);
+  menu.hidden = false;
+}
+function showOverlayInspectorForLayer(card, layerId, left = null, top = null){
+  const surface = card.querySelector("[data-overlay-surface]");
+  const menu = card.querySelector("[data-overlay-menu]");
+  if (!surface || !menu) return;
+  const layer = overlayLayersForRank(card.dataset.rank).find(item => item.id === layerId);
+  if (!layer) return;
+  card.dataset.selectedOverlayLayer = layer.id;
+  menu.innerHTML = overlayInspectorHtml(layer);
+  bindOverlayMenuBasics(card);
+  bindOverlayInspectorControls(card, layer);
+  const box = card.querySelector(`[data-overlay-layer="${CSS.escape(layer.id)}"]`);
+  if ((left === null || top === null) && box) {
+    const surfaceRect = surface.getBoundingClientRect();
+    const boxRect = box.getBoundingClientRect();
+    left = boxRect.left - surfaceRect.left + Math.min(boxRect.width + 8, surfaceRect.width * .55);
+    top = boxRect.top - surfaceRect.top;
+  }
+  positionOverlayMenu(surface, menu, Number(left ?? 8), Number(top ?? 8));
+  menu.hidden = false;
+  renderOverlayLayerBoxes(card, overlayLayersForRank(card.dataset.rank));
+}
+function bindOverlayMenuBasics(card){
+  const surface = card.querySelector("[data-overlay-surface]");
+  const menu = card.querySelector("[data-overlay-menu]");
+  if (!surface || !menu) return;
+  menu.querySelector("[data-overlay-close]")?.addEventListener("click", () => closeOverlayMenu(card));
+  bindOverlayMenuDrag(surface, menu);
+}
+function bindOverlayInspectorControls(card, layer){
+  const rank = card.dataset.rank;
+  const patch = (value, rerender = true) => patchOverlayLayerForRank(rank, layer.id, value, rerender);
+  const text = card.querySelector("[data-layer-text]");
+  if (text) text.addEventListener("input", () => patch({ text: text.value, label: text.value }));
+  const fontSize = card.querySelector("[data-layer-font-size]");
+  if (fontSize) fontSize.addEventListener("input", () => patch({ font_size: Number(fontSize.value) }));
+  const color = card.querySelector("[data-layer-color]");
+  if (color) color.addEventListener("input", () => patch({ color: color.value }));
+  const opacity = card.querySelector("[data-layer-opacity]");
+  if (opacity) opacity.addEventListener("input", () => patch({ opacity: Number(opacity.value) }));
+  const width = card.querySelector("[data-layer-width]");
+  if (width) width.addEventListener("input", () => patch({ width: Number(width.value) / 100 }));
+  const backgroundEnabled = card.querySelector("[data-layer-background-enabled]");
+  if (backgroundEnabled) backgroundEnabled.addEventListener("change", () => patch({ background_enabled: backgroundEnabled.checked }));
+  const backgroundColor = card.querySelector("[data-layer-background-color]");
+  if (backgroundColor) backgroundColor.addEventListener("input", () => patch({ background_color: backgroundColor.value }));
+  const backgroundOpacity = card.querySelector("[data-layer-background-opacity]");
+  if (backgroundOpacity) backgroundOpacity.addEventListener("input", () => patch({ background_opacity: Number(backgroundOpacity.value) }));
+  card.querySelector("[data-layer-remove]")?.addEventListener("click", () => {
+    removeOverlayLayerForRank(rank, layer.id);
+    delete card.dataset.selectedOverlayLayer;
+    closeOverlayMenu(card);
   });
 }
 function bindOverlayMenuDrag(surface, menu){
@@ -2822,55 +3033,22 @@ function renderOverlayPreview(){
   bindOverlayPreviewControls();
 }
 function overlayPreviewItemHtml(item){
-  const overlay = normalizeOverlay(item.overlay);
-  const meta = overlayMeta[overlay.key] || overlayMeta.none;
+  const layers = normalizeOverlayLayers(item.overlays, item.overlay);
   const src = cacheBustedPreview(item.clip_file || "", `overlay-${item.rank}-${item.adjusted_start}-${item.adjusted_end}`);
   return `<article class="caption-item" data-rank="${escapeAttr(item.rank)}" data-platform="${escapeAttr(item.platform)}">
     <div class="caption-preview" data-overlay-surface>
       <video controls preload="metadata" src="${escapeAttr(src)}"></video>
-      <div class="overlay-box" data-overlay-drag data-overlay-key="${escapeAttr(overlay.key)}" style="${escapeAttr(overlayStyle(overlay))}">
-        <strong>${escapeHtml(meta.title)}</strong>
-        <em>${escapeHtml(meta.subtitle)}</em>
-        <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
-      </div>
+      ${layers.map(overlayLayerBoxHtml).join("")}
     </div>
     <div class="caption-item-body">
       <strong>Preview #${String(item.rank).padStart(2, "0")} ${escapeHtml(item.title || "")}</strong>
-      <span>${escapeHtml(item.platform_label)}</span><span data-overlay-current>${escapeHtml(overlayLabel(overlay))}</span>
-      <div class="overlay-card-controls">
-        <div class="overlay-card-buttons" role="group" aria-label="Chamada do corte ${escapeAttr(item.rank)}">
-          ${overlayButtonsHtml(overlay)}
-        </div>
-        <div class="overlay-tools">
-          <label>Opacidade
-            <input data-preview-overlay-opacity type="range" min="35" max="100" step="5" value="${overlay.opacity}">
-          </label>
-          <button data-overlay-reset>Resetar posicao</button>
-        </div>
-      </div>
+      <span>${escapeHtml(item.platform_label)}</span><span data-overlay-current>${layers.length ? `${layers.length} camada(s)` : "Sem camada"}</span>
     </div>
   </article>`;
 }
-function overlayButtonsHtml(current){
-  return Object.entries(overlayMeta).map(([key, meta]) => {
-    const active = current.key === key ? " active" : "";
-    return `<button data-preview-overlay="${escapeAttr(key)}" class="${active}">${escapeHtml(meta.label)}</button>`;
-  }).join("");
-}
 function bindOverlayPreviewControls(){
-  document.querySelectorAll("[data-overlay-preview] .caption-item").forEach(item => {
-    const rank = item.dataset.rank;
-    item.querySelectorAll("[data-preview-overlay]").forEach(button => {
-      button.addEventListener("click", () => setOverlayForRank(rank, { key: button.dataset.previewOverlay }));
-    });
-    const opacity = item.querySelector("[data-preview-overlay-opacity]");
-    if (opacity) {
-      opacity.addEventListener("input", () => setOverlayForRank(rank, { opacity: Number(opacity.value) }));
-      opacity.addEventListener("change", () => setOverlayForRank(rank, { opacity: Number(opacity.value) }));
-    }
-    const reset = item.querySelector("[data-overlay-reset]");
-    if (reset) reset.addEventListener("click", () => setOverlayForRank(rank, { x: .62, y: .78, width: .34 }));
-    bindOverlayDrag(item);
+  document.querySelectorAll("[data-overlay-preview] .caption-item video").forEach(video => {
+    video.volume = defaultPreviewVolume;
   });
 }
 function bindOverlayDrag(item){
@@ -2893,8 +3071,10 @@ function bindOverlayDrag(item){
         startTop: boxRect.top - surfaceRect.top,
         startWidth: boxRect.width,
         surfaceWidth: surfaceRect.width,
-        surfaceHeight: surfaceRect.height
+        surfaceHeight: surfaceRect.height,
+        moved: false
       };
+      if (item.classList.contains("card")) item.dataset.selectedOverlayLayer = box.dataset.overlayLayer;
       if (event.pointerId !== undefined && box.setPointerCapture) box.setPointerCapture(event.pointerId);
       if (event.type === "mousedown") {
         document.addEventListener("mousemove", moveDrag);
@@ -2907,6 +3087,7 @@ function bindOverlayDrag(item){
       if (!drag || (event.pointerId !== undefined && event.pointerId !== drag.pointerId)) return;
       const dx = event.clientX - drag.startX;
       const dy = event.clientY - drag.startY;
+      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) drag.moved = true;
       const patch = {};
       if (drag.type === "resize") {
         const minWidth = box.dataset.overlayKey === "image" ? .08 : .18;
@@ -2930,9 +3111,12 @@ function bindOverlayDrag(item){
     };
     const endDrag = event => {
       if (!drag || (event.pointerId !== undefined && event.pointerId !== drag.pointerId)) return;
+      const shouldInspect = item.classList.contains("card") && !drag.moved;
+      const layerId = box.dataset.overlayLayer;
       drag = null;
       document.removeEventListener("mousemove", moveDrag);
       updateOverlayUi(item);
+      if (shouldInspect) showOverlayInspectorForLayer(item, layerId);
       event.stopPropagation();
     };
     box.onpointerdown = startDrag;
