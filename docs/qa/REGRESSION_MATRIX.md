@@ -22,6 +22,9 @@ review workspace, data contracts, or render pipeline.
 | AI import | Generate 10 suggestions from a long transcript | Suggestions are spread across distinct timeline windows |
 | AI import | YouTube has captions | Captions are used without downloading full audio for transcription |
 | AI import | Audio exceeds upload limit | Audio is compressed or chunked before hosted transcription |
+| AI import UI | Open import tab | Local path defaults to Desktop |
+| AI import UI | Suggestion count | Dropdown offers 1 through 20 |
+| AI import UI | Duration profile | Short, medium, and long map to expected duration arguments |
 
 ## Overlay Regression Checks
 
