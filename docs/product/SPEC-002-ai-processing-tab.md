@@ -54,6 +54,10 @@ Minimum provider operations:
 - score highlight candidates
 - optionally summarize clip rationale
 
+Provider output is not the final quality gate. The local pipeline must enforce
+clip diversity, upload-size limits, and safe fallbacks before writing review
+cards. See [SPEC-003](SPEC-003-ai-ingestion-and-clip-diversity.md).
+
 ## API Shape Draft
 
 ```text
@@ -82,6 +86,9 @@ cancelled
 - A user can initiate analysis without Codex commands.
 - The app shows progress during long-running work.
 - The output of the processing tab can feed the existing Review Workspace.
+- AI-selected suggestions are filtered so near-duplicate timeline windows do not
+  fill the review workspace.
+- Oversized audio is compressed or chunked before hosted transcription.
 - Failures keep enough diagnostic information for developers without exposing
   secrets, full private payloads, or credentials.
 - Provider credentials are read from environment or secure local configuration.

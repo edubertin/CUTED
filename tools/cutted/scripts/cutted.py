@@ -8,6 +8,7 @@ import http.server
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -30,6 +31,17 @@ WEAK_ENDINGS = (
 WEAK_STARTINGS = (
     "e ", "mas ", "aí ", "ai ", "então ", "entao ", "porque ", "por que ", "só que ", "so que ",
 )
+
+
+OPENAI_TRANSCRIBE_LIMIT_BYTES = 22 * 1024 * 1024
+OPENAI_TRANSCRIBE_CHUNK_SECONDS = 600
+MAX_SELECTION_OVERLAP = 0.35
+MAX_SELECTION_TEXT_SIMILARITY = 0.72
+SELECTION_CLUSTER_SECONDS = 120.0
+COMMON_TOKENS = {
+    "que", "para", "com", "uma", "por", "tem", "mas", "vai", "voce", "vocÃª",
+    "isso", "essa", "esse", "aqui", "porque", "entao", "entÃ£o", "como",
+}
 
 
 @dataclass(frozen=True)
@@ -1634,9 +1646,27 @@ def probe_duration(video: Path | str, ffprobe: str | None) -> float:
 
 def yt_dlp_command() -> list[str]:
     path_bin = shutil.which("yt-dlp")
-    if path_bin:
-        return [path_bin]
-    return [sys.executable, "-m", "yt_dlp"]
+    command = [path_bin] if path_bin else [sys.executable, "-m", "yt_dlp"]
+    return command + yt_dlp_runtime_args() + yt_dlp_extra_args()
+
+
+def yt_dlp_runtime_args() -> list[str]:
+    runtime = os.environ.get("CUTED_YTDLP_JS_RUNTIME", "").strip()
+    if runtime:
+        return ["--js-runtimes", runtime]
+    node = bundled_node_path() or shutil.which("node")
+    return ["--js-runtimes", f"node:{node}"] if node else []
+
+
+def bundled_node_path() -> str | None:
+    exe_name = "node.exe" if os.name == "nt" else "node"
+    candidate = Path(sys.executable).resolve().parent.parent / "node" / "bin" / exe_name
+    return str(candidate) if candidate.exists() else None
+
+
+def yt_dlp_extra_args() -> list[str]:
+    raw = os.environ.get("CUTED_YTDLP_EXTRA_ARGS", "").strip()
+    return shlex.split(raw) if raw else []
 
 
 def youtube_title(url: str) -> str:
@@ -1762,6 +1792,17 @@ def transcribe_with_openai(video: Path | str, language: str | None) -> list[Segm
     key = openai_api_key()
     if not key:
         raise RuntimeError("OPENAI_API_KEY is not configured in .env.local.")
+    files = openai_transcription_files(path)
+    segments: list[Segment] = []
+    offset = 0.0
+    for file_path in files:
+        rows = transcribe_openai_file(file_path, key, language)
+        segments.extend(Segment(row.start + offset, row.end + offset, row.text) for row in rows)
+        offset += openai_chunk_seconds() if len(files) > 1 else 0.0
+    return [segment for segment in segments if segment.text and segment.end > segment.start]
+
+
+def transcribe_openai_file(path: Path, key: str, language: str | None) -> list[Segment]:
     fields: dict[str, str] = {"model": openai_transcribe_model(), "response_format": "verbose_json"}
     if language:
         fields["language"] = language
@@ -1771,6 +1812,58 @@ def transcribe_with_openai(video: Path | str, language: str | None) -> list[Segm
         raise RuntimeError("OpenAI transcription did not return timestamped segments. Use CUTED_TRANSCRIBE_MODEL=whisper-1.")
     segments = [Segment(float(row["start"]), float(row["end"]), str(row["text"]).strip()) for row in rows if isinstance(row, dict)]
     return [segment for segment in segments if segment.text and segment.end > segment.start]
+
+
+def openai_transcription_files(path: Path) -> list[Path]:
+    limit = openai_upload_limit_bytes()
+    if path.stat().st_size <= limit:
+        return [path]
+    ffmpeg = find_ffmpeg()
+    compact = compressed_audio_path(path)
+    compress_audio_for_openai(path, compact, ffmpeg)
+    if compact.stat().st_size <= limit:
+        return [compact]
+    return split_audio_for_openai(compact, ffmpeg)
+
+
+def openai_upload_limit_bytes() -> int:
+    raw = os.environ.get("CUTED_OPENAI_UPLOAD_LIMIT_MB", "").strip()
+    if not raw:
+        return OPENAI_TRANSCRIBE_LIMIT_BYTES
+    return max(1, int(float(raw))) * 1024 * 1024
+
+
+def openai_chunk_seconds() -> int:
+    raw = os.environ.get("CUTED_OPENAI_CHUNK_SECONDS", "").strip()
+    if not raw:
+        return OPENAI_TRANSCRIBE_CHUNK_SECONDS
+    return max(60, int(float(raw)))
+
+
+def compressed_audio_path(path: Path) -> Path:
+    return path.with_name(f"{path.stem}.openai-16k.m4a")
+
+
+def compress_audio_for_openai(source: Path, output: Path, ffmpeg: str) -> None:
+    command = [ffmpeg, "-y", "-i", str(source), "-vn", "-ac", "1", "-ar", "16000", "-b:a", "32k", str(output)]
+    subprocess.run(command, check=True, capture_output=True, text=True)
+
+
+def split_audio_for_openai(source: Path, ffmpeg: str) -> list[Path]:
+    chunk_dir = source.with_suffix("")
+    chunk_dir.mkdir(exist_ok=True)
+    for stale in chunk_dir.glob("chunk-*.m4a"):
+        stale.unlink()
+    pattern = chunk_dir / "chunk-%03d.m4a"
+    command = [ffmpeg, "-y", "-i", str(source), "-f", "segment", "-segment_time", str(openai_chunk_seconds()), "-c", "copy", str(pattern)]
+    subprocess.run(command, check=True, capture_output=True, text=True)
+    chunks = sorted(chunk_dir.glob("chunk-*.m4a"))
+    if not chunks:
+        raise RuntimeError("Could not split audio for OpenAI transcription.")
+    too_large = [chunk for chunk in chunks if chunk.stat().st_size > openai_upload_limit_bytes()]
+    if too_large:
+        raise RuntimeError("Audio chunks are still too large for OpenAI transcription. Lower CUTED_OPENAI_CHUNK_SECONDS.")
+    return chunks
 
 
 def openai_structured_response(system: str, user: str, schema_name: str, schema: dict[str, object]) -> dict[str, object]:
@@ -1886,7 +1979,8 @@ def pick_moments_for_import(args: argparse.Namespace, segments: list[Segment], c
 def pick_moments_with_openai(args: argparse.Namespace, segments: list[Segment], config: CuttedConfig, video_duration: float) -> list[Moment]:
     if not openai_api_key():
         raise RuntimeError("OPENAI_API_KEY is not configured in .env.local.")
-    candidates = sorted(build_candidates(segments, config, video_duration), key=lambda item: item.score, reverse=True)[:90]
+    ranked = sorted(build_candidates(segments, config, video_duration), key=lambda item: item.score, reverse=True)
+    candidates = diverse_candidate_pool(ranked, config.clips, 90)
     if not candidates:
         raise RuntimeError("No transcript candidates found.")
     requested = min(max(config.clips, 1), len(candidates))
@@ -1904,6 +1998,7 @@ def openai_select_candidates(args: argparse.Namespace, candidates: list[Moment],
             "end": round(item.end, 3),
             "duration": round(item.end - item.start, 3),
             "score": item.score,
+            "cluster_id": selection_cluster_id(item),
             "title": item.title,
             "text": item.transcript[:1600],
         }
@@ -1938,7 +2033,8 @@ def openai_select_candidates(args: argparse.Namespace, candidates: list[Moment],
         "parecem comecar no meio de uma frase ou terminar em conectivos como porque, entao, mas, so que, "
         "ou seja e tipo. Favoreca surpresa, conflito, opiniao forte, aprendizado, dinheiro, erro, segredo "
         "ou insight especifico. Evite filler generico, repeticao, sobreposicao e trechos que dependem de "
-        "contexto externo demais. Use o contexto editorial do usuario para desempatar. "
+        "contexto externo demais. Evite escolher mais de um corte do mesmo cluster_id, exceto se forem "
+        "momentos claramente diferentes. Use o contexto editorial do usuario para desempatar. "
         "Responda apenas no JSON estruturado solicitado."
     )
     user = json.dumps(
@@ -1966,6 +2062,8 @@ def openai_selected_moments(payload: dict[str, object], candidates: list[Moment]
             continue
         used.add(index)
         candidate = candidates[index]
+        if not is_diverse_candidate(candidate, selected):
+            continue
         title = clean_optional_text(row.get("title"), 80) or candidate.title
         reason_text = clean_optional_text(row.get("reason"), 160) or candidate.reason
         selected.append(Moment(0, candidate.start, candidate.end, candidate.peak, candidate.score, title, reason_text, candidate.transcript, candidate.peak_text, candidate.clip_file, candidate.frame_file, candidate.caption_segments))
@@ -1978,10 +2076,62 @@ def openai_selected_moments(payload: dict[str, object], candidates: list[Moment]
     return selected[:requested]
 
 
+def diverse_candidate_pool(candidates: list[Moment], requested: int, limit: int) -> list[Moment]:
+    selected: list[Moment] = []
+    target = min(limit, max(requested * 6, requested))
+    for candidate in candidates:
+        if is_diverse_candidate(candidate, selected):
+            selected.append(candidate)
+        if len(selected) >= target:
+            break
+    if len(selected) < requested:
+        selected.extend(fill_missing_without_duplicates(selected, candidates, requested - len(selected)))
+    return selected[:limit]
+
+
+def fill_missing_without_duplicates(selected: list[Moment], candidates: list[Moment], count: int) -> list[Moment]:
+    filled: list[Moment] = []
+    for candidate in candidates:
+        if any(same_window(candidate, item) for item in [*selected, *filled]):
+            continue
+        filled.append(candidate)
+        if len(filled) >= count:
+            break
+    return filled
+
+
+def same_window(left: Moment, right: Moment) -> bool:
+    return abs(left.start - right.start) < 0.01 and abs(left.end - right.end) < 0.01
+
+
+def is_diverse_candidate(candidate: Moment, selected: list[Moment]) -> bool:
+    return all(not selection_conflict(candidate, item) for item in selected)
+
+
+def selection_conflict(left: Moment, right: Moment) -> bool:
+    return overlap_ratio(left, right) >= MAX_SELECTION_OVERLAP or transcript_similarity(left, right) >= MAX_SELECTION_TEXT_SIMILARITY
+
+
+def transcript_similarity(left: Moment, right: Moment) -> float:
+    left_tokens = meaningful_tokens(left.transcript)
+    right_tokens = meaningful_tokens(right.transcript)
+    if not left_tokens or not right_tokens:
+        return 0.0
+    return len(left_tokens & right_tokens) / max(1, min(len(left_tokens), len(right_tokens)))
+
+
+def meaningful_tokens(text: str) -> set[str]:
+    return {token for token in re.findall(r"\w{3,}", normalize_text(text)) if token not in COMMON_TOKENS}
+
+
+def selection_cluster_id(moment: Moment) -> int:
+    return int(moment.start // SELECTION_CLUSTER_SECONDS)
+
+
 def fill_missing_moments(selected: list[Moment], candidates: list[Moment], count: int) -> list[Moment]:
     filled: list[Moment] = []
     for candidate in candidates:
-        if any(overlap_ratio(candidate, item) >= 0.35 for item in [*selected, *filled]):
+        if not is_diverse_candidate(candidate, [*selected, *filled]):
             continue
         filled.append(candidate)
         if len(filled) >= count:

@@ -32,14 +32,15 @@ python tools/cutted/scripts/cutted.py render-selected "samples/example/selected-
 1. Source preparation.
 2. Transcript loading or transcription.
 3. Highlight candidate selection.
-4. Preview clip render.
-5. Frame extraction.
-6. HTML review workspace generation.
-7. Browser edit state collection.
-8. Final queue submission to `/api/finalize`.
-9. Caption, camera, effect, and overlay filter construction.
-10. Final MP4 render.
-11. Output manifest update.
+4. Candidate diversity guardrails.
+5. Preview clip render.
+6. Frame extraction.
+7. HTML review workspace generation.
+8. Browser edit state collection.
+9. Final queue submission to `/api/finalize`.
+10. Caption, camera, effect, and overlay filter construction.
+11. Final MP4 render.
+12. Output manifest update.
 
 ## Filter Order
 
@@ -77,6 +78,10 @@ YouTube:   1920x1080
   them.
 - PNG/WebP transparency depends on the overlay filter preserving alpha.
 - Generated sample artifacts can dirty the git tree during QA.
+- Hosted transcription can reject oversized audio uploads unless audio is
+  compressed or chunked first.
+- AI-selected candidate IDs can repeat the same timeline region unless
+  deterministic diversity guardrails are applied after selection.
 
 ## Render Acceptance Criteria
 
