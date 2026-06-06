@@ -38,6 +38,16 @@ WEAK_STARTINGS = (
 
 OPENAI_TRANSCRIBE_LIMIT_BYTES = 22 * 1024 * 1024
 OPENAI_TRANSCRIBE_CHUNK_SECONDS = 600
+OPENAI_PRICING_SOURCE = "https://platform.openai.com/docs/pricing"
+OPENAI_PRICING_UPDATED = "2026-06-06"
+OPENAI_TEXT_PRICES_USD_PER_1M = {
+    "gpt-5": {"input": 1.25, "cached_input": 0.125, "output": 10.0},
+    "gpt-5-mini": {"input": 0.25, "cached_input": 0.025, "output": 2.0},
+    "gpt-5-nano": {"input": 0.05, "cached_input": 0.005, "output": 0.40},
+}
+OPENAI_TRANSCRIBE_PRICES_USD_PER_MINUTE = {
+    "whisper-1": 0.006,
+}
 MAX_SELECTION_OVERLAP = 0.35
 MAX_SELECTION_TEXT_SIMILARITY = 0.72
 SELECTION_CLUSTER_SECONDS = 120.0
@@ -334,6 +344,12 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if path == "/api/select-folder":
                 self.handle_select_folder()
                 return
+            if path == "/api/settings/openai":
+                self.handle_openai_settings_save()
+                return
+            if path == "/api/settings/openai/test":
+                self.handle_openai_settings_test()
+                return
             if re.fullmatch(r"/api/import-jobs/[^/]+/cancel", path):
                 self.handle_import_cancel(path)
                 return
@@ -343,6 +359,12 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
 
         def do_GET(self) -> None:
             path = urllib.parse.urlparse(self.path).path
+            if path == "/api/settings/openai":
+                self.handle_openai_settings_get()
+                return
+            if path == "/api/usage/local":
+                send_json_response(self, 200, local_usage_payload())
+                return
             if re.fullmatch(r"/api/import-jobs/[^/]+", path):
                 self.handle_import_status(path)
                 return
@@ -381,6 +403,26 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
                 send_json_response(self, 200, {"ok": True, "path": path})
             except Exception as error:
                 send_json_response(self, 500, {"ok": False, "error": str(error)})
+
+        def handle_openai_settings_get(self) -> None:
+            send_json_response(self, 200, {"ok": True, "settings": openai_settings_payload(), "usage": usage_summary_payload()})
+
+        def handle_openai_settings_save(self) -> None:
+            try:
+                payload = read_json_body(self)
+                save_openai_settings(payload)
+                send_json_response(self, 200, {"ok": True, "settings": openai_settings_payload(), "usage": usage_summary_payload()})
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
+
+        def handle_openai_settings_test(self) -> None:
+            try:
+                payload = read_json_body(self)
+                key = clean_optional_text(payload.get("api_key"), 2048) or openai_api_key()
+                test_openai_connection(key)
+                send_json_response(self, 200, {"ok": True, "message": "Conexao OpenAI validada."})
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
 
     return CuttedGalleryHandler
 
@@ -675,15 +717,60 @@ def local_env_candidates() -> list[Path]:
     roots = [Path.cwd(), *script_dir.parents]
     candidates: list[Path] = []
     for root in roots:
-        for name in (".env.local", ".env"):
+        for name in (".env.cuted.local", ".env.local", ".env"):
             path = root / name
             if path not in candidates:
                 candidates.append(path)
     return candidates
 
 
+def project_root() -> Path:
+    script_dir = Path(__file__).resolve().parent
+    for root in [Path.cwd(), *script_dir.parents]:
+        if (root / ".git").exists():
+            return root.resolve()
+    return Path.cwd().resolve()
+
+
+def cuted_data_dir() -> Path:
+    raw = os.environ.get("CUTED_HOME", "").strip()
+    return Path(raw).expanduser() if raw else Path.home() / ".cuted"
+
+
+def cuted_settings_path() -> Path:
+    return cuted_data_dir() / "settings.json"
+
+
+def cuted_usage_path() -> Path:
+    raw = os.environ.get("CUTED_USAGE_LEDGER", "").strip()
+    return Path(raw).expanduser() if raw else cuted_data_dir() / "usage-ledger.json"
+
+
+def cuted_secret_env_path() -> Path:
+    return project_root() / ".env.cuted.local"
+
+
+def read_cuted_settings() -> dict[str, object]:
+    path = cuted_settings_path()
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def write_cuted_settings(data: dict[str, object]) -> None:
+    path = cuted_settings_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def configured_ai_provider() -> str:
-    provider = os.environ.get("CUTED_AI_PROVIDER", "local").strip().lower()
+    settings = read_cuted_settings()
+    provider = str(settings.get("ai_provider") or os.environ.get("CUTED_AI_PROVIDER") or "local")
+    provider = provider.strip().lower()
     return provider if provider in {"auto", "local", "openai"} else "local"
 
 
@@ -697,11 +784,134 @@ def openai_api_key() -> str:
 
 
 def openai_model() -> str:
-    return os.environ.get("CUTED_OPENAI_MODEL", "gpt-5-mini").strip() or "gpt-5-mini"
+    settings = read_cuted_settings()
+    model = str(settings.get("openai_model") or os.environ.get("CUTED_OPENAI_MODEL") or "gpt-5-mini")
+    return clean_openai_model(model)
 
 
 def openai_transcribe_model() -> str:
-    return os.environ.get("CUTED_TRANSCRIBE_MODEL", "whisper-1").strip() or "whisper-1"
+    settings = read_cuted_settings()
+    model = str(settings.get("transcribe_model") or os.environ.get("CUTED_TRANSCRIBE_MODEL") or "whisper-1")
+    return clean_transcribe_model(model)
+
+
+def clean_openai_model(value: object) -> str:
+    model = str(value or "gpt-5-mini").strip()
+    return model if model in OPENAI_TEXT_PRICES_USD_PER_1M else "gpt-5-mini"
+
+
+def clean_transcribe_model(value: object) -> str:
+    model = str(value or "whisper-1").strip()
+    return model if model in OPENAI_TRANSCRIBE_PRICES_USD_PER_MINUTE else "whisper-1"
+
+
+def save_openai_settings(payload: dict[str, object]) -> None:
+    provider = str(payload.get("ai_provider") or "openai").strip().lower()
+    if provider not in {"auto", "local", "openai"}:
+        raise ValueError("Provedor de IA invalido.")
+    model = clean_openai_model(payload.get("openai_model"))
+    transcribe_model = clean_transcribe_model(payload.get("transcribe_model"))
+    api_key = clean_optional_text(payload.get("api_key"), 2048)
+    if api_key:
+        write_openai_key(api_key)
+        os.environ["OPENAI_API_KEY"] = api_key
+    settings = read_cuted_settings()
+    settings.update({"ai_provider": provider, "openai_model": model, "transcribe_model": transcribe_model})
+    write_cuted_settings(settings)
+    os.environ["CUTED_AI_PROVIDER"] = provider
+    os.environ["CUTED_OPENAI_MODEL"] = model
+    os.environ["CUTED_TRANSCRIBE_MODEL"] = transcribe_model
+
+
+def write_openai_key(api_key: str) -> None:
+    key = api_key.strip()
+    if len(key) < 20 or not key.startswith("sk-"):
+        raise ValueError("Token OpenAI invalido.")
+    path = cuted_secret_env_path()
+    path.write_text(f"OPENAI_API_KEY={key}\n", encoding="utf-8")
+
+
+def openai_settings_payload() -> dict[str, object]:
+    key = openai_api_key()
+    return {
+        "ai_provider": configured_ai_provider(),
+        "openai_model": openai_model(),
+        "transcribe_model": openai_transcribe_model(),
+        "key_configured": bool(key),
+        "secret_path": str(cuted_secret_env_path()),
+        "settings_path": str(cuted_settings_path()),
+        "pricing": pricing_payload(),
+    }
+
+
+def pricing_payload() -> dict[str, object]:
+    return {
+        "source": OPENAI_PRICING_SOURCE,
+        "updated": OPENAI_PRICING_UPDATED,
+        "text_usd_per_1m": OPENAI_TEXT_PRICES_USD_PER_1M,
+        "transcribe_usd_per_minute": OPENAI_TRANSCRIBE_PRICES_USD_PER_MINUTE,
+    }
+
+
+def test_openai_connection(api_key: str) -> None:
+    if not api_key:
+        raise RuntimeError("Configure um token OpenAI antes de testar.")
+    request = urllib.request.Request(
+        "https://api.openai.com/v1/models",
+        headers={"Authorization": f"Bearer {api_key}"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            if response.status >= 400:
+                raise RuntimeError("A OpenAI recusou a conexao.")
+    except urllib.error.HTTPError as error:
+        raise RuntimeError(f"A OpenAI recusou a conexao (HTTP {error.code}).") from error
+    except urllib.error.URLError as error:
+        raise RuntimeError("Nao consegui conectar na OpenAI agora.") from error
+
+
+def local_usage_payload() -> dict[str, object]:
+    return {"ok": True, "usage": usage_summary_payload(), "pricing": pricing_payload()}
+
+
+def usage_summary_payload() -> dict[str, object]:
+    ledger = read_usage_ledger()
+    events = ledger.get("events") if isinstance(ledger, dict) else []
+    rows = events if isinstance(events, list) else []
+    total = sum(float(row.get("estimated_usd") or 0.0) for row in rows if isinstance(row, dict))
+    last = next((row for row in reversed(rows) if isinstance(row, dict)), None)
+    return {
+        "ledger_path": str(cuted_usage_path()),
+        "event_count": len(rows),
+        "estimated_total_usd": round(total, 6),
+        "last_event": last or {},
+        "recent_events": rows[-12:],
+    }
+
+
+def read_usage_ledger() -> dict[str, object]:
+    path = cuted_usage_path()
+    if not path.exists():
+        return {"version": 1, "events": []}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return {"version": 1, "events": []}
+    return data if isinstance(data, dict) else {"version": 1, "events": []}
+
+
+def append_usage_event(event: dict[str, object]) -> None:
+    path = cuted_usage_path()
+    ledger = read_usage_ledger()
+    events = ledger.get("events")
+    if not isinstance(events, list):
+        events = []
+    events.append(event)
+    ledger["version"] = 1
+    ledger["events"] = events[-500:]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def read_json_body(handler: http.server.BaseHTTPRequestHandler) -> dict[str, object]:
@@ -1869,6 +2079,7 @@ def transcribe_with_openai(video: Path | str, language: str | None) -> list[Segm
     for file_path in files:
         rows = transcribe_openai_file(file_path, key, language)
         segments.extend(Segment(row.start + offset, row.end + offset, row.text) for row in rows)
+        record_openai_transcribe_usage(openai_transcribe_model(), transcription_duration(rows))
         offset += openai_chunk_seconds() if len(files) > 1 else 0.0
     return [segment for segment in segments if segment.text and segment.end > segment.start]
 
@@ -1938,8 +2149,9 @@ def split_audio_for_openai(source: Path, ffmpeg: str) -> list[Path]:
 
 
 def openai_structured_response(system: str, user: str, schema_name: str, schema: dict[str, object]) -> dict[str, object]:
+    model = openai_model()
     body = {
-        "model": openai_model(),
+        "model": model,
         "input": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -1954,6 +2166,7 @@ def openai_structured_response(system: str, user: str, schema_name: str, schema:
         },
     }
     data = openai_json_request("https://api.openai.com/v1/responses", openai_api_key(), body)
+    record_openai_text_usage("clip_selection", model, data.get("usage"))
     text = openai_output_text(data)
     parsed = json.loads(text)
     if not isinstance(parsed, dict):
@@ -2022,6 +2235,78 @@ def read_openai_json(request: urllib.request.Request) -> dict[str, object]:
     if not isinstance(data, dict):
         raise RuntimeError("OpenAI response must be a JSON object.")
     return data
+
+
+def transcription_duration(rows: list[Segment]) -> float:
+    if not rows:
+        return 0.0
+    return max(0.0, max(row.end for row in rows) - min(row.start for row in rows))
+
+
+def record_openai_text_usage(operation: str, model: str, usage: object) -> None:
+    if not isinstance(usage, dict):
+        return
+    input_tokens = usage_number(usage, "input_tokens", "prompt_tokens")
+    output_tokens = usage_number(usage, "output_tokens", "completion_tokens")
+    cached_tokens = cached_input_tokens(usage)
+    estimated = estimate_text_cost(model, input_tokens, output_tokens, cached_tokens)
+    append_usage_event({
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "provider": "openai",
+        "operation": operation,
+        "model": model,
+        "input_tokens": input_tokens,
+        "cached_input_tokens": cached_tokens,
+        "output_tokens": output_tokens,
+        "estimated_usd": round(estimated, 6),
+        "pricing_source": OPENAI_PRICING_SOURCE,
+    })
+
+
+def record_openai_transcribe_usage(model: str, duration_seconds: float) -> None:
+    if duration_seconds <= 0:
+        return
+    estimated = estimate_transcribe_cost(model, duration_seconds)
+    append_usage_event({
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "provider": "openai",
+        "operation": "transcription",
+        "model": model,
+        "audio_seconds": round(duration_seconds, 3),
+        "estimated_usd": round(estimated, 6),
+        "pricing_source": OPENAI_PRICING_SOURCE,
+    })
+
+
+def usage_number(usage: dict[str, object], *keys: str) -> int:
+    for key in keys:
+        value = usage.get(key)
+        if isinstance(value, (int, float)):
+            return max(0, int(value))
+    return 0
+
+
+def cached_input_tokens(usage: dict[str, object]) -> int:
+    details = usage.get("input_tokens_details") or usage.get("prompt_tokens_details")
+    if not isinstance(details, dict):
+        return 0
+    value = details.get("cached_tokens")
+    return max(0, int(value)) if isinstance(value, (int, float)) else 0
+
+
+def estimate_text_cost(model: str, input_tokens: int, output_tokens: int, cached_tokens: int) -> float:
+    prices = OPENAI_TEXT_PRICES_USD_PER_1M.get(model, OPENAI_TEXT_PRICES_USD_PER_1M["gpt-5-mini"])
+    billable_input = max(0, input_tokens - cached_tokens)
+    return (
+        billable_input * float(prices["input"]) / 1_000_000
+        + cached_tokens * float(prices["cached_input"]) / 1_000_000
+        + max(0, output_tokens) * float(prices["output"]) / 1_000_000
+    )
+
+
+def estimate_transcribe_cost(model: str, duration_seconds: float) -> float:
+    price = OPENAI_TRANSCRIBE_PRICES_USD_PER_MINUTE.get(model, OPENAI_TRANSCRIBE_PRICES_USD_PER_MINUTE["whisper-1"])
+    return max(0.0, duration_seconds) / 60.0 * price
 
 
 def pick_moments(segments: list[Segment], config: CuttedConfig, video_duration: float) -> list[Moment]:
@@ -2456,6 +2741,29 @@ def suggestion_count_options() -> str:
     return "\n".join(f'<option value="{value}"{" selected" if value == 10 else ""}>{value}</option>' for value in range(1, 21))
 
 
+def openai_model_options() -> str:
+    labels = {"gpt-5": "GPT-5", "gpt-5-mini": "GPT-5 mini", "gpt-5-nano": "GPT-5 nano"}
+    return "\n".join(option_html(key, labels.get(key, key), key == "gpt-5-mini") for key in OPENAI_TEXT_PRICES_USD_PER_1M)
+
+
+def transcribe_model_options() -> str:
+    return option_html("whisper-1", "Whisper 1", True)
+
+
+def option_html(value: str, label: str, selected: bool) -> str:
+    marker = " selected" if selected else ""
+    return f'<option value="{html.escape(value)}"{marker}>{html.escape(label)}</option>'
+
+
+def gear_icon_svg() -> str:
+    return (
+        '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+        '<path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/>'
+        '<path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.04.04a2 2 0 1 1-2.83 2.83l-.04-.04A1.7 1.7 0 0 0 15 19.37a1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.07a1.7 1.7 0 0 0-1-1.56 1.7 1.7 0 0 0-1.88.34l-.04.04a2 2 0 1 1-2.83-2.83l.04-.04A1.7 1.7 0 0 0 4.63 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.07a1.7 1.7 0 0 0 1.56-1 1.7 1.7 0 0 0-.34-1.88l-.04-.04a2 2 0 1 1 2.83-2.83l.04.04A1.7 1.7 0 0 0 9 4.63a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.07a1.7 1.7 0 0 0 1 1.56 1.7 1.7 0 0 0 1.88-.34l.04-.04a2 2 0 1 1 2.83 2.83l-.04.04A1.7 1.7 0 0 0 19.37 9a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.07A1.7 1.7 0 0 0 19.4 15Z"/>'
+        '</svg>'
+    )
+
+
 def card_html(moment: Moment) -> str:
     video_tag = media_html(moment)
     duration = max(0.0, moment.end - moment.start)
@@ -2636,6 +2944,7 @@ def page_html(source_label: str, cards: str, data: str, logo_src: str) -> str:
       <p>{html.escape(source_label)}</p>
     </div>
     <div class="header-actions">
+      <button id="open-settings" class="icon-button" type="button" aria-label="Configuracoes OpenAI" title="Configuracoes OpenAI">{gear_icon_svg()}</button>
       <button id="reset-ui">Novo projeto</button>
     </div>
   </header>
@@ -2707,6 +3016,55 @@ def page_html(source_label: str, cards: str, data: str, logo_src: str) -> str:
     <div class="render-status" data-render-status></div>
     <div class="render-results" data-render-results></div>
   </section>
+  <section class="empty-project-stage" aria-label="Projeto em branco">
+    <div class="empty-project-panel">
+      <strong>Novo projeto em branco</strong>
+      <p>Importe um link ou arquivo local para carregar novos cortes.</p>
+      <button type="button" data-empty-import>Importar projeto</button>
+    </div>
+  </section>
+  <div class="settings-backdrop" data-settings-modal hidden>
+    <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="settings-head">
+        <div>
+          <strong id="settings-title">Configuracoes</strong>
+          <p>OpenAI local, sem salvar token no navegador.</p>
+        </div>
+        <button type="button" data-settings-close>Fechar</button>
+      </div>
+      <form data-settings-form class="settings-form">
+        <div class="settings-status" data-settings-status>Carregando...</div>
+        <label>Token OpenAI
+          <input name="api_key" type="password" autocomplete="off" placeholder="Cole aqui apenas se quiser trocar o token">
+        </label>
+        <div class="settings-grid">
+          <label>Provedor IA
+            <select name="ai_provider">
+              <option value="openai">OpenAI</option>
+              <option value="auto">Auto</option>
+              <option value="local">Local</option>
+            </select>
+          </label>
+          <label>Modelo de analise
+            <select name="openai_model">
+              {openai_model_options()}
+            </select>
+          </label>
+          <label>Transcricao
+            <select name="transcribe_model">
+              {transcribe_model_options()}
+            </select>
+          </label>
+        </div>
+        <div class="settings-usage" data-settings-usage>Sem uso registrado nesta maquina.</div>
+        <div class="settings-actions">
+          <button type="button" data-settings-test>Testar conexao</button>
+          <button type="submit">Salvar</button>
+        </div>
+        <small>Estimativa local. Confira o valor oficial no painel da OpenAI.</small>
+      </form>
+    </section>
+  </div>
   <main>{cards}</main>
   <script>window.CUTTED_DATA = {data}; window.CUTTED_SCRIPT = {json.dumps(str(Path(__file__).resolve()))};</script>
   <script>{js()}</script>
@@ -2721,7 +3079,7 @@ def css() -> str:
 def base_css() -> str:
     return """
 *{box-sizing:border-box}:root{--color-brand-blue:#11A2CF;--color-brand-green:#AFCF2A;--color-brand-white:#E7E7E8;--color-brand-black:#050505;--color-metal-gray:#68686A;--color-surface:#0D0D0D;--color-surface-raised:#111;--color-surface-muted:#151515;--color-surface-control:#191919;--color-border:#272727;--color-border-strong:#333;--color-text:#f4f4f4;--color-text-soft:#ddd;--color-text-muted:#9a9a9a;--color-focus:#11A2CF;--color-danger:#ffb3b3;--shadow-panel:0 14px 42px rgba(0,0,0,.5)}body{margin:0;background:var(--color-brand-black);color:var(--color-text);font:14px/1.45 Arial,sans-serif}
-header{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:minmax(90px,1fr) auto minmax(90px,1fr);gap:16px;align-items:center;padding:10px 22px 12px;background:var(--color-brand-black);border-bottom:1px solid var(--color-border)}.header-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.brand-lockup{display:grid;justify-items:center;gap:8px;min-width:0}.brand-logo{display:block;width:min(540px,54vw);height:78px;object-fit:contain;object-position:center;border:0;border-radius:0;filter:none}.brand-lockup p{margin:2px 0 0;color:var(--color-text-muted);font-size:11px;line-height:1.1;text-align:center;max-width:min(520px,56vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tabs{position:sticky;top:119px;z-index:4;display:flex;gap:8px;padding:10px 22px;background:#060606;border-bottom:1px solid #1f1f1f}.tabs button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 12px}.tabs button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
+header{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:minmax(90px,1fr) auto minmax(90px,1fr);gap:16px;align-items:center;padding:10px 22px 12px;background:var(--color-brand-black);border-bottom:1px solid var(--color-border)}.header-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.icon-button{display:inline-grid;place-items:center;width:38px;min-width:38px;padding:0}.icon-button svg{display:block;width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.brand-lockup{display:grid;justify-items:center;gap:8px;min-width:0}.brand-logo{display:block;width:min(540px,54vw);height:78px;object-fit:contain;object-position:center;border:0;border-radius:0;filter:none}.brand-lockup p{margin:2px 0 0;color:var(--color-text-muted);font-size:11px;line-height:1.1;text-align:center;max-width:min(520px,56vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tabs{position:sticky;top:119px;z-index:4;display:flex;gap:8px;padding:10px 22px;background:#060606;border-bottom:1px solid #1f1f1f}.tabs button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 12px}.tabs button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
 main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px}.card{border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface);overflow:hidden}.card[open]{border-color:var(--color-metal-gray);background:var(--color-surface-raised)}.card.liked{border-color:var(--color-brand-green)}.card.discarded{opacity:.46}.clip-summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;min-height:62px;padding:12px 14px;cursor:pointer;list-style:none}.clip-summary::-webkit-details-marker{display:none}.clip-rank{color:var(--color-metal-gray);font-weight:700}.clip-title{display:grid;gap:2px;min-width:0}.clip-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}.clip-title small{color:var(--color-text-muted)}.clip-status{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.clip-status span,.format-previews span{display:inline-flex;align-items:center;min-height:26px;padding:4px 8px;border-radius:999px;background:#242424;color:var(--color-text-soft);font-size:12px}
 .app-notice{position:sticky;top:0;z-index:30;margin:0;padding:10px 14px;background:#2b1717;color:#ffd7d7;border-bottom:1px solid #6d2b2b;font-size:13px;text-align:center}.app-notice[hidden]{display:none}
 .import-stage{display:none;max-width:1080px;margin:18px auto;padding:0 18px}.import-panel{display:grid;gap:14px;padding:18px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised)}.import-panel p{margin:4px 0 0;color:var(--color-text-muted)}.import-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.import-panel label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.import-panel input,.import-panel select,.import-panel textarea{width:100%;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black);color:var(--color-text);padding:9px 10px;font:inherit}.import-panel textarea{resize:vertical;min-height:112px}.import-path-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px}.import-path-row button{min-height:38px;background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.duration-profile{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0}.duration-profile legend{grid-column:1/-1;color:var(--color-text-muted);font-size:12px}.duration-profile label{position:relative;display:grid!important}.duration-profile input{position:absolute;opacity:0;pointer-events:none}.duration-profile span{display:grid;gap:2px;min-height:54px;padding:10px 12px;border:1px solid var(--color-border-strong);border-radius:8px;background:var(--color-surface-muted);color:var(--color-text-soft)}.duration-profile input:checked+span{border-color:var(--color-brand-green);background:#182011;color:var(--color-text)}.duration-profile small{color:var(--color-text-muted)}.import-context{display:grid}.import-status{min-height:20px;color:var(--color-text-muted)}.import-result{display:flex;gap:8px;flex-wrap:wrap}.import-result a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.import-result code{display:block;width:100%;padding:10px;border:1px solid #3a2525;border-radius:6px;background:#180d0d;color:#ffcccc;white-space:pre-wrap}
@@ -2735,8 +3093,10 @@ main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px
 .overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,var(--color-brand-green));border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none;pointer-events:auto}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-text-box{display:grid;align-items:center;min-width:96px;min-height:34px;padding:8px 12px;border-left:0;background:rgba(var(--overlay-bg-rgb,0,0,0),var(--overlay-bg-opacity,.7));box-shadow:none;color:var(--overlay-color,#fff);font-weight:700;font-size:clamp(13px,var(--overlay-font-size,20px),36px);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.overlay-text-box[data-overlay-bg=off]{background:transparent;box-shadow:none}.overlay-text-box span{opacity:var(--overlay-opacity,1);overflow:hidden;text-overflow:ellipsis}.overlay-box.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.overlay-image-box{display:grid;place-items:center;min-width:72px;min-height:72px;padding:6px;border:1px dashed rgba(255,255,255,.42);background:rgba(0,0,0,.12);box-shadow:0 8px 24px rgba(0,0,0,.22)}.overlay-image-box img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none;background:transparent}.overlay-resize{position:absolute;right:3px;bottom:3px;z-index:4;width:22px;height:22px;padding:0;border:1px solid rgba(255,255,255,.52);border-radius:5px;background:rgba(255,255,255,.2);cursor:nwse-resize;touch-action:none;pointer-events:auto}.overlay-menu{position:absolute;z-index:6;display:grid;gap:8px;width:min(360px,94%);padding:8px;border:1px solid var(--color-border-strong);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel);touch-action:none}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px;cursor:move}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-inspector{display:grid;gap:8px}.overlay-inspector label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.overlay-inspector input[type=text],.overlay-inspector input[type=number]{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.overlay-inspector input[type=color]{width:42px;height:32px;padding:2px;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black)}.overlay-inspector-row{display:flex;gap:8px;align-items:center}.overlay-inspector-row>*{flex:1}.overlay-inspector-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.overlay-inspector-check input{width:auto}.overlay-danger{color:var(--color-danger)!important;border-color:#5b2626!important;background:#251111!important}.image-upload{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-empty{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;color:var(--color-text-muted)}
 p{color:#bebebe}.peak{color:#fff;font-size:16px}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}.transcript-panel details{border-top:1px solid #242424;margin-top:12px;padding-top:10px}.transcript-panel summary{cursor:pointer;color:#ddd}
 body[data-tab=import] main,body[data-tab=import] .final-stage{display:none}body[data-tab=import] .import-stage{display:block}body[data-tab=final] main,body[data-tab=final] .import-stage{display:none}body[data-tab=final] .final-stage{display:block}.final-stage{display:none;margin:18px auto;max-width:1240px;padding:18px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised)}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.render-status{margin-top:12px;color:var(--color-text-muted)}.render-results{display:grid;gap:12px;margin-top:14px}.result-item{border:1px solid #303030;border-radius:8px;background:#090909;overflow:hidden}.result-item[open]{border-color:var(--color-metal-gray)}.result-item summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;border:0;color:var(--color-text)}.result-item summary strong{font-size:14px}.result-item summary span{color:var(--color-text-muted);font-size:12px}.result-body{display:grid;grid-template-columns:minmax(260px,420px) minmax(240px,1fr);gap:14px;padding:0 14px 14px}.result-body video{width:100%;max-height:70vh;background:#000;border-radius:6px;object-fit:contain}.result-meta{display:grid;align-content:start;gap:10px}.result-meta dl{margin:0}.result-actions{display:flex;gap:8px;flex-wrap:wrap}.result-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.result-actions a.secondary{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}
+.empty-project-stage{display:none;max-width:720px;margin:18px auto;padding:0 18px}.empty-project-panel{display:grid;gap:10px;padding:18px;border:1px solid var(--glass-border);border-radius:var(--radius-panel);background:var(--glass-bg-strong);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(24px) saturate(1.45);text-align:center}.empty-project-panel p{margin:0;color:var(--color-text-muted)}.empty-project-panel button{justify-self:center}body[data-project-empty=true][data-tab=edit] main{display:none}body[data-project-empty=true][data-tab=edit] .empty-project-stage{display:block}
+.settings-backdrop{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:18px;background:rgba(0,0,0,.58)}.settings-backdrop[hidden]{display:none}.settings-panel{width:min(560px,100%);border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised);box-shadow:var(--shadow-panel);padding:16px}.settings-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.settings-head p{margin:3px 0 0;color:var(--color-text-muted)}.settings-form{display:grid;gap:12px;margin-top:14px}.settings-form label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.settings-form input,.settings-form select{width:100%;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black);color:var(--color-text);padding:9px 10px;font:inherit}.settings-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.settings-status,.settings-usage{padding:10px;border:1px solid var(--color-border);border-radius:8px;background:#0b0b0b;color:var(--color-text-soft)}.settings-usage{display:grid;gap:3px;color:var(--color-text-muted)}.settings-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}.settings-form small{color:var(--color-text-muted)}
 button{background:var(--color-brand-white);color:var(--color-brand-black);border:0;border-radius:6px;padding:9px 12px;cursor:pointer}#reset-ui,button[data-action=discard]{background:#242424;color:var(--color-text-soft)}button[data-action=reset-trim],button[data-action=next-card]{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong)}
-@media(max-width:860px){header{position:relative;grid-template-columns:1fr;justify-items:center}.header-actions{justify-content:center}.brand-logo{width:min(390px,88vw);height:64px}.brand-lockup p{max-width:86vw}.tabs{top:0;overflow:auto}.preview-strip button,.card-tabs button{font-size:12px;padding:7px 9px}main{padding:12px}.clip-summary{grid-template-columns:auto minmax(0,1fr);align-items:start}.clip-status{grid-column:1/-1;justify-content:flex-start}.editor-shell,.result-body,.camera-segments,.caption-settings,.preview-bar,.import-grid,.duration-profile,.import-path-row{grid-template-columns:1fr}.preview-frame{max-width:100%}.preview-strip{justify-content:center}.preview-controls{width:max-content;max-width:100%;flex-wrap:wrap}.media{max-height:none}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons,.overlay-menu{grid-template-columns:1fr}}
+@media(max-width:860px){header{position:relative;grid-template-columns:1fr;justify-items:center}.header-actions{justify-content:center}.brand-logo{width:min(390px,88vw);height:64px}.brand-lockup p{max-width:86vw}.tabs{top:0;overflow:auto}.preview-strip button,.card-tabs button{font-size:12px;padding:7px 9px}main{padding:12px}.clip-summary{grid-template-columns:auto minmax(0,1fr);align-items:start}.clip-status{grid-column:1/-1;justify-content:flex-start}.editor-shell,.result-body,.camera-segments,.caption-settings,.preview-bar,.import-grid,.duration-profile,.import-path-row,.settings-grid{grid-template-columns:1fr}.preview-frame{max-width:100%}.preview-strip{justify-content:center}.preview-controls{width:max-content;max-width:100%;flex-wrap:wrap}.media{max-height:none}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons,.overlay-menu{grid-template-columns:1fr}}
 """
 
 
@@ -2768,18 +3128,19 @@ header{background:linear-gradient(180deg,rgba(5,5,5,.92),rgba(5,5,5,.68));backdr
 .preview-play{width:38px;height:38px;min-width:38px;background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
 .preview-volume-group{border-left:1px solid rgba(231,231,232,.12)}.preview-volume-group output{color:rgba(231,231,232,.72);font-variant-numeric:tabular-nums}
 .media{border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-panel);background:#000;box-shadow:0 14px 44px rgba(0,0,0,.32)}
-.tool-panel,.export-dock,.overlay-menu{border-color:var(--glass-border);border-radius:var(--radius-panel);background:linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.025) 36%,rgba(0,0,0,.08) 100%),var(--glass-bg-strong);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-edge),inset 0 -18px 28px rgba(0,0,0,.14);backdrop-filter:blur(24px) saturate(1.45)}
+.tool-panel,.export-dock,.overlay-menu,.settings-panel{border-color:var(--glass-border);border-radius:var(--radius-panel);background:linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.025) 36%,rgba(0,0,0,.08) 100%),var(--glass-bg-strong);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-edge),inset 0 -18px 28px rgba(0,0,0,.14);backdrop-filter:blur(24px) saturate(1.45)}
 .tool-summary{color:rgba(231,231,232,.74)}.export-dock{padding:14px}.export-dock span{color:rgba(231,231,232,.6)}
 .timeline-scrub-track,.timeline-track{border-color:rgba(231,231,232,.12);background:linear-gradient(90deg,rgba(17,162,207,.18),rgba(231,231,232,.08))}
 .timeline-selected{background:rgba(17,162,207,.2)}.timeline-playhead,.timeline-playhead:before,.timeline-fill{background:var(--color-brand-white)}
 .timeline-tools button,button[data-action=reset-trim],button[data-action=next-card]{background:rgba(231,231,232,.07);color:rgba(231,231,232,.8);border-color:var(--glass-border)}
 button[data-action=like],.import-panel button[type=submit],#finalize-videos,.import-result a,.result-actions a{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white);font-weight:800}
 button[data-action=discard],.result-actions a.secondary{background:rgba(231,231,232,.07);color:rgba(231,231,232,.76);border-color:var(--glass-border)}
-.import-panel input,.import-panel select,.import-panel textarea,.camera-card-controls select,.caption-settings select,.caption-settings input,.overlay-inspector input[type=text],.overlay-inspector input[type=number]{border-color:var(--glass-border);border-radius:var(--radius-panel);background:rgba(5,5,5,.72);color:var(--color-text)}
+.import-panel input,.import-panel select,.import-panel textarea,.camera-card-controls select,.caption-settings select,.caption-settings input,.overlay-inspector input[type=text],.overlay-inspector input[type=number],.settings-form input,.settings-form select{border-color:var(--glass-border);border-radius:var(--radius-panel);background:rgba(5,5,5,.72);color:var(--color-text)}
 .duration-profile span,.camera-segment,.layer-chip,.overlay-layer-row,.image-upload{border-color:var(--glass-border);background:rgba(231,231,232,.05)}
 .duration-profile input:checked+span,.layer-chip.is-selected{border-color:rgba(17,162,207,.72);background:var(--control-active);color:var(--color-text)}
 .overlay-menu button,.overlay-layer-row button{background:rgba(231,231,232,.08);color:rgba(231,231,232,.8);border-color:var(--glass-border)}
 .overlay-danger{background:rgba(80,20,20,.72)!important;border-color:rgba(255,120,120,.46)!important;color:#ffd2d2!important}
+.settings-status,.settings-usage{border-color:var(--glass-border);background:rgba(231,231,232,.05)}.settings-backdrop{backdrop-filter:blur(14px)}
 .result-item{border-color:var(--glass-border);background:rgba(9,9,9,.82)}.result-item[open]{border-color:rgba(231,231,232,.25)}
 .result-body video{border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-panel)}
 @supports not (backdrop-filter:blur(1px)){.preview-bar,.preview-controls,.tool-panel,.export-dock,.overlay-menu,header,.tabs{background:#111}}
@@ -2792,9 +3153,11 @@ def js() -> str:
 if (new URLSearchParams(location.search).has("reset")) {
   localStorage.removeItem("cutted-state");
   localStorage.removeItem("cutted-tab");
+  localStorage.removeItem("cutted-empty-gallery");
   history.replaceState(null, "", location.pathname);
 }
 const state = JSON.parse(localStorage.getItem("cutted-state") || "{}");
+const emptyGalleryStorageKey = "cutted-empty-gallery";
 const maxOverlayImageBytes = 1800000;
 const maxOverlayImageSourceBytes = 6000000;
 const maxOverlayImagePixels = 1600;
@@ -4248,6 +4611,16 @@ function currentGalleryPath(){
   if (path.endsWith("/")) return path.replace(/\\/$/, "");
   return path.replace(/\\/[^/]*$/, "");
 }
+function isCurrentGalleryEmpty(){
+  return localStorage.getItem(emptyGalleryStorageKey) === currentGalleryPath();
+}
+function syncProjectEmptyState(){
+  document.body.dataset.projectEmpty = isCurrentGalleryEmpty() ? "true" : "false";
+}
+function markCurrentGalleryEmpty(){
+  localStorage.setItem(emptyGalleryStorageKey, currentGalleryPath());
+  syncProjectEmptyState();
+}
 function importFormPayload(form){
   const data = new FormData(form);
   return {
@@ -4260,6 +4633,125 @@ function importFormPayload(form){
     context_prompt: String(data.get("context_prompt") || "").trim(),
     render_previews: true
   };
+}
+function setupSettingsPanel(){
+  const modal = document.querySelector("[data-settings-modal]");
+  const form = document.querySelector("[data-settings-form]");
+  const open = document.getElementById("open-settings");
+  const close = document.querySelector("[data-settings-close]");
+  const test = document.querySelector("[data-settings-test]");
+  if (!modal || !form || !open) return;
+  open.addEventListener("click", () => openSettingsPanel());
+  close?.addEventListener("click", () => closeSettingsPanel());
+  modal.addEventListener("click", event => { if (event.target === modal) closeSettingsPanel(); });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !modal.hidden) closeSettingsPanel();
+  });
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    saveSettingsForm(form);
+  });
+  test?.addEventListener("click", () => testSettingsConnection(form));
+  loadOpenaiSettings();
+}
+function openSettingsPanel(){
+  const modal = document.querySelector("[data-settings-modal]");
+  if (!modal) return;
+  modal.hidden = false;
+  loadOpenaiSettings();
+  modal.querySelector("[name=api_key]")?.focus();
+}
+function closeSettingsPanel(){
+  const modal = document.querySelector("[data-settings-modal]");
+  if (modal) modal.hidden = true;
+}
+async function loadOpenaiSettings(){
+  const form = document.querySelector("[data-settings-form]");
+  const status = document.querySelector("[data-settings-status]");
+  if (!form) return;
+  try {
+    const response = await fetch("/api/settings/openai");
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao carregar configuracoes.");
+    applySettingsPayload(form, payload.settings || {}, payload.usage || {});
+  } catch (error) {
+    if (status) status.textContent = error.message || "Nao consegui carregar configuracoes.";
+  }
+}
+function applySettingsPayload(form, settings, usage){
+  form.elements.ai_provider.value = settings.ai_provider || "openai";
+  form.elements.openai_model.value = settings.openai_model || "gpt-5-mini";
+  form.elements.transcribe_model.value = settings.transcribe_model || "whisper-1";
+  form.elements.api_key.value = "";
+  const status = document.querySelector("[data-settings-status]");
+  if (status) {
+    const key = settings.key_configured ? "Token configurado" : "Token nao configurado";
+    status.textContent = `${key} - ${settings.openai_model || "gpt-5-mini"} / ${settings.transcribe_model || "whisper-1"}`;
+  }
+  renderSettingsUsage(usage);
+}
+function settingsPayloadFromForm(form){
+  const data = new FormData(form);
+  const payload = {
+    ai_provider: String(data.get("ai_provider") || "openai"),
+    openai_model: String(data.get("openai_model") || "gpt-5-mini"),
+    transcribe_model: String(data.get("transcribe_model") || "whisper-1")
+  };
+  const apiKey = String(data.get("api_key") || "").trim();
+  if (apiKey) payload.api_key = apiKey;
+  return payload;
+}
+async function saveSettingsForm(form){
+  const status = document.querySelector("[data-settings-status]");
+  if (status) status.textContent = "Salvando...";
+  try {
+    const response = await fetch("/api/settings/openai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settingsPayloadFromForm(form))
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao salvar configuracoes.");
+    applySettingsPayload(form, payload.settings || {}, payload.usage || {});
+    if (status) status.textContent = `Salvo. ${status.textContent}`;
+  } catch (error) {
+    if (status) status.textContent = error.message || "Nao consegui salvar.";
+  }
+}
+async function testSettingsConnection(form){
+  const status = document.querySelector("[data-settings-status]");
+  const button = document.querySelector("[data-settings-test]");
+  if (status) status.textContent = "Testando conexao...";
+  if (button) button.disabled = true;
+  try {
+    const payload = settingsPayloadFromForm(form);
+    const response = await fetch("/api/settings/openai/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || "Falha ao testar conexao.");
+    if (status) status.textContent = data.message || "Conexao OpenAI validada.";
+  } catch (error) {
+    if (status) status.textContent = error.message || "Nao consegui validar a conexao.";
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+function renderSettingsUsage(usage){
+  const target = document.querySelector("[data-settings-usage]");
+  if (!target) return;
+  const total = Number(usage.estimated_total_usd || 0);
+  const count = Number(usage.event_count || 0);
+  const last = usage.last_event || {};
+  const lastText = last.operation
+    ? `Ultimo: ${escapeHtml(last.operation)} em ${escapeHtml(last.model || "-")} - ${formatUsd(last.estimated_usd || 0)}`
+    : "Ultimo: sem registro.";
+  target.innerHTML = `<strong>Total local estimado: ${formatUsd(total)}</strong><span>${count} evento(s) registrado(s).</span><span>${lastText}</span>`;
+}
+function formatUsd(value){
+  return `$${Number(value || 0).toFixed(4)}`;
 }
 function setupImportPathButtons(){
   const form = document.querySelector("[data-import-form]");
@@ -4470,6 +4962,7 @@ function startNewProject(){
   const ok = confirm("Iniciar novo projeto? As edicoes da interface serao redefinidas, mas os videos renderizados continuarao salvos.");
   if (!ok) return;
   clearNewProjectState();
+  markCurrentGalleryEmpty();
   syncCaptionInputs();
   resetCardsForNewProject();
   const status = document.querySelector("[data-render-status]");
@@ -4505,12 +4998,15 @@ function escapeHtml(value){
   return String(value).replace(/[&<>"']/g, char => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[char]));
 }
 function escapeAttr(value){ return escapeHtml(value); }
+syncProjectEmptyState();
 applyTab(localStorage.getItem("cutted-tab") || "edit");
 syncCaptionInputs();
 document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
   btn.addEventListener("click", () => { applyTab(btn.dataset.tab); renderCaptionQueue(); });
 });
+setupSettingsPanel();
 setupImportPathButtons();
+document.querySelector("[data-empty-import]")?.addEventListener("click", () => applyTab("import"));
 document.querySelector("[data-import-form]")?.addEventListener("submit", event => {
   event.preventDefault();
   startImportJob(event.currentTarget);
