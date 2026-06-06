@@ -21,8 +21,8 @@ surfaces:
 
 | Token | Value | Use |
 | --- | --- | --- |
-| `--color-brand-blue` | `#11A2CF` | Technical/focus accent, future progress states |
-| `--color-brand-green` | `#AFCF2A` | Selected/approved/active edit states |
+| `--color-brand-blue` | `#11A2CF` | Selected, focus, current edit, and technical progress states |
+| `--color-brand-green` | `#AFCF2A` | Approved, complete, export-ready, and positive states |
 | `--color-brand-white` | `#E7E7E8` | Primary action surfaces and logo metal white |
 | `--color-brand-black` | `#050505` | App background |
 | `--color-metal-gray` | `#68686A` | Secondary metadata and neutral emphasis |
@@ -58,8 +58,8 @@ and mostly opaque.
 
 - Keep the interface predominantly black/neutral so video previews remain the
   primary content.
-- Use green for selected, active, approved, or export-ready states.
-- Use blue sparingly for technical progress and future import/AI feedback.
+- Use blue for selected, active, current edit, focus, and technical progress states.
+- Use green for approved, complete, export-ready, or success states.
 - Use white/black for primary actions with high contrast.
 - Avoid new decorative glows in the application chrome; the logo already
   carries the brand energy.

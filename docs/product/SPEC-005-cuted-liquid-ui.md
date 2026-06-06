@@ -13,8 +13,8 @@ interface copy.
 - Glass appears on functional chrome: header, flow tabs, preview transport,
   segmented presets, floating layer menus, inspectors, and render actions.
 - Dense content stays readable with dark neutral panels.
-- Primary actions use the metal white token. Selection and approved states use
-  brand green. Technical/import progress can use brand blue.
+- Primary actions use the metal white token. Selection and current edit states
+  use brand blue. Approved and complete states use brand green.
 - Copy is terse. Professional users do not need repeated explanations on every
   screen.
 
