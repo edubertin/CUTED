@@ -182,7 +182,6 @@ def parse_args() -> argparse.Namespace:
     analyze.add_argument("--youtube-url", default=None)
     analyze.add_argument("--out", type=Path, required=True)
     analyze.add_argument("--clips", type=int, default=15)
-    analyze.add_argument("--final-clips", type=int, default=None)
     analyze.add_argument("--preset", choices=("tiktok", "shorts", "reels"), default=None)
     analyze.add_argument("--target-duration", type=float, default=None)
     analyze.add_argument("--min-duration", type=float, default=None)
@@ -398,7 +397,6 @@ def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path
     if not source_url and not source_path:
         raise ValueError("Informe um link ou caminho local para importar.")
     clips = clamp_int(payload.get("preview_count"), 1, 40, 10)
-    final_count = clamp_int(payload.get("final_count"), 1, clips, min(10, clips))
     language = clean_optional_text(payload.get("language"), 24)
     preset = clean_preset(payload.get("preset"))
     context_prompt = clean_optional_text(payload.get("context_prompt"), 5000)
@@ -412,7 +410,6 @@ def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path
         "source_url": source_url,
         "source_path": source_path,
         "preview_count": clips,
-        "final_count": final_count,
         "language": language,
         "preset": preset,
         "context_prompt": context_prompt,
@@ -443,7 +440,7 @@ def import_command(
         local_source = Path(source_path).expanduser().resolve()
         require_file(local_source)
         command.append(str(local_source))
-    command.extend(["--out", str(out_dir), "--clips", str(metadata["preview_count"]), "--final-clips", str(metadata["final_count"]), "--preset", str(metadata["preset"])])
+    command.extend(["--out", str(out_dir), "--clips", str(metadata["preview_count"]), "--preset", str(metadata["preset"])])
     command.extend(["--ai-provider", str(metadata["ai_provider"]), "--context-prompt", str(metadata["context_prompt"])])
     language = str(metadata["language"])
     if language:
@@ -1900,7 +1897,6 @@ def pick_moments_with_openai(args: argparse.Namespace, segments: list[Segment], 
 
 def openai_select_candidates(args: argparse.Namespace, candidates: list[Moment], requested: int) -> dict[str, object]:
     context = clean_optional_text(getattr(args, "context_prompt", ""), 5000)
-    final_clips = getattr(args, "final_clips", None) or requested
     candidate_rows = [
         {
             "id": index,
@@ -1936,14 +1932,18 @@ def openai_select_candidates(args: argparse.Namespace, candidates: list[Moment],
         "required": ["clips"],
     }
     system = (
-        "Voce e o analista editorial do CUTED. Escolha cortes curtos com gancho forte, "
-        "frase compreensivel, inicio e fim naturais, e bom potencial para redes sociais. "
+        "Voce e o analista editorial do CUTED e deve imitar o criterio da skill local. "
+        "Escolha apenas IDs existentes; nunca invente timestamps. Priorize cortes com gancho forte, "
+        "frase completa, contexto suficiente, comeco natural e fechamento claro. Penalize trechos que "
+        "parecem comecar no meio de uma frase ou terminar em conectivos como porque, entao, mas, so que, "
+        "ou seja e tipo. Favoreca surpresa, conflito, opiniao forte, aprendizado, dinheiro, erro, segredo "
+        "ou insight especifico. Evite filler generico, repeticao, sobreposicao e trechos que dependem de "
+        "contexto externo demais. Use o contexto editorial do usuario para desempatar. "
         "Responda apenas no JSON estruturado solicitado."
     )
     user = json.dumps(
         {
-            "desired_preview_count": requested,
-            "desired_final_clip_count_after_review": final_clips,
+            "desired_suggestion_count": requested,
             "editorial_context": context or "Use o criterio editorial padrao do CUTED.",
             "candidates": candidate_rows,
         },
@@ -2421,11 +2421,8 @@ def page_html(source_label: str, cards: str, data: str) -> str:
         <label>Caminho local
           <input name="source_path" type="text" placeholder="C:\\videos\\arquivo.mp4" autocomplete="off">
         </label>
-        <label>Previews
+        <label>Quantidade de sugestoes
           <input name="preview_count" type="number" min="1" max="40" value="10">
-        </label>
-        <label>Cortes finais
-          <input name="final_count" type="number" min="1" max="40" value="10">
         </label>
         <label>Idioma
           <input name="language" type="text" value="pt" maxlength="24">
@@ -3998,7 +3995,6 @@ function importFormPayload(form){
     source_url: String(data.get("source_url") || "").trim(),
     source_path: String(data.get("source_path") || "").trim(),
     preview_count: Number(data.get("preview_count") || 10),
-    final_count: Number(data.get("final_count") || 10),
     language: String(data.get("language") || "").trim(),
     preset: String(data.get("preset") || "tiktok"),
     context_prompt: String(data.get("context_prompt") || "").trim(),
