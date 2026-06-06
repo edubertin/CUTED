@@ -2466,11 +2466,11 @@ def card_html(moment: Moment) -> str:
         <span class="clip-rank">#{moment.rank:02d}</span>
         <span class="clip-title">
           <strong>{html.escape(moment.title)}</strong>
-          <small data-card-summary>Final: {moment.start:.1f}s - {moment.end:.1f}s ({duration:.1f}s)</small>
+          <small data-card-summary>{moment.start:.1f}s - {moment.end:.1f}s ({duration:.1f}s)</small>
         </span>
         <span class="clip-status">
-          <span data-platform-summary>Nenhum destino marcado</span>
-          <span data-status-pill>Pendente</span>
+          <span data-platform-summary>Sem destino</span>
+          <span data-status-pill>Em edicao</span>
         </span>
       </summary>
       <div class="editor-shell">
@@ -2485,9 +2485,9 @@ def card_html(moment: Moment) -> str:
                 <button data-card-format-preview="youtube">YouTube</button>
               </div>
               <div class="preview-controls" aria-label="Controles do preview">
-                <button class="preview-icon preview-play" data-preview-play type="button" aria-label="Reproduzir" title="Reproduzir">Play</button>
+                <button class="preview-icon preview-play" data-preview-play type="button" aria-label="Reproduzir" title="Reproduzir"></button>
                 <div class="preview-volume-group" aria-label="Volume do preview">
-                  <button class="preview-icon preview-volume" data-preview-volume type="button" aria-label="Alternar mudo" title="Alternar mudo">Vol</button>
+                  <button class="preview-icon preview-volume" data-preview-volume type="button" aria-label="Alternar mudo" title="Alternar mudo"></button>
                   <button class="preview-step" data-preview-volume-down type="button" aria-label="Diminuir volume" title="Diminuir volume">-</button>
                   <output data-preview-volume-value>20%</output>
                   <button class="preview-step" data-preview-volume-up type="button" aria-label="Aumentar volume" title="Aumentar volume">+</button>
@@ -2516,7 +2516,7 @@ def card_html(moment: Moment) -> str:
             <div class="timeline-editor">
               <div class="timeline-head">
                 <span>Ajuste fino</span>
-                <output data-trim-summary>Final: {moment.start:.1f}s - {moment.end:.1f}s ({duration:.1f}s)</output>
+                <output data-trim-summary>{moment.start:.1f}s - {moment.end:.1f}s ({duration:.1f}s)</output>
               </div>
               <div class="timeline-timebar">
                 <span>Agora <output data-output="current">{moment.start:.1f}s</output></span>
@@ -2582,7 +2582,7 @@ def card_html(moment: Moment) -> str:
           <footer class="export-dock" aria-label="Fila de exportacao do corte">
             <div>
               <strong>Export</strong>
-              <span data-platform-summary>Nenhum destino marcado</span>
+              <span data-platform-summary>Sem destino</span>
             </div>
             <div class="platform-tags" role="group" aria-label="Adicionar destino na fila final">
               <button data-platform="tiktok">TikTok</button>
@@ -2649,7 +2649,7 @@ def page_html(source_label: str, cards: str, data: str, logo_src: str) -> str:
       <div class="stage-head">
         <div>
           <strong>Importar projeto</strong>
-          <p>Crie uma nova galeria usando o motor local atual do CUTED. A skill permanece como fallback.</p>
+          <p>Link, contexto e destino local.</p>
         </div>
         <button type="submit">Importar</button>
       </div>
@@ -2690,18 +2690,18 @@ def page_html(source_label: str, cards: str, data: str, logo_src: str) -> str:
       <label class="import-context">Contexto para a IA
         <textarea name="context_prompt" rows="5" placeholder="Opcional. Ex.: priorize momentos polemicos, engracados, com frase completa e gancho forte."></textarea>
       </label>
-      <div class="import-status" data-import-status>Nenhuma importacao em andamento.</div>
+      <div class="import-status" data-import-status>Pronto.</div>
       <div class="import-result" data-import-result></div>
     </form>
   </section>
   <section class="final-stage">
     <div class="stage-head">
       <div>
-        <strong>Resultados</strong>
-        <p data-final-summary>Selecione cortes antes de renderizar.</p>
+        <strong>Fila</strong>
+        <p data-final-summary>Nada na fila.</p>
       </div>
       <div class="header-actions">
-        <button id="finalize-videos">Renderizar novamente</button>
+        <button id="finalize-videos">Renderizar</button>
       </div>
     </div>
     <div class="render-status" data-render-status></div>
@@ -2715,6 +2715,10 @@ def page_html(source_label: str, cards: str, data: str, logo_src: str) -> str:
 
 
 def css() -> str:
+    return base_css() + liquid_ui_css()
+
+
+def base_css() -> str:
     return """
 *{box-sizing:border-box}:root{--color-brand-blue:#11A2CF;--color-brand-green:#AFCF2A;--color-brand-white:#E7E7E8;--color-brand-black:#050505;--color-metal-gray:#68686A;--color-surface:#0D0D0D;--color-surface-raised:#111;--color-surface-muted:#151515;--color-surface-control:#191919;--color-border:#272727;--color-border-strong:#333;--color-text:#f4f4f4;--color-text-soft:#ddd;--color-text-muted:#9a9a9a;--color-focus:#AFCF2A;--color-danger:#ffb3b3;--shadow-panel:0 14px 42px rgba(0,0,0,.5)}body{margin:0;background:var(--color-brand-black);color:var(--color-text);font:14px/1.45 Arial,sans-serif}
 header{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:minmax(90px,1fr) auto minmax(90px,1fr);gap:16px;align-items:center;padding:10px 22px 12px;background:var(--color-brand-black);border-bottom:1px solid var(--color-border)}.header-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.brand-lockup{display:grid;justify-items:center;gap:8px;min-width:0}.brand-logo{display:block;width:min(540px,54vw);height:78px;object-fit:contain;object-position:center;border:0;border-radius:0;filter:none}.brand-lockup p{margin:2px 0 0;color:var(--color-text-muted);font-size:11px;line-height:1.1;text-align:center;max-width:min(520px,56vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tabs{position:sticky;top:119px;z-index:4;display:flex;gap:8px;padding:10px 22px;background:#060606;border-bottom:1px solid #1f1f1f}.tabs button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 12px}.tabs button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
@@ -2733,6 +2737,51 @@ p{color:#bebebe}.peak{color:#fff;font-size:16px}dl{display:grid;grid-template-co
 body[data-tab=import] main,body[data-tab=import] .final-stage{display:none}body[data-tab=import] .import-stage{display:block}body[data-tab=final] main,body[data-tab=final] .import-stage{display:none}body[data-tab=final] .final-stage{display:block}.final-stage{display:none;margin:18px auto;max-width:1240px;padding:18px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised)}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.render-status{margin-top:12px;color:var(--color-text-muted)}.render-results{display:grid;gap:12px;margin-top:14px}.result-item{border:1px solid #303030;border-radius:8px;background:#090909;overflow:hidden}.result-item[open]{border-color:var(--color-metal-gray)}.result-item summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;border:0;color:var(--color-text)}.result-item summary strong{font-size:14px}.result-item summary span{color:var(--color-text-muted);font-size:12px}.result-body{display:grid;grid-template-columns:minmax(260px,420px) minmax(240px,1fr);gap:14px;padding:0 14px 14px}.result-body video{width:100%;max-height:70vh;background:#000;border-radius:6px;object-fit:contain}.result-meta{display:grid;align-content:start;gap:10px}.result-meta dl{margin:0}.result-actions{display:flex;gap:8px;flex-wrap:wrap}.result-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.result-actions a.secondary{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}
 button{background:var(--color-brand-white);color:var(--color-brand-black);border:0;border-radius:6px;padding:9px 12px;cursor:pointer}#reset-ui,button[data-action=discard]{background:#242424;color:var(--color-text-soft)}button[data-action=reset-trim],button[data-action=next-card]{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong)}
 @media(max-width:860px){header{position:relative;grid-template-columns:1fr;justify-items:center}.header-actions{justify-content:center}.brand-logo{width:min(390px,88vw);height:64px}.brand-lockup p{max-width:86vw}.tabs{top:0;overflow:auto}.preview-strip button,.card-tabs button{font-size:12px;padding:7px 9px}main{padding:12px}.clip-summary{grid-template-columns:auto minmax(0,1fr);align-items:start}.clip-status{grid-column:1/-1;justify-content:flex-start}.editor-shell,.result-body,.camera-segments,.caption-settings,.preview-bar,.import-grid,.duration-profile,.import-path-row{grid-template-columns:1fr}.preview-frame{max-width:100%}.preview-strip{justify-content:center}.preview-controls{width:max-content;max-width:100%;flex-wrap:wrap}.media{max-height:none}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons,.overlay-menu{grid-template-columns:1fr}}
+"""
+
+
+def liquid_ui_css() -> str:
+    return """
+:root{--glass-bg:rgba(18,18,18,.72);--glass-bg-strong:rgba(24,24,24,.88);--glass-border:rgba(231,231,232,.14);--glass-highlight:rgba(255,255,255,.08);--glass-shadow:0 18px 52px rgba(0,0,0,.42);--control-bg:rgba(25,25,25,.82);--control-hover:rgba(48,48,48,.86);--control-active:rgba(175,207,42,.16);--radius-control:999px;--radius-panel:8px;--focus-ring:0 0 0 2px rgba(175,207,42,.5)}
+body{background:radial-gradient(circle at 18% 0,rgba(17,162,207,.09),transparent 30%),radial-gradient(circle at 82% 0,rgba(175,207,42,.08),transparent 28%),var(--color-brand-black);font-family:Inter,Arial,sans-serif;letter-spacing:0}
+button,.import-result a,.result-actions a{min-height:36px;border:1px solid var(--glass-border);border-radius:var(--radius-control);background:var(--control-bg);color:var(--color-text-soft);box-shadow:inset 0 1px 0 var(--glass-highlight);transition:background .16s ease,border-color .16s ease,color .16s ease,transform .16s ease}
+button:hover,.import-result a:hover,.result-actions a:hover{background:var(--control-hover);border-color:rgba(231,231,232,.24)}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:0;box-shadow:var(--focus-ring)}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.48;cursor:not-allowed;transform:none}
+header{background:linear-gradient(180deg,rgba(5,5,5,.94),rgba(5,5,5,.78));backdrop-filter:blur(18px);border-bottom:1px solid var(--glass-border)}
+.brand-logo{width:min(500px,48vw);height:70px}.brand-lockup p{margin-top:0;color:rgba(231,231,232,.56)}
+.header-actions button,#reset-ui{background:rgba(231,231,232,.08);color:var(--color-text-soft);border-color:var(--glass-border)}
+.tabs{justify-content:center;background:rgba(5,5,5,.7);backdrop-filter:blur(18px);border-bottom:1px solid var(--glass-border)}
+.tabs button{min-width:98px;background:rgba(231,231,232,.06);border-color:var(--glass-border);color:rgba(231,231,232,.74);font-weight:700}
+.tabs button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
+.card,.import-panel,.final-stage{border-color:var(--glass-border);background:linear-gradient(180deg,rgba(17,17,17,.92),rgba(10,10,10,.94));box-shadow:0 10px 34px rgba(0,0,0,.22)}
+.card[open]{border-color:rgba(231,231,232,.22);background:linear-gradient(180deg,rgba(20,20,20,.96),rgba(12,12,12,.96))}
+.clip-summary{min-height:58px}.clip-status span,.format-previews span{background:rgba(231,231,232,.07);border:1px solid var(--glass-border);color:rgba(231,231,232,.72)}
+.preview-bar{gap:10px;padding:10px;width:100%;border:1px solid var(--glass-border);border-radius:var(--radius-panel);background:var(--glass-bg);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight);backdrop-filter:blur(18px) saturate(1.25)}
+.preview-strip{width:100%;justify-content:center}.preview-strip button,.card-tabs button,.platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{border-color:var(--glass-border);background:rgba(231,231,232,.06);color:rgba(231,231,232,.78);font-weight:700;text-align:center}
+.preview-strip button.active,.card-tabs button.active,.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:var(--control-active);color:var(--color-brand-green);border-color:rgba(175,207,42,.72)}
+.preview-controls{gap:8px;padding:5px 8px;border-color:var(--glass-border);background:rgba(5,5,5,.34);box-shadow:inset 0 1px 0 var(--glass-highlight);backdrop-filter:blur(12px)}
+.preview-icon,.preview-step{border-color:var(--glass-border);background:rgba(231,231,232,.08);color:var(--color-text);box-shadow:inset 0 1px 0 var(--glass-highlight)}
+.preview-play{width:38px;height:38px;min-width:38px;background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
+.preview-volume-group{border-left:1px solid rgba(231,231,232,.12)}.preview-volume-group output{color:rgba(231,231,232,.72);font-variant-numeric:tabular-nums}
+.media{border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-panel);background:#000;box-shadow:0 14px 44px rgba(0,0,0,.32)}
+.tool-panel,.export-dock,.overlay-menu{border-color:var(--glass-border);border-radius:var(--radius-panel);background:var(--glass-bg-strong);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight);backdrop-filter:blur(18px) saturate(1.2)}
+.tool-summary{color:rgba(231,231,232,.74)}.export-dock{padding:14px}.export-dock span{color:rgba(231,231,232,.6)}
+.timeline-scrub-track,.timeline-track{border-color:rgba(231,231,232,.12);background:linear-gradient(90deg,rgba(17,162,207,.18),rgba(175,207,42,.18))}
+.timeline-selected{background:rgba(175,207,42,.2)}.timeline-playhead,.timeline-playhead:before,.timeline-fill{background:var(--color-brand-white)}
+.timeline-tools button,button[data-action=reset-trim],button[data-action=next-card]{background:rgba(231,231,232,.07);color:rgba(231,231,232,.8);border-color:var(--glass-border)}
+button[data-action=like],.import-panel button[type=submit],#finalize-videos,.import-result a,.result-actions a{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white);font-weight:800}
+button[data-action=discard],.result-actions a.secondary{background:rgba(231,231,232,.07);color:rgba(231,231,232,.76);border-color:var(--glass-border)}
+.import-panel input,.import-panel select,.import-panel textarea,.camera-card-controls select,.caption-settings select,.caption-settings input,.overlay-inspector input[type=text],.overlay-inspector input[type=number]{border-color:var(--glass-border);border-radius:var(--radius-panel);background:rgba(5,5,5,.72);color:var(--color-text)}
+.duration-profile span,.camera-segment,.layer-chip,.overlay-layer-row,.image-upload{border-color:var(--glass-border);background:rgba(231,231,232,.05)}
+.duration-profile input:checked+span,.layer-chip.is-selected{border-color:rgba(175,207,42,.72);background:var(--control-active);color:var(--color-text)}
+.overlay-menu button,.overlay-layer-row button{background:rgba(231,231,232,.08);color:rgba(231,231,232,.8);border-color:var(--glass-border)}
+.overlay-danger{background:rgba(80,20,20,.72)!important;border-color:rgba(255,120,120,.46)!important;color:#ffd2d2!important}
+.result-item{border-color:var(--glass-border);background:rgba(9,9,9,.82)}.result-item[open]{border-color:rgba(231,231,232,.25)}
+.result-body video{border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-panel)}
+@supports not (backdrop-filter:blur(1px)){.preview-bar,.preview-controls,.tool-panel,.export-dock,.overlay-menu,header,.tabs{background:#111}}
+@media(max-width:860px){.brand-logo{width:min(360px,86vw);height:58px}.tabs{justify-content:flex-start}.tabs button{min-width:auto}.preview-bar{padding:8px}.preview-controls{max-width:100%;justify-content:center}.preview-volume-group{flex-wrap:nowrap}}
 """
 
 
@@ -3093,7 +3142,7 @@ function cardForRank(rank){
 function statusLabel(status){
   if (status === "liked") return "Aprovado";
   if (status === "discarded") return "Descartado";
-  return "Pendente";
+  return "Em edicao";
 }
 function setCardPreviewFormat(card, format){
   const next = validPlatform(format);
@@ -3102,7 +3151,7 @@ function setCardPreviewFormat(card, format){
     button.classList.toggle("active", button.dataset.cardFormatPreview === next);
   });
   const status = card.querySelector("[data-platform-preset-current]");
-  if (status) status.textContent = `Editando preset: ${platformLabel(next)}`;
+  if (status) status.textContent = `Preset: ${platformLabel(next)}`;
 }
 function updateCardTools(card){
   updateCameraUi(card);
@@ -3591,8 +3640,8 @@ function updatePlatformUi(card){
   });
   const fallback = document.body.dataset.format || "tiktok";
   const summary = platforms.length
-    ? `Na fila: ${platforms.map(platformLabel).join(", ")}`
-    : (current.status === "liked" ? `Fila usa formato atual: ${platformLabel(fallback)}` : "Fora da fila final");
+    ? `Fila: ${platforms.map(platformLabel).join(", ")}`
+    : (current.status === "liked" ? `Fila: ${platformLabel(fallback)}` : "Sem destino");
   card.querySelectorAll("[data-platform-summary]").forEach(item => { item.textContent = summary; });
   const status = card.querySelector("[data-status-pill]");
   if (status) status.textContent = statusLabel(current.status);
@@ -3625,7 +3674,7 @@ function updateTrimUi(card){
   if (scrubInput) scrubInput.max = values.duration.toFixed(1);
   card.querySelector("[data-output=start]").textContent = fixed(values.trimStart);
   card.querySelector("[data-output=end]").textContent = fixed(values.trimEnd);
-  const summary = `Final: ${fixed(values.adjustedStart)} - ${fixed(values.adjustedEnd)} (${fixed(values.adjustedEnd - values.adjustedStart)})`;
+  const summary = `${fixed(values.adjustedStart)} - ${fixed(values.adjustedEnd)} (${fixed(values.adjustedEnd - values.adjustedStart)})`;
   card.querySelector("[data-trim-summary]").textContent = summary;
   const cardSummary = card.querySelector("[data-card-summary]");
   if (cardSummary) cardSummary.textContent = summary;
@@ -4188,8 +4237,8 @@ function renderFinalStage(){
     const effectCount = queue.filter(item => normalizeEffect(item.effect).key !== "none").length;
     const overlayCount = queue.reduce((count, item) => count + normalizeOverlayLayers(item.overlays, item.overlay).length, 0);
     summary.textContent = queue.length
-      ? `${queue.length} video(s) na fila; ${cameraCount} com camera; ${effectCount} com efeito; ${overlayCount} com chamada.`
-      : "Selecione cortes antes de renderizar.";
+      ? `${queue.length} na fila; ${cameraCount} camera; ${effectCount} efeito; ${overlayCount} camada.`
+      : "Nada na fila.";
   }
 }
 function currentGalleryPath(){

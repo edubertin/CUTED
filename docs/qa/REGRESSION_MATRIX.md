@@ -14,8 +14,10 @@ review workspace, data contracts, or render pipeline.
 | Header | Check legacy export action | Exportar selecionados is absent |
 | Brand | Header logo | Transparent official PNG appears without black rectangle |
 | Brand | UI tokens | `:root` exposes CUTED blue, green, white, black, gray, surface, and border tokens |
+| Brand | CUTED Liquid UI | Glass tokens style tabs, preview dock, tool panels, overlay menu, and render actions |
 | Preview | Expand one clip card | Only active video is loaded |
 | Preview | Inspect preview stack | Platform tags sit above controls, and controls sit above video |
+| Preview | Mobile width | Preview dock stays constrained to video width without horizontal overflow |
 | Playback | Click canvas | Video does not start |
 | Playback | Click play button | Video starts |
 | Volume | Open any video | Volume starts at 20 percent |
