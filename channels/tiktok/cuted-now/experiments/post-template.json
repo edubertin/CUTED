@@ -1,0 +1,46 @@
+{
+  "post_id": "",
+  "status": "draft",
+  "platform": "tiktok",
+  "account": "@cutednow",
+  "source": {
+    "url": "",
+    "type": "",
+    "rights_status": "unverified",
+    "notes": ""
+  },
+  "strategy": {
+    "pillar": "",
+    "topic": "",
+    "hook_type": "",
+    "hypothesis": ""
+  },
+  "render": {
+    "cuted_sample_dir": "",
+    "clip_file": "",
+    "duration_seconds": 0,
+    "asset_template": "",
+    "watermark": "assets/social/cuted-now/approved/watermark-light.png"
+  },
+  "copy": {
+    "caption": "",
+    "hashtags": []
+  },
+  "approval": {
+    "approved_by_user": false,
+    "approved_at": "",
+    "notes": ""
+  },
+  "metrics": {
+    "views_1h": null,
+    "views_24h": null,
+    "views_7d": null,
+    "likes_24h": null,
+    "comments_24h": null,
+    "shares_24h": null,
+    "saves_24h": null,
+    "followers_gained_24h": null,
+    "retention_avg": null,
+    "completion_rate": null
+  }
+}

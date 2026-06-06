@@ -15,8 +15,10 @@ class application workflow.
 6. [Render Pipeline](architecture/RENDER_PIPELINE.md)
 7. [Skill to App Migration ADR](architecture/ADR-0001-skill-to-app-migration.md)
 8. [AI Ingestion and Selection Guardrails ADR](architecture/ADR-0002-ai-ingestion-and-selection-guardrails.md)
-9. [QA Regression Matrix](qa/REGRESSION_MATRIX.md)
-10. [Local Development Runbook](operations/LOCAL_DEV.md)
+9. [CUTED Now TikTok Channel Spec](product/SPEC-006-cuted-now-tiktok-channel.md)
+10. [OpenAI Settings and Local Cost Ledger Spec](product/SPEC-007-openai-settings-and-cost-ledger.md)
+11. [QA Regression Matrix](qa/REGRESSION_MATRIX.md)
+12. [Local Development Runbook](operations/LOCAL_DEV.md)
 
 ## Current Source of Truth
 
@@ -29,6 +31,9 @@ split across:
   and FFmpeg render pipeline.
 - `samples/`: generated review pages, videos, frames, captions, render outputs,
   and QA evidence.
+- `channels/`: channel operations, editorial backlogs, post templates, and
+  metrics logs for social publishing experiments.
+- `assets/social/`: approved and draft social channel assets.
 
 The docs in this folder should become the primary source of truth before the
 code is split into app and package boundaries.
