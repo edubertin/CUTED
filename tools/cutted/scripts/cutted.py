@@ -13,7 +13,9 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
+import urllib.request
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -180,6 +182,7 @@ def parse_args() -> argparse.Namespace:
     analyze.add_argument("--youtube-url", default=None)
     analyze.add_argument("--out", type=Path, required=True)
     analyze.add_argument("--clips", type=int, default=15)
+    analyze.add_argument("--final-clips", type=int, default=None)
     analyze.add_argument("--preset", choices=("tiktok", "shorts", "reels"), default=None)
     analyze.add_argument("--target-duration", type=float, default=None)
     analyze.add_argument("--min-duration", type=float, default=None)
@@ -191,6 +194,8 @@ def parse_args() -> argparse.Namespace:
     analyze.add_argument("--language", default=None)
     analyze.add_argument("--transcript-json", type=Path, default=None)
     analyze.add_argument("--youtube-captions", action=argparse.BooleanOptionalAction, default=True)
+    analyze.add_argument("--ai-provider", choices=("auto", "local", "openai"), default=None)
+    analyze.add_argument("--context-prompt", default="")
     analyze.add_argument("--skip-render", action="store_true")
     analyze.add_argument("--cleanup-source", action="store_true")
     render = subparsers.add_parser("render-selected", help="Render final clips from an exported selected-clips JSON.")
@@ -211,6 +216,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    load_local_env()
     args = parse_args()
     if args.command == "analyze":
         analyze(args)
@@ -236,7 +242,7 @@ def analyze(args: argparse.Namespace) -> None:
     source = prepare_source(args, out_dir, ffmpeg)
     duration = probe_duration(source.render_source, ffprobe)
     segments = load_segments(args, source.transcribe_source)
-    moments = pick_moments(segments, config, duration)
+    moments = pick_moments_for_import(args, segments, config, duration)
     rendered = render_outputs(source.render_source, out_dir, moments, ffmpeg, args.skip_render)
     write_json(out_dir / "moments.json", rendered, source.label, duration, config)
     write_html(out_dir / "index.html", rendered, source.label)
@@ -394,17 +400,12 @@ def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path
     clips = clamp_int(payload.get("preview_count"), 1, 40, 10)
     final_count = clamp_int(payload.get("final_count"), 1, clips, min(10, clips))
     language = clean_optional_text(payload.get("language"), 24)
-    model = clean_optional_text(payload.get("model"), 48) or "small"
     preset = clean_preset(payload.get("preset"))
     context_prompt = clean_optional_text(payload.get("context_prompt"), 5000)
     render_previews = bool(payload.get("render_previews", True))
-    youtube_captions = bool(payload.get("youtube_captions", True))
-    smart_boundaries = clean_smart_boundaries(payload.get("smart_boundaries"))
-    target_duration = optional_float(payload.get("target_duration"), 10.0, 120.0)
-    min_duration = optional_float(payload.get("min_duration"), 3.0, 120.0)
-    max_duration = optional_float(payload.get("max_duration"), 5.0, 180.0)
-    lead_in = clamp_float(payload.get("lead_in"), 0.0, 8.0, 1.0)
-    tail_out = clamp_float(payload.get("tail_out"), 0.0, 8.0, 1.5)
+    ai_provider = configured_ai_provider()
+    if ai_provider == "openai" and not openai_api_key():
+        raise ValueError("Configure OPENAI_API_KEY no .env.local antes de importar com IA.")
     out_dir = next_import_output_dir(base_dir, source_url or source_path)
     out_dir.mkdir(parents=True, exist_ok=True)
     metadata = {
@@ -413,18 +414,11 @@ def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path
         "preview_count": clips,
         "final_count": final_count,
         "language": language,
-        "model": model,
         "preset": preset,
         "context_prompt": context_prompt,
         "render_previews": render_previews,
-        "youtube_captions": youtube_captions,
-        "smart_boundaries": smart_boundaries,
-        "target_duration": target_duration,
-        "min_duration": min_duration,
-        "max_duration": max_duration,
-        "lead_in": lead_in,
-        "tail_out": tail_out,
-        "mode": "local_skill_fallback",
+        "ai_provider": ai_provider,
+        "mode": "openai_import" if ai_provider == "openai" else "local_fallback",
     }
     (out_dir / "import-request.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
     command = import_command(out_dir, source_url, source_path, metadata)
@@ -449,20 +443,8 @@ def import_command(
         local_source = Path(source_path).expanduser().resolve()
         require_file(local_source)
         command.append(str(local_source))
-    command.extend(["--out", str(out_dir), "--clips", str(metadata["preview_count"]), "--preset", str(metadata["preset"])])
-    command.extend(["--model", str(metadata["model"]), "--lead-in", str(metadata["lead_in"]), "--tail-out", str(metadata["tail_out"])])
-    if metadata["target_duration"] is not None:
-        command.extend(["--target-duration", str(metadata["target_duration"])])
-    if metadata["min_duration"] is not None:
-        command.extend(["--min-duration", str(metadata["min_duration"])])
-    if metadata["max_duration"] is not None:
-        command.extend(["--max-duration", str(metadata["max_duration"])])
-    if metadata["smart_boundaries"] == "on":
-        command.append("--smart-boundaries")
-    if metadata["smart_boundaries"] == "off":
-        command.append("--no-smart-boundaries")
-    if not metadata["youtube_captions"]:
-        command.append("--no-youtube-captions")
+    command.extend(["--out", str(out_dir), "--clips", str(metadata["preview_count"]), "--final-clips", str(metadata["final_count"]), "--preset", str(metadata["preset"])])
+    command.extend(["--ai-provider", str(metadata["ai_provider"]), "--context-prompt", str(metadata["context_prompt"])])
     language = str(metadata["language"])
     if language:
         command.extend(["--language", language])
@@ -592,6 +574,54 @@ def clamp_float(value: object, minimum: float, maximum: float, fallback: float) 
     except (TypeError, ValueError):
         return fallback
     return min(max(number, minimum), maximum)
+
+
+def load_local_env() -> None:
+    for env_path in local_env_candidates():
+        if not env_path.exists():
+            continue
+        for raw_line in env_path.read_text(encoding="utf-8-sig").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            if key and key not in os.environ:
+                os.environ[key] = value.strip().strip('"').strip("'")
+
+
+def local_env_candidates() -> list[Path]:
+    script_dir = Path(__file__).resolve().parent
+    roots = [Path.cwd(), *script_dir.parents]
+    candidates: list[Path] = []
+    for root in roots:
+        for name in (".env.local", ".env"):
+            path = root / name
+            if path not in candidates:
+                candidates.append(path)
+    return candidates
+
+
+def configured_ai_provider() -> str:
+    provider = os.environ.get("CUTED_AI_PROVIDER", "local").strip().lower()
+    return provider if provider in {"auto", "local", "openai"} else "local"
+
+
+def requested_ai_provider(args: argparse.Namespace) -> str:
+    provider = str(getattr(args, "ai_provider", "") or configured_ai_provider()).strip().lower()
+    return provider if provider in {"auto", "local", "openai"} else "local"
+
+
+def openai_api_key() -> str:
+    return os.environ.get("OPENAI_API_KEY", "").strip()
+
+
+def openai_model() -> str:
+    return os.environ.get("CUTED_OPENAI_MODEL", "gpt-5-mini").strip() or "gpt-5-mini"
+
+
+def openai_transcribe_model() -> str:
+    return os.environ.get("CUTED_TRANSCRIBE_MODEL", "whisper-1").strip() or "whisper-1"
 
 
 def read_json_body(handler: http.server.BaseHTTPRequestHandler) -> dict[str, object]:
@@ -1704,6 +1734,8 @@ def load_segments(args: argparse.Namespace, video: Path | str) -> list[Segment]:
         return read_transcript_json(args.transcript_json)
     if isinstance(video, Path) and video.suffix.lower() == ".json":
         return read_transcript_json(video)
+    if requested_ai_provider(args) == "openai":
+        return transcribe_with_openai(video, args.language)
     try:
         return transcribe_with_faster_whisper(video, args.model, args.language)
     except ModuleNotFoundError as exc:
@@ -1726,6 +1758,111 @@ def transcribe_with_faster_whisper(video: Path | str, model_name: str, language:
     return [segment for segment in segments if segment.text]
 
 
+def transcribe_with_openai(video: Path | str, language: str | None) -> list[Segment]:
+    path = Path(str(video))
+    if not path.exists():
+        raise RuntimeError("OpenAI transcription requires a local audio/video file.")
+    key = openai_api_key()
+    if not key:
+        raise RuntimeError("OPENAI_API_KEY is not configured in .env.local.")
+    fields: dict[str, str] = {"model": openai_transcribe_model(), "response_format": "verbose_json"}
+    if language:
+        fields["language"] = language
+    data = openai_multipart_request("https://api.openai.com/v1/audio/transcriptions", key, fields, "file", path)
+    rows = data.get("segments")
+    if not isinstance(rows, list):
+        raise RuntimeError("OpenAI transcription did not return timestamped segments. Use CUTED_TRANSCRIBE_MODEL=whisper-1.")
+    segments = [Segment(float(row["start"]), float(row["end"]), str(row["text"]).strip()) for row in rows if isinstance(row, dict)]
+    return [segment for segment in segments if segment.text and segment.end > segment.start]
+
+
+def openai_structured_response(system: str, user: str, schema_name: str, schema: dict[str, object]) -> dict[str, object]:
+    body = {
+        "model": openai_model(),
+        "input": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": schema_name,
+                "strict": True,
+                "schema": schema,
+            }
+        },
+    }
+    data = openai_json_request("https://api.openai.com/v1/responses", openai_api_key(), body)
+    text = openai_output_text(data)
+    parsed = json.loads(text)
+    if not isinstance(parsed, dict):
+        raise RuntimeError("OpenAI structured response must be a JSON object.")
+    return parsed
+
+
+def openai_output_text(data: dict[str, object]) -> str:
+    direct = data.get("output_text")
+    if isinstance(direct, str) and direct.strip():
+        return direct
+    output = data.get("output")
+    if isinstance(output, list):
+        for item in output:
+            if not isinstance(item, dict):
+                continue
+            content = item.get("content")
+            if not isinstance(content, list):
+                continue
+            for part in content:
+                if isinstance(part, dict) and isinstance(part.get("text"), str):
+                    return str(part["text"])
+    raise RuntimeError("OpenAI response did not include output text.")
+
+
+def openai_json_request(url: str, api_key: str, payload: dict[str, object]) -> dict[str, object]:
+    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=data,
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    return read_openai_json(request)
+
+
+def openai_multipart_request(url: str, api_key: str, fields: dict[str, str], file_field: str, file_path: Path) -> dict[str, object]:
+    boundary = f"----cuted{uuid.uuid4().hex}"
+    chunks: list[bytes] = []
+    for key, value in fields.items():
+        chunks.append(f"--{boundary}\r\n".encode("utf-8"))
+        chunks.append(f'Content-Disposition: form-data; name="{key}"\r\n\r\n{value}\r\n'.encode("utf-8"))
+    chunks.append(f"--{boundary}\r\n".encode("utf-8"))
+    chunks.append(
+        f'Content-Disposition: form-data; name="{file_field}"; filename="{file_path.name}"\r\n'
+        f"Content-Type: application/octet-stream\r\n\r\n".encode("utf-8")
+    )
+    chunks.append(file_path.read_bytes())
+    chunks.append(f"\r\n--{boundary}--\r\n".encode("utf-8"))
+    request = urllib.request.Request(
+        url,
+        data=b"".join(chunks),
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": f"multipart/form-data; boundary={boundary}"},
+        method="POST",
+    )
+    return read_openai_json(request)
+
+
+def read_openai_json(request: urllib.request.Request) -> dict[str, object]:
+    try:
+        with urllib.request.urlopen(request, timeout=180) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        message = error.read().decode("utf-8", errors="replace")[:1200]
+        raise RuntimeError(f"OpenAI request failed with HTTP {error.code}: {message}") from error
+    if not isinstance(data, dict):
+        raise RuntimeError("OpenAI response must be a JSON object.")
+    return data
+
+
 def pick_moments(segments: list[Segment], config: CuttedConfig, video_duration: float) -> list[Moment]:
     if not segments:
         raise RuntimeError("No transcript segments found.")
@@ -1733,6 +1870,123 @@ def pick_moments(segments: list[Segment], config: CuttedConfig, video_duration: 
     ranked = sorted(candidates, key=lambda item: item.score, reverse=True)
     selected = suppress_overlaps(ranked, config.clips)
     return [with_rank(moment, index + 1) for index, moment in enumerate(sorted(selected, key=lambda item: item.start))]
+
+
+def pick_moments_for_import(args: argparse.Namespace, segments: list[Segment], config: CuttedConfig, video_duration: float) -> list[Moment]:
+    provider = requested_ai_provider(args)
+    if provider == "local":
+        return pick_moments(segments, config, video_duration)
+    if provider == "openai":
+        return pick_moments_with_openai(args, segments, config, video_duration)
+    if openai_api_key():
+        try:
+            return pick_moments_with_openai(args, segments, config, video_duration)
+        except Exception as error:
+            print(f"[cutted] OpenAI selection failed, falling back to local heuristics: {error}")
+    return pick_moments(segments, config, video_duration)
+
+
+def pick_moments_with_openai(args: argparse.Namespace, segments: list[Segment], config: CuttedConfig, video_duration: float) -> list[Moment]:
+    if not openai_api_key():
+        raise RuntimeError("OPENAI_API_KEY is not configured in .env.local.")
+    candidates = sorted(build_candidates(segments, config, video_duration), key=lambda item: item.score, reverse=True)[:90]
+    if not candidates:
+        raise RuntimeError("No transcript candidates found.")
+    requested = min(max(config.clips, 1), len(candidates))
+    payload = openai_select_candidates(args, candidates, requested)
+    selected = openai_selected_moments(payload, candidates, requested)
+    return [with_rank(moment, index + 1) for index, moment in enumerate(sorted(selected, key=lambda item: item.start))]
+
+
+def openai_select_candidates(args: argparse.Namespace, candidates: list[Moment], requested: int) -> dict[str, object]:
+    context = clean_optional_text(getattr(args, "context_prompt", ""), 5000)
+    final_clips = getattr(args, "final_clips", None) or requested
+    candidate_rows = [
+        {
+            "id": index,
+            "start": round(item.start, 3),
+            "end": round(item.end, 3),
+            "duration": round(item.end - item.start, 3),
+            "score": item.score,
+            "title": item.title,
+            "text": item.transcript[:1600],
+        }
+        for index, item in enumerate(candidates)
+    ]
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "clips": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": requested,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "id": {"type": "integer"},
+                        "title": {"type": "string"},
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["id", "title", "reason"],
+                },
+            }
+        },
+        "required": ["clips"],
+    }
+    system = (
+        "Voce e o analista editorial do CUTED. Escolha cortes curtos com gancho forte, "
+        "frase compreensivel, inicio e fim naturais, e bom potencial para redes sociais. "
+        "Responda apenas no JSON estruturado solicitado."
+    )
+    user = json.dumps(
+        {
+            "desired_preview_count": requested,
+            "desired_final_clip_count_after_review": final_clips,
+            "editorial_context": context or "Use o criterio editorial padrao do CUTED.",
+            "candidates": candidate_rows,
+        },
+        ensure_ascii=False,
+    )
+    return openai_structured_response(system, user, "cuted_clip_selection", schema)
+
+
+def openai_selected_moments(payload: dict[str, object], candidates: list[Moment], requested: int) -> list[Moment]:
+    selected: list[Moment] = []
+    used: set[int] = set()
+    rows = payload.get("clips")
+    if not isinstance(rows, list):
+        raise RuntimeError("OpenAI response did not include clips.")
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        index = int(row.get("id", -1))
+        if index < 0 or index >= len(candidates) or index in used:
+            continue
+        used.add(index)
+        candidate = candidates[index]
+        title = clean_optional_text(row.get("title"), 80) or candidate.title
+        reason_text = clean_optional_text(row.get("reason"), 160) or candidate.reason
+        selected.append(Moment(0, candidate.start, candidate.end, candidate.peak, candidate.score, title, reason_text, candidate.transcript, candidate.peak_text, candidate.clip_file, candidate.frame_file, candidate.caption_segments))
+        if len(selected) >= requested:
+            break
+    if not selected:
+        raise RuntimeError("OpenAI did not select usable clips.")
+    if len(selected) < requested:
+        selected.extend(fill_missing_moments(selected, candidates, requested - len(selected)))
+    return selected[:requested]
+
+
+def fill_missing_moments(selected: list[Moment], candidates: list[Moment], count: int) -> list[Moment]:
+    filled: list[Moment] = []
+    for candidate in candidates:
+        if any(overlap_ratio(candidate, item) >= 0.35 for item in [*selected, *filled]):
+            continue
+        filled.append(candidate)
+        if len(filled) >= count:
+            break
+    return filled
 
 
 def build_candidates(segments: list[Segment], config: CuttedConfig, video_duration: float) -> list[Moment]:
@@ -2187,43 +2441,9 @@ def page_html(source_label: str, cards: str, data: str) -> str:
       <label class="import-context">Contexto para a IA
         <textarea name="context_prompt" rows="5" placeholder="Opcional. Ex.: priorize momentos polemicos, engracados, com frase completa e gancho forte."></textarea>
       </label>
-      <details class="import-advanced">
-        <summary>Opcoes avancadas da skill</summary>
-        <div class="import-grid">
-          <label>Modelo local
-            <input name="model" type="text" value="small" autocomplete="off">
-          </label>
-          <label>Smart boundaries
-            <select name="smart_boundaries">
-              <option value="auto">Automatico</option>
-              <option value="on">Forcar ligado</option>
-              <option value="off">Forcar desligado</option>
-            </select>
-          </label>
-          <label>Duracao alvo
-            <input name="target_duration" type="number" min="10" max="120" step="1" placeholder="auto">
-          </label>
-          <label>Duracao minima
-            <input name="min_duration" type="number" min="3" max="120" step="1" placeholder="auto">
-          </label>
-          <label>Duracao maxima
-            <input name="max_duration" type="number" min="5" max="180" step="1" placeholder="auto">
-          </label>
-          <label>Lead-in
-            <input name="lead_in" type="number" min="0" max="8" step="0.1" value="1">
-          </label>
-          <label>Tail-out
-            <input name="tail_out" type="number" min="0" max="8" step="0.1" value="1.5">
-          </label>
-        </div>
-      </details>
       <label class="import-check">
         <input name="render_previews" type="checkbox" checked>
         Gerar previews em video durante a importacao
-      </label>
-      <label class="import-check">
-        <input name="youtube_captions" type="checkbox" checked>
-        Tentar captions do YouTube antes de transcrever
       </label>
       <div class="import-status" data-import-status>Nenhuma importacao em andamento.</div>
       <div class="import-result" data-import-result></div>
@@ -2270,7 +2490,7 @@ header{position:sticky;top:0;z-index:5;display:flex;justify-content:space-betwee
 h1{margin:0;font-size:22px;letter-spacing:0}header p{margin:3px 0 0;color:#9a9a9a}.tabs{position:sticky;top:70px;z-index:4;display:flex;gap:8px;padding:10px 22px;background:#060606;border-bottom:1px solid #1f1f1f}.tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 12px}.tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}.config{position:sticky;top:119px;z-index:3;display:flex;justify-content:space-between;gap:14px;align-items:center;padding:12px 22px;background:#080808;border-bottom:1px solid #202020}.config strong{display:block;font-size:13px}.config span{color:#9a9a9a;font-size:12px}.segments{display:flex;gap:6px;flex-wrap:wrap}.segments button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.segments button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}
 main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px}.card{border:1px solid #272727;border-radius:8px;background:#0d0d0d;overflow:hidden}.card[open]{border-color:#3b3b3b;background:#101010}.card.liked{border-color:#24d17e}.card.discarded{opacity:.46}.clip-summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;min-height:62px;padding:12px 14px;cursor:pointer;list-style:none}.clip-summary::-webkit-details-marker{display:none}.clip-rank{color:#8f8f8f;font-weight:700}.clip-title{display:grid;gap:2px;min-width:0}.clip-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}.clip-title small{color:#9c9c9c}.clip-status{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.clip-status span,.format-previews span{display:inline-flex;align-items:center;min-height:26px;padding:4px 8px;border-radius:999px;background:#242424;color:#ddd;font-size:12px}
 .app-notice{position:sticky;top:0;z-index:30;margin:0;padding:10px 14px;background:#2b1717;color:#ffd7d7;border-bottom:1px solid #6d2b2b;font-size:13px;text-align:center}.app-notice[hidden]{display:none}
-.import-stage{display:none;max-width:1080px;margin:18px auto;padding:0 18px}.import-panel{display:grid;gap:14px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.import-panel p{margin:4px 0 0;color:#aaa}.import-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.import-panel label{display:grid;gap:6px;color:#aaa;font-size:12px}.import-panel input,.import-panel select,.import-panel textarea{width:100%;border:1px solid #333;border-radius:6px;background:#050505;color:#f4f4f4;padding:9px 10px;font:inherit}.import-panel textarea{resize:vertical;min-height:112px}.import-context{display:grid}.import-advanced{border:1px solid #252525;border-radius:8px;background:#0b0b0b;padding:10px}.import-advanced summary{cursor:pointer;color:#ddd;font-weight:700}.import-advanced .import-grid{margin-top:12px}.import-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.import-check input{width:auto}.import-status{min-height:20px;color:#aaa}.import-result{display:flex;gap:8px;flex-wrap:wrap}.import-result a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:#f4f4f4;color:#050505;text-decoration:none}.import-result code{display:block;width:100%;padding:10px;border:1px solid #3a2525;border-radius:6px;background:#180d0d;color:#ffcccc;white-space:pre-wrap}
+.import-stage{display:none;max-width:1080px;margin:18px auto;padding:0 18px}.import-panel{display:grid;gap:14px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.import-panel p{margin:4px 0 0;color:#aaa}.import-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.import-panel label{display:grid;gap:6px;color:#aaa;font-size:12px}.import-panel input,.import-panel select,.import-panel textarea{width:100%;border:1px solid #333;border-radius:6px;background:#050505;color:#f4f4f4;padding:9px 10px;font:inherit}.import-panel textarea{resize:vertical;min-height:112px}.import-context{display:grid}.import-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.import-check input{width:auto}.import-status{min-height:20px;color:#aaa}.import-result{display:flex;gap:8px;flex-wrap:wrap}.import-result a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:#f4f4f4;color:#050505;text-decoration:none}.import-result code{display:block;width:100%;padding:10px;border:1px solid #3a2525;border-radius:6px;background:#180d0d;color:#ffcccc;white-space:pre-wrap}
 .layer-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:100%;min-height:0}.layer-strip:empty{display:none}.layer-chip{display:inline-flex;gap:6px;align-items:center;max-width:100%;min-height:30px;padding:4px 5px 4px 9px;border:1px solid #303030;border-radius:999px;background:#151515;color:#ddd;font-size:12px}.layer-chip.is-selected{border-color:#f5b03d;background:#211b10;color:#f4f4f4}.layer-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.layer-chip button{display:inline-grid;place-items:center;width:22px;height:22px;min-width:22px;padding:0;border:1px solid #3a3a3a;border-radius:999px;background:#242424;color:#ddd;font-size:14px;line-height:1}
 .editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;justify-items:center;gap:10px}.preview-frame{display:grid;gap:10px;width:100%;max-width:520px}.media{position:relative;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000;pointer-events:none}.placeholder{display:grid;place-items:center;height:100%;color:#777}.preview-bar{display:grid;grid-template-columns:1fr;gap:8px;justify-items:center;width:100%;padding:8px;border:1px solid #252525;border-radius:8px;background:#0a0a0a}.preview-controls,.preview-volume-group{display:flex;gap:6px;align-items:center}.preview-controls{justify-content:center;padding:4px;border:1px solid #202020;border-radius:999px;background:#111}.preview-volume-group{padding-left:4px;border-left:1px solid #2d2d2d}.preview-icon,.preview-step{display:inline-grid;place-items:center;width:32px;height:32px;min-width:32px;padding:0;border:1px solid #333;border-radius:999px;background:#191919;color:#ddd}.preview-play{background:#f4f4f4;color:#050505;border-color:#f4f4f4}.preview-icon svg{width:16px;height:16px;display:block;stroke:currentColor}.preview-step{width:26px;height:26px;min-width:26px;font-weight:700}.preview-volume-group output{min-width:32px;color:#d8d8d8;font-size:12px;text-align:center}.card[data-preview-format=tiktok] .preview-frame,.card[data-preview-format=shorts] .preview-frame,.card[data-preview-format=instagram] .preview-frame{max-width:min(100%,calc(72vh * 9 / 16))}.card[data-preview-format=facebook] .preview-frame{max-width:min(100%,calc(72vh * 4 / 5))}.card[data-preview-format=youtube] .preview-frame{max-width:min(100%,520px)}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip,.card-tabs{display:flex;gap:6px;flex-wrap:wrap}.preview-strip{justify-content:center;overflow:visible;padding-bottom:1px}.preview-strip button,.card-tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.preview-strip button{min-height:34px;border-radius:999px;white-space:nowrap}.preview-strip button.active,.card-tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-panel{display:none;border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:12px}.tool-panel.active{display:block}.tool-summary{margin-bottom:10px;color:#d8d8d8}.timeline-editor{padding:0}.timeline-head,.timeline-timebar,.timeline-values{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.timeline-head output,.timeline-timebar output{color:#f4f4f4;text-align:right}.timeline-timebar{margin-top:10px}.timeline-timebar span:last-child{color:#777;text-align:right}.timeline-scrub{position:relative;height:42px;margin-top:8px}.timeline-scrub-track{position:absolute;left:0;right:0;top:17px;height:8px;border:1px solid #343434;border-radius:999px;background:linear-gradient(90deg,#151515,#252525);overflow:hidden}.timeline-selected{position:absolute;top:0;bottom:0;background:rgba(245,176,61,.24);border-left:1px solid #f5b03d;border-right:1px solid #f5b03d}.timeline-playhead{position:absolute;top:-8px;bottom:-8px;width:2px;background:#f4f4f4;box-shadow:0 0 0 1px rgba(0,0,0,.7)}.timeline-playhead:before{content:"";position:absolute;left:50%;top:-4px;width:10px;height:10px;border-radius:50%;background:#f4f4f4;transform:translateX(-50%)}.timeline-scrub input{position:absolute;inset:0;width:100%;height:42px;margin:0;background:transparent;opacity:0;cursor:pointer}.timeline{position:relative;height:38px;margin-top:6px}.timeline-track{position:absolute;left:0;right:0;top:16px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:#f4f4f4;border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:38px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}.timeline-tools button{background:#191919;color:#ddd;border:1px solid #333;padding:7px 9px}.timeline-values{margin-top:6px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
@@ -3780,17 +4000,9 @@ function importFormPayload(form){
     preview_count: Number(data.get("preview_count") || 10),
     final_count: Number(data.get("final_count") || 10),
     language: String(data.get("language") || "").trim(),
-    model: String(data.get("model") || "small").trim(),
     preset: String(data.get("preset") || "tiktok"),
     context_prompt: String(data.get("context_prompt") || "").trim(),
-    smart_boundaries: String(data.get("smart_boundaries") || "auto"),
-    target_duration: Number(data.get("target_duration") || 0) || null,
-    min_duration: Number(data.get("min_duration") || 0) || null,
-    max_duration: Number(data.get("max_duration") || 0) || null,
-    lead_in: Number(data.get("lead_in") || 1),
-    tail_out: Number(data.get("tail_out") || 1.5),
-    render_previews: data.get("render_previews") === "on",
-    youtube_captions: data.get("youtube_captions") === "on"
+    render_previews: data.get("render_previews") === "on"
   };
 }
 async function startImportJob(form){
