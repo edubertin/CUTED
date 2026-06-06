@@ -10,7 +10,10 @@ review workspace, data contracts, or render pipeline.
 | Area | Check | Expected Result |
 | --- | --- | --- |
 | Server | Start `cutted.py serve` | Gallery opens on local port |
+| Navigation | Check workflow tabs | Labels are Importar, Editar, and Renderizar |
+| Header | Check legacy export action | Exportar selecionados is absent |
 | Preview | Expand one clip card | Only active video is loaded |
+| Preview | Inspect preview stack | Platform tags sit above controls, and controls sit above video |
 | Playback | Click canvas | Video does not start |
 | Playback | Click play button | Video starts |
 | Volume | Open any video | Volume starts at 20 percent |
@@ -25,6 +28,7 @@ review workspace, data contracts, or render pipeline.
 | AI import UI | Open import tab | Local path defaults to Desktop |
 | AI import UI | Suggestion count | Dropdown offers 1 through 20 |
 | AI import UI | Duration profile | Short, medium, and long map to expected duration arguments |
+| Render UI | Open Renderizar tab | Exportar fila is absent and render action remains available |
 
 ## Overlay Regression Checks
 
