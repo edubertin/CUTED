@@ -19,6 +19,9 @@ Two failure modes were observed during local imports:
 
 - The requested suggestion count means distinct clip ideas, not repeated trims of
   the same moment.
+- The initial app UI supports 1 to 20 suggestions per import.
+- Clip duration is selected through product-friendly profiles instead of raw
+  timing fields.
 - AI-selected clips must pass deterministic guardrails before they become review
   cards.
 - YouTube captions are preferred when available because they avoid transcription
@@ -30,6 +33,10 @@ Two failure modes were observed during local imports:
 
 ## Clip Diversity Requirements
 
+- Supported duration profiles are short, medium, and long.
+- Short targets compact clips around 20 to 45 seconds.
+- Medium targets clips around 30 to 70 seconds.
+- Long targets clips around 60 to 120 seconds.
 - Candidate pools sent to AI should be prefiltered for timeline diversity.
 - Final AI selections must reject candidates with excessive overlap.
 - Final AI selections must reject candidates with highly similar transcript text.

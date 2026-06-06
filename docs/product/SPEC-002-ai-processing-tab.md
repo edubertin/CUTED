@@ -23,8 +23,8 @@ interface. The next product step is to move the job controls into the app.
 
 1. User opens the AI Processing tab.
 2. User chooses a local video or provides a rights-approved URL.
-3. User chooses language, target platforms, clip count, and optional quality
-   settings.
+3. User chooses source, suggestion count, clip duration profile, and optional
+   editorial context.
 4. User starts processing.
 5. UI shows job status: queued, ingesting, transcribing, analyzing, rendering
    previews, ready, failed, or cancelled.
@@ -40,6 +40,9 @@ interface. The next product step is to move the job controls into the app.
 - Surface errors in user-safe language.
 - Keep model/provider configuration out of source code.
 - Preserve a local-first path.
+- Default the local source path to the user's Desktop.
+- Keep language and initial analysis preset as internal defaults until advanced
+  settings are needed.
 
 ## AI Provider Requirements
 
@@ -85,6 +88,8 @@ cancelled
 
 - A user can initiate analysis without Codex commands.
 - The app shows progress during long-running work.
+- Suggestion count is selectable from 1 to 20.
+- Clip duration can be selected as short, medium, or long.
 - The output of the processing tab can feed the existing Review Workspace.
 - AI-selected suggestions are filtered so near-duplicate timeline windows do not
   fill the review workspace.

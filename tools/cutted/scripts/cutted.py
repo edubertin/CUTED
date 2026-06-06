@@ -42,6 +42,11 @@ COMMON_TOKENS = {
     "que", "para", "com", "uma", "por", "tem", "mas", "vai", "voce", "vocÃª",
     "isso", "essa", "esse", "aqui", "porque", "entao", "entÃ£o", "como",
 }
+DURATION_PROFILES = {
+    "short": (20.0, 30.0, 45.0),
+    "medium": (30.0, 45.0, 70.0),
+    "long": (60.0, 90.0, 120.0),
+}
 
 
 @dataclass(frozen=True)
@@ -323,6 +328,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if path == "/api/import-jobs":
                 self.handle_import_job(base_dir)
                 return
+            if path == "/api/select-folder":
+                self.handle_select_folder()
+                return
             if re.fullmatch(r"/api/import-jobs/[^/]+/cancel", path):
                 self.handle_import_cancel(path)
                 return
@@ -363,6 +371,13 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             job_id = path.split("/")[-2]
             result = cancel_import_job(job_id)
             send_json_response(self, 200 if result.get("ok") else 404, result)
+
+        def handle_select_folder(self) -> None:
+            try:
+                path = select_folder_path()
+                send_json_response(self, 200, {"ok": True, "path": path})
+            except Exception as error:
+                send_json_response(self, 500, {"ok": False, "error": str(error)})
 
     return CuttedGalleryHandler
 
@@ -408,9 +423,10 @@ def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path
     source_path = str(payload.get("source_path") or "").strip()
     if not source_url and not source_path:
         raise ValueError("Informe um link ou caminho local para importar.")
-    clips = clamp_int(payload.get("preview_count"), 1, 40, 10)
-    language = clean_optional_text(payload.get("language"), 24)
+    clips = clamp_int(payload.get("preview_count"), 1, 20, 10)
+    language = clean_optional_text(payload.get("language"), 24) or "pt"
     preset = clean_preset(payload.get("preset"))
+    duration_profile = clean_duration_profile(payload.get("duration_profile"))
     context_prompt = clean_optional_text(payload.get("context_prompt"), 5000)
     render_previews = bool(payload.get("render_previews", True))
     ai_provider = configured_ai_provider()
@@ -424,6 +440,7 @@ def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path
         "preview_count": clips,
         "language": language,
         "preset": preset,
+        "duration_profile": duration_profile,
         "context_prompt": context_prompt,
         "render_previews": render_previews,
         "ai_provider": ai_provider,
@@ -453,6 +470,7 @@ def import_command(
         require_file(local_source)
         command.append(str(local_source))
     command.extend(["--out", str(out_dir), "--clips", str(metadata["preview_count"]), "--preset", str(metadata["preset"])])
+    command.extend(duration_profile_args(str(metadata["duration_profile"])))
     command.extend(["--ai-provider", str(metadata["ai_provider"]), "--context-prompt", str(metadata["context_prompt"])])
     language = str(metadata["language"])
     if language:
@@ -552,6 +570,56 @@ def clean_optional_text(value: object, limit: int) -> str:
 def clean_preset(value: object) -> str:
     preset = str(value or "tiktok").strip().lower()
     return preset if preset in {"tiktok", "shorts", "reels"} else "tiktok"
+
+
+def clean_duration_profile(value: object) -> str:
+    profile = str(value or "medium").strip().lower()
+    return profile if profile in DURATION_PROFILES else "medium"
+
+
+def duration_profile_args(profile: str) -> list[str]:
+    min_duration, target_duration, max_duration = DURATION_PROFILES[profile]
+    return [
+        "--min-duration", str(min_duration),
+        "--target-duration", str(target_duration),
+        "--max-duration", str(max_duration),
+    ]
+
+
+def default_desktop_path() -> str:
+    for candidate in desktop_path_candidates():
+        if candidate.exists():
+            return str(candidate)
+    return str(Path.home() / "Desktop")
+
+
+def desktop_path_candidates() -> list[Path]:
+    home = Path.home()
+    candidates = [home / "Desktop"]
+    user_profile = os.environ.get("USERPROFILE")
+    if user_profile:
+        profile = Path(user_profile)
+        candidates.extend([profile / "OneDrive" / "Desktop", profile / "Desktop"])
+    one_drive = os.environ.get("OneDrive") or os.environ.get("OneDriveCommercial") or os.environ.get("OneDriveConsumer")
+    if one_drive:
+        candidates.append(Path(one_drive) / "Desktop")
+    return candidates
+
+
+def select_folder_path() -> str:
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except Exception as error:
+        raise RuntimeError("Seletor de pasta indisponivel neste ambiente.") from error
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    selected = filedialog.askdirectory(initialdir=default_desktop_path(), title="Selecionar pasta do projeto")
+    root.destroy()
+    if not selected:
+        raise RuntimeError("Nenhuma pasta selecionada.")
+    return selected
 
 
 def clean_smart_boundaries(value: object) -> str:
@@ -2370,6 +2438,10 @@ def write_html(path: Path, moments: list[Moment], source_label: str) -> None:
     path.write_text(page_html(source_label, cards, data), encoding="utf-8")
 
 
+def suggestion_count_options() -> str:
+    return "\n".join(f'<option value="{value}"{" selected" if value == 10 else ""}>{value}</option>' for value in range(1, 21))
+
+
 def card_html(moment: Moment) -> str:
     video_tag = media_html(moment)
     duration = max(0.0, moment.end - moment.start)
@@ -2569,22 +2641,35 @@ def page_html(source_label: str, cards: str, data: str) -> str:
           <input name="source_url" type="url" placeholder="https://..." autocomplete="off">
         </label>
         <label>Caminho local
-          <input name="source_path" type="text" placeholder="C:\\videos\\arquivo.mp4" autocomplete="off">
+          <span class="import-path-row">
+            <input name="source_path" type="text" value="{html.escape(default_desktop_path())}" autocomplete="off">
+            <button type="button" data-use-desktop>Desktop</button>
+            <button type="button" data-select-folder>Pasta</button>
+          </span>
         </label>
         <label>Quantidade de sugestoes
-          <input name="preview_count" type="number" min="1" max="40" value="10">
-        </label>
-        <label>Idioma
-          <input name="language" type="text" value="pt" maxlength="24">
-        </label>
-        <label>Preset inicial
-          <select name="preset">
-            <option value="tiktok">TikTok / vertical</option>
-            <option value="shorts">Shorts / vertical</option>
-            <option value="reels">Reels / vertical</option>
+          <select name="preview_count">
+            {suggestion_count_options()}
           </select>
         </label>
       </div>
+      <input name="language" type="hidden" value="pt">
+      <input name="preset" type="hidden" value="tiktok">
+      <fieldset class="duration-profile">
+        <legend>Duracao dos cortes</legend>
+        <label>
+          <input name="duration_profile" type="radio" value="short">
+          <span><strong>Curto</strong><small>20-45s</small></span>
+        </label>
+        <label>
+          <input name="duration_profile" type="radio" value="medium" checked>
+          <span><strong>Medio</strong><small>30-70s</small></span>
+        </label>
+        <label>
+          <input name="duration_profile" type="radio" value="long">
+          <span><strong>Longo</strong><small>60-120s</small></span>
+        </label>
+      </fieldset>
       <label class="import-context">Contexto para a IA
         <textarea name="context_prompt" rows="5" placeholder="Opcional. Ex.: priorize momentos polemicos, engracados, com frase completa e gancho forte."></textarea>
       </label>
@@ -2637,7 +2722,7 @@ header{position:sticky;top:0;z-index:5;display:flex;justify-content:space-betwee
 h1{margin:0;font-size:22px;letter-spacing:0}header p{margin:3px 0 0;color:#9a9a9a}.tabs{position:sticky;top:70px;z-index:4;display:flex;gap:8px;padding:10px 22px;background:#060606;border-bottom:1px solid #1f1f1f}.tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 12px}.tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}.config{position:sticky;top:119px;z-index:3;display:flex;justify-content:space-between;gap:14px;align-items:center;padding:12px 22px;background:#080808;border-bottom:1px solid #202020}.config strong{display:block;font-size:13px}.config span{color:#9a9a9a;font-size:12px}.segments{display:flex;gap:6px;flex-wrap:wrap}.segments button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.segments button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}
 main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px}.card{border:1px solid #272727;border-radius:8px;background:#0d0d0d;overflow:hidden}.card[open]{border-color:#3b3b3b;background:#101010}.card.liked{border-color:#24d17e}.card.discarded{opacity:.46}.clip-summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;min-height:62px;padding:12px 14px;cursor:pointer;list-style:none}.clip-summary::-webkit-details-marker{display:none}.clip-rank{color:#8f8f8f;font-weight:700}.clip-title{display:grid;gap:2px;min-width:0}.clip-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}.clip-title small{color:#9c9c9c}.clip-status{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.clip-status span,.format-previews span{display:inline-flex;align-items:center;min-height:26px;padding:4px 8px;border-radius:999px;background:#242424;color:#ddd;font-size:12px}
 .app-notice{position:sticky;top:0;z-index:30;margin:0;padding:10px 14px;background:#2b1717;color:#ffd7d7;border-bottom:1px solid #6d2b2b;font-size:13px;text-align:center}.app-notice[hidden]{display:none}
-.import-stage{display:none;max-width:1080px;margin:18px auto;padding:0 18px}.import-panel{display:grid;gap:14px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.import-panel p{margin:4px 0 0;color:#aaa}.import-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.import-panel label{display:grid;gap:6px;color:#aaa;font-size:12px}.import-panel input,.import-panel select,.import-panel textarea{width:100%;border:1px solid #333;border-radius:6px;background:#050505;color:#f4f4f4;padding:9px 10px;font:inherit}.import-panel textarea{resize:vertical;min-height:112px}.import-context{display:grid}.import-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.import-check input{width:auto}.import-status{min-height:20px;color:#aaa}.import-result{display:flex;gap:8px;flex-wrap:wrap}.import-result a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:#f4f4f4;color:#050505;text-decoration:none}.import-result code{display:block;width:100%;padding:10px;border:1px solid #3a2525;border-radius:6px;background:#180d0d;color:#ffcccc;white-space:pre-wrap}
+.import-stage{display:none;max-width:1080px;margin:18px auto;padding:0 18px}.import-panel{display:grid;gap:14px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.import-panel p{margin:4px 0 0;color:#aaa}.import-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.import-panel label{display:grid;gap:6px;color:#aaa;font-size:12px}.import-panel input,.import-panel select,.import-panel textarea{width:100%;border:1px solid #333;border-radius:6px;background:#050505;color:#f4f4f4;padding:9px 10px;font:inherit}.import-panel textarea{resize:vertical;min-height:112px}.import-path-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px}.import-path-row button{min-height:38px;background:#191919;color:#ddd;border:1px solid #333}.duration-profile{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0}.duration-profile legend{grid-column:1/-1;color:#aaa;font-size:12px}.duration-profile label{position:relative;display:grid!important}.duration-profile input{position:absolute;opacity:0;pointer-events:none}.duration-profile span{display:grid;gap:2px;min-height:54px;padding:10px 12px;border:1px solid #333;border-radius:8px;background:#151515;color:#ddd}.duration-profile input:checked+span{border-color:#f5b03d;background:#211b10;color:#f4f4f4}.duration-profile small{color:#aaa}.import-context{display:grid}.import-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.import-check input{width:auto}.import-status{min-height:20px;color:#aaa}.import-result{display:flex;gap:8px;flex-wrap:wrap}.import-result a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:#f4f4f4;color:#050505;text-decoration:none}.import-result code{display:block;width:100%;padding:10px;border:1px solid #3a2525;border-radius:6px;background:#180d0d;color:#ffcccc;white-space:pre-wrap}
 .layer-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:100%;min-height:0}.layer-strip:empty{display:none}.layer-chip{display:inline-flex;gap:6px;align-items:center;max-width:100%;min-height:30px;padding:4px 5px 4px 9px;border:1px solid #303030;border-radius:999px;background:#151515;color:#ddd;font-size:12px}.layer-chip.is-selected{border-color:#f5b03d;background:#211b10;color:#f4f4f4}.layer-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.layer-chip button{display:inline-grid;place-items:center;width:22px;height:22px;min-width:22px;padding:0;border:1px solid #3a3a3a;border-radius:999px;background:#242424;color:#ddd;font-size:14px;line-height:1}
 .editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;justify-items:center;gap:10px}.preview-frame{display:grid;gap:10px;width:100%;max-width:520px}.media{position:relative;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000;pointer-events:none}.placeholder{display:grid;place-items:center;height:100%;color:#777}.preview-bar{display:grid;grid-template-columns:1fr;gap:8px;justify-items:center;width:100%;padding:8px;border:1px solid #252525;border-radius:8px;background:#0a0a0a}.preview-controls,.preview-volume-group{display:flex;gap:6px;align-items:center}.preview-controls{justify-content:center;padding:4px;border:1px solid #202020;border-radius:999px;background:#111}.preview-volume-group{padding-left:4px;border-left:1px solid #2d2d2d}.preview-icon,.preview-step{display:inline-grid;place-items:center;width:32px;height:32px;min-width:32px;padding:0;border:1px solid #333;border-radius:999px;background:#191919;color:#ddd}.preview-play{background:#f4f4f4;color:#050505;border-color:#f4f4f4}.preview-icon svg{width:16px;height:16px;display:block;stroke:currentColor}.preview-step{width:26px;height:26px;min-width:26px;font-weight:700}.preview-volume-group output{min-width:32px;color:#d8d8d8;font-size:12px;text-align:center}.card[data-preview-format=tiktok] .preview-frame,.card[data-preview-format=shorts] .preview-frame,.card[data-preview-format=instagram] .preview-frame{max-width:min(100%,calc(72vh * 9 / 16))}.card[data-preview-format=facebook] .preview-frame{max-width:min(100%,calc(72vh * 4 / 5))}.card[data-preview-format=youtube] .preview-frame{max-width:min(100%,520px)}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip,.card-tabs{display:flex;gap:6px;flex-wrap:wrap}.preview-strip{justify-content:center;overflow:visible;padding-bottom:1px}.preview-strip button,.card-tabs button{background:#191919;color:#ddd;border:1px solid #303030;padding:8px 10px}.preview-strip button{min-height:34px;border-radius:999px;white-space:nowrap}.preview-strip button.active,.card-tabs button.active{background:#f4f4f4;color:#050505;border-color:#f4f4f4}
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-panel{display:none;border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:12px}.tool-panel.active{display:block}.tool-summary{margin-bottom:10px;color:#d8d8d8}.timeline-editor{padding:0}.timeline-head,.timeline-timebar,.timeline-values{display:flex;justify-content:space-between;gap:12px;color:#aaa;font-size:12px}.timeline-head output,.timeline-timebar output{color:#f4f4f4;text-align:right}.timeline-timebar{margin-top:10px}.timeline-timebar span:last-child{color:#777;text-align:right}.timeline-scrub{position:relative;height:42px;margin-top:8px}.timeline-scrub-track{position:absolute;left:0;right:0;top:17px;height:8px;border:1px solid #343434;border-radius:999px;background:linear-gradient(90deg,#151515,#252525);overflow:hidden}.timeline-selected{position:absolute;top:0;bottom:0;background:rgba(245,176,61,.24);border-left:1px solid #f5b03d;border-right:1px solid #f5b03d}.timeline-playhead{position:absolute;top:-8px;bottom:-8px;width:2px;background:#f4f4f4;box-shadow:0 0 0 1px rgba(0,0,0,.7)}.timeline-playhead:before{content:"";position:absolute;left:50%;top:-4px;width:10px;height:10px;border-radius:50%;background:#f4f4f4;transform:translateX(-50%)}.timeline-scrub input{position:absolute;inset:0;width:100%;height:42px;margin:0;background:transparent;opacity:0;cursor:pointer}.timeline{position:relative;height:38px;margin-top:6px}.timeline-track{position:absolute;left:0;right:0;top:16px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:#f4f4f4;border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:38px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#f4f4f4;border:2px solid #050505;pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}.timeline-tools button{background:#191919;color:#ddd;border:1px solid #333;padding:7px 9px}.timeline-values{margin-top:6px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
@@ -2649,7 +2734,7 @@ main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px
 p{color:#bebebe}.peak{color:#fff;font-size:16px}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}.transcript-panel details{border-top:1px solid #242424;margin-top:12px;padding-top:10px}.transcript-panel summary{cursor:pointer;color:#ddd}
 body[data-tab=import] main,body[data-tab=import] .config,body[data-tab=import] .final-stage{display:none}body[data-tab=import] .import-stage{display:block}body[data-tab=final] main,body[data-tab=final] .config,body[data-tab=final] .import-stage{display:none}body[data-tab=final] .final-stage{display:block}.final-stage{display:none;margin:18px auto;max-width:1240px;padding:18px;border:1px solid #272727;border-radius:8px;background:#111}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.render-status{margin-top:12px;color:#aaa}.render-results{display:grid;gap:12px;margin-top:14px}.result-item{border:1px solid #303030;border-radius:8px;background:#090909;overflow:hidden}.result-item[open]{border-color:#3b3b3b}.result-item summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;border:0;color:#f4f4f4}.result-item summary strong{font-size:14px}.result-item summary span{color:#aaa;font-size:12px}.result-body{display:grid;grid-template-columns:minmax(260px,420px) minmax(240px,1fr);gap:14px;padding:0 14px 14px}.result-body video{width:100%;max-height:70vh;background:#000;border-radius:6px;object-fit:contain}.result-meta{display:grid;align-content:start;gap:10px}.result-meta dl{margin:0}.result-actions{display:flex;gap:8px;flex-wrap:wrap}.result-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:#f4f4f4;color:#050505;text-decoration:none}.result-actions a.secondary{background:#242424;color:#ddd;border:1px solid #333}
 button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 12px;cursor:pointer}#reset-ui,button[data-action=discard]{background:#242424;color:#ddd}button[data-action=reset-trim],button[data-action=next-card]{background:#191919;color:#ddd;border:1px solid #333}
-@media(max-width:860px){header{position:relative;align-items:flex-start;flex-direction:column}.tabs{top:0;overflow:auto}.config{top:49px;align-items:flex-start;flex-direction:column}.segments button,.preview-strip button,.card-tabs button{font-size:12px;padding:7px 9px}main{padding:12px}.clip-summary{grid-template-columns:auto minmax(0,1fr);align-items:start}.clip-status{grid-column:1/-1;justify-content:flex-start}.editor-shell,.result-body,.camera-segments,.caption-settings,.preview-bar,.import-grid{grid-template-columns:1fr}.preview-frame{max-width:100%}.preview-strip{justify-content:center}.preview-controls{width:max-content;max-width:100%;flex-wrap:wrap}.media{max-height:none}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons,.overlay-menu{grid-template-columns:1fr}}
+@media(max-width:860px){header{position:relative;align-items:flex-start;flex-direction:column}.tabs{top:0;overflow:auto}.config{top:49px;align-items:flex-start;flex-direction:column}.segments button,.preview-strip button,.card-tabs button{font-size:12px;padding:7px 9px}main{padding:12px}.clip-summary{grid-template-columns:auto minmax(0,1fr);align-items:start}.clip-status{grid-column:1/-1;justify-content:flex-start}.editor-shell,.result-body,.camera-segments,.caption-settings,.preview-bar,.import-grid,.duration-profile,.import-path-row{grid-template-columns:1fr}.preview-frame{max-width:100%}.preview-strip{justify-content:center}.preview-controls{width:max-content;max-width:100%;flex-wrap:wrap}.media{max-height:none}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons,.overlay-menu{grid-template-columns:1fr}}
 """
 
 
@@ -4147,9 +4232,42 @@ function importFormPayload(form){
     preview_count: Number(data.get("preview_count") || 10),
     language: String(data.get("language") || "").trim(),
     preset: String(data.get("preset") || "tiktok"),
+    duration_profile: String(data.get("duration_profile") || "medium"),
     context_prompt: String(data.get("context_prompt") || "").trim(),
     render_previews: data.get("render_previews") === "on"
   };
+}
+function setupImportPathButtons(){
+  const form = document.querySelector("[data-import-form]");
+  if (!form) return;
+  const sourcePath = form.querySelector("[name=source_path]");
+  const desktopPath = sourcePath?.defaultValue || "";
+  const status = document.querySelector("[data-import-status]");
+  const useDesktop = form.querySelector("[data-use-desktop]");
+  if (useDesktop && sourcePath) {
+    useDesktop.addEventListener("click", () => {
+      sourcePath.value = desktopPath;
+      sourcePath.focus();
+    });
+  }
+  const selectFolder = form.querySelector("[data-select-folder]");
+  if (selectFolder && sourcePath) {
+    selectFolder.addEventListener("click", async () => {
+      selectFolder.disabled = true;
+      if (status) status.textContent = "Abrindo seletor de pasta...";
+      try {
+        const response = await fetch("/api/select-folder", { method: "POST" });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) throw new Error(payload.error || "Nao consegui selecionar a pasta.");
+        sourcePath.value = payload.path || desktopPath;
+        if (status) status.textContent = "Pasta selecionada.";
+      } catch (error) {
+        if (status) status.textContent = error.message || "Seletor de pasta indisponivel.";
+      } finally {
+        selectFolder.disabled = false;
+      }
+    });
+  }
 }
 async function startImportJob(form){
   const status = document.querySelector("[data-import-status]");
@@ -4327,6 +4445,7 @@ document.querySelectorAll(".segments [data-format]").forEach(btn => {
 document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
   btn.addEventListener("click", () => { applyTab(btn.dataset.tab); renderCaptionQueue(); });
 });
+setupImportPathButtons();
 document.querySelector("[data-import-form]")?.addEventListener("submit", event => {
   event.preventDefault();
   startImportJob(event.currentTarget);
