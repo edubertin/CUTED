@@ -10,11 +10,13 @@ class application workflow.
 1. [Product PRD](product/PRD.md)
 2. [Review Workspace Spec](product/SPEC-001-review-workspace.md)
 3. [AI Processing Tab Spec](product/SPEC-002-ai-processing-tab.md)
-4. [Data Contracts](architecture/DATA_CONTRACTS.md)
-5. [Render Pipeline](architecture/RENDER_PIPELINE.md)
-6. [Skill to App Migration ADR](architecture/ADR-0001-skill-to-app-migration.md)
-7. [QA Regression Matrix](qa/REGRESSION_MATRIX.md)
-8. [Local Development Runbook](operations/LOCAL_DEV.md)
+4. [AI Ingestion and Clip Diversity Spec](product/SPEC-003-ai-ingestion-and-clip-diversity.md)
+5. [Data Contracts](architecture/DATA_CONTRACTS.md)
+6. [Render Pipeline](architecture/RENDER_PIPELINE.md)
+7. [Skill to App Migration ADR](architecture/ADR-0001-skill-to-app-migration.md)
+8. [AI Ingestion and Selection Guardrails ADR](architecture/ADR-0002-ai-ingestion-and-selection-guardrails.md)
+9. [QA Regression Matrix](qa/REGRESSION_MATRIX.md)
+10. [Local Development Runbook](operations/LOCAL_DEV.md)
 
 ## Current Source of Truth
 

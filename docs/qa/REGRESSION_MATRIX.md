@@ -19,6 +19,9 @@ review workspace, data contracts, or render pipeline.
 | Image layer | Add PNG/WebP logo | Transparency preserved in preview and render |
 | Export | Add multiple platforms | Queue contains each selected platform |
 | Finalize | Render final queue | MP4 files and manifest are created |
+| AI import | Generate 10 suggestions from a long transcript | Suggestions are spread across distinct timeline windows |
+| AI import | YouTube has captions | Captions are used without downloading full audio for transcription |
+| AI import | Audio exceeds upload limit | Audio is compressed or chunked before hosted transcription |
 
 ## Overlay Regression Checks
 
@@ -56,5 +59,7 @@ review workspace, data contracts, or render pipeline.
 
 - Run a real local final render after render pipeline changes.
 - Inspect at least one output MP4 when overlays or effects change.
+- Run the clip diversity smoke test after candidate selection changes.
+- Run an audio-size guard test after transcription pipeline changes.
 - Check `git status` before commit because sample renders produce artifacts.
 - Do not commit generated media unless the task explicitly asks for fixtures.

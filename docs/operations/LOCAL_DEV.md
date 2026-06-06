@@ -44,6 +44,25 @@ Start a fresh sample server:
 python tools/cutted/scripts/cutted.py serve --dir "samples/cutted-o5kdfgnz-s0-tiktok-6" --port 8779
 ```
 
+## AI Import Configuration
+
+Use `.env.local` for secrets and local provider settings. Do not commit it.
+
+```text
+OPENAI_API_KEY=
+CUTED_AI_PROVIDER=openai
+CUTED_OPENAI_MODEL=gpt-5-mini
+CUTED_TRANSCRIBE_MODEL=whisper-1
+CUTED_OPENAI_UPLOAD_LIMIT_MB=22
+CUTED_OPENAI_CHUNK_SECONDS=600
+CUTED_YTDLP_JS_RUNTIME=node:C:\path\to\node.exe
+CUTED_YTDLP_EXTRA_ARGS=
+```
+
+`CUTED_YTDLP_JS_RUNTIME` can be left empty when the bundled Node runtime is
+discoverable. Set it explicitly when YouTube extraction warns that no supported
+JavaScript runtime is available.
+
 ## Generated Artifacts
 
 Common generated paths:
