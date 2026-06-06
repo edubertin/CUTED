@@ -130,12 +130,12 @@ The trim sliders are stored in browser `localStorage`. The exported JSON include
 - `platform_edits`;
 - `status`.
 
-The `Final` tab is the local render/results gallery. When opened through `cutted.py serve`, rendering goes through `/api/finalize`. Results appear as one dropdown per rendered video, each with an inline player, an open-in-new-tab link, and a direct MP4 download link. It can still export the queue as `caption-queue.json` for manual/debug workflows.
+The `Renderizar` tab is the local render/results gallery. When opened through `cutted.py serve`, rendering goes through `/api/finalize`. Results appear as one dropdown per rendered video, each with an inline player, an open-in-new-tab link, and a direct MP4 download link. Manual queue export is no longer exposed in the browser UI.
 
 Selection rule:
 
 - clips marked with `Gostei` always enter the caption queue;
-- if a liked clip has no platform tag, it uses the current global format as the default destination;
+- if a liked clip has no platform tag, it uses TikTok as the default destination;
 - explicit platform tags still win when the user marks TikTok, Shorts, Instagram, Facebook, or YouTube on the card.
 
 Each queued item also includes deterministic publishing metadata:

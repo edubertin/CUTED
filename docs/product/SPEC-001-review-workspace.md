@@ -11,6 +11,7 @@ into a dedicated app.
 - Collapsible clip cards.
 - Single active video preview per expanded card.
 - Trim/timeline editing.
+- Importar, Editar, and Renderizar workflow tabs.
 - Platform preset editing for TikTok, Shorts, Instagram, Facebook, and YouTube.
 - Camera, effects, captions, transcript review, text overlays, image overlays,
   layer movement, layer resizing, opacity, and export queue selection.
@@ -29,10 +30,14 @@ into a dedicated app.
 - The first screen is the main editing workspace.
 - Each clip is represented as a dropdown card.
 - Only the active card should load and play its video preview.
-- Preview playback controls should live below the video, not on top of the
+- Each clip owns its own platform switcher; there is no global Format toolbar in
+  the Edit tab.
+- The preview stack order is platform switcher, compact playback controls, then
+  the video composition canvas.
+- Preview playback controls should live outside the video, not on top of the
   composition canvas.
-- Platform edit tags sit below the compact playback controls and are centered
-  relative to the preview width.
+- Platform edit tags and compact playback controls are centered relative to the
+  preview width.
 - The controls container should respond to the video preview width.
 
 ## Preview Interaction Rules
@@ -65,12 +70,12 @@ TikTok-specific state must be restored.
 
 ## Export Dock Rules
 
-- Platform tags below the preview select the active edit preset.
+- Platform tags above the preview select the active edit preset.
 - The export dock controls which presets enter the final render queue.
 - The final render must read the latest state at finalization time, even if the
   platform was added to export before later edits.
-- A clip with no explicit export destination falls back to the active/global
-  format only when the selection rule requires a default.
+- A clip with no explicit export destination falls back to TikTok only when the
+  selection rule requires a default.
 
 ## Layer Rules
 
@@ -99,3 +104,6 @@ Image layers:
 - Double-clicking and closing the edit box does not break later layer movement.
 - Switching platform presets restores the correct saved layers for each preset.
 - Final render receives all active per-platform edits.
+- The top navigation labels are `Importar`, `Editar`, and `Renderizar`.
+- The header does not show the legacy `Exportar selecionados` action.
+- The Renderizar tab does not show the legacy `Exportar fila` action.
