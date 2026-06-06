@@ -12,6 +12,8 @@ review workspace, data contracts, or render pipeline.
 | Server | Start `cutted.py serve` | Gallery opens on local port |
 | Navigation | Check workflow tabs | Labels are Importar, Editar, and Renderizar |
 | Header | Check legacy export action | Exportar selecionados is absent |
+| Brand | Header logo | Transparent official PNG appears without black rectangle |
+| Brand | UI tokens | `:root` exposes CUTED blue, green, white, black, gray, surface, and border tokens |
 | Preview | Expand one clip card | Only active video is loaded |
 | Preview | Inspect preview stack | Platform tags sit above controls, and controls sit above video |
 | Playback | Click canvas | Video does not start |
