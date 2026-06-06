@@ -9,6 +9,10 @@ the main application code is organized here.
 ## Current Contents
 
 - `assets/brand/`: brand images for channel/profile use.
+- `assets/social/`: social channel assets, including approved CUTED Now TikTok
+  profile and overlay files.
+- `channels/`: social channel operations, content backlogs, publishing
+  experiments, and metrics logs.
 - `samples/`: generated clipping experiments with review HTML, frames, clips,
   caption queues, subtitles, and rendered outputs.
 - `tools/cutted/`: versioned copy of the local CUTED skill used to generate
