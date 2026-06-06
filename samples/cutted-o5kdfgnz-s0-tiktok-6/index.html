@@ -54,11 +54,8 @@ button{background:#f4f4f4;color:#050505;border:0;border-radius:6px;padding:9px 1
         <label>Caminho local
           <input name="source_path" type="text" placeholder="C:\videos\arquivo.mp4" autocomplete="off">
         </label>
-        <label>Previews
+        <label>Quantidade de sugestoes
           <input name="preview_count" type="number" min="1" max="40" value="10">
-        </label>
-        <label>Cortes finais
-          <input name="final_count" type="number" min="1" max="40" value="10">
         </label>
         <label>Idioma
           <input name="language" type="text" value="pt" maxlength="24">
@@ -2411,7 +2408,6 @@ function importFormPayload(form){
     source_url: String(data.get("source_url") || "").trim(),
     source_path: String(data.get("source_path") || "").trim(),
     preview_count: Number(data.get("preview_count") || 10),
-    final_count: Number(data.get("final_count") || 10),
     language: String(data.get("language") || "").trim(),
     preset: String(data.get("preset") || "tiktok"),
     context_prompt: String(data.get("context_prompt") || "").trim(),
