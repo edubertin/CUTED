@@ -22,6 +22,7 @@ review workspace, data contracts, or render pipeline.
 | Playback | Click play button | Video starts |
 | Playback | Local MP4 range request | Server responds with `206 Partial Content` |
 | Timeline | Scrub the cut timeline, then play | Preview seeks to the scrubbed time and plays from there |
+| Timeline | Drag start/end trim handles | Preview pauses and seeks to the active trim handle |
 | Volume | Open any video | Volume starts at 20 percent |
 | Platform | Switch TikTok to Facebook | Preset state changes without losing TikTok edits |
 | Text layer | Add text layer | Layer appears, moves, resizes, edits, deletes |
