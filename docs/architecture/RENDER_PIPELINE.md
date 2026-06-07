@@ -75,6 +75,18 @@ The renderer should preserve this conceptual order:
 Actual FFmpeg filter graph implementation may split and concatenate sections
 for camera segments.
 
+## Camera Preview Parity
+
+Camera reframing is stored as a three-part sequence for the beginning, middle,
+and end of the adjusted clip. The browser preview should derive the active
+camera segment from the current playback time inside the trimmed range, using
+the same third-split rule as the FFmpeg filter graph.
+
+The browser should not use independent infinite CSS camera animations because
+they drift from the rendered MP4. Dynamic presets such as `alternate` and
+`jump-cut` should be calculated from video time so seek, play, and final render
+show the same framing intent.
+
 ## Effects
 
 The browser preview uses CSS filters and overlays, but final exports must use
