@@ -2002,6 +2002,22 @@ function seekTrimHandle(card, handle){
   delete card.dataset.timelineSeekIntent;
   seekTimeline(card, target, { mode: "trim" });
 }
+function trimEndPosition(values){
+  return values.duration - values.trimEnd;
+}
+function trimPlaybackStart(values, currentTime){
+  const endPos = trimEndPosition(values);
+  if (currentTime < values.trimStart || currentTime >= endPos - .05) return values.trimStart;
+  return currentTime;
+}
+function pauseAtTrimEnd(card, video, values){
+  const endPos = trimEndPosition(values);
+  if (video.currentTime < endPos) return false;
+  video.pause();
+  video.currentTime = endPos;
+  updateTimelinePlayhead(card, endPos);
+  return true;
+}
 function togglePreviewPlayback(card){
   const video = card.querySelector("video");
   if (!video) return;
@@ -3009,12 +3025,10 @@ document.querySelectorAll(".card").forEach(card => {
     applyPreviewVolume(video);
     video.addEventListener("play", () => {
       const values = trimValues(card);
-      const freePlayback = card.dataset.timelineSeekIntent === "1";
-      card.dataset.playbackMode = freePlayback ? "free" : "range";
+      const nextTime = trimPlaybackStart(values, video.currentTime);
+      card.dataset.playbackMode = "range";
       delete card.dataset.timelineSeekIntent;
-      if (!freePlayback && (video.currentTime < values.trimStart || video.currentTime >= values.duration - values.trimEnd)) {
-        video.currentTime = values.trimStart;
-      }
+      if (Math.abs(video.currentTime - nextTime) > .05) video.currentTime = nextTime;
       syncPreviewPlayButton(card);
     });
     video.addEventListener("pause", () => {
@@ -3032,9 +3046,7 @@ document.querySelectorAll(".card").forEach(card => {
       const values = trimValues(card);
       updateTimelinePlayhead(card);
       if (card.dataset.playbackMode === "range" && video.currentTime >= values.duration - values.trimEnd) {
-        video.pause();
-        video.currentTime = values.trimStart;
-        updateTimelinePlayhead(card, values.trimStart);
+        pauseAtTrimEnd(card, video, values);
       }
     });
   }
@@ -3073,6 +3085,7 @@ document.querySelectorAll(".card").forEach(card => {
     if (btn.dataset.trimSet === "end") next.trimEnd = Math.max(values.duration - Math.max(playhead, values.startPos + 1), 0);
     setCardState(card.dataset.rank, Object.assign(current, next));
     updateTrimUi(card);
+    seekTrimHandle(card, btn.dataset.trimSet);
     renderCaptionQueue();
   }));
   card.querySelectorAll("[data-platform]").forEach(btn => btn.addEventListener("click", () => {
