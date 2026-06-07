@@ -75,6 +75,14 @@ The renderer should preserve this conceptual order:
 Actual FFmpeg filter graph implementation may split and concatenate sections
 for camera segments.
 
+## Effects
+
+The browser preview uses CSS filters and overlays, but final exports must use
+FFmpeg filters with equivalent visible intent. Low non-zero intensities should
+still produce a visible MP4 difference, because subtle pure noise can disappear
+after H.264 compression. Regression checks should cover `light-grain`,
+`old-film`, `vhs`, and `bw-old` individually.
+
 ## Platform Presets
 
 ```text

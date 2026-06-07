@@ -68,6 +68,7 @@ review workspace, data contracts, or render pipeline.
 | --- | --- |
 | Captions only | Captions render with normalized timing |
 | Effect only | Effect renders without blank output |
+| Each effect preset | Light grain, old film, VHS, and black-and-white render visible MP4 differences |
 | Text overlay plus effect | Both text and effect appear |
 | Image overlay plus effect | Image remains visible |
 | PNG logo overlay | Alpha is preserved |

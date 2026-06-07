@@ -1745,17 +1745,26 @@ def camera_segment_bounds(duration: float) -> list[tuple[float, float]]:
 def effect_filter(row: dict[str, object]) -> str:
     effect = effect_from_row(row)
     key = effect["key"]
-    intensity = float(effect["intensity"])
+    intensity = visible_effect_intensity(float(effect["intensity"]))
     if key == "none" or intensity <= 0:
         return ""
     if key == "light-grain":
-        return f"noise=alls={scaled_value(intensity, 4, 14)}:allf=t+u"
+        grain = scaled_value(intensity, 10, 28)
+        contrast = scaled_float(intensity, 1.04, 1.12)
+        return f"eq=contrast={contrast}:saturation=0.96,noise=alls={grain}:allf=t+u,unsharp=3:3:0.22"
     if key == "old-film":
-        return f"curves=preset=vintage,eq=saturation=0.7:contrast=1.16:brightness=-0.04,noise=alls={scaled_value(intensity, 5, 16)}:allf=t+u,vignette=PI/4"
+        grain = scaled_value(intensity, 11, 26)
+        contrast = scaled_float(intensity, 1.18, 1.32)
+        brightness = scaled_float(intensity, -0.04, -0.08)
+        return f"curves=preset=vintage,eq=saturation=0.56:contrast={contrast}:brightness={brightness},noise=alls={grain}:allf=t+u,vignette=PI/3"
     if key == "vhs":
-        return f"eq=saturation=0.62:contrast=1.2:brightness=-0.05,noise=alls={scaled_value(intensity, 7, 20)}:allf=t+u"
+        grain = scaled_value(intensity, 14, 34)
+        contrast = scaled_float(intensity, 1.2, 1.34)
+        return f"eq=saturation=0.55:contrast={contrast}:brightness=-0.06,noise=alls={grain}:allf=t+u,drawgrid=w=iw:h=4:t=1:c=white@0.08"
     if key == "bw-old":
-        return f"hue=s=0,eq=contrast=1.18:brightness=-0.03,noise=alls={scaled_value(intensity, 6, 18)}:allf=t+u,vignette=PI/4"
+        grain = scaled_value(intensity, 12, 30)
+        contrast = scaled_float(intensity, 1.18, 1.34)
+        return f"hue=s=0,eq=contrast={contrast}:brightness=-0.04,noise=alls={grain}:allf=t+u,vignette=PI/3"
     return ""
 
 
@@ -1763,9 +1772,20 @@ def video_crf(row: dict[str, object]) -> str:
     return "24" if effect_from_row(row)["key"] != "none" else "23"
 
 
+def visible_effect_intensity(intensity: float) -> float:
+    if intensity <= 0:
+        return 0.0
+    return max(clamp(intensity, 0.0, 100.0), 24.0)
+
+
 def scaled_value(intensity: float, low: int, high: int) -> int:
     value = low + ((clamp(intensity, 0.0, 100.0) / 100.0) * (high - low))
     return int(round(value))
+
+
+def scaled_float(intensity: float, low: float, high: float) -> str:
+    value = low + ((clamp(intensity, 0.0, 100.0) / 100.0) * (high - low))
+    return f"{value:.3f}".rstrip("0").rstrip(".")
 
 
 def effect_from_row(row: dict[str, object]) -> dict[str, object]:
