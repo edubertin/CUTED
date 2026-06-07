@@ -24,6 +24,7 @@ review workspace, data contracts, or render pipeline.
 | Timeline | Scrub the cut timeline, then play | Preview seeks to the scrubbed time and plays from there |
 | Timeline | Drag start/end trim handles | Preview pauses and seeks to the active trim handle |
 | Timeline | Play adjusted trim range | Preview starts inside the cut and pauses at the adjusted end |
+| Timeline | Scrub outside an active trim range | Preview clamps to the adjusted cut window |
 | Volume | Open any video | Volume starts at 20 percent |
 | Platform | Switch TikTok to Facebook | Preset state changes without losing TikTok edits |
 | Text layer | Add text layer | Layer appears, moves, resizes, edits, deletes |
@@ -57,6 +58,7 @@ review workspace, data contracts, or render pipeline.
 | Add Facebook text, return TikTok | TikTok text is restored |
 | Add platform to export, then edit layer | Final render uses latest edit |
 | Remove platform from export | Platform is absent from final queue |
+| Discard clip with platform selected | Discarded clip is absent from final queue and shows no active platform |
 | Render TikTok and YouTube | Output dimensions differ as expected |
 
 ## Render Checks
