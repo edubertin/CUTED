@@ -3332,6 +3332,7 @@ function cardState(rank){
   const raw = state[rank];
   if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], platformEdits: {} };
   const next = Object.assign({ status: null, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], platformEdits: {} }, raw || {});
+  next.platforms = next.status === "discarded" ? [] : uniquePlatforms(next.platforms);
   next.camera = normalizeCamera(next.camera);
   next.effect = normalizeEffect(next.effect);
   next.overlay = normalizeOverlay(next.overlay);
@@ -4140,7 +4141,7 @@ function positionOverlayMenu(surface, menu, left, top){
 }
 function updatePlatformUi(card){
   const current = cardState(card.dataset.rank);
-  const platforms = Array.isArray(current.platforms) ? current.platforms : [];
+  const platforms = uniquePlatforms(current.platforms);
   card.querySelectorAll("[data-platform]").forEach(btn => {
     btn.classList.toggle("active", platforms.includes(btn.dataset.platform));
   });
@@ -4201,7 +4202,10 @@ function updateTimelinePlayhead(card, time = null){
   const values = trimValues(card);
   const video = card.querySelector("video");
   const raw = time === null && video && Number.isFinite(video.currentTime) ? video.currentTime : time;
-  const current = clampNumber(Number(raw ?? values.trimStart), 0, Math.max(values.duration, .1));
+  const current = clampPreviewTime(values, Number(raw ?? values.trimStart));
+  if (time === null && video && trimRangeActive(values) && Math.abs(Number(video.currentTime || 0) - current) > .05) {
+    video.currentTime = current;
+  }
   const scrubInput = card.querySelector("[data-trim-scrub]");
   if (scrubInput) scrubInput.value = current.toFixed(1);
   const playhead = card.querySelector("[data-timeline-playhead]");
@@ -4231,9 +4235,10 @@ function applyPendingTimelineSeek(card, video){
 function seekTimeline(card, time, options = {}){
   const video = card.querySelector("video");
   const values = trimValues(card);
-  const current = clampNumber(Number(time), 0, Math.max(values.duration, .1));
-  if (options.userInitiated) card.dataset.timelineSeekIntent = "1";
-  if (options.mode) card.dataset.playbackMode = options.mode;
+  const current = clampPreviewTime(values, Number(time));
+  const mode = trimRangeActive(values) && options.mode === "free" ? "trim" : options.mode;
+  if (options.userInitiated && !trimRangeActive(values)) card.dataset.timelineSeekIntent = "1";
+  if (mode) card.dataset.playbackMode = mode;
   card.dataset.pendingSeek = current.toFixed(3);
   if (video) {
     loadCardVideo(card);
@@ -4263,6 +4268,15 @@ function seekTrimHandle(card, handle){
 }
 function trimEndPosition(values){
   return values.duration - values.trimEnd;
+}
+function trimRangeActive(values){
+  return values.trimStart > .05 || values.trimEnd > .05;
+}
+function clampPreviewTime(values, time){
+  const safeTime = clampNumber(Number(time), 0, Math.max(values.duration, .1));
+  if (!trimRangeActive(values)) return safeTime;
+  const endPos = trimEndPosition(values);
+  return clampNumber(safeTime, values.trimStart, Math.max(values.trimStart, endPos));
 }
 function trimPlaybackStart(values, currentTime){
   const endPos = trimEndPosition(values);
@@ -4426,7 +4440,7 @@ function buildExportData(){
   data.export_format = document.body.dataset.format || "tiktok";
   const adjusted = data.moments.map(adjustedMoment);
   data.moments = adjusted;
-  data.selected = adjusted.filter(m => m.status === "liked" || m.platforms.length > 0);
+  data.selected = adjusted.filter(moment => captionPlatforms(moment, data.export_format).length > 0);
   data.caption_queue = data.selected.flatMap(moment => captionPlatforms(moment, data.export_format).map(platform => {
     const edit = platformEditForRank(moment.rank, platform);
     const overlays = edit.overlays;
@@ -4456,8 +4470,18 @@ function buildExportData(){
   return data;
 }
 function captionPlatforms(moment, exportFormat){
-  if (Array.isArray(moment.platforms) && moment.platforms.length) return moment.platforms;
+  if (moment.status === "discarded") return [];
+  const platforms = uniquePlatforms(moment.platforms);
+  if (platforms.length) return platforms;
   return moment.status === "liked" && platformMeta[exportFormat] ? [exportFormat] : [];
+}
+function uniquePlatforms(values){
+  const seen = new Set();
+  return (Array.isArray(values) ? values : []).map(value => String(value || "").trim().toLowerCase()).filter(platform => {
+    if (!platformMeta[platform] || seen.has(platform)) return false;
+    seen.add(platform);
+    return true;
+  });
 }
 function publishMetadata(platform, moment){
   const hashtags = suggestHashtags(platform, `${moment.title} ${moment.peak_text} ${moment.transcript}`);
@@ -5304,7 +5328,7 @@ document.querySelectorAll(".card").forEach(card => {
     video.addEventListener("timeupdate", () => {
       const values = trimValues(card);
       updateTimelinePlayhead(card);
-      if (card.dataset.playbackMode === "range" && video.currentTime >= values.duration - values.trimEnd) {
+      if (trimRangeActive(values) && video.currentTime >= values.duration - values.trimEnd) {
         pauseAtTrimEnd(card, video, values);
       }
     });
@@ -5353,7 +5377,8 @@ document.querySelectorAll(".card").forEach(card => {
     const existing = platforms.indexOf(btn.dataset.platform);
     if (existing >= 0) platforms.splice(existing, 1);
     else platforms.push(btn.dataset.platform);
-    setCardState(card.dataset.rank, { platforms });
+    setCardState(card.dataset.rank, { platforms, status: current.status === "discarded" ? null : current.status });
+    paint(card);
     updatePlatformUi(card);
     renderCaptionQueue();
   }));
@@ -5369,7 +5394,8 @@ document.querySelectorAll(".card").forEach(card => {
       openNextCard(card);
       return;
     }
-    setCardState(card.dataset.rank, { status: btn.dataset.action === "like" ? "liked" : "discarded" });
+    const patch = btn.dataset.action === "like" ? { status: "liked" } : { status: "discarded", platforms: [] };
+    setCardState(card.dataset.rank, patch);
     paint(card);
     updatePlatformUi(card);
     renderCaptionQueue();
