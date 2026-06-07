@@ -100,9 +100,9 @@ button[data-action=discard],.result-actions a.secondary{background:rgba(231,231,
         <label>Link do video
           <input name="source_url" type="url" placeholder="https://..." autocomplete="off">
         </label>
-        <label>Caminho local
+        <label>Destino dos renders
           <span class="import-path-row">
-            <input name="source_path" type="text" value="C:\Users\edube\Desktop" autocomplete="off">
+            <input name="output_path" type="text" value="C:\Users\edube\Desktop" autocomplete="off">
             <button type="button" data-use-desktop>Desktop</button>
             <button type="button" data-select-folder>Pasta</button>
           </span>
@@ -1950,13 +1950,49 @@ function updateTimelinePlayhead(card, time = null){
   const output = card.querySelector("[data-output=current]");
   if (output) output.textContent = fixed(values.start + current);
 }
+function applyTimelineSeek(card, video, current){
+  if (!video) return false;
+  try {
+    video.currentTime = current;
+    updateTimelinePlayhead(card, current);
+    return Math.abs(Number(video.currentTime || 0) - current) < .6;
+  } catch (error) {
+    return false;
+  }
+}
+function applyPendingTimelineSeek(card, video){
+  const pending = card.dataset.pendingSeek;
+  if (pending === undefined) return false;
+  const duration = Number(card.dataset.duration) || .1;
+  const current = clampNumber(Number(pending), 0, Math.max(duration, .1));
+  const applied = applyTimelineSeek(card, video, current);
+  if (applied) delete card.dataset.pendingSeek;
+  return applied;
+}
+function seekTimeline(card, time, options = {}){
+  const video = card.querySelector("video");
+  const values = trimValues(card);
+  const current = clampNumber(Number(time), 0, Math.max(values.duration, .1));
+  if (options.userInitiated) card.dataset.timelineSeekIntent = "1";
+  if (options.mode) card.dataset.playbackMode = options.mode;
+  card.dataset.pendingSeek = current.toFixed(3);
+  if (video) {
+    loadCardVideo(card);
+    if (video.readyState > 0) {
+      applyPendingTimelineSeek(card, video);
+    }
+    window.setTimeout(() => applyPendingTimelineSeek(card, video), 120);
+    window.setTimeout(() => applyPendingTimelineSeek(card, video), 400);
+  }
+  updateTimelinePlayhead(card, current);
+}
 function seekPreview(card){
   const video = card.querySelector("video");
   if (!video) return;
   loadCardVideo(card);
   const values = trimValues(card);
-  video.currentTime = values.trimStart;
-  updateTimelinePlayhead(card, values.trimStart);
+  delete card.dataset.timelineSeekIntent;
+  seekTimeline(card, values.trimStart, { mode: "range" });
 }
 function togglePreviewPlayback(card){
   const video = card.querySelector("video");
@@ -2508,6 +2544,7 @@ function importFormPayload(form){
   return {
     source_url: String(data.get("source_url") || "").trim(),
     source_path: String(data.get("source_path") || "").trim(),
+    output_path: String(data.get("output_path") || "").trim(),
     preview_count: Number(data.get("preview_count") || 10),
     language: String(data.get("language") || "").trim(),
     preset: String(data.get("preset") || "tiktok"),
@@ -2638,18 +2675,18 @@ function formatUsd(value){
 function setupImportPathButtons(){
   const form = document.querySelector("[data-import-form]");
   if (!form) return;
-  const sourcePath = form.querySelector("[name=source_path]");
-  const desktopPath = sourcePath?.defaultValue || "";
+  const outputPath = form.querySelector("[name=output_path]");
+  const desktopPath = outputPath?.defaultValue || "";
   const status = document.querySelector("[data-import-status]");
   const useDesktop = form.querySelector("[data-use-desktop]");
-  if (useDesktop && sourcePath) {
+  if (useDesktop && outputPath) {
     useDesktop.addEventListener("click", () => {
-      sourcePath.value = desktopPath;
-      sourcePath.focus();
+      outputPath.value = desktopPath;
+      outputPath.focus();
     });
   }
   const selectFolder = form.querySelector("[data-select-folder]");
-  if (selectFolder && sourcePath) {
+  if (selectFolder && outputPath) {
     selectFolder.addEventListener("click", async () => {
       selectFolder.disabled = true;
       if (status) status.textContent = "Abrindo seletor de pasta...";
@@ -2657,7 +2694,7 @@ function setupImportPathButtons(){
         const response = await fetch("/api/select-folder", { method: "POST" });
         const payload = await response.json();
         if (!response.ok || !payload.ok) throw new Error(payload.error || "Nao consegui selecionar a pasta.");
-        sourcePath.value = payload.path || desktopPath;
+        outputPath.value = payload.path || desktopPath;
         if (status) status.textContent = "Pasta selecionada.";
       } catch (error) {
         if (status) status.textContent = error.message || "Seletor de pasta indisponivel.";
@@ -2759,7 +2796,8 @@ async function finalizeVideos(){
     const payload = await response.json();
     if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao renderizar.");
     renderFinalizeResults(payload.files || []);
-    if (status) status.textContent = `${payload.count || 0} video(s) finalizado(s).`;
+    const exported = payload.export_dir ? ` Exportado em: ${payload.export_dir}` : "";
+    if (status) status.textContent = `${payload.count || 0} video(s) finalizado(s).${exported}`;
   } catch (error) {
     if (status) status.textContent = finalizeErrorMessage(error);
   } finally {
@@ -2798,6 +2836,7 @@ function renderFinalizeResults(files){
             <dt>Camera</dt><dd>${escapeHtml(cameraLabel(camera))}</dd>
             <dt>Efeito</dt><dd>${escapeHtml(effect.label)}</dd>
             <dt>Chamada</dt><dd>${escapeHtml(overlay.label)}</dd>
+            ${file.local_file ? `<dt>Arquivo local</dt><dd>${escapeHtml(file.local_file)}</dd>` : ""}
           </dl>
           <div class="result-actions">
             <a href="${escapeAttr(file.url)}" target="_blank" rel="noopener">Abrir</a>
@@ -2962,7 +3001,10 @@ document.querySelectorAll(".card").forEach(card => {
     applyPreviewVolume(video);
     video.addEventListener("play", () => {
       const values = trimValues(card);
-      if (video.currentTime < values.trimStart || video.currentTime >= values.duration - values.trimEnd) {
+      const freePlayback = card.dataset.timelineSeekIntent === "1";
+      card.dataset.playbackMode = freePlayback ? "free" : "range";
+      delete card.dataset.timelineSeekIntent;
+      if (!freePlayback && (video.currentTime < values.trimStart || video.currentTime >= values.duration - values.trimEnd)) {
         video.currentTime = values.trimStart;
       }
       syncPreviewPlayButton(card);
@@ -2973,13 +3015,15 @@ document.querySelectorAll(".card").forEach(card => {
     video.addEventListener("volumechange", () => {
       syncPreviewVolumeButton(card);
     });
-    video.addEventListener("loadedmetadata", () => {
-      updateTimelinePlayhead(card);
+    ["loadedmetadata", "loadeddata", "canplay", "durationchange"].forEach(eventName => {
+      video.addEventListener(eventName, () => {
+        if (!applyPendingTimelineSeek(card, video)) updateTimelinePlayhead(card);
+      });
     });
     video.addEventListener("timeupdate", () => {
       const values = trimValues(card);
       updateTimelinePlayhead(card);
-      if (video.currentTime >= values.duration - values.trimEnd) {
+      if (card.dataset.playbackMode !== "free" && video.currentTime >= values.duration - values.trimEnd) {
         video.pause();
         video.currentTime = values.trimStart;
         updateTimelinePlayhead(card, values.trimStart);
@@ -3006,14 +3050,9 @@ document.querySelectorAll(".card").forEach(card => {
   const scrubInput = card.querySelector("[data-trim-scrub]");
   if (scrubInput) {
     scrubInput.addEventListener("input", () => {
-      const video = card.querySelector("video");
       const duration = Number(card.dataset.duration);
       const current = clampNumber(Number(scrubInput.value), 0, Math.max(duration, .1));
-      if (video) {
-        loadCardVideo(card);
-        video.currentTime = current;
-      }
-      updateTimelinePlayhead(card, current);
+      seekTimeline(card, current, { userInitiated: true, mode: "free" });
     });
   }
   card.querySelectorAll("[data-trim-set]").forEach(btn => btn.addEventListener("click", () => {
