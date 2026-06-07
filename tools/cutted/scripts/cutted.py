@@ -3486,6 +3486,10 @@ function cameraLabel(camera){
   return active.map(segment => `${segment.part_label}: ${segment.label}`).join(" | ");
 }
 function cameraForRank(rank, platform = activePlatformForRank(rank)){ return platformEditForRank(rank, platform).camera; }
+function updateCardCameraSummary(card, camera){
+  const summary = card?.querySelector("[data-camera-current]");
+  if (summary) summary.textContent = cameraLabel(camera);
+}
 function setCameraSegmentForRank(rank, part, patch, platform = activePlatformForRank(rank)){
   const targetPlatform = validPlatform(platform);
   const camera = cameraForRank(rank, targetPlatform);
@@ -3495,7 +3499,11 @@ function setCameraSegmentForRank(rank, part, patch, platform = activePlatformFor
   });
   setPlatformEditForRank(rank, targetPlatform, { camera: cameraSequence(segments) });
   const card = cardForRank(rank);
-  if (card) updateCameraUi(card);
+  if (card) {
+    const nextCamera = cameraForRank(rank, activePlatformForRank(rank));
+    updateCardCameraSummary(card, nextCamera);
+    updateCameraSurfaceForCard(card);
+  }
   renderFinalStage();
 }
 function normalizeSingleCamera(camera){
@@ -3569,6 +3577,29 @@ function cameraContextForCard(card, time = null){
 function updateCameraSurfaceForCard(card, time = null){
   const context = cameraContextForCard(card, time);
   applyCameraSurface(card.querySelector(".camera-surface"), cameraForRank(card.dataset.rank), context.position, context.duration);
+}
+function startCameraFrameSync(video, update){
+  if (!video || typeof requestAnimationFrame !== "function") return;
+  const tick = () => {
+    if (video.paused || video.ended) {
+      delete video.dataset.cameraFrameSync;
+      return;
+    }
+    update();
+    video.dataset.cameraFrameSync = String(requestAnimationFrame(tick));
+  };
+  if (video.dataset.cameraFrameSync) return;
+  update();
+  video.dataset.cameraFrameSync = String(requestAnimationFrame(tick));
+}
+function stopCameraFrameSync(video, update){
+  if (!video || !video.dataset.cameraFrameSync) {
+    if (update) update();
+    return;
+  }
+  cancelAnimationFrame(Number(video.dataset.cameraFrameSync));
+  delete video.dataset.cameraFrameSync;
+  if (update) update();
 }
 function cameraStyle(camera){
   return cameraPreviewStyle(camera, 0);
@@ -3759,8 +3790,7 @@ function updateCameraUi(card){
   const camera = cameraForRank(card.dataset.rank);
   const surface = card.querySelector(".camera-surface");
   if (surface) updateCameraSurfaceForCard(card);
-  const summary = card.querySelector("[data-camera-current]");
-  if (summary) summary.textContent = cameraLabel(camera);
+  updateCardCameraSummary(card, camera);
   const container = card.querySelector("[data-card-camera]");
   if (!container) return;
   container.innerHTML = `<div class="camera-card-controls">${cameraSegmentsHtml(camera)}</div>`;
@@ -4718,8 +4748,12 @@ function bindCameraPreviewControls(){
     updatePreviewSurface();
     const video = item.querySelector("video");
     if (video) {
-      ["loadedmetadata", "durationchange", "seeked", "timeupdate", "play"].forEach(eventName => {
+      ["loadedmetadata", "durationchange", "seeked", "timeupdate"].forEach(eventName => {
         video.addEventListener(eventName, updatePreviewSurface);
+      });
+      video.addEventListener("play", () => startCameraFrameSync(video, updatePreviewSurface));
+      ["pause", "ended"].forEach(eventName => {
+        video.addEventListener(eventName, () => stopCameraFrameSync(video, updatePreviewSurface));
       });
     }
     item.querySelectorAll("[data-preview-camera-segment]").forEach(select => {
@@ -5446,9 +5480,15 @@ document.querySelectorAll(".card").forEach(card => {
       card.dataset.playbackMode = "range";
       delete card.dataset.timelineSeekIntent;
       if (Math.abs(video.currentTime - nextTime) > .05) video.currentTime = nextTime;
+      startCameraFrameSync(video, () => updateCameraSurfaceForCard(card));
       syncPreviewPlayButton(card);
     });
     video.addEventListener("pause", () => {
+      stopCameraFrameSync(video, () => updateCameraSurfaceForCard(card));
+      syncPreviewPlayButton(card);
+    });
+    video.addEventListener("ended", () => {
+      stopCameraFrameSync(video, () => updateCameraSurfaceForCard(card));
       syncPreviewPlayButton(card);
     });
     video.addEventListener("volumechange", () => {
