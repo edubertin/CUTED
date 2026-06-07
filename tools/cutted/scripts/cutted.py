@@ -24,6 +24,7 @@ from types import SimpleNamespace
 
 
 BRAND_LOGO_FILE = "cuted-logo-transparent.png"
+RANGE_MEDIA_EXTENSIONS = {".m4v", ".mov", ".mp4", ".webm"}
 
 
 TERMINAL_ENDINGS = (".", "!", "?", "…")
@@ -368,7 +369,46 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if re.fullmatch(r"/api/import-jobs/[^/]+", path):
                 self.handle_import_status(path)
                 return
+            if self.handle_range_request():
+                return
             super().do_GET()
+
+        def handle_range_request(self) -> bool:
+            range_header = self.headers.get("Range")
+            if not range_header:
+                return False
+            file_path = Path(self.translate_path(self.path))
+            if file_path.suffix.lower() not in RANGE_MEDIA_EXTENSIONS or not file_path.is_file():
+                return False
+            file_size = file_path.stat().st_size
+            byte_range = parse_range_header(range_header, file_size)
+            if byte_range is None:
+                self.send_error(416, "Requested Range Not Satisfiable")
+                return True
+            self.send_media_range(file_path, file_size, byte_range)
+            return True
+
+        def send_media_range(self, file_path: Path, file_size: int, byte_range: tuple[int, int]) -> None:
+            start, end = byte_range
+            length = end - start + 1
+            self.send_response(206)
+            self.send_header("Content-type", self.guess_type(str(file_path)))
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
+            self.send_header("Content-Length", str(length))
+            self.end_headers()
+            with file_path.open("rb") as source:
+                source.seek(start)
+                self.copy_range(source, length)
+
+        def copy_range(self, source, length: int) -> None:
+            remaining = length
+            while remaining > 0:
+                chunk = source.read(min(64 * 1024, remaining))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                remaining -= len(chunk)
 
         def handle_finalize(self, request_base_dir: Path) -> None:
             try:
@@ -427,6 +467,25 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
     return CuttedGalleryHandler
 
 
+def parse_range_header(header: str, file_size: int) -> tuple[int, int] | None:
+    match = re.fullmatch(r"bytes=(\d*)-(\d*)", header.strip())
+    if not match or file_size <= 0:
+        return None
+    start_text, end_text = match.groups()
+    if not start_text and not end_text:
+        return None
+    if not start_text:
+        suffix_length = int(end_text)
+        start = max(file_size - suffix_length, 0)
+        end = file_size - 1
+    else:
+        start = int(start_text)
+        end = int(end_text) if end_text else file_size - 1
+    if start >= file_size or end < start:
+        return None
+    return start, min(end, file_size - 1)
+
+
 def finalize_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
     payload = read_json_body(handler)
     queue = payload.get("queue") if isinstance(payload, dict) else None
@@ -441,9 +500,12 @@ def finalize_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir:
     rows = caption_rows_from_data(queue)
     options = SimpleNamespace(chars_per_line=int(payload.get("chars_per_line") or 28), max_lines=int(payload.get("max_lines") or 2))
     captioned = caption_selected_rows(rows, gallery_dir, out_dir, find_ffmpeg(), options)
+    captioned, export_dir = export_captioned_rows(captioned, gallery_dir)
     manifest = {"source_caption_queue": str(caption_path), "captioned": captioned}
+    if export_dir:
+        manifest["export_dir"] = str(export_dir)
     (out_dir / "captioned-clips.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    return {"ok": True, "count": len(captioned), "files": finalized_file_urls(captioned, gallery_dir)}
+    return {"ok": True, "count": len(captioned), "files": finalized_file_urls(captioned, gallery_dir), "export_dir": str(export_dir) if export_dir else ""}
 
 
 def resolve_request_gallery_dir(base_dir: Path, payload: dict[str, object]) -> Path:
@@ -462,6 +524,61 @@ def resolve_request_gallery_dir(base_dir: Path, payload: dict[str, object]) -> P
     return candidate
 
 
+def export_captioned_rows(rows: list[dict[str, object]], gallery_dir: Path) -> tuple[list[dict[str, object]], Path | None]:
+    export_dir = render_export_dir(gallery_dir)
+    if export_dir is None:
+        return rows, None
+    export_dir.mkdir(parents=True, exist_ok=True)
+    exported: list[dict[str, object]] = []
+    for row in rows:
+        source = Path(str(row.get("file") or ""))
+        if not source.exists():
+            exported.append(row)
+            continue
+        destination = unique_export_path(export_dir / source.name)
+        shutil.copy2(source, destination)
+        exported.append({**row, "local_file": str(destination)})
+    return exported, export_dir
+
+
+def render_export_dir(gallery_dir: Path) -> Path | None:
+    metadata = read_import_metadata(gallery_dir)
+    raw = str(metadata.get("output_path") or "").strip()
+    if not raw and metadata.get("source_url"):
+        legacy_path = Path(str(metadata.get("source_path") or "")).expanduser()
+        if legacy_path.exists() and legacy_path.is_dir():
+            raw = str(legacy_path)
+    if not raw:
+        return None
+    base = Path(raw).expanduser()
+    if base.suffix and not base.exists():
+        base = base.parent
+    return base / "CUTED Renders" / gallery_dir.name
+
+
+def read_import_metadata(gallery_dir: Path) -> dict[str, object]:
+    path = gallery_dir / "import-request.json"
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def unique_export_path(path: Path) -> Path:
+    if not path.exists():
+        return path
+    stem = path.stem
+    suffix = path.suffix
+    for index in range(2, 1000):
+        candidate = path.with_name(f"{stem}-{index}{suffix}")
+        if not candidate.exists():
+            return candidate
+    return path.with_name(f"{stem}-{uuid.uuid4().hex[:8]}{suffix}")
+
+
 def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
     payload = read_json_body(handler)
     source_url = str(payload.get("source_url") or "").strip()
@@ -474,6 +591,7 @@ def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path
     duration_profile = clean_duration_profile(payload.get("duration_profile"))
     context_prompt = clean_optional_text(payload.get("context_prompt"), 5000)
     render_previews = bool(payload.get("render_previews", True))
+    output_path = clean_output_path(payload.get("output_path") or (payload.get("source_path") if source_url else None))
     ai_provider = configured_ai_provider()
     if ai_provider == "openai" and not openai_api_key():
         raise ValueError("Configure OPENAI_API_KEY no .env.local antes de importar com IA.")
@@ -482,6 +600,7 @@ def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path
     metadata = {
         "source_url": source_url,
         "source_path": source_path,
+        "output_path": output_path,
         "preview_count": clips,
         "language": language,
         "preset": preset,
@@ -620,6 +739,13 @@ def clean_preset(value: object) -> str:
 def clean_duration_profile(value: object) -> str:
     profile = str(value or "medium").strip().lower()
     return profile if profile in DURATION_PROFILES else "medium"
+
+
+def clean_output_path(value: object) -> str:
+    raw = str(value or "").strip().strip('"')
+    if not raw:
+        return default_desktop_path()
+    return str(Path(raw).expanduser())
 
 
 def duration_profile_args(profile: str) -> list[str]:
@@ -1380,21 +1506,34 @@ def render_command(
         filter_arg = image_overlay_complex_filter(preset, row, duration, filters)
         return [
             *base, "-filter_complex", filter_arg, "-map", "[vout]", "-map", "0:a?",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", video_crf(row),
-            "-c:a", "aac", "-movflags", "+faststart", str(output_path),
+            *mp4_output_args(row), str(output_path),
         ]
     if camera_is_sequence(row):
         filter_arg = camera_sequence_filter(preset, row, duration, filters)
         return [
             *base, "-filter_complex", filter_arg, "-map", "[vout]", "-map", "0:a?",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", video_crf(row),
-            "-c:a", "aac", "-movflags", "+faststart", str(output_path),
+            *mp4_output_args(row), str(output_path),
         ]
     filter_arg = ",".join([camera_filter(preset, row), *filters])
     return [
         *base, "-vf", filter_arg,
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", video_crf(row),
-        "-c:a", "aac", "-movflags", "+faststart", str(output_path),
+        *mp4_output_args(row), str(output_path),
+    ]
+
+
+def mp4_output_args(row: dict[str, object]) -> list[str]:
+    return [
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-profile:v", "main",
+        "-level", "4.1",
+        "-pix_fmt", "yuv420p",
+        "-r", "30",
+        "-crf", video_crf(row),
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-ar", "44100",
+        "-movflags", "+faststart",
     ]
 
 
@@ -2666,7 +2805,9 @@ def render_one(video: Path | str, clips_dir: Path, frames_dir: Path, moment: Mom
 
 def cut_clip(video: Path | str, output: Path, start: float, end: float, ffmpeg: str) -> None:
     command = [ffmpeg, "-y", "-ss", fmt_time(start), "-i", str(video), "-t", fmt_time(end - start),
-               "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-c:a", "aac", "-movflags", "+faststart", str(output)]
+               "-c:v", "libx264", "-preset", "veryfast", "-profile:v", "main", "-level", "4.1",
+               "-pix_fmt", "yuv420p", "-r", "30", "-crf", "23", "-c:a", "aac", "-b:a", "128k",
+               "-ar", "44100", "-movflags", "+faststart", str(output)]
     subprocess.run(command, check=True, capture_output=True, text=True)
 
 
@@ -2966,9 +3107,9 @@ def page_html(source_label: str, cards: str, data: str, logo_src: str) -> str:
         <label>Link do video
           <input name="source_url" type="url" placeholder="https://..." autocomplete="off">
         </label>
-        <label>Caminho local
+        <label>Destino dos renders
           <span class="import-path-row">
-            <input name="source_path" type="text" value="{html.escape(default_desktop_path())}" autocomplete="off">
+            <input name="output_path" type="text" value="{html.escape(default_desktop_path())}" autocomplete="off">
             <button type="button" data-use-desktop>Desktop</button>
             <button type="button" data-select-folder>Pasta</button>
           </span>
@@ -4068,13 +4209,49 @@ function updateTimelinePlayhead(card, time = null){
   const output = card.querySelector("[data-output=current]");
   if (output) output.textContent = fixed(values.start + current);
 }
+function applyTimelineSeek(card, video, current){
+  if (!video) return false;
+  try {
+    video.currentTime = current;
+    updateTimelinePlayhead(card, current);
+    return Math.abs(Number(video.currentTime || 0) - current) < .6;
+  } catch (error) {
+    return false;
+  }
+}
+function applyPendingTimelineSeek(card, video){
+  const pending = card.dataset.pendingSeek;
+  if (pending === undefined) return false;
+  const duration = Number(card.dataset.duration) || .1;
+  const current = clampNumber(Number(pending), 0, Math.max(duration, .1));
+  const applied = applyTimelineSeek(card, video, current);
+  if (applied) delete card.dataset.pendingSeek;
+  return applied;
+}
+function seekTimeline(card, time, options = {}){
+  const video = card.querySelector("video");
+  const values = trimValues(card);
+  const current = clampNumber(Number(time), 0, Math.max(values.duration, .1));
+  if (options.userInitiated) card.dataset.timelineSeekIntent = "1";
+  if (options.mode) card.dataset.playbackMode = options.mode;
+  card.dataset.pendingSeek = current.toFixed(3);
+  if (video) {
+    loadCardVideo(card);
+    if (video.readyState > 0) {
+      applyPendingTimelineSeek(card, video);
+    }
+    window.setTimeout(() => applyPendingTimelineSeek(card, video), 120);
+    window.setTimeout(() => applyPendingTimelineSeek(card, video), 400);
+  }
+  updateTimelinePlayhead(card, current);
+}
 function seekPreview(card){
   const video = card.querySelector("video");
   if (!video) return;
   loadCardVideo(card);
   const values = trimValues(card);
-  video.currentTime = values.trimStart;
-  updateTimelinePlayhead(card, values.trimStart);
+  delete card.dataset.timelineSeekIntent;
+  seekTimeline(card, values.trimStart, { mode: "range" });
 }
 function togglePreviewPlayback(card){
   const video = card.querySelector("video");
@@ -4626,6 +4803,7 @@ function importFormPayload(form){
   return {
     source_url: String(data.get("source_url") || "").trim(),
     source_path: String(data.get("source_path") || "").trim(),
+    output_path: String(data.get("output_path") || "").trim(),
     preview_count: Number(data.get("preview_count") || 10),
     language: String(data.get("language") || "").trim(),
     preset: String(data.get("preset") || "tiktok"),
@@ -4756,18 +4934,18 @@ function formatUsd(value){
 function setupImportPathButtons(){
   const form = document.querySelector("[data-import-form]");
   if (!form) return;
-  const sourcePath = form.querySelector("[name=source_path]");
-  const desktopPath = sourcePath?.defaultValue || "";
+  const outputPath = form.querySelector("[name=output_path]");
+  const desktopPath = outputPath?.defaultValue || "";
   const status = document.querySelector("[data-import-status]");
   const useDesktop = form.querySelector("[data-use-desktop]");
-  if (useDesktop && sourcePath) {
+  if (useDesktop && outputPath) {
     useDesktop.addEventListener("click", () => {
-      sourcePath.value = desktopPath;
-      sourcePath.focus();
+      outputPath.value = desktopPath;
+      outputPath.focus();
     });
   }
   const selectFolder = form.querySelector("[data-select-folder]");
-  if (selectFolder && sourcePath) {
+  if (selectFolder && outputPath) {
     selectFolder.addEventListener("click", async () => {
       selectFolder.disabled = true;
       if (status) status.textContent = "Abrindo seletor de pasta...";
@@ -4775,7 +4953,7 @@ function setupImportPathButtons(){
         const response = await fetch("/api/select-folder", { method: "POST" });
         const payload = await response.json();
         if (!response.ok || !payload.ok) throw new Error(payload.error || "Nao consegui selecionar a pasta.");
-        sourcePath.value = payload.path || desktopPath;
+        outputPath.value = payload.path || desktopPath;
         if (status) status.textContent = "Pasta selecionada.";
       } catch (error) {
         if (status) status.textContent = error.message || "Seletor de pasta indisponivel.";
@@ -4877,7 +5055,8 @@ async function finalizeVideos(){
     const payload = await response.json();
     if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao renderizar.");
     renderFinalizeResults(payload.files || []);
-    if (status) status.textContent = `${payload.count || 0} video(s) finalizado(s).`;
+    const exported = payload.export_dir ? ` Exportado em: ${payload.export_dir}` : "";
+    if (status) status.textContent = `${payload.count || 0} video(s) finalizado(s).${exported}`;
   } catch (error) {
     if (status) status.textContent = finalizeErrorMessage(error);
   } finally {
@@ -4916,6 +5095,7 @@ function renderFinalizeResults(files){
             <dt>Camera</dt><dd>${escapeHtml(cameraLabel(camera))}</dd>
             <dt>Efeito</dt><dd>${escapeHtml(effect.label)}</dd>
             <dt>Chamada</dt><dd>${escapeHtml(overlay.label)}</dd>
+            ${file.local_file ? `<dt>Arquivo local</dt><dd>${escapeHtml(file.local_file)}</dd>` : ""}
           </dl>
           <div class="result-actions">
             <a href="${escapeAttr(file.url)}" target="_blank" rel="noopener">Abrir</a>
@@ -5080,7 +5260,10 @@ document.querySelectorAll(".card").forEach(card => {
     applyPreviewVolume(video);
     video.addEventListener("play", () => {
       const values = trimValues(card);
-      if (video.currentTime < values.trimStart || video.currentTime >= values.duration - values.trimEnd) {
+      const freePlayback = card.dataset.timelineSeekIntent === "1";
+      card.dataset.playbackMode = freePlayback ? "free" : "range";
+      delete card.dataset.timelineSeekIntent;
+      if (!freePlayback && (video.currentTime < values.trimStart || video.currentTime >= values.duration - values.trimEnd)) {
         video.currentTime = values.trimStart;
       }
       syncPreviewPlayButton(card);
@@ -5091,13 +5274,15 @@ document.querySelectorAll(".card").forEach(card => {
     video.addEventListener("volumechange", () => {
       syncPreviewVolumeButton(card);
     });
-    video.addEventListener("loadedmetadata", () => {
-      updateTimelinePlayhead(card);
+    ["loadedmetadata", "loadeddata", "canplay", "durationchange"].forEach(eventName => {
+      video.addEventListener(eventName, () => {
+        if (!applyPendingTimelineSeek(card, video)) updateTimelinePlayhead(card);
+      });
     });
     video.addEventListener("timeupdate", () => {
       const values = trimValues(card);
       updateTimelinePlayhead(card);
-      if (video.currentTime >= values.duration - values.trimEnd) {
+      if (card.dataset.playbackMode !== "free" && video.currentTime >= values.duration - values.trimEnd) {
         video.pause();
         video.currentTime = values.trimStart;
         updateTimelinePlayhead(card, values.trimStart);
@@ -5124,14 +5309,9 @@ document.querySelectorAll(".card").forEach(card => {
   const scrubInput = card.querySelector("[data-trim-scrub]");
   if (scrubInput) {
     scrubInput.addEventListener("input", () => {
-      const video = card.querySelector("video");
       const duration = Number(card.dataset.duration);
       const current = clampNumber(Number(scrubInput.value), 0, Math.max(duration, .1));
-      if (video) {
-        loadCardVideo(card);
-        video.currentTime = current;
-      }
-      updateTimelinePlayhead(card, current);
+      seekTimeline(card, current, { userInitiated: true, mode: "free" });
     });
   }
   card.querySelectorAll("[data-trim-set]").forEach(btn => btn.addEventListener("click", () => {

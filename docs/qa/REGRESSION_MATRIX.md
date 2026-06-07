@@ -20,6 +20,8 @@ review workspace, data contracts, or render pipeline.
 | Preview | Mobile width | Preview dock stays constrained to video width without horizontal overflow |
 | Playback | Click canvas | Video does not start |
 | Playback | Click play button | Video starts |
+| Playback | Local MP4 range request | Server responds with `206 Partial Content` |
+| Timeline | Scrub the cut timeline, then play | Preview seeks to the scrubbed time and plays from there |
 | Volume | Open any video | Volume starts at 20 percent |
 | Platform | Switch TikTok to Facebook | Preset state changes without losing TikTok edits |
 | Text layer | Add text layer | Layer appears, moves, resizes, edits, deletes |
