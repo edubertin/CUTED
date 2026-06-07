@@ -1147,8 +1147,10 @@ function normalizePlatformEdit(edit, fallback){
   const base = fallback && typeof fallback === "object" ? fallback : {};
   const overlayFallback = source.overlay || base.overlay || defaultOverlay();
   const overlays = normalizeOverlayLayers(source.overlays, overlayFallback);
+  const pathSource = Object.prototype.hasOwnProperty.call(source, "camera_path") ? source.camera_path : base.camera_path;
   return {
     camera: normalizeCamera(source.camera || base.camera || defaultCamera()),
+    camera_path: normalizeCameraPath(pathSource),
     effect: normalizeEffect(source.effect || base.effect || defaultEffect()),
     overlay: overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
     overlays
@@ -1202,7 +1204,7 @@ function setCameraSegmentForRank(rank, part, patch, platform = activePlatformFor
     if (segment.part !== part) return segment;
     return normalizeCameraSegment(Object.assign({}, segment, patch), part);
   });
-  setPlatformEditForRank(rank, targetPlatform, { camera: cameraSequence(segments) });
+  setPlatformEditForRank(rank, targetPlatform, { camera: cameraSequence(segments), camera_path: [] });
   const card = cardForRank(rank);
   if (card) {
     const nextCamera = cameraForRank(rank, activePlatformForRank(rank));
@@ -1219,6 +1221,32 @@ function normalizeSingleCamera(camera){
 function normalizeCameraSegment(segment, part){
   const current = normalizeSingleCamera(segment);
   return Object.assign({ part, part_label: cameraPartLabel(part) }, current);
+}
+function normalizeCameraPath(path){
+  const source = Array.isArray(path) ? path : Array.isArray(path?.keyframes) ? path.keyframes : [];
+  return source.map(frame => normalizeCameraPathFrame(frame)).filter(Boolean).sort((a, b) => a.time - b.time);
+}
+function normalizeCameraPathFrame(frame){
+  if (!frame || typeof frame !== "object") return null;
+  const time = Math.max(0, Number(frame.time ?? frame.t ?? 0));
+  const key = cameraMeta[frame.key] ? frame.key : cameraMeta[frame.camera_key] ? frame.camera_key : null;
+  const strength = Math.max(0, Math.min(Number(frame.strength ?? 60), 100));
+  const base = key ? normalizeSingleCamera({ key, strength }) : null;
+  const x = Math.max(0, Math.min(Number(frame.x ?? (base ? cameraCropPercent(base, time) : 50)), 100));
+  const y = Math.max(0, Math.min(Number(frame.y ?? 50), 100));
+  const zoom = Math.max(1, Math.min(Number(frame.zoom ?? (base ? cameraScaleValue(base) : 1)), 2));
+  return {
+    time: Number(time.toFixed(3)),
+    x: Number(x.toFixed(2)),
+    y: Number(y.toFixed(2)),
+    zoom: Number(zoom.toFixed(3)),
+    source: String(frame.source || (key ? "manual-segment" : "manual-path")),
+    confidence: Math.max(0, Math.min(Number(frame.confidence ?? 1), 1)),
+    part: frame.part ? String(frame.part) : undefined,
+    key: key || undefined,
+    label: key ? cameraMeta[key].label : undefined,
+    strength: key ? strength : undefined
+  };
 }
 function cameraCropPercent(camera, elapsed = 0){
   const current = normalizeSingleCamera(camera);
@@ -1254,20 +1282,82 @@ function cameraSegmentForTime(camera, position, duration){
   const segment = current.segments.find(item => item.part === part.key) || defaultCameraSegment(part.key);
   return { segment, elapsed: Math.max(0, safePosition - segmentDuration * index) };
 }
+function cameraFrameFromSegment(segment, time, elapsed){
+  const current = normalizeCameraSegment(segment, segment.part || "start");
+  return {
+    time: Number(Math.max(0, Number(time) || 0).toFixed(3)),
+    x: Number(cameraCropPercent(current, elapsed).toFixed(2)),
+    y: 50,
+    zoom: Number(cameraScaleValue(current).toFixed(3)),
+    source: "manual-segment",
+    confidence: 1,
+    part: current.part,
+    key: current.key,
+    label: current.label,
+    strength: current.strength
+  };
+}
+function cameraPathFromCamera(camera, duration){
+  const current = normalizeCamera(camera);
+  const safeDuration = Math.max(Number(duration) || 0, .3);
+  const segmentDuration = safeDuration / cameraParts.length;
+  return cameraParts.map((part, index) => {
+    const segment = current.segments.find(item => item.part === part.key) || defaultCameraSegment(part.key);
+    return cameraFrameFromSegment(segment, segmentDuration * index, 0);
+  });
+}
+function cameraPathForEdit(edit, duration){
+  const path = normalizeCameraPath(edit?.camera_path);
+  return path.length ? path : cameraPathFromCamera(edit?.camera || defaultCamera(), duration);
+}
+function cameraFrameForTime(camera, cameraPath, position, duration){
+  const path = normalizeCameraPath(cameraPath);
+  if (!path.length) {
+    const active = cameraSegmentForTime(camera, position, duration);
+    return cameraFrameFromSegment(active.segment, position, active.elapsed);
+  }
+  const safePosition = Math.max(0, Number(position) || 0);
+  let previous = path[0];
+  let next = path[path.length - 1];
+  for (let index = 0; index < path.length; index += 1) {
+    if (path[index].time <= safePosition) previous = path[index];
+    if (path[index].time >= safePosition) {
+      next = path[index];
+      break;
+    }
+  }
+  if (previous.key) {
+    return cameraFrameFromSegment(previous, safePosition, Math.max(0, safePosition - previous.time));
+  }
+  if (previous === next || next.time <= previous.time) return previous;
+  const ratio = (safePosition - previous.time) / (next.time - previous.time);
+  return {
+    time: Number(safePosition.toFixed(3)),
+    x: Number((previous.x + (next.x - previous.x) * ratio).toFixed(2)),
+    y: Number((previous.y + (next.y - previous.y) * ratio).toFixed(2)),
+    zoom: Number((previous.zoom + (next.zoom - previous.zoom) * ratio).toFixed(3)),
+    source: previous.source || "manual-path",
+    confidence: Math.min(previous.confidence ?? 1, next.confidence ?? 1)
+  };
+}
 function cameraPreviewStyle(camera, elapsed = 0){
   const current = normalizeSingleCamera(camera);
   const x = cameraCropPercent(current, elapsed).toFixed(2);
   const scale = cameraScaleValue(current).toFixed(3);
   return `--camera-x:${x}%;--camera-scale:${scale}`;
 }
+function cameraPreviewStyleFromFrame(frame){
+  const current = normalizeCameraPathFrame(frame) || { x: 50, zoom: 1 };
+  return `--camera-x:${current.x.toFixed(2)}%;--camera-scale:${current.zoom.toFixed(3)}`;
+}
 function cameraHasMovement(camera){
   return normalizeCamera(camera).segments.some(segment => segment.key !== "center");
 }
-function applyCameraSurface(surface, camera, position = 0, duration = 0){
+function applyCameraSurface(surface, camera, position = 0, duration = 0, cameraPath = []){
   if (!surface) return;
-  const active = cameraSegmentForTime(camera, position, duration);
-  surface.dataset.cameraKey = active.segment.key;
-  surface.setAttribute("style", cameraPreviewStyle(active.segment, active.elapsed));
+  const frame = cameraFrameForTime(camera, cameraPath, position, duration);
+  surface.dataset.cameraKey = frame.key || "path";
+  surface.setAttribute("style", cameraPreviewStyleFromFrame(frame));
 }
 function cameraContextForCard(card, time = null){
   const values = trimValues(card);
@@ -1281,7 +1371,8 @@ function cameraContextForCard(card, time = null){
 }
 function updateCameraSurfaceForCard(card, time = null){
   const context = cameraContextForCard(card, time);
-  applyCameraSurface(card.querySelector(".camera-surface"), cameraForRank(card.dataset.rank), context.position, context.duration);
+  const edit = platformEditForRank(card.dataset.rank, activePlatformForRank(card.dataset.rank));
+  applyCameraSurface(card.querySelector(".camera-surface"), edit.camera, context.position, context.duration, cameraPathForEdit(edit, context.duration));
 }
 function startCameraFrameSync(video, update){
   if (!video || typeof requestAnimationFrame !== "function") return;
@@ -2242,6 +2333,8 @@ function adjustedMoment(moment){
   const trimStart = Number(current.trimStart || 0);
   const trimEnd = Number(current.trimEnd || 0);
   const platforms = Array.isArray(current.platforms) ? current.platforms : [];
+  const adjustedDuration = Number((moment.end - trimEnd - moment.start - trimStart).toFixed(3));
+  const edit = platformEditForRank(moment.rank);
   return Object.assign({}, moment, {
     status: current.status || null,
     platforms,
@@ -2249,8 +2342,9 @@ function adjustedMoment(moment){
     trim_end_seconds: trimEnd,
     adjusted_start: Number((moment.start + trimStart).toFixed(3)),
     adjusted_end: Number((moment.end - trimEnd).toFixed(3)),
-    adjusted_duration: Number((moment.end - trimEnd - moment.start - trimStart).toFixed(3)),
-    camera: cameraForRank(moment.rank),
+    adjusted_duration: adjustedDuration,
+    camera: edit.camera,
+    camera_path: cameraPathForEdit(edit, adjustedDuration),
     effect: effectForRank(moment.rank),
     overlay: primaryOverlayForRank(moment.rank),
     overlays: overlayLayersForRank(moment.rank),
@@ -2266,6 +2360,7 @@ function buildExportData(){
   data.caption_queue = data.selected.flatMap(moment => captionPlatforms(moment, data.export_format).map(platform => {
     const edit = platformEditForRank(moment.rank, platform);
     const overlays = edit.overlays;
+    const cameraPath = cameraPathForEdit(edit, moment.adjusted_duration);
     return {
       rank: moment.rank,
       platform,
@@ -2279,6 +2374,7 @@ function buildExportData(){
       adjusted_end: moment.adjusted_end,
       adjusted_duration: moment.adjusted_duration,
       camera: edit.camera,
+      camera_path: cameraPath,
       effect: edit.effect,
       overlay: overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
       overlays,
@@ -2405,10 +2501,11 @@ function renderCameraPreview(){
 }
 function cameraPreviewItemHtml(item){
   const camera = normalizeCamera(item.camera);
-  const previewSegment = cameraSegmentForTime(camera, 0, Number(item.adjusted_duration || 0)).segment;
+  const cameraPath = cameraPathForEdit({ camera, camera_path: item.camera_path }, Number(item.adjusted_duration || 0));
+  const previewFrame = cameraFrameForTime(camera, cameraPath, 0, Number(item.adjusted_duration || 0));
   const src = cacheBustedPreview(item.clip_file || "", `camera-${item.rank}-${item.adjusted_start}-${item.adjusted_end}`);
   return `<article class="caption-item" data-rank="${escapeAttr(item.rank)}" data-platform="${escapeAttr(item.platform)}" data-camera-duration="${escapeAttr(item.adjusted_duration || 0)}">
-    <div class="caption-preview camera-surface" data-camera-key="${escapeAttr(previewSegment.key)}" style="${escapeAttr(cameraPreviewStyle(previewSegment, 0))}">
+    <div class="caption-preview camera-surface" data-camera-key="${escapeAttr(previewFrame.key || "path")}" style="${escapeAttr(cameraPreviewStyleFromFrame(previewFrame))}">
       <video controls preload="metadata" src="${escapeAttr(src)}"></video>
       <div class="camera-reticle"></div>
     </div>
@@ -2444,11 +2541,11 @@ function bindCameraPreviewControls(){
     const rank = item.dataset.rank;
     const updatePreviewSurface = () => {
       const video = item.querySelector("video");
-      const camera = cameraForRank(rank, item.dataset.platform);
+      const edit = platformEditForRank(rank, item.dataset.platform);
       const duration = Number(item.dataset.cameraDuration || video?.duration || 0);
-      applyCameraSurface(item.querySelector(".camera-surface"), camera, Number(video?.currentTime || 0), duration);
+      applyCameraSurface(item.querySelector(".camera-surface"), edit.camera, Number(video?.currentTime || 0), duration, cameraPathForEdit(edit, duration));
       const summary = item.querySelector("[data-camera-current]");
-      if (summary) summary.textContent = cameraLabel(camera);
+      if (summary) summary.textContent = cameraLabel(edit.camera);
     };
     updatePreviewSurface();
     const video = item.querySelector("video");

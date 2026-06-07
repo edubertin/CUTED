@@ -60,6 +60,7 @@ caption_segments
 caption_lines
 caption_width
 camera
+camera_path
 effect
 overlay
 overlays
@@ -86,6 +87,7 @@ trim_end_seconds
 export_format
 platforms
 camera
+camera_path
 effect
 overlay
 overlays
@@ -95,8 +97,8 @@ status
 
 ## `platform_edits`
 
-Per-platform state map. Each platform key may contain camera, effect, overlays,
-and other platform-specific edit data.
+Per-platform state map. Each platform key may contain camera, camera_path,
+effect, overlays, and other platform-specific edit data.
 
 Supported platform keys:
 
@@ -110,6 +112,32 @@ youtube
 
 Invariant: finalization must resolve the selected platform edit at render time,
 not only when the platform was first added to export.
+
+## Camera Path Contract
+
+`camera` remains the compatibility contract for manual camera presets. The
+new `camera_path` field is the time-based camera track that future automatic
+reframing can write and the renderer can consume.
+
+`camera_path` may be either an array of keyframes or an object with a
+`keyframes` array. Each keyframe is relative to the adjusted clip timeline.
+
+```text
+time        seconds from the adjusted clip start
+x           horizontal crop center, 0-100
+y           vertical crop center, 0-100
+zoom        scale multiplier, 1-2
+source      manual-segment, manual-path, auto-face, auto-speaker, or similar
+confidence  0-1 confidence score
+key         optional legacy camera preset key
+strength    optional legacy preset strength
+part        optional start, middle, or end label for compatibility
+```
+
+When `camera_path` is absent, the app derives it from the existing
+beginning/middle/end `camera` sequence. When a user manually changes a camera
+segment, any stale stored camera path for that platform must be cleared and
+regenerated from the updated camera state.
 
 ## Overlay Contract
 

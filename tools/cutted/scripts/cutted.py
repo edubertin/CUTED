@@ -6,6 +6,7 @@ import hashlib
 import html
 import http.server
 import json
+import math
 import os
 import re
 import shlex
@@ -1485,6 +1486,7 @@ def captioned_row(
         "adjusted_duration": caption_duration(row),
         "publish_metadata": row.get("publish_metadata") if isinstance(row.get("publish_metadata"), dict) else {},
         "camera": camera_from_row(row),
+        "camera_path": camera_path_from_row(row, caption_duration(row)),
         "effect": effect_from_row(row),
         "overlay": overlay_from_row(row),
         "overlays": overlay_layers_from_row(row),
@@ -1520,6 +1522,12 @@ def render_command(
 ) -> list[str]:
     if image_overlay_layers_from_row(row):
         filter_arg = image_overlay_complex_filter(preset, row, duration, filters)
+        return [
+            *base, "-filter_complex", filter_arg, "-map", "[vout]", "-map", "0:a?",
+            *mp4_output_args(row), str(output_path),
+        ]
+    if camera_is_path(row):
+        filter_arg = camera_path_filter(preset, row, duration, filters)
         return [
             *base, "-filter_complex", filter_arg, "-map", "[vout]", "-map", "0:a?",
             *mp4_output_args(row), str(output_path),
@@ -1579,11 +1587,13 @@ def image_overlay_complex_filter(
 ) -> str:
     parts: list[str] = []
     tail = ",".join(filters)
-    if camera_is_sequence(row):
+    if camera_is_path(row):
+        parts.extend(camera_path_split_filters(preset, row, duration))
+        base = camera_concat_filter(len(parts), "cp", tail)
+        parts.append(f"{base}[vbase]")
+    elif camera_is_sequence(row):
         parts.extend(camera_split_filters(preset, camera_from_row(row).get("segments"), duration))
-        base = "".join(f"[cv{index}]" for index in range(3)) + "concat=n=3:v=1:a=0"
-        if tail:
-            base = f"{base},{tail}"
+        base = camera_concat_filter(3, "cv", tail)
         parts.append(f"{base}[vbase]")
     else:
         base_filters = ",".join([camera_filter(preset, row), *filters])
@@ -1640,6 +1650,22 @@ def camera_filter_from_camera(preset: PlatformPreset, camera: dict[str, object])
     ])
 
 
+def camera_filter_from_path_frame(preset: PlatformPreset, frame: dict[str, object]) -> str:
+    key = str(frame.get("key") or "")
+    if key in CAMERA_PRESETS:
+        return camera_filter_from_camera(preset, frame)
+    zoom = clamp(float(frame.get("zoom") or 1.0), 1.0, 2.0)
+    target_w = int(round(preset.width * zoom))
+    target_h = int(round(preset.height * zoom))
+    x = crop_ratio_expr(float(frame.get("x") or 50.0) / 100.0)
+    y = crop_ratio_expr(float(frame.get("y") or 50.0) / 100.0).replace("iw", "ih").replace("ow", "oh")
+    return ",".join([
+        f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase",
+        f"crop={preset.width}:{preset.height}:x='{x}':y='{y}'",
+        "setsar=1",
+    ])
+
+
 def camera_crop_x(camera: dict[str, object]) -> str:
     key = str(camera["key"])
     strength = float(camera["strength"])
@@ -1671,6 +1697,23 @@ def camera_zoom(camera: dict[str, object]) -> float:
     if key == "punch-in":
         return 1.12 + (strength / 100.0) * 0.16
     return 1.0
+
+
+def camera_x_percent(camera: dict[str, object], elapsed: float = 0.0) -> float:
+    key = str(camera.get("key") or "center")
+    strength = float(camera.get("strength") or 60.0)
+    if key == "face-left":
+        return clamp((0.22 - strength * 0.0012) * 100.0, 0.0, 100.0)
+    if key == "face-right":
+        return clamp((0.78 + strength * 0.0012) * 100.0, 0.0, 100.0)
+    if key == "alternate":
+        amplitude = 0.12 + (strength / 100.0) * 0.22
+        return clamp((0.5 + amplitude * math.sin(2 * math.pi * elapsed / 6.0)) * 100.0, 0.0, 100.0)
+    if key == "jump-cut":
+        left = 0.22 - strength * 0.0012
+        right = 0.78 + strength * 0.0012
+        return clamp((left if elapsed % 6.0 < 3.0 else right) * 100.0, 0.0, 100.0)
+    return 50.0
 
 
 def camera_from_row(row: dict[str, object]) -> dict[str, object]:
@@ -1709,6 +1752,12 @@ def camera_is_sequence(row: dict[str, object]) -> bool:
     return camera_from_row(row).get("key") == "sequence"
 
 
+def camera_is_path(row: dict[str, object]) -> bool:
+    raw = row.get("camera_path")
+    source = raw.get("keyframes") if isinstance(raw, dict) and isinstance(raw.get("keyframes"), list) else raw
+    return isinstance(source, list) and bool([item for item in source if isinstance(item, dict)])
+
+
 def camera_sequence_filter(
     preset: PlatformPreset, row: dict[str, object], duration: float, filters: list[str]
 ) -> str:
@@ -1722,6 +1771,18 @@ def camera_sequence_filter(
     return ";".join([*split_filters, f"{concat}[vout]"])
 
 
+def camera_path_filter(preset: PlatformPreset, row: dict[str, object], duration: float, filters: list[str]) -> str:
+    split_filters = camera_path_split_filters(preset, row, duration)
+    tail = ",".join(filters)
+    concat = camera_concat_filter(len(split_filters), "cp", tail)
+    return ";".join([*split_filters, f"{concat}[vout]"])
+
+
+def camera_concat_filter(count: int, prefix: str, tail: str = "") -> str:
+    concat = "".join(f"[{prefix}{index}]" for index in range(count)) + f"concat=n={count}:v=1:a=0"
+    return f"{concat},{tail}" if tail else concat
+
+
 def camera_split_filters(preset: PlatformPreset, segments: object, duration: float) -> list[str]:
     filters = []
     bounds = camera_segment_bounds(duration)
@@ -1733,6 +1794,101 @@ def camera_split_filters(preset: PlatformPreset, segments: object, duration: flo
             f"{camera_filter_from_camera(preset, segment)}[cv{index}]"
         )
     return filters
+
+
+def camera_path_split_filters(preset: PlatformPreset, row: dict[str, object], duration: float) -> list[str]:
+    filters = []
+    for index, (start, end, frame) in enumerate(camera_path_bounds(row, duration)):
+        filters.append(
+            f"[0:v]trim=start={start:.3f}:end={end:.3f},setpts=PTS-STARTPTS,"
+            f"{camera_filter_from_path_frame(preset, frame)}[cp{index}]"
+        )
+    return filters
+
+
+def camera_path_bounds(row: dict[str, object], duration: float) -> list[tuple[float, float, dict[str, object]]]:
+    frames = camera_path_from_row(row, duration)
+    safe_duration = max(duration, 0.3)
+    if not frames:
+        return [(0.0, safe_duration, default_camera_path_frame(default_camera(), 0.0))]
+    frames = sorted(frames, key=lambda item: float(item.get("time") or 0.0))
+    if float(frames[0].get("time") or 0.0) > 0.001:
+        frames.insert(0, {**frames[0], "time": 0.0})
+    bounds = []
+    for index, frame in enumerate(frames):
+        start = clamp(float(frame.get("time") or 0.0), 0.0, safe_duration)
+        end = safe_duration
+        if index + 1 < len(frames):
+            end = clamp(float(frames[index + 1].get("time") or safe_duration), start + 0.001, safe_duration)
+        if end > start:
+            bounds.append((start, end, frame))
+    return bounds or [(0.0, safe_duration, default_camera_path_frame(default_camera(), 0.0))]
+
+
+def camera_path_from_row(row: dict[str, object], duration: float) -> list[dict[str, object]]:
+    raw = row.get("camera_path")
+    source = raw.get("keyframes") if isinstance(raw, dict) and isinstance(raw.get("keyframes"), list) else raw
+    if isinstance(source, list):
+        frames = [camera_path_frame_from_source(item) for item in source if isinstance(item, dict)]
+        frames = [frame for frame in frames if frame is not None]
+        if frames:
+            return sorted(frames, key=lambda item: float(item.get("time") or 0.0))
+    return camera_path_from_camera(camera_from_row(row), duration)
+
+
+def camera_path_from_camera(camera: dict[str, object], duration: float) -> list[dict[str, object]]:
+    safe_duration = max(duration, 0.3)
+    if camera.get("key") != "sequence":
+        return [default_camera_path_frame(camera, 0.0)]
+    segments = camera.get("segments") if isinstance(camera.get("segments"), list) else []
+    bounds = camera_segment_bounds(safe_duration)
+    frames = []
+    for index, (start, _end) in enumerate(bounds):
+        segment = segments[index] if index < len(segments) and isinstance(segments[index], dict) else default_camera()
+        frames.append(default_camera_path_frame(segment, start))
+    return frames
+
+
+def camera_path_frame_from_source(frame: dict[str, object]) -> dict[str, object] | None:
+    time = clamp(float(frame.get("time") if frame.get("time") is not None else frame.get("t") or 0.0), 0.0, 86400.0)
+    key = str(frame.get("key") or frame.get("camera_key") or "")
+    if key in CAMERA_PRESETS:
+        camera = {
+            "key": key,
+            "label": CAMERA_PRESETS[key].label,
+            "strength": clamp(float(frame.get("strength") if frame.get("strength") is not None else 60.0), 0.0, 100.0),
+        }
+        result = default_camera_path_frame(camera, time)
+    else:
+        result = {
+            "time": round(time, 3),
+            "x": round(clamp(float(frame.get("x") if frame.get("x") is not None else 50.0), 0.0, 100.0), 2),
+            "y": round(clamp(float(frame.get("y") if frame.get("y") is not None else 50.0), 0.0, 100.0), 2),
+            "zoom": round(clamp(float(frame.get("zoom") if frame.get("zoom") is not None else 1.0), 1.0, 2.0), 3),
+        }
+    result["source"] = str(frame.get("source") or result.get("source") or "manual-path")
+    result["confidence"] = round(clamp(float(frame.get("confidence") if frame.get("confidence") is not None else 1.0), 0.0, 1.0), 3)
+    if frame.get("part"):
+        result["part"] = str(frame.get("part"))
+    return result
+
+
+def default_camera_path_frame(camera: dict[str, object], time: float) -> dict[str, object]:
+    key = str(camera.get("key") or "center")
+    strength = clamp(float(camera.get("strength") if camera.get("strength") is not None else 60.0), 0.0, 100.0)
+    preset = CAMERA_PRESETS.get(key, CAMERA_PRESETS["center"])
+    return {
+        "time": round(max(time, 0.0), 3),
+        "x": round(camera_x_percent({"key": preset.key, "strength": strength}, 0.0), 2),
+        "y": 50.0,
+        "zoom": round(camera_zoom({"key": preset.key, "strength": strength}), 3),
+        "source": "manual-segment",
+        "confidence": 1.0,
+        "key": preset.key,
+        "label": preset.label,
+        "strength": strength,
+        "part": str(camera.get("part") or ""),
+    }
 
 
 def camera_segment_bounds(duration: float) -> list[tuple[float, float]]:
@@ -3442,8 +3598,10 @@ function normalizePlatformEdit(edit, fallback){
   const base = fallback && typeof fallback === "object" ? fallback : {};
   const overlayFallback = source.overlay || base.overlay || defaultOverlay();
   const overlays = normalizeOverlayLayers(source.overlays, overlayFallback);
+  const pathSource = Object.prototype.hasOwnProperty.call(source, "camera_path") ? source.camera_path : base.camera_path;
   return {
     camera: normalizeCamera(source.camera || base.camera || defaultCamera()),
+    camera_path: normalizeCameraPath(pathSource),
     effect: normalizeEffect(source.effect || base.effect || defaultEffect()),
     overlay: overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
     overlays
@@ -3497,7 +3655,7 @@ function setCameraSegmentForRank(rank, part, patch, platform = activePlatformFor
     if (segment.part !== part) return segment;
     return normalizeCameraSegment(Object.assign({}, segment, patch), part);
   });
-  setPlatformEditForRank(rank, targetPlatform, { camera: cameraSequence(segments) });
+  setPlatformEditForRank(rank, targetPlatform, { camera: cameraSequence(segments), camera_path: [] });
   const card = cardForRank(rank);
   if (card) {
     const nextCamera = cameraForRank(rank, activePlatformForRank(rank));
@@ -3514,6 +3672,32 @@ function normalizeSingleCamera(camera){
 function normalizeCameraSegment(segment, part){
   const current = normalizeSingleCamera(segment);
   return Object.assign({ part, part_label: cameraPartLabel(part) }, current);
+}
+function normalizeCameraPath(path){
+  const source = Array.isArray(path) ? path : Array.isArray(path?.keyframes) ? path.keyframes : [];
+  return source.map(frame => normalizeCameraPathFrame(frame)).filter(Boolean).sort((a, b) => a.time - b.time);
+}
+function normalizeCameraPathFrame(frame){
+  if (!frame || typeof frame !== "object") return null;
+  const time = Math.max(0, Number(frame.time ?? frame.t ?? 0));
+  const key = cameraMeta[frame.key] ? frame.key : cameraMeta[frame.camera_key] ? frame.camera_key : null;
+  const strength = Math.max(0, Math.min(Number(frame.strength ?? 60), 100));
+  const base = key ? normalizeSingleCamera({ key, strength }) : null;
+  const x = Math.max(0, Math.min(Number(frame.x ?? (base ? cameraCropPercent(base, time) : 50)), 100));
+  const y = Math.max(0, Math.min(Number(frame.y ?? 50), 100));
+  const zoom = Math.max(1, Math.min(Number(frame.zoom ?? (base ? cameraScaleValue(base) : 1)), 2));
+  return {
+    time: Number(time.toFixed(3)),
+    x: Number(x.toFixed(2)),
+    y: Number(y.toFixed(2)),
+    zoom: Number(zoom.toFixed(3)),
+    source: String(frame.source || (key ? "manual-segment" : "manual-path")),
+    confidence: Math.max(0, Math.min(Number(frame.confidence ?? 1), 1)),
+    part: frame.part ? String(frame.part) : undefined,
+    key: key || undefined,
+    label: key ? cameraMeta[key].label : undefined,
+    strength: key ? strength : undefined
+  };
 }
 function cameraCropPercent(camera, elapsed = 0){
   const current = normalizeSingleCamera(camera);
@@ -3549,20 +3733,82 @@ function cameraSegmentForTime(camera, position, duration){
   const segment = current.segments.find(item => item.part === part.key) || defaultCameraSegment(part.key);
   return { segment, elapsed: Math.max(0, safePosition - segmentDuration * index) };
 }
+function cameraFrameFromSegment(segment, time, elapsed){
+  const current = normalizeCameraSegment(segment, segment.part || "start");
+  return {
+    time: Number(Math.max(0, Number(time) || 0).toFixed(3)),
+    x: Number(cameraCropPercent(current, elapsed).toFixed(2)),
+    y: 50,
+    zoom: Number(cameraScaleValue(current).toFixed(3)),
+    source: "manual-segment",
+    confidence: 1,
+    part: current.part,
+    key: current.key,
+    label: current.label,
+    strength: current.strength
+  };
+}
+function cameraPathFromCamera(camera, duration){
+  const current = normalizeCamera(camera);
+  const safeDuration = Math.max(Number(duration) || 0, .3);
+  const segmentDuration = safeDuration / cameraParts.length;
+  return cameraParts.map((part, index) => {
+    const segment = current.segments.find(item => item.part === part.key) || defaultCameraSegment(part.key);
+    return cameraFrameFromSegment(segment, segmentDuration * index, 0);
+  });
+}
+function cameraPathForEdit(edit, duration){
+  const path = normalizeCameraPath(edit?.camera_path);
+  return path.length ? path : cameraPathFromCamera(edit?.camera || defaultCamera(), duration);
+}
+function cameraFrameForTime(camera, cameraPath, position, duration){
+  const path = normalizeCameraPath(cameraPath);
+  if (!path.length) {
+    const active = cameraSegmentForTime(camera, position, duration);
+    return cameraFrameFromSegment(active.segment, position, active.elapsed);
+  }
+  const safePosition = Math.max(0, Number(position) || 0);
+  let previous = path[0];
+  let next = path[path.length - 1];
+  for (let index = 0; index < path.length; index += 1) {
+    if (path[index].time <= safePosition) previous = path[index];
+    if (path[index].time >= safePosition) {
+      next = path[index];
+      break;
+    }
+  }
+  if (previous.key) {
+    return cameraFrameFromSegment(previous, safePosition, Math.max(0, safePosition - previous.time));
+  }
+  if (previous === next || next.time <= previous.time) return previous;
+  const ratio = (safePosition - previous.time) / (next.time - previous.time);
+  return {
+    time: Number(safePosition.toFixed(3)),
+    x: Number((previous.x + (next.x - previous.x) * ratio).toFixed(2)),
+    y: Number((previous.y + (next.y - previous.y) * ratio).toFixed(2)),
+    zoom: Number((previous.zoom + (next.zoom - previous.zoom) * ratio).toFixed(3)),
+    source: previous.source || "manual-path",
+    confidence: Math.min(previous.confidence ?? 1, next.confidence ?? 1)
+  };
+}
 function cameraPreviewStyle(camera, elapsed = 0){
   const current = normalizeSingleCamera(camera);
   const x = cameraCropPercent(current, elapsed).toFixed(2);
   const scale = cameraScaleValue(current).toFixed(3);
   return `--camera-x:${x}%;--camera-scale:${scale}`;
 }
+function cameraPreviewStyleFromFrame(frame){
+  const current = normalizeCameraPathFrame(frame) || { x: 50, zoom: 1 };
+  return `--camera-x:${current.x.toFixed(2)}%;--camera-scale:${current.zoom.toFixed(3)}`;
+}
 function cameraHasMovement(camera){
   return normalizeCamera(camera).segments.some(segment => segment.key !== "center");
 }
-function applyCameraSurface(surface, camera, position = 0, duration = 0){
+function applyCameraSurface(surface, camera, position = 0, duration = 0, cameraPath = []){
   if (!surface) return;
-  const active = cameraSegmentForTime(camera, position, duration);
-  surface.dataset.cameraKey = active.segment.key;
-  surface.setAttribute("style", cameraPreviewStyle(active.segment, active.elapsed));
+  const frame = cameraFrameForTime(camera, cameraPath, position, duration);
+  surface.dataset.cameraKey = frame.key || "path";
+  surface.setAttribute("style", cameraPreviewStyleFromFrame(frame));
 }
 function cameraContextForCard(card, time = null){
   const values = trimValues(card);
@@ -3576,7 +3822,8 @@ function cameraContextForCard(card, time = null){
 }
 function updateCameraSurfaceForCard(card, time = null){
   const context = cameraContextForCard(card, time);
-  applyCameraSurface(card.querySelector(".camera-surface"), cameraForRank(card.dataset.rank), context.position, context.duration);
+  const edit = platformEditForRank(card.dataset.rank, activePlatformForRank(card.dataset.rank));
+  applyCameraSurface(card.querySelector(".camera-surface"), edit.camera, context.position, context.duration, cameraPathForEdit(edit, context.duration));
 }
 function startCameraFrameSync(video, update){
   if (!video || typeof requestAnimationFrame !== "function") return;
@@ -4537,6 +4784,8 @@ function adjustedMoment(moment){
   const trimStart = Number(current.trimStart || 0);
   const trimEnd = Number(current.trimEnd || 0);
   const platforms = Array.isArray(current.platforms) ? current.platforms : [];
+  const adjustedDuration = Number((moment.end - trimEnd - moment.start - trimStart).toFixed(3));
+  const edit = platformEditForRank(moment.rank);
   return Object.assign({}, moment, {
     status: current.status || null,
     platforms,
@@ -4544,8 +4793,9 @@ function adjustedMoment(moment){
     trim_end_seconds: trimEnd,
     adjusted_start: Number((moment.start + trimStart).toFixed(3)),
     adjusted_end: Number((moment.end - trimEnd).toFixed(3)),
-    adjusted_duration: Number((moment.end - trimEnd - moment.start - trimStart).toFixed(3)),
-    camera: cameraForRank(moment.rank),
+    adjusted_duration: adjustedDuration,
+    camera: edit.camera,
+    camera_path: cameraPathForEdit(edit, adjustedDuration),
     effect: effectForRank(moment.rank),
     overlay: primaryOverlayForRank(moment.rank),
     overlays: overlayLayersForRank(moment.rank),
@@ -4561,6 +4811,7 @@ function buildExportData(){
   data.caption_queue = data.selected.flatMap(moment => captionPlatforms(moment, data.export_format).map(platform => {
     const edit = platformEditForRank(moment.rank, platform);
     const overlays = edit.overlays;
+    const cameraPath = cameraPathForEdit(edit, moment.adjusted_duration);
     return {
       rank: moment.rank,
       platform,
@@ -4574,6 +4825,7 @@ function buildExportData(){
       adjusted_end: moment.adjusted_end,
       adjusted_duration: moment.adjusted_duration,
       camera: edit.camera,
+      camera_path: cameraPath,
       effect: edit.effect,
       overlay: overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
       overlays,
@@ -4700,10 +4952,11 @@ function renderCameraPreview(){
 }
 function cameraPreviewItemHtml(item){
   const camera = normalizeCamera(item.camera);
-  const previewSegment = cameraSegmentForTime(camera, 0, Number(item.adjusted_duration || 0)).segment;
+  const cameraPath = cameraPathForEdit({ camera, camera_path: item.camera_path }, Number(item.adjusted_duration || 0));
+  const previewFrame = cameraFrameForTime(camera, cameraPath, 0, Number(item.adjusted_duration || 0));
   const src = cacheBustedPreview(item.clip_file || "", `camera-${item.rank}-${item.adjusted_start}-${item.adjusted_end}`);
   return `<article class="caption-item" data-rank="${escapeAttr(item.rank)}" data-platform="${escapeAttr(item.platform)}" data-camera-duration="${escapeAttr(item.adjusted_duration || 0)}">
-    <div class="caption-preview camera-surface" data-camera-key="${escapeAttr(previewSegment.key)}" style="${escapeAttr(cameraPreviewStyle(previewSegment, 0))}">
+    <div class="caption-preview camera-surface" data-camera-key="${escapeAttr(previewFrame.key || "path")}" style="${escapeAttr(cameraPreviewStyleFromFrame(previewFrame))}">
       <video controls preload="metadata" src="${escapeAttr(src)}"></video>
       <div class="camera-reticle"></div>
     </div>
@@ -4739,11 +4992,11 @@ function bindCameraPreviewControls(){
     const rank = item.dataset.rank;
     const updatePreviewSurface = () => {
       const video = item.querySelector("video");
-      const camera = cameraForRank(rank, item.dataset.platform);
+      const edit = platformEditForRank(rank, item.dataset.platform);
       const duration = Number(item.dataset.cameraDuration || video?.duration || 0);
-      applyCameraSurface(item.querySelector(".camera-surface"), camera, Number(video?.currentTime || 0), duration);
+      applyCameraSurface(item.querySelector(".camera-surface"), edit.camera, Number(video?.currentTime || 0), duration, cameraPathForEdit(edit, duration));
       const summary = item.querySelector("[data-camera-current]");
-      if (summary) summary.textContent = cameraLabel(camera);
+      if (summary) summary.textContent = cameraLabel(edit.camera);
     };
     updatePreviewSurface();
     const video = item.querySelector("video");
