@@ -27,6 +27,7 @@ review workspace, data contracts, or render pipeline.
 | Timeline | Scrub outside an active trim range | Preview clamps to the adjusted cut window |
 | Camera | Seek/play through Inicio, Meio, and Fim | Preview framing follows video time and does not drift independently |
 | Camera | Play an alternating camera preset | Preview updates smoothly while playing and stops updating when paused |
+| Camera path | Finalize a manually configured camera | Queue includes `camera_path` and render still matches the manual camera intent |
 | Volume | Open any video | Volume starts at 20 percent |
 | Platform | Switch TikTok to Facebook | Preset state changes without losing TikTok edits |
 | Text layer | Add text layer | Layer appears, moves, resizes, edits, deletes |

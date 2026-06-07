@@ -87,6 +87,19 @@ they drift from the rendered MP4. Dynamic presets such as `alternate` and
 `jump-cut` should be calculated from video time so seek, play, and final render
 show the same framing intent.
 
+## Camera Path
+
+The browser emits `camera_path` with finalization payloads. It is a keyframe
+track derived from the current manual `camera` sequence unless a future
+automatic reframing step provides explicit keyframes. The renderer should
+prefer explicit `camera_path` data when present, while keeping legacy `camera`
+sequence rendering supported for older queue files.
+
+Manual camera keyframes may include the legacy preset `key` and `strength`.
+Those frames render through the same FFmpeg crop/scale presets as the manual
+camera controls. Arbitrary keyframes without a preset key render using their
+`x`, `y`, and `zoom` values.
+
 ## Effects
 
 The browser preview uses CSS filters and overlays, but final exports must use
