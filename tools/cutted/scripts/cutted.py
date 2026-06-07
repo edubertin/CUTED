@@ -4253,6 +4253,14 @@ function seekPreview(card){
   delete card.dataset.timelineSeekIntent;
   seekTimeline(card, values.trimStart, { mode: "range" });
 }
+function seekTrimHandle(card, handle){
+  const video = card.querySelector("video");
+  if (video) video.pause();
+  const values = trimValues(card);
+  const target = handle === "end" ? values.endPos : values.startPos;
+  delete card.dataset.timelineSeekIntent;
+  seekTimeline(card, target, { mode: "trim" });
+}
 function togglePreviewPlayback(card){
   const video = card.querySelector("video");
   if (!video) return;
@@ -5282,7 +5290,7 @@ document.querySelectorAll(".card").forEach(card => {
     video.addEventListener("timeupdate", () => {
       const values = trimValues(card);
       updateTimelinePlayhead(card);
-      if (card.dataset.playbackMode !== "free" && video.currentTime >= values.duration - values.trimEnd) {
+      if (card.dataset.playbackMode === "range" && video.currentTime >= values.duration - values.trimEnd) {
         video.pause();
         video.currentTime = values.trimStart;
         updateTimelinePlayhead(card, values.trimStart);
@@ -5303,7 +5311,7 @@ document.querySelectorAll(".card").forEach(card => {
     const patch = { trimStart: Math.max(startPos, 0), trimEnd: Math.max(duration - endPos, 0) };
     setCardState(card.dataset.rank, Object.assign(current, patch));
     updateTrimUi(card);
-    seekPreview(card);
+    seekTrimHandle(card, input.dataset.trim);
     renderCaptionQueue();
   }));
   const scrubInput = card.querySelector("[data-trim-scrub]");
