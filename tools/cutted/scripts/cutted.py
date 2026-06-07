@@ -3420,7 +3420,7 @@ main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px
 .editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;justify-items:center;gap:10px}.preview-frame{display:grid;gap:10px;width:100%;max-width:520px}.media{position:relative;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000;pointer-events:none}.placeholder{display:grid;place-items:center;height:100%;color:#777}.preview-bar{display:grid;grid-template-columns:1fr;gap:8px;justify-items:center;width:100%;padding:8px;border:1px solid #252525;border-radius:8px;background:#0a0a0a}.preview-controls,.preview-volume-group{display:flex;gap:6px;align-items:center}.preview-controls{justify-content:center;padding:4px;border:1px solid #202020;border-radius:999px;background:var(--color-surface-raised)}.preview-volume-group{padding-left:4px;border-left:1px solid #2d2d2d}.preview-icon,.preview-step{display:inline-grid;place-items:center;width:32px;height:32px;min-width:32px;padding:0;border:1px solid var(--color-border-strong);border-radius:999px;background:var(--color-surface-control);color:var(--color-text-soft)}.preview-play{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}.preview-icon svg{width:16px;height:16px;display:block;stroke:currentColor}.preview-step{width:26px;height:26px;min-width:26px;font-weight:700}.preview-volume-group output{min-width:32px;color:#d8d8d8;font-size:12px;text-align:center}.card[data-preview-format=tiktok] .preview-frame,.card[data-preview-format=shorts] .preview-frame,.card[data-preview-format=instagram] .preview-frame{max-width:min(100%,calc(72vh * 9 / 16))}.card[data-preview-format=facebook] .preview-frame{max-width:min(100%,calc(72vh * 4 / 5))}.card[data-preview-format=youtube] .preview-frame{max-width:min(100%,520px)}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip,.card-tabs{display:flex;gap:6px;flex-wrap:wrap}.preview-strip{justify-content:center;overflow:visible;padding-bottom:1px}.preview-strip button,.card-tabs button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 10px}.preview-strip button{min-height:34px;border-radius:999px;white-space:nowrap}.preview-strip button.active,.card-tabs button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-panel{display:none;border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:12px}.tool-panel.active{display:block}.tool-summary{margin-bottom:10px;color:#d8d8d8}.timeline-editor{padding:0}.timeline-head,.timeline-timebar,.timeline-values{display:flex;justify-content:space-between;gap:12px;color:var(--color-text-muted);font-size:12px}.timeline-head output,.timeline-timebar output{color:var(--color-text);text-align:right}.timeline-timebar{margin-top:10px}.timeline-timebar span:last-child{color:#777;text-align:right}.timeline-scrub{position:relative;height:42px;margin-top:8px}.timeline-scrub-track{position:absolute;left:0;right:0;top:17px;height:8px;border:1px solid #343434;border-radius:999px;background:linear-gradient(90deg,var(--color-surface-muted),#252525);overflow:hidden}.timeline-selected{position:absolute;top:0;bottom:0;background:rgba(175,207,42,.22);border-left:1px solid var(--color-brand-green);border-right:1px solid var(--color-brand-green)}.timeline-playhead{position:absolute;top:-8px;bottom:-8px;width:2px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7)}.timeline-playhead:before{content:"";position:absolute;left:50%;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--color-brand-white);transform:translateX(-50%)}.timeline-scrub input{position:absolute;inset:0;width:100%;height:42px;margin:0;background:transparent;opacity:0;cursor:pointer}.timeline{position:relative;height:38px;margin-top:6px}.timeline-track{position:absolute;left:0;right:0;top:16px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:var(--color-brand-white);border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:38px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}.timeline-tools button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);padding:7px 9px}.timeline-values{margin-top:6px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .export-dock{display:grid;gap:8px;margin-top:2px;padding:12px;border:1px solid #303030;border-radius:8px;background:#111}.export-dock strong{display:block;font-size:13px}.export-dock span{color:#a8a8a8;font-size:12px}
-.platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:var(--color-text);border-color:var(--color-brand-green)}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:var(--color-brand-green)}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:160px 180px;gap:12px;max-width:380px}
+.platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:var(--color-text);border-color:var(--color-brand-green)}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:var(--color-brand-blue)}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.camera-path-editor{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-path-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.camera-path-head strong{font-size:12px}.camera-path-head span{color:var(--color-text-muted);font-size:12px}.camera-path-track{position:relative;height:34px}.camera-path-rail{position:absolute;left:0;right:0;top:15px;height:5px;border-radius:999px;background:#292929}.camera-path-marker{position:absolute;top:7px;width:20px;height:20px;min-width:20px;padding:0;border-radius:999px;transform:translateX(-50%);background:var(--color-surface-control);border:1px solid var(--color-border-strong)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:var(--color-brand-blue);box-shadow:0 0 0 4px rgba(17,162,207,.18)}.camera-path-actions,.camera-keyframe-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-keyframe-panel{align-items:end}.camera-path-delete{color:var(--color-danger)!important}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:160px 180px;gap:12px;max-width:380px}
 .camera-surface video{object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position .12s linear,transform .12s linear}.camera-reticle{position:absolute;inset:14% 22%;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}
 .card[data-effect=light-grain] .media video,.card[data-effect=light-grain] .media img{filter:contrast(1.08) brightness(1.02)}.card[data-effect=old-film] .media video,.card[data-effect=old-film] .media img{filter:sepia(.48) contrast(1.2) saturate(.62) brightness(.92)}.card[data-effect=vhs] .media video,.card[data-effect=vhs] .media img{filter:saturate(.62) contrast(1.22) brightness(.9) hue-rotate(-7deg)}.card[data-effect=bw-old] .media video,.card[data-effect=bw-old] .media img{filter:grayscale(1) contrast(1.22) brightness(.9)}.card[data-effect=light-grain] .media:after,.card[data-effect=old-film] .media:after,.card[data-effect=vhs] .media:after,.card[data-effect=bw-old] .media:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--effect-opacity,.24);background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 70% 65%,rgba(0,0,0,.95) 0 1px,transparent 1.8px);background-size:4px 4px,6px 6px;mix-blend-mode:overlay}.card[data-effect=old-film] .media:before,.card[data-effect=bw-old] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at center,transparent 44%,rgba(0,0,0,.46) 100%)}.card[data-effect=vhs] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 4px);mix-blend-mode:overlay}
 .overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,var(--color-brand-green));border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none;pointer-events:auto}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-text-box{display:grid;align-items:center;min-width:96px;min-height:34px;padding:8px 12px;border-left:0;background:rgba(var(--overlay-bg-rgb,0,0,0),var(--overlay-bg-opacity,.7));box-shadow:none;color:var(--overlay-color,#fff);font-weight:700;font-size:clamp(13px,var(--overlay-font-size,20px),36px);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.overlay-text-box[data-overlay-bg=off]{background:transparent;box-shadow:none}.overlay-text-box span{opacity:var(--overlay-opacity,1);overflow:hidden;text-overflow:ellipsis}.overlay-box.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.overlay-image-box{display:grid;place-items:center;min-width:72px;min-height:72px;padding:6px;border:1px dashed rgba(255,255,255,.42);background:rgba(0,0,0,.12);box-shadow:0 8px 24px rgba(0,0,0,.22)}.overlay-image-box img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none;background:transparent}.overlay-resize{position:absolute;right:3px;bottom:3px;z-index:4;width:22px;height:22px;padding:0;border:1px solid rgba(255,255,255,.52);border-radius:5px;background:rgba(255,255,255,.2);cursor:nwse-resize;touch-action:none;pointer-events:auto}.overlay-menu{position:absolute;z-index:6;display:grid;gap:8px;width:min(360px,94%);padding:8px;border:1px solid var(--color-border-strong);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel);touch-action:none}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px;cursor:move}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-inspector{display:grid;gap:8px}.overlay-inspector label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.overlay-inspector input[type=text],.overlay-inspector input[type=number]{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.overlay-inspector input[type=color]{width:42px;height:32px;padding:2px;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black)}.overlay-inspector-row{display:flex;gap:8px;align-items:center}.overlay-inspector-row>*{flex:1}.overlay-inspector-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.overlay-inspector-check input{width:auto}.overlay-danger{color:var(--color-danger)!important;border-color:#5b2626!important;background:#251111!important}.image-upload{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-empty{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;color:var(--color-text-muted)}
@@ -3429,7 +3429,7 @@ body[data-tab=import] main,body[data-tab=import] .final-stage{display:none}body[
 .empty-project-stage{display:none;max-width:720px;margin:18px auto;padding:0 18px}.empty-project-panel{display:grid;gap:10px;padding:18px;border:1px solid var(--glass-border);border-radius:var(--radius-panel);background:var(--glass-bg-strong);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(24px) saturate(1.45);text-align:center}.empty-project-panel p{margin:0;color:var(--color-text-muted)}.empty-project-panel button{justify-self:center}body[data-project-empty=true][data-tab=edit] main{display:none}body[data-project-empty=true][data-tab=edit] .empty-project-stage{display:block}
 .settings-backdrop{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:18px;background:rgba(0,0,0,.58)}.settings-backdrop[hidden]{display:none}.settings-panel{width:min(560px,100%);border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised);box-shadow:var(--shadow-panel);padding:16px}.settings-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.settings-head p{margin:3px 0 0;color:var(--color-text-muted)}.settings-form{display:grid;gap:12px;margin-top:14px}.settings-form label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.settings-form input,.settings-form select{width:100%;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black);color:var(--color-text);padding:9px 10px;font:inherit}.settings-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.settings-status,.settings-usage{padding:10px;border:1px solid var(--color-border);border-radius:8px;background:#0b0b0b;color:var(--color-text-soft)}.settings-usage{display:grid;gap:3px;color:var(--color-text-muted)}.settings-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}.settings-form small{color:var(--color-text-muted)}
 button{background:var(--color-brand-white);color:var(--color-brand-black);border:0;border-radius:6px;padding:9px 12px;cursor:pointer}#reset-ui,button[data-action=discard]{background:#242424;color:var(--color-text-soft)}button[data-action=reset-trim],button[data-action=next-card]{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong)}
-@media(max-width:860px){header{position:relative;grid-template-columns:1fr;justify-items:center}.header-actions{justify-content:center}.brand-logo{width:min(390px,88vw);height:64px}.brand-lockup p{max-width:86vw}.tabs{top:0;overflow:auto}.preview-strip button,.card-tabs button{font-size:12px;padding:7px 9px}main{padding:12px}.clip-summary{grid-template-columns:auto minmax(0,1fr);align-items:start}.clip-status{grid-column:1/-1;justify-content:flex-start}.editor-shell,.result-body,.camera-segments,.caption-settings,.preview-bar,.import-grid,.duration-profile,.import-path-row,.settings-grid{grid-template-columns:1fr}.preview-frame{max-width:100%}.preview-strip{justify-content:center}.preview-controls{width:max-content;max-width:100%;flex-wrap:wrap}.media{max-height:none}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons,.overlay-menu{grid-template-columns:1fr}}
+@media(max-width:860px){header{position:relative;grid-template-columns:1fr;justify-items:center}.header-actions{justify-content:center}.brand-logo{width:min(390px,88vw);height:64px}.brand-lockup p{max-width:86vw}.tabs{top:0;overflow:auto}.preview-strip button,.card-tabs button{font-size:12px;padding:7px 9px}main{padding:12px}.clip-summary{grid-template-columns:auto minmax(0,1fr);align-items:start}.clip-status{grid-column:1/-1;justify-content:flex-start}.editor-shell,.result-body,.camera-segments,.camera-path-actions,.camera-keyframe-panel,.caption-settings,.preview-bar,.import-grid,.duration-profile,.import-path-row,.settings-grid{grid-template-columns:1fr}.preview-frame{max-width:100%}.preview-strip{justify-content:center}.preview-controls{width:max-content;max-width:100%;flex-wrap:wrap}.media{max-height:none}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons,.overlay-menu{grid-template-columns:1fr}}
 """
 
 
@@ -3469,8 +3469,9 @@ header{background:linear-gradient(180deg,rgba(5,5,5,.92),rgba(5,5,5,.68));backdr
 button[data-action=like],.import-panel button[type=submit],#finalize-videos,.import-result a,.result-actions a,.result-actions button{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white);font-weight:800}
 button[data-action=discard],.result-actions a.secondary,.result-actions button.secondary{background:rgba(231,231,232,.07);color:rgba(231,231,232,.76);border-color:var(--glass-border)}
 .import-panel input,.import-panel select,.import-panel textarea,.camera-card-controls select,.caption-settings select,.caption-settings input,.overlay-inspector input[type=text],.overlay-inspector input[type=number],.settings-form input,.settings-form select{border-color:var(--glass-border);border-radius:var(--radius-panel);background:rgba(5,5,5,.72);color:var(--color-text)}
-.duration-profile span,.camera-segment,.layer-chip,.overlay-layer-row,.image-upload{border-color:var(--glass-border);background:rgba(231,231,232,.05)}
+.duration-profile span,.camera-path-editor,.camera-segment,.layer-chip,.overlay-layer-row,.image-upload{border-color:var(--glass-border);background:rgba(231,231,232,.05)}
 .duration-profile input:checked+span,.layer-chip.is-selected{border-color:rgba(17,162,207,.72);background:var(--control-active);color:var(--color-text)}
+.camera-path-rail{background:linear-gradient(90deg,rgba(17,162,207,.28),rgba(231,231,232,.1),rgba(175,207,42,.18))}.camera-path-marker{border-color:var(--glass-border);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.035)),rgba(231,231,232,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.32),0 6px 14px rgba(0,0,0,.26)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:rgba(17,162,207,.88);box-shadow:0 0 0 4px rgba(17,162,207,.16),0 0 24px rgba(17,162,207,.26)}
 .overlay-menu button,.overlay-layer-row button{background:rgba(231,231,232,.08);color:rgba(231,231,232,.8);border-color:var(--glass-border)}
 .overlay-danger{background:rgba(80,20,20,.72)!important;border-color:rgba(255,120,120,.46)!important;color:#ffd2d2!important}
 .settings-status,.settings-usage{border-color:var(--glass-border);background:rgba(231,231,232,.05)}.settings-backdrop{backdrop-filter:blur(14px)}
@@ -3643,10 +3644,18 @@ function cameraLabel(camera){
   if (!active.length) return cameraMeta.center.label;
   return active.map(segment => `${segment.part_label}: ${segment.label}`).join(" | ");
 }
+function cameraEditLabel(edit, duration){
+  const path = normalizeCameraPath(edit?.camera_path);
+  if (path.length) return `Camera path: ${path.length} pontos`;
+  return cameraLabel(edit?.camera || defaultCamera());
+}
 function cameraForRank(rank, platform = activePlatformForRank(rank)){ return platformEditForRank(rank, platform).camera; }
-function updateCardCameraSummary(card, camera){
+function updateCardCameraSummary(card, camera, edit = null){
   const summary = card?.querySelector("[data-camera-current]");
-  if (summary) summary.textContent = cameraLabel(camera);
+  if (summary) {
+    const context = card ? cameraContextForCard(card) : { duration: 0 };
+    summary.textContent = edit ? cameraEditLabel(edit, context.duration) : cameraLabel(camera);
+  }
 }
 function setCameraSegmentForRank(rank, part, patch, platform = activePlatformForRank(rank)){
   const targetPlatform = validPlatform(platform);
@@ -3663,6 +3672,13 @@ function setCameraSegmentForRank(rank, part, patch, platform = activePlatformFor
     updateCameraSurfaceForCard(card);
   }
   renderFinalStage();
+}
+function cameraPathHasMovement(path){
+  return normalizeCameraPath(path).some(frame => Math.abs(Number(frame.x || 50) - 50) > .2 || Math.abs(Number(frame.zoom || 1) - 1) > .002 || frame.key && frame.key !== "center");
+}
+function cameraEditHasMovement(edit){
+  const path = normalizeCameraPath(edit?.camera_path);
+  return path.length ? cameraPathHasMovement(path) : cameraHasMovement(edit?.camera || defaultCamera());
 }
 function normalizeSingleCamera(camera){
   const key = cameraMeta[camera?.key] ? camera.key : "center";
@@ -3760,6 +3776,99 @@ function cameraPathFromCamera(camera, duration){
 function cameraPathForEdit(edit, duration){
   const path = normalizeCameraPath(edit?.camera_path);
   return path.length ? path : cameraPathFromCamera(edit?.camera || defaultCamera(), duration);
+}
+function explicitCameraPathForEdit(edit){
+  return normalizeCameraPath(edit?.camera_path);
+}
+function selectedCameraPathIndex(card, path){
+  const count = path.length;
+  if (!count) return 0;
+  const index = Number(card?.dataset.cameraPathIndex ?? 0);
+  return Math.min(Math.max(Number.isFinite(index) ? index : 0, 0), count - 1);
+}
+function setSelectedCameraPathIndex(card, index){
+  if (!card) return;
+  card.dataset.cameraPathIndex = String(Math.max(0, Number(index) || 0));
+}
+function cameraPathWithFrame(path, frame, index = null){
+  const frames = normalizeCameraPath(path);
+  const next = normalizeCameraPathFrame(frame);
+  if (!next) return frames;
+  const exactIndex = index === null ? frames.findIndex(item => Math.abs(item.time - next.time) < .15) : Number(index);
+  if (exactIndex >= 0 && exactIndex < frames.length) {
+    frames[exactIndex] = next;
+  } else {
+    frames.push(next);
+  }
+  return normalizeCameraPath(frames);
+}
+function cameraPathFrameWithPreset(frame, key, strength){
+  const next = cameraFrameFromSegment({ part: frame.part || "", key, strength }, frame.time, 0);
+  next.source = "manual-path";
+  return next;
+}
+function setCameraPathForRank(rank, path, platform = activePlatformForRank(rank), rerender = true){
+  setPlatformEditForRank(rank, platform, { camera_path: normalizeCameraPath(path) });
+  const card = cardForRank(rank);
+  if (card) {
+    const edit = platformEditForRank(rank, platform);
+    if (rerender) updateCameraUi(card);
+    updateCardCameraSummary(card, edit.camera, edit);
+    updateCameraSurfaceForCard(card);
+  }
+  renderFinalStage();
+}
+function addCameraPathFrameForCard(card){
+  const rank = card.dataset.rank;
+  const platform = activePlatformForRank(rank);
+  const context = cameraContextForCard(card);
+  const edit = platformEditForRank(rank, platform);
+  const sourcePath = cameraPathForEdit(edit, context.duration);
+  const position = clampNumber(context.position, 0, Math.max(context.duration, .3));
+  const frame = cameraFrameForTime(edit.camera, sourcePath, position, context.duration);
+  const next = Object.assign({}, frame, { time: Number(position.toFixed(3)), source: "manual-path" });
+  const path = cameraPathWithFrame(sourcePath, next);
+  const index = path.findIndex(item => Math.abs(item.time - next.time) < .01);
+  setSelectedCameraPathIndex(card, index >= 0 ? index : path.length - 1);
+  setCameraPathForRank(rank, path, platform);
+}
+function updateCameraPathFrameForCard(card, patch, rerender = true){
+  const rank = card.dataset.rank;
+  const platform = activePlatformForRank(rank);
+  const edit = platformEditForRank(rank, platform);
+  const context = cameraContextForCard(card);
+  const path = cameraPathForEdit(edit, context.duration);
+  const index = selectedCameraPathIndex(card, path);
+  const current = path[index] || cameraFrameForTime(edit.camera, path, context.position, context.duration);
+  let frame = Object.assign({}, current, patch);
+  if (patch.key || patch.strength !== undefined) {
+    frame = cameraPathFrameWithPreset(frame, patch.key || current.key || "center", patch.strength ?? current.strength ?? 60);
+  }
+  const nextPath = cameraPathWithFrame(path, frame, index);
+  setSelectedCameraPathIndex(card, Math.min(index, nextPath.length - 1));
+  setCameraPathForRank(rank, nextPath, platform, rerender);
+}
+function moveCameraPathFrameToPlayhead(card){
+  const context = cameraContextForCard(card);
+  updateCameraPathFrameForCard(card, { time: Number(context.position.toFixed(3)), source: "manual-path" });
+}
+function deleteCameraPathFrameForCard(card){
+  const rank = card.dataset.rank;
+  const platform = activePlatformForRank(rank);
+  const edit = platformEditForRank(rank, platform);
+  const context = cameraContextForCard(card);
+  const path = cameraPathForEdit(edit, context.duration);
+  if (path.length <= 1) return;
+  const index = selectedCameraPathIndex(card, path);
+  path.splice(index, 1);
+  setSelectedCameraPathIndex(card, Math.max(0, index - 1));
+  setCameraPathForRank(rank, path, platform);
+}
+function resetCameraPathForCard(card){
+  const rank = card.dataset.rank;
+  const platform = activePlatformForRank(rank);
+  setSelectedCameraPathIndex(card, 0);
+  setCameraPathForRank(rank, [], platform);
 }
 function cameraFrameForTime(camera, cameraPath, position, duration){
   const path = normalizeCameraPath(cameraPath);
@@ -4034,17 +4143,40 @@ function updateCardTools(card){
   updateOverlayUi(card);
 }
 function updateCameraUi(card){
-  const camera = cameraForRank(card.dataset.rank);
+  const edit = platformEditForRank(card.dataset.rank, activePlatformForRank(card.dataset.rank));
+  const camera = edit.camera;
+  const context = cameraContextForCard(card);
   const surface = card.querySelector(".camera-surface");
   if (surface) updateCameraSurfaceForCard(card);
-  updateCardCameraSummary(card, camera);
+  updateCardCameraSummary(card, camera, edit);
   const container = card.querySelector("[data-card-camera]");
   if (!container) return;
-  container.innerHTML = `<div class="camera-card-controls">${cameraSegmentsHtml(camera)}</div>`;
+  container.innerHTML = `<div class="camera-card-controls">${cameraPathEditorHtml(card, edit, context.duration)}${cameraSegmentsHtml(camera)}</div>`;
   bindCardCameraControls(card);
 }
 function bindCardCameraControls(card){
   const rank = card.dataset.rank;
+  card.querySelectorAll("[data-camera-path-marker]").forEach(button => {
+    button.addEventListener("click", () => {
+      setSelectedCameraPathIndex(card, button.dataset.cameraPathMarker);
+      updateCameraUi(card);
+      updateCameraSurfaceForCard(card);
+    });
+  });
+  card.querySelector("[data-camera-path-add]")?.addEventListener("click", () => addCameraPathFrameForCard(card));
+  card.querySelector("[data-camera-path-reset]")?.addEventListener("click", () => resetCameraPathForCard(card));
+  card.querySelector("[data-camera-path-set-time]")?.addEventListener("click", () => moveCameraPathFrameToPlayhead(card));
+  card.querySelector("[data-camera-path-delete]")?.addEventListener("click", () => deleteCameraPathFrameForCard(card));
+  card.querySelector("[data-camera-path-key]")?.addEventListener("change", event => {
+    updateCameraPathFrameForCard(card, { key: event.target.value });
+  });
+  const keyframeStrength = card.querySelector("[data-camera-path-strength]");
+  keyframeStrength?.addEventListener("input", event => {
+    updateCameraPathFrameForCard(card, { strength: Number(event.target.value) }, false);
+  });
+  keyframeStrength?.addEventListener("change", event => {
+    updateCameraPathFrameForCard(card, { strength: Number(event.target.value) });
+  });
   card.querySelectorAll("[data-preview-camera-segment]").forEach(select => {
     select.addEventListener("change", () => setCameraSegmentForRank(rank, select.dataset.previewCameraSegment, { key: select.value }));
   });
@@ -4955,6 +5087,7 @@ function cameraPreviewItemHtml(item){
   const cameraPath = cameraPathForEdit({ camera, camera_path: item.camera_path }, Number(item.adjusted_duration || 0));
   const previewFrame = cameraFrameForTime(camera, cameraPath, 0, Number(item.adjusted_duration || 0));
   const src = cacheBustedPreview(item.clip_file || "", `camera-${item.rank}-${item.adjusted_start}-${item.adjusted_end}`);
+  const duration = Number(item.adjusted_duration || 0);
   return `<article class="caption-item" data-rank="${escapeAttr(item.rank)}" data-platform="${escapeAttr(item.platform)}" data-camera-duration="${escapeAttr(item.adjusted_duration || 0)}">
     <div class="caption-preview camera-surface" data-camera-key="${escapeAttr(previewFrame.key || "path")}" style="${escapeAttr(cameraPreviewStyleFromFrame(previewFrame))}">
       <video controls preload="metadata" src="${escapeAttr(src)}"></video>
@@ -4962,12 +5095,49 @@ function cameraPreviewItemHtml(item){
     </div>
     <div class="caption-item-body">
       <strong>Preview #${String(item.rank).padStart(2, "0")} ${escapeHtml(item.title || "")}</strong>
-      <span>${escapeHtml(item.platform_label)}</span><span data-camera-current>${escapeHtml(cameraLabel(camera))}</span>
+      <span>${escapeHtml(item.platform_label)}</span><span data-camera-current>${escapeHtml(cameraEditLabel({ camera, camera_path: item.camera_path }, duration))}</span>
       <div class="camera-card-controls">
         ${cameraSegmentsHtml(camera)}
       </div>
     </div>
   </article>`;
+}
+function cameraPathEditorHtml(card, edit, duration){
+  const explicit = explicitCameraPathForEdit(edit);
+  const path = cameraPathForEdit(edit, duration);
+  const selectedIndex = selectedCameraPathIndex(card, path);
+  const selected = path[selectedIndex] || path[0] || normalizeCameraPathFrame({ time: 0, key: "center", strength: 60 });
+  const safeDuration = Math.max(Number(duration) || 0, .3);
+  const markers = path.map((frame, index) => {
+    const left = clampNumber((Number(frame.time || 0) / safeDuration) * 100, 0, 100);
+    const active = index === selectedIndex ? " active" : "";
+    const label = frame.key ? cameraMeta[frame.key]?.label || "Path" : "Path";
+    return `<button class="camera-path-marker${active}" data-camera-path-marker="${index}" type="button" style="left:${left.toFixed(2)}%" title="${escapeAttr(`${fixed(frame.time)} - ${label}`)}"></button>`;
+  }).join("");
+  return `<div class="camera-path-editor" data-camera-path-editor>
+    <div class="camera-path-head">
+      <strong>Camera path</strong>
+      <span>${explicit.length ? `${path.length} keyframes manuais` : "Derivado de Inicio/Meio/Fim"}</span>
+    </div>
+    <div class="camera-path-track" aria-label="Keyframes de camera">
+      <div class="camera-path-rail"></div>
+      ${markers}
+    </div>
+    <div class="camera-path-actions">
+      <button data-camera-path-add type="button">+ no playhead</button>
+      <button data-camera-path-set-time type="button"${explicit.length ? "" : " disabled"}>Mover para playhead</button>
+      <button data-camera-path-reset type="button"${explicit.length ? "" : " disabled"}>Usar simples</button>
+    </div>
+    <div class="camera-keyframe-panel">
+      <label>Keyframe
+        <select data-camera-path-key${explicit.length ? "" : " disabled"}>${cameraOptionsHtml(selected?.key || "center")}</select>
+      </label>
+      <label>Forca
+        <input data-camera-path-strength type="range" min="0" max="100" step="5" value="${selected?.strength ?? 60}"${explicit.length ? "" : " disabled"}>
+      </label>
+      <button class="camera-path-delete" data-camera-path-delete type="button"${path.length > 1 && explicit.length ? "" : " disabled"}>Excluir ponto</button>
+    </div>
+  </div>`;
 }
 function cameraSegmentsHtml(camera){
   return `<div class="camera-segments">${cameraParts.map(part => {
@@ -4996,7 +5166,7 @@ function bindCameraPreviewControls(){
       const duration = Number(item.dataset.cameraDuration || video?.duration || 0);
       applyCameraSurface(item.querySelector(".camera-surface"), edit.camera, Number(video?.currentTime || 0), duration, cameraPathForEdit(edit, duration));
       const summary = item.querySelector("[data-camera-current]");
-      if (summary) summary.textContent = cameraLabel(edit.camera);
+      if (summary) summary.textContent = cameraEditLabel(edit, duration);
     };
     updatePreviewSurface();
     const video = item.querySelector("video");
@@ -5218,7 +5388,7 @@ function renderFinalStage(){
   const queue = buildExportData().caption_queue || [];
   const summary = document.querySelector("[data-final-summary]");
   if (summary) {
-    const cameraCount = queue.filter(item => cameraHasMovement(item.camera)).length;
+    const cameraCount = queue.filter(item => cameraEditHasMovement(item)).length;
     const effectCount = queue.filter(item => normalizeEffect(item.effect).key !== "none").length;
     const overlayCount = queue.reduce((count, item) => count + normalizeOverlayLayers(item.overlays, item.overlay).length, 0);
     summary.textContent = queue.length

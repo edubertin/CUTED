@@ -89,16 +89,22 @@ show the same framing intent.
 
 ## Camera Path
 
-The browser emits `camera_path` with finalization payloads. It is a keyframe
-track derived from the current manual `camera` sequence unless a future
-automatic reframing step provides explicit keyframes. The renderer should
-prefer explicit `camera_path` data when present, while keeping legacy `camera`
-sequence rendering supported for older queue files.
+The browser emits `camera_path` with finalization payloads. In simple mode it
+is derived from the current manual `camera` sequence. In advanced mode the user
+can add timeline keyframes at the current playhead; that explicit path is saved
+per platform and becomes the render source of truth. Future automatic
+reframing should write explicit keyframes into the same track. The renderer
+should prefer explicit `camera_path` data when present, while keeping legacy
+`camera` sequence rendering supported for older queue files.
 
 Manual camera keyframes may include the legacy preset `key` and `strength`.
 Those frames render through the same FFmpeg crop/scale presets as the manual
 camera controls. Arbitrary keyframes without a preset key render using their
 `x`, `y`, and `zoom` values.
+
+The UI should keep the simple beginning/middle/end controls available because
+they are faster for most edits. Editing those simple controls clears any stale
+explicit path for the active platform, so preview and render cannot disagree.
 
 ## Effects
 

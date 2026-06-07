@@ -135,9 +135,15 @@ part        optional start, middle, or end label for compatibility
 ```
 
 When `camera_path` is absent, the app derives it from the existing
-beginning/middle/end `camera` sequence. When a user manually changes a camera
-segment, any stale stored camera path for that platform must be cleared and
-regenerated from the updated camera state.
+beginning/middle/end `camera` sequence. The review UI exposes this as the
+simple camera mode. When the user adds or edits a timeline keyframe, the app
+stores an explicit per-platform `camera_path`; that path becomes the render
+source of truth for that platform.
+
+When a user manually changes a simple camera segment, any stale stored camera
+path for that platform must be cleared and regenerated from the updated camera
+state. Future automatic reframing should also write into `camera_path` instead
+of replacing the simple `camera` compatibility field.
 
 ## Overlay Contract
 

@@ -28,6 +28,9 @@ review workspace, data contracts, or render pipeline.
 | Camera | Seek/play through Inicio, Meio, and Fim | Preview framing follows video time and does not drift independently |
 | Camera | Play an alternating camera preset | Preview updates smoothly while playing and stops updating when paused |
 | Camera path | Finalize a manually configured camera | Queue includes `camera_path` and render still matches the manual camera intent |
+| Camera path | Add keyframe at playhead | Camera panel switches to explicit path and marker appears at the current adjusted time |
+| Camera path | Edit keyframe preset/strength | Preview updates for the active platform without changing other platforms |
+| Camera path | Reset to simple mode | Explicit path is cleared and preview returns to Inicio/Meio/Fim behavior |
 | Volume | Open any video | Volume starts at 20 percent |
 | Platform | Switch TikTok to Facebook | Preset state changes without losing TikTok edits |
 | Text layer | Add text layer | Layer appears, moves, resizes, edits, deletes |
