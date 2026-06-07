@@ -31,6 +31,7 @@ review workspace, data contracts, or render pipeline.
 | Image layer | Add PNG/WebP logo | Transparency preserved in preview and render |
 | Export | Add multiple platforms | Queue contains each selected platform |
 | Finalize | Render final queue | MP4 files and manifest are created |
+| Finalize | Render with import output path | Final MP4 is copied to `CUTED Renders/<import>` and UI shows the final path |
 | AI import | Generate 10 suggestions from a long transcript | Suggestions are spread across distinct timeline windows |
 | AI import | YouTube has captions | Captions are used without downloading full audio for transcription |
 | AI import | Audio exceeds upload limit | Audio is compressed or chunked before hosted transcription |

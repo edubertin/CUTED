@@ -16,6 +16,7 @@ flowchart LR
   F --> G["FFmpeg render"]
   G --> H["captioned-clips/*.mp4"]
   G --> I["captioned-clips.json"]
+  H --> J["output_path/CUTED Renders/<import>/*.mp4"]
 ```
 
 ## Commands
@@ -40,7 +41,23 @@ python tools/cutted/scripts/cutted.py render-selected "samples/example/selected-
 9. Final queue submission to `/api/finalize`.
 10. Caption, camera, effect, and overlay filter construction.
 11. Final MP4 render.
-12. Output manifest update.
+12. Final MP4 copy to the configured render destination when available.
+13. Output manifest update.
+
+## Output Locations
+
+`captioned-clips/` is the technical workspace output. It may include MP4
+previews, subtitle files, and manifests required by the local review UI.
+
+When an import has `output_path` in `import-request.json`, `/api/finalize`
+copies only the final MP4 files to:
+
+```text
+<output_path>/CUTED Renders/<import-folder>/
+```
+
+The UI may keep using the workspace MP4 for browser preview, but the user-facing
+final file is the manifest/response `final_file` or `local_file` path.
 
 ## Filter Order
 

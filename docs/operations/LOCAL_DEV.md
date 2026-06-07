@@ -105,4 +105,6 @@ Check:
 - Queue payload sent to `/api/finalize`.
 - Resolved platform edit used by render.
 - Output manifest in `captioned-clips/captioned-clips.json`.
+- `local_file` or `final_file` copied under `CUTED Renders/<import>` when
+  the import has an output path.
 - Whether an old server process handled the request.

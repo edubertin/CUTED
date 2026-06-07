@@ -155,11 +155,21 @@ can be mapped to different platform dimensions.
 Expected responsibilities:
 
 - output path
+- exported final path when `output_path` is configured
 - platform
 - preset dimensions
 - source rank/title
 - render status
 - error if failed
+
+Output path fields:
+
+```text
+file        temporary workspace MP4 used by the local preview
+local_file  copied final MP4 in the configured render destination
+final_file  response alias for the user-facing MP4 path
+final_dir   response alias for the user-facing output folder
+```
 
 ## Compatibility Rules
 
