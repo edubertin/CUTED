@@ -29,7 +29,7 @@ GROUP_FIT_LOGO_TOP_RATIO = 0.11
 GROUP_FIT_LOGO_WIDTH_RATIO = 0.38
 GROUP_FIT_LOGO_OPACITY = 0.9
 GROUP_FIT_MIN_HOLD_SECONDS = 3.0
-AI_DIRECTOR_MIN_MOVE_HOLD_SECONDS = 2.4
+AI_DIRECTOR_MIN_MOVE_HOLD_SECONDS = 4.0
 RANGE_MEDIA_EXTENSIONS = {".m4v", ".mov", ".mp4", ".webm"}
 YOUTUBE_HIGH_QUALITY_FORMAT = (
     "bv*[height<=1440][vcodec^=avc1]+ba[ext=m4a]/"
@@ -44,15 +44,16 @@ FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
 MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
 MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
-CAMERA_ANALYSIS_VERSION = "auto-face-v22"
+CAMERA_ANALYSIS_VERSION = "auto-face-v23"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
 CAMERA_ANALYSIS_MAX_FRAMES = 140
 CAMERA_UNCERTAIN_MIN_SECONDS = 0.85
-CAMERA_TWO_CLOSE_PAN_SPREAD = 16.0
-CAMERA_TWO_CLOSE_PAN_SPAN = 28.0
+CAMERA_TWO_CLOSE_PAN_SPREAD = 10.0
+CAMERA_TWO_CLOSE_PAN_SPAN = 20.0
 CAMERA_SCENE_FIRST_CUT_SECONDS = 1.4
-CAMERA_HARD_CUT_MIN_HOLD_SECONDS = 3.8
-CAMERA_GROUP_ALTERNATE_MIN_HOLD_SECONDS = 3.3
+CAMERA_HARD_CUT_MIN_HOLD_SECONDS = 4.2
+CAMERA_GROUP_ALTERNATE_MIN_HOLD_SECONDS = 4.0
+CAMERA_MIN_TARGET_SHIFT = 10.0
 CAMERA_GROUP_FIT_SPREAD = 38.0
 CAMERA_GROUP_FIT_SPAN = 52.0
 AI_DIRECTOR_MAX_FRAME_SAMPLES = 10
@@ -1304,12 +1305,13 @@ def ai_director_rules(mode: str) -> list[str]:
         "Se 2 ou mais rostos ficariam fora do crop, reduza zoom e centralize entre os rostos.",
         "Use close em uma pessoa apenas quando os outros rostos nao estiverem visiveis ou nao importarem para a cena.",
         "Quando scene_direction.uncertain_windows indicar baixa deteccao, nao persiga rosto antigo; prefira plano aberto com blur.",
-        "Siga scene_direction.scene_intent_windows: solo=center, two_close=movimento suave somente com rostos muito proximos, two_far=corte seco com holds longos, group_close=alternar focos com calma, group_fit=plano aberto com blur.",
+        "Siga scene_direction.scene_intent_windows: solo=center, two_close=movimento suave somente com rostos quase colados, two_far=corte seco com holds longos, group_close=cortes fixos entre focos, group_fit=plano aberto com blur.",
     ]
     if ai_director_uses_hard_cuts(mode):
         rules.extend([
             "Este modo deve parecer corte seco: nao crie keyframes para pans graduais.",
-            "Prefira 3.5 a 4.8 segundos entre cortes, salvo mudanca clara de fala ou reacao.",
+            "Prefira 4.0 a 5.0 segundos entre cortes, salvo mudanca clara de fala ou reacao.",
+            "Nao crie pans longos; quando houver duvida, use corte seco ou mantenha o plano atual.",
             "Alterne entre close, grupo e reacao quando houver rostos confiaveis.",
             "Quando cortar para uma pessoa secundaria, volte para a pessoa principal depois de 2 a 3 segundos.",
             "Use as janelas em scene_direction.reaction_windows como candidatos preferenciais de corte.",
@@ -1613,7 +1615,7 @@ def hard_cut_spaced_ai_frames(frames: list[dict[str, object]], duration: float) 
     result: list[dict[str, object]] = []
     for frame in sorted_frames:
         time_value = clamp(float(frame.get("time") or 0.0), 0.0, safe_duration)
-        if result and time_value - float(result[-1].get("time") or 0.0) < 2.35:
+        if result and time_value - float(result[-1].get("time") or 0.0) < CAMERA_HARD_CUT_MIN_HOLD_SECONDS:
             continue
         result.append(hard_cut_ai_director_frame(frame, time_value))
     if not result:
@@ -1737,7 +1739,7 @@ def scene_grammar_camera_frames(
         if scene_grammar_should_wait(time_value, duration, intent, last_time, last_intent):
             continue
         target = scene_grammar_target_for_row(row, time_value, platform, hard_cut, intent)
-        if target is None or recent_similar_camera_frame(frames, target, 2.2):
+        if target is None or scene_target_too_small(frames, target):
             continue
         frames.append(target)
         last_time = time_value
@@ -1764,8 +1766,15 @@ def scene_grammar_target_for_row(
         return forced_group_fit_frame(faces, time_value, platform, hard_cut)
     if intent not in {"two_far_cut", "group_close_alternate"}:
         return None
-    source = "ai-director-cuts-reaction" if intent == "two_far_cut" or hard_cut else "ai-director-dense-reaction"
+    source = "ai-director-cuts-reaction" if intent in {"two_far_cut", "group_close_alternate"} or hard_cut else "ai-director-dense-reaction"
     return hard_cut_ai_director_frame(director_alternate_target(row, time_value, intent), time_value, source)
+
+
+def scene_target_too_small(frames: list[dict[str, object]], target: dict[str, object]) -> bool:
+    if not frames:
+        return False
+    previous = frames[-1]
+    return abs(float(previous.get("x") or 50.0) - float(target.get("x") or 50.0)) < CAMERA_MIN_TARGET_SHIFT
 
 
 def camera_scene_min_hold(intent: str, previous_intent: str) -> float:
