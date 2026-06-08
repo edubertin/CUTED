@@ -658,7 +658,10 @@ def detect_primary_face(cv2: object, cascade: object, frame: object, relative_ti
     faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(36, 36))
     if len(faces) == 0:
         return None
-    x, y, face_w, face_h = select_primary_face(faces, previous_x, small.shape[1])
+    primary = select_primary_face(faces, previous_x, small.shape[1])
+    if primary is None:
+        return None
+    x, y, face_w, face_h = primary
     center_x = ((x + face_w / 2.0) / scale) / width * 100.0
     center_y = ((y + face_h / 2.0) / scale) / height * 100.0
     zoom = face_zoom(face_w / scale, width)
@@ -673,12 +676,14 @@ def detect_primary_face(cv2: object, cascade: object, frame: object, relative_ti
     }
 
 
-def select_primary_face(faces: object, previous_x: float, width: int) -> tuple[float, float, float, float]:
+def select_primary_face(faces: object, previous_x: float, width: int) -> tuple[float, float, float, float] | None:
     best: tuple[float, float, float, float] | None = None
-    best_score = -1.0
+    best_score = -math.inf
     previous_px = previous_x / 100.0 * width
     for face in faces:
         x, y, face_w, face_h = [float(value) for value in face]
+        if face_w <= 0 or face_h <= 0:
+            continue
         center = x + face_w / 2.0
         area = face_w * face_h
         stability_penalty = abs(center - previous_px) * max(face_h, 1.0) * 0.18
@@ -686,8 +691,6 @@ def select_primary_face(faces: object, previous_x: float, width: int) -> tuple[f
         if score > best_score:
             best = (x, y, face_w, face_h)
             best_score = score
-    if best is None:
-        raise RuntimeError("OpenCV returned faces but no primary face could be selected.")
     return best
 
 
