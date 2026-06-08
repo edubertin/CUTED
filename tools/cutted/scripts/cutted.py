@@ -26,9 +26,11 @@ from types import SimpleNamespace
 
 BRAND_LOGO_FILE = "cuted-logo-transparent.png"
 RANGE_MEDIA_EXTENSIONS = {".m4v", ".mov", ".mp4", ".webm"}
-CAMERA_ANALYSIS_VERSION = "auto-face-v4"
-CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.4
-CAMERA_ANALYSIS_MAX_FRAMES = 90
+CAMERA_ANALYSIS_VERSION = "auto-face-v13"
+CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
+CAMERA_ANALYSIS_MAX_FRAMES = 140
+CAMERA_SAFE_X_MIN = 30.0
+CAMERA_SAFE_X_MAX = 70.0
 SMART_CAMERA_MODES = {
     "auto-director": "Auto Director",
     "follow-face": "Seguir rosto",
@@ -799,6 +801,7 @@ def camera_analysis_diagnostics(
     sample_count = len(sample_times)
     detection_frames = len(detections)
     multi_face_frames = sum(1 for row in detections if len(row.get("faces", [])) > 1)
+    edge_face_frames = sum(1 for row in detections if row_has_edge_face(row))
     detected_faces = max((len(row.get("faces", [])) for row in detections), default=0)
     detected_times = [float(row.get("time") or 0.0) for row in detections]
     return {
@@ -815,6 +818,7 @@ def camera_analysis_diagnostics(
         "detection_rate": round(detection_frames / sample_count, 3) if sample_count else 0.0,
         "detected_faces_max": detected_faces,
         "multi_face_frames": multi_face_frames,
+        "edge_face_frames": edge_face_frames,
         "first_detection_time": round(min(detected_times), 3) if detected_times else None,
         "last_detection_time": round(max(detected_times), 3) if detected_times else None,
         "camera_keyframes": len(camera_path),
@@ -833,8 +837,16 @@ def compact_detection_preview(detections: list[dict[str, object]]) -> list[dict[
             "y": primary.get("y"),
             "zoom": primary.get("zoom"),
             "confidence": primary.get("confidence"),
+            "face_xs": [face.get("x") for face in row.get("faces", [])[:4] if isinstance(face, dict)],
         })
     return preview
+
+
+def row_has_edge_face(row: dict[str, object]) -> bool:
+    faces = row.get("faces")
+    if not isinstance(faces, list):
+        return False
+    return any(isinstance(face, dict) and face_outside_safe_zone(face) for face in faces)
 
 
 def camera_sample_times(duration: float) -> list[float]:
@@ -879,12 +891,23 @@ def select_primary_face(faces: list[dict[str, float]], previous_x: float) -> dic
     best_score = -math.inf
     for face in faces:
         area = float(face.get("area") or 0.0)
-        stability_penalty = abs(float(face.get("x") or 50.0) - previous_x) * max(area, 1.0) * 0.003
-        score = area - stability_penalty
+        confidence = float(face.get("confidence") or 0.0)
+        stability_penalty = abs(face_x(face) - previous_x) * max(area, 1.0) * 0.0015
+        edge_bonus = area * 0.16 if face_outside_safe_zone(face) and confidence >= 0.35 else 0.0
+        score = area + edge_bonus - stability_penalty
         if score > best_score:
             best = face
             best_score = score
     return best
+
+
+def face_x(face: dict[str, float]) -> float:
+    return float(face.get("x") or 50.0)
+
+
+def face_outside_safe_zone(face: dict[str, float]) -> bool:
+    x_value = face_x(face)
+    return x_value < CAMERA_SAFE_X_MIN or x_value > CAMERA_SAFE_X_MAX
 
 
 def face_zoom(face_width: float, frame_width: float) -> float:
@@ -917,14 +940,14 @@ def smart_camera_path(detections: list[dict[str, object]], duration: float, mode
     if mode == "stable-face":
         return stable_face_camera_path(primary)
     if mode == "face-zoom":
-        return compressed_camera_path(smoothed_camera_frames(boost_face_zoom(primary), "auto-face-face-zoom"), duration)
+        return primary_face_camera_path(boost_face_zoom(primary), "auto-face-face-zoom", duration)
     if mode == "alternate-faces":
         path = multi_face_camera_path(detections, duration, smooth=True)
-        return path or compressed_camera_path(smoothed_camera_frames(primary, "auto-face-follow-face"), duration)
+        return path or primary_face_camera_path(primary, "auto-face-follow-face", duration)
     if mode == "cut-between-faces":
         path = multi_face_camera_path(detections, duration, smooth=False)
-        return path or compressed_camera_path(smoothed_camera_frames(primary, "auto-face-follow-face"), duration)
-    return compressed_camera_path(smoothed_camera_frames(primary, "auto-face-follow-face"), duration)
+        return path or primary_face_camera_path(primary, "auto-face-follow-face", duration)
+    return follow_face_camera_path(detections, primary, duration)
 
 
 def auto_director_camera_path(detections: list[dict[str, object]], primary: list[dict[str, float]], duration: float) -> list[dict[str, object]]:
@@ -932,7 +955,36 @@ def auto_director_camera_path(detections: list[dict[str, object]], primary: list
         path = director_multi_face_path(detections, duration)
         if path:
             return path
-    return compressed_camera_path(smoothed_camera_frames(primary, "auto-face-auto-director"), duration)
+    return primary_face_camera_path(primary, "auto-face-auto-director", duration)
+
+
+def primary_face_camera_path(detections: list[dict[str, float]], source: str, duration: float) -> list[dict[str, object]]:
+    frames = smoothed_camera_frames(detections, source, x_weight=0.48, y_weight=0.32, zoom_weight=0.28)
+    return compressed_camera_path(frames, duration, max_gap=2.1, x_threshold=2.0, zoom_threshold=0.016)
+
+
+def follow_face_camera_path(detections: list[dict[str, object]], primary: list[dict[str, float]], duration: float) -> list[dict[str, object]]:
+    if not has_reliable_multi_face_context(detections):
+        return primary_face_camera_path(primary, "auto-face-follow-face", duration)
+    frames = safe_follow_frames(detections)
+    if not frames:
+        return primary_face_camera_path(primary, "auto-face-follow-face", duration)
+    rows = smoothed_camera_frames(frames, "auto-face-follow-face", x_weight=0.54, y_weight=0.36, zoom_weight=0.32)
+    path = compressed_camera_path(rows, duration, max_gap=1.9, x_threshold=1.9, zoom_threshold=0.015)
+    return stable_camera_targets(path)
+
+
+def safe_follow_frames(detections: list[dict[str, object]]) -> list[dict[str, float]]:
+    frames: list[dict[str, float]] = []
+    for row in detections:
+        time_value = float(row.get("time") or 0.0)
+        faces = sorted(reliable_faces(row), key=lambda item: face_x(item))
+        primary = row.get("primary") if isinstance(row.get("primary"), dict) else None
+        if should_use_group_frame(faces):
+            frames.append(group_face_frame(faces, time_value))
+        elif isinstance(primary, dict):
+            frames.append({**primary, "time": time_value})
+    return frames
 
 
 def has_reliable_multi_face_context(detections: list[dict[str, object]]) -> bool:
@@ -954,28 +1006,45 @@ def director_multi_face_path(detections: list[dict[str, object]], duration: floa
         time_value = float(row.get("time") or 0.0)
         faces = sorted(reliable_faces(row), key=lambda item: float(item.get("x") or 50.0))
         target = row.get("primary") if isinstance(row.get("primary"), dict) else None
-        if len(faces) >= 2 and time_value - last_reaction >= 4.0:
+        if should_use_group_frame(faces) or (len(faces) >= 2 and time_value - last_reaction >= 3.0):
             frames.append(group_face_frame(faces, time_value))
             last_reaction = time_value
         elif isinstance(target, dict):
             frames.append({**target, "time": time_value})
     if len(frames) < 2:
         return []
-    rows = smoothed_camera_frames(frames, "auto-face-auto-director")
-    return compressed_camera_path(rows, duration)
+    rows = smoothed_camera_frames(frames, "auto-face-auto-director", x_weight=0.58, y_weight=0.38, zoom_weight=0.34)
+    path = compressed_camera_path(rows, duration, max_gap=1.8, x_threshold=1.8, zoom_threshold=0.014)
+    return stable_camera_targets(path)
+
+
+def should_use_group_frame(faces: list[dict[str, float]]) -> bool:
+    if len(faces) < 2:
+        return False
+    spread = face_x(faces[-1]) - face_x(faces[0])
+    return spread >= 24.0 or any(face_outside_safe_zone(face) for face in faces)
 
 
 def group_face_frame(faces: list[dict[str, float]], time_value: float) -> dict[str, float]:
     left = faces[0]
     right = faces[-1]
     confidence = max(float(left.get("confidence") or 0.35), float(right.get("confidence") or 0.35))
+    spread = max(face_x(right) - face_x(left), 0.0)
     return {
         "time": time_value,
-        "x": clamp((float(left.get("x") or 50.0) + float(right.get("x") or 50.0)) / 2.0, 12.0, 88.0),
+        "x": clamp((face_x(left) + face_x(right)) / 2.0, 18.0, 82.0),
         "y": clamp((float(left.get("y") or 50.0) + float(right.get("y") or 50.0)) / 2.0, 38.0, 62.0),
-        "zoom": 1.06,
+        "zoom": group_face_zoom(spread),
         "confidence": confidence,
     }
+
+
+def group_face_zoom(spread: float) -> float:
+    if spread >= 42.0:
+        return 1.0
+    if spread >= 30.0:
+        return 1.03
+    return 1.07
 
 
 def boost_face_zoom(detections: list[dict[str, float]]) -> list[dict[str, float]]:
@@ -1040,15 +1109,21 @@ def camera_frames_from_detections(detections: list[dict[str, float]], source: st
     } for item in detections]
 
 
-def smoothed_camera_frames(detections: list[dict[str, float]], source: str) -> list[dict[str, object]]:
+def smoothed_camera_frames(
+    detections: list[dict[str, float]],
+    source: str,
+    x_weight: float = 0.32,
+    y_weight: float = 0.25,
+    zoom_weight: float = 0.22,
+) -> list[dict[str, object]]:
     frames: list[dict[str, object]] = []
     smooth_x: float | None = None
     smooth_y: float | None = None
     smooth_zoom: float | None = None
     for detection in detections:
-        smooth_x = detection["x"] if smooth_x is None else smooth_x * 0.68 + detection["x"] * 0.32
-        smooth_y = detection["y"] if smooth_y is None else smooth_y * 0.75 + detection["y"] * 0.25
-        smooth_zoom = detection["zoom"] if smooth_zoom is None else smooth_zoom * 0.78 + detection["zoom"] * 0.22
+        smooth_x = weighted_smooth(smooth_x, detection["x"], x_weight)
+        smooth_y = weighted_smooth(smooth_y, detection["y"], y_weight)
+        smooth_zoom = weighted_smooth(smooth_zoom, detection["zoom"], zoom_weight)
         frames.append({
             "time": detection["time"],
             "x": round(smooth_x, 2),
@@ -1060,7 +1135,60 @@ def smoothed_camera_frames(detections: list[dict[str, float]], source: str) -> l
     return frames
 
 
-def compressed_camera_path(frames: list[dict[str, object]], duration: float) -> list[dict[str, object]]:
+def stable_camera_targets(frames: list[dict[str, float]]) -> list[dict[str, float]]:
+    if len(frames) < 3:
+        return frames
+    stable = [frames[0]]
+    for index in range(1, len(frames) - 1):
+        previous = frames[index - 1]
+        current = frames[index]
+        next_frame = frames[index + 1]
+        stable.append(stabilized_camera_target(previous, current, next_frame))
+    stable.append(frames[-1])
+    return stable
+
+
+def stabilized_camera_target(
+    previous: dict[str, float],
+    current: dict[str, float],
+    next_frame: dict[str, float],
+) -> dict[str, float]:
+    if not is_camera_outlier(previous, current, next_frame):
+        return current
+    return {
+        **current,
+        "x": round((face_x(previous) + face_x(next_frame)) / 2.0, 2),
+        "y": round((float(previous.get("y") or 50.0) + float(next_frame.get("y") or 50.0)) / 2.0, 2),
+        "zoom": round(min(float(previous.get("zoom") or 1.0), float(next_frame.get("zoom") or 1.0)), 3),
+    }
+
+
+def is_camera_outlier(previous: dict[str, float], current: dict[str, float], next_frame: dict[str, float]) -> bool:
+    if float(next_frame["time"]) - float(previous["time"]) > 2.2:
+        return False
+    previous_x = face_x(previous)
+    current_x = face_x(current)
+    next_x = face_x(next_frame)
+    center_snap = current_x < 50.0 and previous_x > 55.0 and next_x > 55.0
+    strong_jump = abs(current_x - previous_x) > 14.0 and abs(current_x - next_x) > 14.0
+    return center_snap and strong_jump and abs(previous_x - next_x) < 10.0
+
+
+def weighted_smooth(previous: float | None, current: float, weight: float) -> float:
+    if previous is None:
+        return current
+    safe_weight = clamp(weight, 0.05, 0.95)
+    return previous * (1.0 - safe_weight) + current * safe_weight
+
+
+def compressed_camera_path(
+    frames: list[dict[str, object]],
+    duration: float,
+    min_gap: float = 0.8,
+    max_gap: float = 2.4,
+    x_threshold: float = 2.4,
+    zoom_threshold: float = 0.018,
+) -> list[dict[str, object]]:
     if not frames:
         return []
     compressed = [frames[0]]
@@ -1069,12 +1197,13 @@ def compressed_camera_path(frames: list[dict[str, object]], duration: float) -> 
         time_gap = float(frame["time"]) - float(last["time"])
         x_delta = abs(float(frame["x"]) - float(last["x"]))
         zoom_delta = abs(float(frame["zoom"]) - float(last["zoom"]))
-        if time_gap >= 1.2 and (x_delta >= 3.0 or zoom_delta >= 0.025):
+        has_moved = x_delta >= x_threshold or zoom_delta >= zoom_threshold
+        if time_gap >= max_gap or (time_gap >= min_gap and has_moved):
             compressed.append(frame)
     last_frame = frames[-1]
     if compressed[-1] is not last_frame and float(last_frame["time"]) < max(duration, 0.3) - 0.05:
         compressed.append(last_frame)
-    return compressed[:36]
+    return compressed[:48]
 
 
 def resolve_request_gallery_dir(base_dir: Path, payload: dict[str, object]) -> Path:
@@ -4501,9 +4630,11 @@ function cameraDiagnosticsText(diagnostics){
   const keyframes = Number(diagnostics.camera_keyframes || 0);
   const input = diagnostics.analysis_input === "source" ? "source" : "clip";
   const multi = Number(diagnostics.multi_face_frames || 0);
+  const edge = Number(diagnostics.edge_face_frames || 0);
   const size = width && height ? `${width}x${height}` : "video";
   const parts = [input, `${detected}/${samples} frames`, size, `${keyframes} keyframes`];
   if (multi) parts.splice(1, 0, `${multi} multi-face`);
+  if (edge) parts.splice(2, 0, `${edge} borda`);
   return parts.join(" | ");
 }
 function cameraFrameForTime(camera, cameraPath, position, duration){

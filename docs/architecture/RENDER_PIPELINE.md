@@ -118,8 +118,10 @@ Supported smart modes:
 
 - `auto-director`: default mode. Tracks the primary face and, when enough
   simultaneous faces are detected, inserts wider group/reaction framing without
-  requiring the user to pick a manual multi-face preset.
-- `follow-face`: tracks the primary face with smoothing.
+  requiring the user to pick a manual multi-face preset. If faces approach the
+  horizontal crop edge, it uses safe group framing to avoid cutting a speaker.
+- `follow-face`: tracks the primary face with smoothing, but also uses safe
+  group framing when another detected face would be cut by the vertical crop.
 - `stable-face`: creates one stable median crop for the detected face.
 - `face-zoom`: tracks the primary face with a tighter zoom.
 - `alternate-faces`: alternates smoothly between multiple detected faces when
@@ -146,7 +148,8 @@ full source context.
 
 Every analysis response should include `diagnostics` with the analyzed media
 scope (`source` or `clip`), dimensions, sample count, detection count,
-multi-face frame count, detection timing range, and produced keyframe count.
+multi-face frame count, edge-risk frame count, detection timing range, and
+produced keyframe count.
 These diagnostics are the first QA layer for deciding whether a bad camera
 result came from weak detection, a cropped/low-resolution analysis source, or
 path generation.
