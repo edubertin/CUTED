@@ -116,15 +116,20 @@ returns explicit `camera_path` keyframes.
 
 Supported smart modes:
 
+- `auto-director`: default mode. Tracks the primary face and, when enough
+  simultaneous faces are detected, inserts wider group/reaction framing without
+  requiring the user to pick a manual multi-face preset.
 - `follow-face`: tracks the primary face with smoothing.
 - `stable-face`: creates one stable median crop for the detected face.
 - `face-zoom`: tracks the primary face with a tighter zoom.
 - `alternate-faces`: alternates smoothly between multiple detected faces when
-  available.
+  available. This remains available for compatibility.
 - `cut-between-faces`: cuts between multiple detected faces when available.
+  This remains available for compatibility.
 
-If a multi-face mode cannot find enough simultaneous faces, the endpoint falls
-back to the primary-face path instead of failing the edit. The older
+If Auto Director or a multi-face compatibility mode cannot find enough
+simultaneous faces, the endpoint falls back to the primary-face path instead of
+failing the edit. The older
 beginning/middle/end controls remain manual presets and are not treated as
 OpenCV-aware detection modes.
 
