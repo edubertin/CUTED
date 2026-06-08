@@ -1450,13 +1450,18 @@ async function analyzeCameraForCard(card, mode = "follow-face"){
       })
     });
     const payload = await response.json();
-    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao analisar camera.");
+    const diagnosticText = cameraDiagnosticsText(payload.diagnostics);
+    if (!response.ok || !payload.ok) {
+      const detail = diagnosticText ? ` (${diagnosticText})` : "";
+      throw new Error(`${payload.error || "Falha ao analisar camera."}${detail}`);
+    }
     const path = normalizeCameraPath(payload.camera_path);
     if (!path.length) throw new Error("A analise nao retornou keyframes.");
     setSelectedCameraPathIndex(card, 0);
     setCameraPathForRank(rank, path, platform);
     const label = payload.mode_label || smartCameraModes[smartMode].label;
-    setCameraAutoStatus(card, payload.cached ? `${label} aplicado do cache.` : `${label} aplicado.`);
+    const suffix = diagnosticText ? ` (${diagnosticText})` : "";
+    setCameraAutoStatus(card, `${payload.cached ? `${label} aplicado do cache` : `${label} aplicado`}.${suffix}`);
   } catch (error) {
     setCameraAutoStatus(card, error.message || "Falha na auto camera.");
   } finally {
@@ -1467,6 +1472,19 @@ async function analyzeCameraForCard(card, mode = "follow-face"){
 function setCameraAutoStatus(card, message){
   const status = card.querySelector("[data-camera-auto-status]");
   if (status) status.textContent = message || "";
+}
+function cameraDiagnosticsText(diagnostics){
+  if (!diagnostics || typeof diagnostics !== "object") return "";
+  const samples = Number(diagnostics.sample_count || 0);
+  const detected = Number(diagnostics.detection_frames || 0);
+  const width = Number(diagnostics.video_width || 0);
+  const height = Number(diagnostics.video_height || 0);
+  const keyframes = Number(diagnostics.camera_keyframes || 0);
+  const multi = Number(diagnostics.multi_face_frames || 0);
+  const size = width && height ? `${width}x${height}` : "video";
+  const parts = [`${detected}/${samples} frames`, size, `${keyframes} keyframes`];
+  if (multi) parts.splice(1, 0, `${multi} multi-face`);
+  return parts.join(" | ");
 }
 function cameraFrameForTime(camera, cameraPath, position, duration){
   const path = normalizeCameraPath(cameraPath);

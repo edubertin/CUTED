@@ -102,9 +102,10 @@ Those frames render through the same FFmpeg crop/scale presets as the manual
 camera controls. Arbitrary keyframes without a preset key render using their
 `x`, `y`, and `zoom` values.
 
-The UI should keep the simple beginning/middle/end controls available because
-they are faster for most edits. Editing those simple controls clears any stale
-explicit path for the active platform, so preview and render cannot disagree.
+The UI direction is Smart Camera first. Beginning/middle/end controls and
+manual keyframe editing should remain available as an advanced fallback, but
+the default camera workflow should ask for the user's framing intent and
+generate a `camera_path` with computer vision.
 
 ## Auto Camera Analysis
 
@@ -131,6 +132,12 @@ The result is cached in `camera-analysis/` using the clip fingerprint, trim
 window, platform, smart mode, and analysis version. If OpenCV is not installed,
 the endpoint returns a user-safe install message and manual camera editing remains
 available.
+
+Every analysis response should include `diagnostics` with the analyzed media
+scope, dimensions, sample count, detection count, multi-face frame count,
+detection timing range, and produced keyframe count. These diagnostics are the
+first QA layer for deciding whether a bad camera result came from weak
+detection, a cropped analysis source, or path generation.
 
 ## Effects
 
