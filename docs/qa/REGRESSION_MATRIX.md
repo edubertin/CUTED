@@ -32,6 +32,8 @@ review workspace, data contracts, or render pipeline.
 | Camera path | Edit keyframe preset/strength | Preview updates for the active platform without changing other platforms |
 | Camera path | Reset to simple mode | Explicit path is cleared and preview returns to Inicio/Meio/Fim behavior |
 | Smart camera | Click Auto Director | Face-based `camera_path` is applied to the active platform |
+| Smart camera | Click AI Director with OpenAI configured | AI-backed `camera_path` is applied and diagnostics include `ai_director` |
+| Smart camera | Click AI Director without OpenAI configured | Local Auto Director fallback applies without losing the current edit |
 | Smart camera | Use Auto Director on multi-face footage | Output includes primary-face tracking plus occasional group/reaction framing when detections are reliable |
 | Smart camera | Use Auto Director when a face is near the vertical crop edge | Camera shifts or opens framing before the face remains cut for several seconds |
 | Smart camera | Use Follow face on edge-risk multi-face footage | Follow mode still uses safe group framing instead of locking to a false central target |

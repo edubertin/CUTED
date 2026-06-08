@@ -18,6 +18,9 @@ face detection, tracking, and source-aware analysis.
 - Auto Director: default mode. Follows the primary face and inserts wider
   reaction/group framing when multi-face context is reliable or when detected
   faces sit near the vertical crop edge.
+- AI Director: optional hosted layer. Uses OpenCV diagnostics, a small set of
+  low-detail sampled frames, transcript context, and the local Auto Director
+  fallback path to decide a more editorial `camera_path`.
 - Follow main face, with safe group framing when a second face would be cut by
   the vertical crop.
 - Stable centered face.
@@ -41,6 +44,9 @@ face detection, tracking, and source-aware analysis.
    and beginning/middle/end controls hidden behind an advanced section.
 6. Tune framing rules for headroom, shoulders, zoom, safe horizontal crop, and
    fast switches.
+7. Add AI Director as an optional layer over OpenCV. It must be cached, bounded
+   by a strict JSON schema, and must fall back to local Auto Director whenever
+   OpenAI is unavailable or returns invalid camera data.
 
 ## Acceptance Criteria
 
@@ -55,3 +61,5 @@ face detection, tracking, and source-aware analysis.
   framing instead of leaving a face cut for several seconds.
 - Manual camera controls remain available for recovery.
 - Final render continues using `camera_path` as the source of truth.
+- AI Director never becomes a hard dependency for camera editing.
+- AI Director responses are validated and clamped before being stored.

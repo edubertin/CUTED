@@ -37,6 +37,8 @@ YOUTUBE_STREAM_FALLBACK_FORMAT = "b[height<=1080]/b[height<=720]/18/b[height<=48
 PREVIEW_VIDEO_CRF = "20"
 FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
+MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
+MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
 CAMERA_ANALYSIS_VERSION = "auto-face-v13"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
 CAMERA_ANALYSIS_MAX_FRAMES = 140
@@ -44,6 +46,7 @@ CAMERA_SAFE_X_MIN = 30.0
 CAMERA_SAFE_X_MAX = 70.0
 SMART_CAMERA_MODES = {
     "auto-director": "Auto Director",
+    "ai-director": "AI Director",
     "follow-face": "Seguir rosto",
     "stable-face": "Enquadramento estavel",
     "face-zoom": "Zoom no rosto",
@@ -566,6 +569,8 @@ def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, bas
     source_start = optional_camera_float(payload.get("source_start_seconds"))
     platform = str(payload.get("platform") or "tiktok")
     mode = normalize_camera_analysis_mode(payload.get("mode"))
+    title = clean_optional_text(payload.get("title"), 240)
+    transcript = clean_optional_text(payload.get("transcript"), 3500)
     last_analysis: dict[str, object] | None = None
     last_error = ""
     for media in camera_analysis_media_candidates(gallery_dir, clip_path, start, source_start):
@@ -575,7 +580,9 @@ def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, bas
             if isinstance(cached, dict) and isinstance(cached.get("camera_path"), list):
                 return {**cached, "ok": True, "cached": True}
         try:
-            analysis = opencv_face_camera_analysis(media.ref, media.start, duration, mode, media.kind, media.label)
+            analysis = opencv_face_camera_analysis(
+                media.ref, media.start, duration, mode, media.kind, media.label, platform, title, transcript
+            )
         except RuntimeError as error:
             last_error = str(error)
             continue
@@ -717,10 +724,15 @@ def safe_cache_stem(value: str) -> str:
 
 
 def opencv_face_camera_path(input_path: Path, start: float, duration: float) -> list[dict[str, object]]:
-    return opencv_face_camera_analysis(input_path, start, duration, "auto-director", "clip", Path(input_path).name)["camera_path"]
+    return opencv_face_camera_analysis(
+        input_path, start, duration, "auto-director", "clip", Path(input_path).name, "tiktok", "", ""
+    )["camera_path"]
 
 
-def opencv_face_camera_analysis(input_ref: Path | str, start: float, duration: float, mode: str, input_kind: str, label: str) -> dict[str, object]:
+def opencv_face_camera_analysis(
+    input_ref: Path | str, start: float, duration: float, mode: str, input_kind: str,
+    label: str, platform: str, title: str, transcript: str
+) -> dict[str, object]:
     cv2 = import_cv2()
     capture = cv2.VideoCapture(str(input_ref))
     if not capture.isOpened():
@@ -737,10 +749,22 @@ def opencv_face_camera_analysis(input_ref: Path | str, start: float, duration: f
         detections = opencv_face_detections(cv2, capture, cascade, safe_start, sample_times)
     finally:
         capture.release()
-    camera_path = smart_camera_path(detections, safe_duration, normalize_camera_analysis_mode(mode))
+    safe_mode = normalize_camera_analysis_mode(mode)
+    local_mode = "auto-director" if safe_mode == "ai-director" else safe_mode
+    camera_path = smart_camera_path(detections, safe_duration, local_mode)
     diagnostics = camera_analysis_diagnostics(input_kind, label, metadata, safe_start, safe_duration, sample_times, detections, camera_path)
+    source = f"auto-face-{local_mode}"
+    if safe_mode == "ai-director":
+        ai_result = ai_director_camera_result(
+            input_ref, safe_start, safe_duration, platform, title, transcript, metadata, detections, camera_path
+        )
+        diagnostics["ai_director"] = ai_result["diagnostics"]
+        if ai_result["camera_path"]:
+            camera_path = ai_result["camera_path"]
+            diagnostics["camera_keyframes"] = len(camera_path)
+            source = "ai-director"
     return {
-        "source": f"auto-face-{normalize_camera_analysis_mode(mode)}",
+        "source": source,
         "detected_faces": max((len(row.get("faces", [])) for row in detections), default=0),
         "detection_frames": len(detections),
         "diagnostics": diagnostics,
@@ -961,6 +985,147 @@ def smart_camera_path(detections: list[dict[str, object]], duration: float, mode
         path = multi_face_camera_path(detections, duration, smooth=False)
         return path or primary_face_camera_path(primary, "auto-face-follow-face", duration)
     return follow_face_camera_path(detections, primary, duration)
+
+
+def ai_director_camera_result(
+    input_ref: Path | str, start: float, duration: float, platform: str, title: str, transcript: str,
+    metadata: dict[str, object], detections: list[dict[str, object]], fallback_path: list[dict[str, object]]
+) -> dict[str, object]:
+    diagnostics: dict[str, object] = {"enabled": bool(openai_api_key()), "fallback": "auto-director"}
+    if not openai_api_key():
+        diagnostics["error"] = "OPENAI_API_KEY nao configurada."
+        return {"camera_path": [], "diagnostics": diagnostics}
+    try:
+        frames = ai_director_frame_samples(input_ref, start, duration)
+        payload = request_ai_director_path(platform, title, transcript, metadata, detections, fallback_path, frames, duration)
+        path = validated_ai_director_path(payload, duration)
+    except Exception as error:
+        diagnostics["error"] = str(error)
+        return {"camera_path": [], "diagnostics": diagnostics}
+    diagnostics.update({"frame_samples": len(frames), "summary": str(payload.get("summary") or "")[:220]})
+    return {"camera_path": path, "diagnostics": diagnostics}
+
+
+def ai_director_frame_samples(input_ref: Path | str, start: float, duration: float) -> list[dict[str, object]]:
+    cv2 = import_cv2()
+    capture = cv2.VideoCapture(str(input_ref))
+    if not capture.isOpened():
+        return []
+    try:
+        samples = []
+        for time_value in ai_director_sample_times(duration):
+            capture.set(0, (start + time_value) * 1000.0)
+            ok, frame = capture.read()
+            if ok and frame is not None:
+                samples.append({"time": time_value, "image_url": frame_to_jpeg_data_url(cv2, frame)})
+        return samples
+    finally:
+        capture.release()
+
+
+def ai_director_sample_times(duration: float) -> list[float]:
+    safe_duration = max(duration, 0.3)
+    count = min(6, max(3, int(math.ceil(safe_duration / 8.0)) + 1))
+    if count <= 1:
+        return [0.0]
+    return [round((safe_duration * index) / (count - 1), 3) for index in range(count)]
+
+
+def frame_to_jpeg_data_url(cv2: object, frame: object) -> str:
+    height, width = frame.shape[:2]
+    scale = min(1.0, 640.0 / max(width, height))
+    resized = cv2.resize(frame, (int(width * scale), int(height * scale))) if scale < 1.0 else frame
+    ok, buffer = cv2.imencode(".jpg", resized, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
+    if not ok:
+        raise RuntimeError("Nao foi possivel gerar frame para AI Director.")
+    return "data:image/jpeg;base64," + base64.b64encode(buffer.tobytes()).decode("ascii")
+
+
+def request_ai_director_path(
+    platform: str, title: str, transcript: str, metadata: dict[str, object],
+    detections: list[dict[str, object]], fallback_path: list[dict[str, object]],
+    frames: list[dict[str, object]], duration: float
+) -> dict[str, object]:
+    system = (
+        "Voce e o AI Director do CUTED. Crie uma camera_path curta para video social vertical. "
+        "Use os frames apenas para enquadramento e composicao; nao identifique pessoas. "
+        "Prefira movimentos poucos, seguros e profissionais. Responda somente no schema JSON."
+    )
+    user = ai_director_user_payload(platform, title, transcript, metadata, detections, fallback_path, duration)
+    return openai_vision_structured_response(system, user, frames, "cuted_ai_director", ai_director_schema(), "ai_director")
+
+
+def ai_director_user_payload(
+    platform: str, title: str, transcript: str, metadata: dict[str, object],
+    detections: list[dict[str, object]], fallback_path: list[dict[str, object]], duration: float
+) -> str:
+    return json.dumps({
+        "task": "Decida quando seguir rosto, abrir quadro, segurar, alternar ou fazer punch-in.",
+        "platform": platform if platform in PLATFORM_PRESETS else "tiktok",
+        "duration_seconds": round(duration, 3),
+        "title": title,
+        "transcript_excerpt": transcript[:2200],
+        "video": metadata,
+        "opencv_detections": compact_detection_preview(detections),
+        "local_auto_director_fallback": fallback_path[:16],
+        "rules": [
+            "x e y sao centros percentuais de crop, 0 a 100.",
+            "zoom deve ficar entre 1.0 e 1.45.",
+            "Use 3 a 12 keyframes; menos e melhor.",
+            "Sempre inclua um keyframe em time 0.",
+            "Segure bons enquadramentos por alguns segundos; evite tremedeira.",
+        ],
+    }, ensure_ascii=False)
+
+
+def ai_director_schema() -> dict[str, object]:
+    frame_schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "time": {"type": "number"},
+            "x": {"type": "number"},
+            "y": {"type": "number"},
+            "zoom": {"type": "number"},
+            "reason": {"type": "string"},
+        },
+        "required": ["time", "x", "y", "zoom", "reason"],
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {"summary": {"type": "string"}, "keyframes": {"type": "array", "items": frame_schema}},
+        "required": ["summary", "keyframes"],
+    }
+
+
+def validated_ai_director_path(payload: dict[str, object], duration: float) -> list[dict[str, object]]:
+    rows = payload.get("keyframes")
+    if not isinstance(rows, list):
+        raise RuntimeError("AI Director nao retornou keyframes.")
+    frames = [ai_director_frame_from_row(row, duration) for row in rows if isinstance(row, dict)]
+    frames = [frame for frame in frames if frame is not None]
+    if not frames:
+        raise RuntimeError("AI Director retornou camera vazia.")
+    frames = sorted(frames, key=lambda item: float(item["time"]))[:24]
+    if float(frames[0]["time"]) > 0.001:
+        frames.insert(0, {**frames[0], "time": 0.0})
+    return stable_camera_targets(frames)
+
+
+def ai_director_frame_from_row(row: dict[str, object], duration: float) -> dict[str, float] | None:
+    try:
+        time_value = clamp(float(row.get("time") or 0.0), 0.0, max(duration, 0.3))
+        return {
+            "time": round(time_value, 3),
+            "x": round(clamp(float(row.get("x") or 50.0), 12.0, 88.0), 2),
+            "y": round(clamp(float(row.get("y") or 50.0), 35.0, 65.0), 2),
+            "zoom": round(clamp(float(row.get("zoom") or 1.0), 1.0, 1.45), 3),
+            "source": "ai-director",
+            "confidence": 0.72,
+        }
+    except (TypeError, ValueError):
+        return None
 
 
 def auto_director_camera_path(detections: list[dict[str, object]], primary: list[dict[str, float]], duration: float) -> list[dict[str, object]]:
@@ -2385,7 +2550,7 @@ def camera_crop_x(camera: dict[str, object]) -> str:
         return crop_ratio_expr(0.78 + strength * 0.0012)
     if key == "alternate":
         amplitude = 0.12 + (strength / 100.0) * 0.22
-        return f"(iw-ow)*(0.5+{amplitude:.3f}*sin(2*PI*t/6))"
+        return f"(iw-ow)*{manual_alternate_ratio_expr(0.5 - amplitude, 0.5 + amplitude)}"
     if key == "jump-cut":
         left = 0.22 - strength * 0.0012
         right = 0.78 + strength * 0.0012
@@ -2395,6 +2560,23 @@ def camera_crop_x(camera: dict[str, object]) -> str:
 
 def crop_ratio_expr(ratio: float) -> str:
     return f"(iw-ow)*{clamp(ratio, 0.0, 1.0):.3f}"
+
+
+def manual_alternate_ratio_expr(left: float, right: float) -> str:
+    hold = MANUAL_ALTERNATE_HOLD_SECONDS
+    move = MANUAL_ALTERNATE_MOVE_SECONDS
+    cycle = (hold + move) * 2.0
+    left = clamp(left, 0.0, 1.0)
+    right = clamp(right, 0.0, 1.0)
+    shift = right - left
+    phase = f"mod(t\\,{cycle:.3f})"
+    ease_to_right = f"{left:.3f}+{shift:.3f}*(1-cos(PI*({phase}-{hold:.3f})/{move:.3f}))/2"
+    ease_to_left = f"{right:.3f}-{shift:.3f}*(1-cos(PI*({phase}-{hold + move + hold:.3f})/{move:.3f}))/2"
+    return (
+        f"if(lt({phase}\\,{hold:.3f})\\,{left:.3f}\\,"
+        f"if(lt({phase}\\,{hold + move:.3f})\\,{ease_to_right}\\,"
+        f"if(lt({phase}\\,{hold + move + hold:.3f})\\,{right:.3f}\\,{ease_to_left})))"
+    )
 
 
 def camera_zoom(camera: dict[str, object]) -> float:
@@ -2418,12 +2600,33 @@ def camera_x_percent(camera: dict[str, object], elapsed: float = 0.0) -> float:
         return clamp((0.78 + strength * 0.0012) * 100.0, 0.0, 100.0)
     if key == "alternate":
         amplitude = 0.12 + (strength / 100.0) * 0.22
-        return clamp((0.5 + amplitude * math.sin(2 * math.pi * elapsed / 6.0)) * 100.0, 0.0, 100.0)
+        return manual_alternate_x_percent(0.5 - amplitude, 0.5 + amplitude, elapsed)
     if key == "jump-cut":
         left = 0.22 - strength * 0.0012
         right = 0.78 + strength * 0.0012
         return clamp((left if elapsed % 6.0 < 3.0 else right) * 100.0, 0.0, 100.0)
     return 50.0
+
+
+def manual_alternate_x_percent(left: float, right: float, elapsed: float) -> float:
+    hold = MANUAL_ALTERNATE_HOLD_SECONDS
+    move = MANUAL_ALTERNATE_MOVE_SECONDS
+    cycle = (hold + move) * 2.0
+    phase = elapsed % cycle
+    if phase < hold:
+        ratio = left
+    elif phase < hold + move:
+        ratio = eased_ratio(left, right, (phase - hold) / move)
+    elif phase < hold + move + hold:
+        ratio = right
+    else:
+        ratio = eased_ratio(right, left, (phase - hold - move - hold) / move)
+    return clamp(ratio * 100.0, 0.0, 100.0)
+
+
+def eased_ratio(start: float, end: float, progress: float) -> float:
+    amount = (1.0 - math.cos(math.pi * clamp(progress, 0.0, 1.0))) / 2.0
+    return start + (end - start) * amount
 
 
 def camera_from_row(row: dict[str, object]) -> dict[str, object]:
@@ -3279,7 +3482,9 @@ def split_audio_for_openai(source: Path, ffmpeg: str) -> list[Path]:
     return chunks
 
 
-def openai_structured_response(system: str, user: str, schema_name: str, schema: dict[str, object]) -> dict[str, object]:
+def openai_structured_response(
+    system: str, user: str, schema_name: str, schema: dict[str, object], operation: str = "clip_selection"
+) -> dict[str, object]:
     model = openai_model()
     body = {
         "model": model,
@@ -3297,7 +3502,39 @@ def openai_structured_response(system: str, user: str, schema_name: str, schema:
         },
     }
     data = openai_json_request("https://api.openai.com/v1/responses", openai_api_key(), body)
-    record_openai_text_usage("clip_selection", model, data.get("usage"))
+    record_openai_text_usage(operation, model, data.get("usage"))
+    return parsed_openai_structured_response(data)
+
+
+def openai_vision_structured_response(
+    system: str, user: str, frames: list[dict[str, object]], schema_name: str,
+    schema: dict[str, object], operation: str
+) -> dict[str, object]:
+    model = openai_model()
+    content: list[dict[str, object]] = [{"type": "input_text", "text": user}]
+    for frame in frames[:8]:
+        content.append({"type": "input_image", "image_url": frame["image_url"], "detail": "low"})
+    body = {
+        "model": model,
+        "input": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": content},
+        ],
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": schema_name,
+                "strict": True,
+                "schema": schema,
+            }
+        },
+    }
+    data = openai_json_request("https://api.openai.com/v1/responses", openai_api_key(), body)
+    record_openai_text_usage(operation, model, data.get("usage"))
+    return parsed_openai_structured_response(data)
+
+
+def parsed_openai_structured_response(data: dict[str, object]) -> dict[str, object]:
     text = openai_output_text(data)
     parsed = json.loads(text)
     if not isinstance(parsed, dict):
@@ -4361,8 +4598,11 @@ const cameraMeta = {
   "soft-zoom": { label: "Zoom sutil", note: "Aproxima sem trocar o foco", x: 50, scale: 1.12 },
   "punch-in": { label: "Punch-in", note: "Mais fechado e energetico", x: 50, scale: 1.22 }
 };
+const manualAlternateHoldSeconds = 3.5;
+const manualAlternateMoveSeconds = 1.2;
 const smartCameraModes = {
   "auto-director": { label: "Auto Director", note: "Escolhe o enquadramento usando rosto principal e contexto multi-rosto", featured: true },
+  "ai-director": { label: "AI Director", note: "Usa OpenCV, frames e transcript para decidir direcao", featured: true },
   "follow-face": { label: "Seguir rosto", note: "Acompanha o rosto principal detectado" },
   "stable-face": { label: "Mais estavel", note: "Trava no enquadramento medio do rosto" },
   "face-zoom": { label: "Mais close", note: "Aproxima usando deteccao real" }
@@ -4528,7 +4768,7 @@ function cameraCropPercent(camera, elapsed = 0){
   if (current.key === "face-right") return clampNumber((0.78 + strength * 0.0012) * 100, 0, 100);
   if (current.key === "alternate") {
     const amplitude = 0.12 + (strength / 100) * 0.22;
-    return clampNumber((0.5 + amplitude * Math.sin(2 * Math.PI * Number(elapsed || 0) / 6)) * 100, 0, 100);
+    return manualAlternateCropPercent(0.5 - amplitude, 0.5 + amplitude, Number(elapsed || 0));
   }
   if (current.key === "jump-cut") {
     const left = 0.22 - strength * 0.0012;
@@ -4536,6 +4776,25 @@ function cameraCropPercent(camera, elapsed = 0){
     return clampNumber((Number(elapsed || 0) % 6 < 3 ? left : right) * 100, 0, 100);
   }
   return 50;
+}
+function manualAlternateCropPercent(left, right, elapsed){
+  const hold = manualAlternateHoldSeconds;
+  const move = manualAlternateMoveSeconds;
+  const cycle = (hold + move) * 2;
+  const phase = positiveModulo(elapsed, cycle);
+  let ratio = left;
+  if (phase < hold) ratio = left;
+  else if (phase < hold + move) ratio = easedCameraRatio(left, right, (phase - hold) / move);
+  else if (phase < hold + move + hold) ratio = right;
+  else ratio = easedCameraRatio(right, left, (phase - hold - move - hold) / move);
+  return clampNumber(ratio * 100, 0, 100);
+}
+function easedCameraRatio(start, end, progress){
+  const amount = (1 - Math.cos(Math.PI * clampNumber(progress, 0, 1))) / 2;
+  return start + (end - start) * amount;
+}
+function positiveModulo(value, size){
+  return ((Number(value || 0) % size) + size) % size;
 }
 function cameraScaleValue(camera){
   const current = normalizeSingleCamera(camera);
@@ -4695,6 +4954,8 @@ async function analyzeCameraForCard(card, mode = "auto-director"){
         platform,
         mode: smartMode,
         clip_file: moment?.clip_file || "",
+        title: moment?.title || "",
+        transcript: moment?.transcript || moment?.text || "",
         trim_start_seconds: values.trimStart,
         source_start_seconds: Number(moment?.start || 0) + values.trimStart,
         adjusted_duration: Math.max(values.endPos - values.startPos, .3)
@@ -4736,6 +4997,9 @@ function cameraDiagnosticsText(diagnostics){
   const edge = Number(diagnostics.edge_face_frames || 0);
   const size = width && height ? `${width}x${height}` : "video";
   const parts = [input, `${detected}/${samples} frames`, size, `${keyframes} keyframes`];
+  const ai = diagnostics.ai_director || {};
+  if (ai && ai.enabled) parts.push(ai.error ? "IA fallback local" : "IA aplicada");
+  if (ai && !ai.enabled && ai.error) parts.push("IA sem chave");
   if (multi) parts.splice(1, 0, `${multi} multi-face`);
   if (edge) parts.splice(2, 0, `${edge} borda`);
   return parts.join(" | ");

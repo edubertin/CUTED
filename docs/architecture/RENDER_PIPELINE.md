@@ -135,6 +135,11 @@ Supported smart modes:
   simultaneous faces are detected, inserts wider group/reaction framing without
   requiring the user to pick a manual multi-face preset. If faces approach the
   horizontal crop edge, it uses safe group framing to avoid cutting a speaker.
+- `ai-director`: optional hosted layer. It runs the local OpenCV analysis first,
+  sends compact diagnostics, a few low-detail sampled frames, transcript
+  context, and the local Auto Director path to OpenAI, then validates the
+  returned `camera_path`. If OpenAI is unavailable or the response is invalid,
+  the endpoint falls back to the local Auto Director path.
 - `follow-face`: tracks the primary face with smoothing, but also uses safe
   group framing when another detected face would be cut by the vertical crop.
 - `stable-face`: creates one stable median crop for the detected face.
@@ -168,6 +173,10 @@ produced keyframe count.
 These diagnostics are the first QA layer for deciding whether a bad camera
 result came from weak detection, a cropped/low-resolution analysis source, or
 path generation.
+
+AI Director diagnostics live under `diagnostics.ai_director` and should state
+whether OpenAI was enabled, whether a fallback was used, how many frames were
+sent, and a short summary when the model produced a valid path.
 
 ## Effects
 
