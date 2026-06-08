@@ -44,11 +44,15 @@ FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
 MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
 MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
-CAMERA_ANALYSIS_VERSION = "auto-face-v21"
+CAMERA_ANALYSIS_VERSION = "auto-face-v22"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
 CAMERA_ANALYSIS_MAX_FRAMES = 140
 CAMERA_UNCERTAIN_MIN_SECONDS = 0.85
-CAMERA_TWO_FAR_SPREAD = 30.0
+CAMERA_TWO_CLOSE_PAN_SPREAD = 16.0
+CAMERA_TWO_CLOSE_PAN_SPAN = 28.0
+CAMERA_SCENE_FIRST_CUT_SECONDS = 1.4
+CAMERA_HARD_CUT_MIN_HOLD_SECONDS = 3.8
+CAMERA_GROUP_ALTERNATE_MIN_HOLD_SECONDS = 3.3
 CAMERA_GROUP_FIT_SPREAD = 38.0
 CAMERA_GROUP_FIT_SPAN = 52.0
 AI_DIRECTOR_MAX_FRAME_SAMPLES = 10
@@ -1300,12 +1304,12 @@ def ai_director_rules(mode: str) -> list[str]:
         "Se 2 ou mais rostos ficariam fora do crop, reduza zoom e centralize entre os rostos.",
         "Use close em uma pessoa apenas quando os outros rostos nao estiverem visiveis ou nao importarem para a cena.",
         "Quando scene_direction.uncertain_windows indicar baixa deteccao, nao persiga rosto antigo; prefira plano aberto com blur.",
-        "Siga scene_direction.scene_intent_windows: solo=center, two_close=movimento suave, two_far=corte seco, group_close=alternar focos, group_fit=plano aberto com blur.",
+        "Siga scene_direction.scene_intent_windows: solo=center, two_close=movimento suave somente com rostos muito proximos, two_far=corte seco com holds longos, group_close=alternar focos com calma, group_fit=plano aberto com blur.",
     ]
     if ai_director_uses_hard_cuts(mode):
         rules.extend([
             "Este modo deve parecer corte seco: nao crie keyframes para pans graduais.",
-            "Prefira 2.5 a 4.5 segundos entre cortes, salvo mudanca clara de fala ou reacao.",
+            "Prefira 3.5 a 4.8 segundos entre cortes, salvo mudanca clara de fala ou reacao.",
             "Alterne entre close, grupo e reacao quando houver rostos confiaveis.",
             "Quando cortar para uma pessoa secundaria, volte para a pessoa principal depois de 2 a 3 segundos.",
             "Use as janelas em scene_direction.reaction_windows como candidatos preferenciais de corte.",
@@ -1442,8 +1446,8 @@ def camera_scene_intent_for_faces(faces: list[dict[str, float]], platform: str) 
     if should_use_group_fit_frame(faces, platform):
         return camera_scene_intent("group_fit", count, spread, span, "fit")
     if count == 2:
-        motion = "hard_cut" if camera_two_faces_are_far(faces, platform) else "smooth_pan"
-        intent = "two_far_cut" if motion == "hard_cut" else "two_close_pan"
+        motion = "smooth_pan" if camera_two_faces_are_close(faces, platform) else "hard_cut"
+        intent = "two_close_pan" if motion == "smooth_pan" else "two_far_cut"
         return camera_scene_intent(intent, count, spread, span, motion)
     return camera_scene_intent("group_close_alternate", count, spread, span, "focus_alternate")
 
@@ -1458,11 +1462,12 @@ def camera_scene_intent(intent: str, count: int, spread: float, span: float, mot
     }
 
 
-def camera_two_faces_are_far(faces: list[dict[str, float]], platform: str) -> bool:
+def camera_two_faces_are_close(faces: list[dict[str, float]], platform: str) -> bool:
     preset = PLATFORM_PRESETS.get(platform, PLATFORM_PRESETS["tiktok"])
     aspect = preset.width / max(preset.height, 1)
-    threshold = CAMERA_TWO_FAR_SPREAD if aspect < 0.95 else CAMERA_TWO_FAR_SPREAD + 8.0
-    return camera_face_spread(faces) >= threshold or camera_face_span(faces) >= threshold + 18.0
+    spread_limit = CAMERA_TWO_CLOSE_PAN_SPREAD + (4.0 if aspect >= 0.95 else 0.0)
+    span_limit = CAMERA_TWO_CLOSE_PAN_SPAN + (6.0 if aspect >= 0.95 else 0.0)
+    return camera_face_spread(faces) <= spread_limit and camera_face_span(faces) <= span_limit
 
 
 def camera_face_spread(faces: list[dict[str, float]]) -> float:
@@ -1725,29 +1730,54 @@ def scene_grammar_camera_frames(
 ) -> list[dict[str, object]]:
     frames: list[dict[str, object]] = []
     last_time = -999.0
+    last_intent = ""
     for row in detections:
         time_value = float(row.get("time") or 0.0)
-        if time_value > max(duration, 0.3) or time_value - last_time < 2.6:
+        intent = str(camera_scene_intent_for_row(row, platform)["intent"])
+        if scene_grammar_should_wait(time_value, duration, intent, last_time, last_intent):
             continue
-        target = scene_grammar_target_for_row(row, time_value, platform, hard_cut)
+        target = scene_grammar_target_for_row(row, time_value, platform, hard_cut, intent)
         if target is None or recent_similar_camera_frame(frames, target, 2.2):
             continue
         frames.append(target)
         last_time = time_value
+        last_intent = intent
     return frames
 
 
+def scene_grammar_should_wait(
+    time_value: float, duration: float, intent: str, last_time: float, last_intent: str
+) -> bool:
+    if time_value > max(duration, 0.3):
+        return True
+    if intent != "group_fit" and time_value < CAMERA_SCENE_FIRST_CUT_SECONDS:
+        return True
+    return time_value - last_time < camera_scene_min_hold(intent, last_intent)
+
+
 def scene_grammar_target_for_row(
-    row: dict[str, object], time_value: float, platform: str, hard_cut: bool
+    row: dict[str, object], time_value: float, platform: str, hard_cut: bool, intent: str | None = None
 ) -> dict[str, object] | None:
     faces = sorted(reliable_faces(row), key=face_x)
-    intent = str(camera_scene_intent_for_faces(faces, platform)["intent"])
+    intent = intent or str(camera_scene_intent_for_faces(faces, platform)["intent"])
     if intent == "group_fit":
         return forced_group_fit_frame(faces, time_value, platform, hard_cut)
     if intent not in {"two_far_cut", "group_close_alternate"}:
         return None
     source = "ai-director-cuts-reaction" if intent == "two_far_cut" or hard_cut else "ai-director-dense-reaction"
     return hard_cut_ai_director_frame(director_alternate_target(row, time_value, intent), time_value, source)
+
+
+def camera_scene_min_hold(intent: str, previous_intent: str) -> float:
+    if intent == "group_fit":
+        return 0.8
+    if intent == "two_far_cut":
+        return CAMERA_HARD_CUT_MIN_HOLD_SECONDS
+    if intent == "group_close_alternate":
+        return CAMERA_GROUP_ALTERNATE_MIN_HOLD_SECONDS
+    if previous_intent == "two_far_cut":
+        return CAMERA_HARD_CUT_MIN_HOLD_SECONDS
+    return 2.8
 
 
 def forced_group_fit_camera_frames(
@@ -1959,7 +1989,10 @@ def nearest_scene_row(time_value: float, rows: list[dict[str, object]]) -> dict[
 
 
 def camera_frames_are_similar(first: dict[str, object], second: dict[str, object]) -> bool:
-    return abs(float(first.get("x") or 50.0) - float(second.get("x") or 50.0)) < 5.0
+    return (
+        abs(float(first.get("x") or 50.0) - float(second.get("x") or 50.0)) < 7.0
+        and abs(float(first.get("zoom") or 1.0) - float(second.get("zoom") or 1.0)) < 0.035
+    )
 
 
 def hard_cut_ai_director_frame(
