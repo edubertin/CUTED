@@ -110,13 +110,26 @@ explicit path for the active platform, so preview and render cannot disagree.
 
 The local gallery server exposes `/api/camera/analyze` for optional OpenCV
 face-based reframing. The endpoint reads the selected clip, respects the
-current trim start and adjusted duration, samples frames, detects the primary
-face, smooths the result, and returns explicit `camera_path` keyframes with
-`source: auto-face`.
+current trim start and adjusted duration, samples frames, detects faces, and
+returns explicit `camera_path` keyframes.
+
+Supported smart modes:
+
+- `follow-face`: tracks the primary face with smoothing.
+- `stable-face`: creates one stable median crop for the detected face.
+- `face-zoom`: tracks the primary face with a tighter zoom.
+- `alternate-faces`: alternates smoothly between multiple detected faces when
+  available.
+- `cut-between-faces`: cuts between multiple detected faces when available.
+
+If a multi-face mode cannot find enough simultaneous faces, the endpoint falls
+back to the primary-face path instead of failing the edit. The older
+beginning/middle/end controls remain manual presets and are not treated as
+OpenCV-aware detection modes.
 
 The result is cached in `camera-analysis/` using the clip fingerprint, trim
-window, platform, and analysis version. If OpenCV is not installed, the endpoint
-returns a user-safe install message and manual camera editing remains
+window, platform, smart mode, and analysis version. If OpenCV is not installed,
+the endpoint returns a user-safe install message and manual camera editing remains
 available.
 
 ## Effects
