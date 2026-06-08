@@ -133,11 +133,18 @@ window, platform, smart mode, and analysis version. If OpenCV is not installed,
 the endpoint returns a user-safe install message and manual camera editing remains
 available.
 
+When `source_start_seconds` is provided and an import source can be resolved,
+Smart Camera analyzes the original source first and falls back to the generated
+preview clip only if source analysis cannot run or cannot find faces. This
+keeps the existing clip workflow compatible while letting newer imports use
+full source context.
+
 Every analysis response should include `diagnostics` with the analyzed media
-scope, dimensions, sample count, detection count, multi-face frame count,
-detection timing range, and produced keyframe count. These diagnostics are the
-first QA layer for deciding whether a bad camera result came from weak
-detection, a cropped analysis source, or path generation.
+scope (`source` or `clip`), dimensions, sample count, detection count,
+multi-face frame count, detection timing range, and produced keyframe count.
+These diagnostics are the first QA layer for deciding whether a bad camera
+result came from weak detection, a cropped/low-resolution analysis source, or
+path generation.
 
 ## Effects
 

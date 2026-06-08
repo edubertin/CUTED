@@ -159,7 +159,8 @@ operator edits, but they do not imply OpenCV detected the face position.
 Smart camera API responses may include a `diagnostics` object:
 
 ```text
-analysis_input        clip, source, or mapped-source
+source_start_seconds  optional absolute source timestamp requested by UI
+analysis_input        clip or source
 analysis_file         file name analyzed by OpenCV
 video_width           analyzed video width
 video_height          analyzed video height
@@ -177,6 +178,11 @@ last_detection_time   last relative detection time, nullable
 camera_keyframes      produced camera_path keyframe count
 detection_preview     compact first detections for QA/debugging
 ```
+
+When `source_start_seconds` is present, the server should prefer the import's
+original source media from `source_path`, `_source/`, or `source_url`. If that
+cannot be opened or no face is detected, it falls back to `clip_file` using
+`trim_start_seconds`.
 
 ## Overlay Contract
 
