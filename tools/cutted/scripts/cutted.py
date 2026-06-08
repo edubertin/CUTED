@@ -26,7 +26,7 @@ from types import SimpleNamespace
 
 BRAND_LOGO_FILE = "cuted-logo-transparent.png"
 RANGE_MEDIA_EXTENSIONS = {".m4v", ".mov", ".mp4", ".webm"}
-CAMERA_ANALYSIS_VERSION = "auto-face-v1"
+CAMERA_ANALYSIS_VERSION = "auto-face-v2"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.4
 CAMERA_ANALYSIS_MAX_FRAMES = 90
 SMART_CAMERA_MODES = {
@@ -548,7 +548,11 @@ def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, bas
     analysis = opencv_face_camera_analysis(input_path, start, duration, mode)
     camera_path = analysis["camera_path"]
     if not camera_path:
-        return {"ok": False, "error": "Nenhum rosto confiavel foi detectado. Mantive a camera atual."}
+        return {
+            "ok": False,
+            "error": "Nenhum rosto confiavel foi detectado. Mantive a camera atual.",
+            "diagnostics": analysis.get("diagnostics", {}),
+        }
     result = {
         "ok": True,
         "cached": False,
@@ -562,6 +566,7 @@ def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, bas
         "adjusted_duration": round(duration, 3),
         "detected_faces": analysis["detected_faces"],
         "detection_frames": analysis["detection_frames"],
+        "diagnostics": analysis.get("diagnostics", {}),
         "camera_path": camera_path,
     }
     cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -615,20 +620,24 @@ def opencv_face_camera_analysis(input_path: Path, start: float, duration: float,
     if not capture.isOpened():
         raise RuntimeError("OpenCV could not open the clip for camera analysis.")
     try:
-        video_duration = opencv_video_duration(capture)
+        metadata = opencv_video_metadata(capture)
+        video_duration = float(metadata["duration"])
         safe_start = min(max(start, 0.0), max(video_duration - 0.3, 0.0)) if video_duration else max(start, 0.0)
         safe_duration = duration
         if video_duration:
             safe_duration = min(duration, max(video_duration - safe_start, 0.3))
         cascade = opencv_face_cascade(cv2)
-        detections = opencv_face_detections(cv2, capture, cascade, safe_start, safe_duration)
+        sample_times = camera_sample_times(safe_duration)
+        detections = opencv_face_detections(cv2, capture, cascade, safe_start, sample_times)
     finally:
         capture.release()
     camera_path = smart_camera_path(detections, safe_duration, normalize_camera_analysis_mode(mode))
+    diagnostics = camera_analysis_diagnostics(input_path, metadata, safe_start, safe_duration, sample_times, detections, camera_path)
     return {
         "source": f"auto-face-{normalize_camera_analysis_mode(mode)}",
         "detected_faces": max((len(row.get("faces", [])) for row in detections), default=0),
         "detection_frames": len(detections),
+        "diagnostics": diagnostics,
         "camera_path": camera_path,
     }
 
@@ -641,10 +650,23 @@ def import_cv2():
     return cv2
 
 
-def opencv_video_duration(capture: object) -> float:
+def opencv_video_metadata(capture: object) -> dict[str, object]:
     fps = float(capture.get(5) or 0.0)
     frames = float(capture.get(7) or 0.0)
-    return frames / fps if fps > 0 and frames > 0 else 0.0
+    width = int(capture.get(3) or 0)
+    height = int(capture.get(4) or 0)
+    duration = frames / fps if fps > 0 and frames > 0 else 0.0
+    return {
+        "width": width,
+        "height": height,
+        "fps": round(fps, 3),
+        "frame_count": int(frames),
+        "duration": round(duration, 3),
+    }
+
+
+def opencv_video_duration(capture: object) -> float:
+    return float(opencv_video_metadata(capture)["duration"])
 
 
 def opencv_face_cascade(cv2: object) -> object:
@@ -655,10 +677,10 @@ def opencv_face_cascade(cv2: object) -> object:
     return cascade
 
 
-def opencv_face_detections(cv2: object, capture: object, cascade: object, start: float, duration: float) -> list[dict[str, object]]:
+def opencv_face_detections(cv2: object, capture: object, cascade: object, start: float, sample_times: list[float]) -> list[dict[str, object]]:
     detections: list[dict[str, object]] = []
     previous_x = 50.0
-    for relative_time in camera_sample_times(duration):
+    for relative_time in sample_times:
         capture.set(0, (start + relative_time) * 1000.0)
         ok, frame = capture.read()
         if not ok or frame is None:
@@ -671,6 +693,56 @@ def opencv_face_detections(cv2: object, capture: object, cascade: object, start:
             previous_x = float(primary["x"])
             detections.append({"time": round(relative_time, 3), "primary": primary, "faces": faces})
     return detections
+
+
+def camera_analysis_diagnostics(
+    input_path: Path,
+    metadata: dict[str, object],
+    start: float,
+    duration: float,
+    sample_times: list[float],
+    detections: list[dict[str, object]],
+    camera_path: list[dict[str, object]],
+) -> dict[str, object]:
+    sample_count = len(sample_times)
+    detection_frames = len(detections)
+    multi_face_frames = sum(1 for row in detections if len(row.get("faces", [])) > 1)
+    detected_faces = max((len(row.get("faces", [])) for row in detections), default=0)
+    detected_times = [float(row.get("time") or 0.0) for row in detections]
+    return {
+        "analysis_input": "clip",
+        "analysis_file": input_path.name,
+        "video_width": metadata.get("width", 0),
+        "video_height": metadata.get("height", 0),
+        "video_fps": metadata.get("fps", 0.0),
+        "video_duration": metadata.get("duration", 0.0),
+        "analysis_start": round(start, 3),
+        "analysis_duration": round(duration, 3),
+        "sample_count": sample_count,
+        "detection_frames": detection_frames,
+        "detection_rate": round(detection_frames / sample_count, 3) if sample_count else 0.0,
+        "detected_faces_max": detected_faces,
+        "multi_face_frames": multi_face_frames,
+        "first_detection_time": round(min(detected_times), 3) if detected_times else None,
+        "last_detection_time": round(max(detected_times), 3) if detected_times else None,
+        "camera_keyframes": len(camera_path),
+        "detection_preview": compact_detection_preview(detections),
+    }
+
+
+def compact_detection_preview(detections: list[dict[str, object]]) -> list[dict[str, object]]:
+    preview = []
+    for row in detections[:8]:
+        primary = row.get("primary") if isinstance(row.get("primary"), dict) else {}
+        preview.append({
+            "time": row.get("time", 0.0),
+            "faces": len(row.get("faces", [])),
+            "x": primary.get("x"),
+            "y": primary.get("y"),
+            "zoom": primary.get("zoom"),
+            "confidence": primary.get("confidence"),
+        })
+    return preview
 
 
 def camera_sample_times(duration: float) -> list[float]:
@@ -4252,13 +4324,18 @@ async function analyzeCameraForCard(card, mode = "follow-face"){
       })
     });
     const payload = await response.json();
-    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao analisar camera.");
+    const diagnosticText = cameraDiagnosticsText(payload.diagnostics);
+    if (!response.ok || !payload.ok) {
+      const detail = diagnosticText ? ` (${diagnosticText})` : "";
+      throw new Error(`${payload.error || "Falha ao analisar camera."}${detail}`);
+    }
     const path = normalizeCameraPath(payload.camera_path);
     if (!path.length) throw new Error("A analise nao retornou keyframes.");
     setSelectedCameraPathIndex(card, 0);
     setCameraPathForRank(rank, path, platform);
     const label = payload.mode_label || smartCameraModes[smartMode].label;
-    setCameraAutoStatus(card, payload.cached ? `${label} aplicado do cache.` : `${label} aplicado.`);
+    const suffix = diagnosticText ? ` (${diagnosticText})` : "";
+    setCameraAutoStatus(card, `${payload.cached ? `${label} aplicado do cache` : `${label} aplicado`}.${suffix}`);
   } catch (error) {
     setCameraAutoStatus(card, error.message || "Falha na auto camera.");
   } finally {
@@ -4269,6 +4346,19 @@ async function analyzeCameraForCard(card, mode = "follow-face"){
 function setCameraAutoStatus(card, message){
   const status = card.querySelector("[data-camera-auto-status]");
   if (status) status.textContent = message || "";
+}
+function cameraDiagnosticsText(diagnostics){
+  if (!diagnostics || typeof diagnostics !== "object") return "";
+  const samples = Number(diagnostics.sample_count || 0);
+  const detected = Number(diagnostics.detection_frames || 0);
+  const width = Number(diagnostics.video_width || 0);
+  const height = Number(diagnostics.video_height || 0);
+  const keyframes = Number(diagnostics.camera_keyframes || 0);
+  const multi = Number(diagnostics.multi_face_frames || 0);
+  const size = width && height ? `${width}x${height}` : "video";
+  const parts = [`${detected}/${samples} frames`, size, `${keyframes} keyframes`];
+  if (multi) parts.splice(1, 0, `${multi} multi-face`);
+  return parts.join(" | ");
 }
 function cameraFrameForTime(camera, cameraPath, position, duration){
   const path = normalizeCameraPath(cameraPath);

@@ -32,6 +32,8 @@ review workspace, data contracts, or render pipeline.
 | Camera path | Edit keyframe preset/strength | Preview updates for the active platform without changing other platforms |
 | Camera path | Reset to simple mode | Explicit path is cleared and preview returns to Inicio/Meio/Fim behavior |
 | Smart camera | Click each OpenCV smart mode | Face-based `camera_path` is applied to the active platform |
+| Smart camera | Inspect analysis status | Status includes sampled frames, detected frames, dimensions, and keyframe count |
+| Smart camera | Failed detection | Error keeps manual camera intact and includes diagnostic counts |
 | Smart camera | Use a multi-face mode on a single-face clip | It falls back to primary-face framing instead of breaking the edit |
 | Smart camera | Run without OpenCV | User-safe install message appears and manual camera controls still work |
 | Smart camera | Repeat the same mode/clip analysis | Cached `camera-analysis` result is reused |

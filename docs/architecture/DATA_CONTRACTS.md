@@ -156,6 +156,28 @@ The legacy camera presets (`center`, `face-left`, `alternate`, `jump-cut`, and
 similar) are manual controls. They may be used for compatibility and quick
 operator edits, but they do not imply OpenCV detected the face position.
 
+Smart camera API responses may include a `diagnostics` object:
+
+```text
+analysis_input        clip, source, or mapped-source
+analysis_file         file name analyzed by OpenCV
+video_width           analyzed video width
+video_height          analyzed video height
+video_fps             analyzed video frame rate
+video_duration        analyzed video duration
+analysis_start        seconds from analyzed media start
+analysis_duration     seconds analyzed
+sample_count          frames requested for analysis
+detection_frames      sampled frames with at least one face
+detection_rate        detection_frames / sample_count
+detected_faces_max    largest face count in one sampled frame
+multi_face_frames     sampled frames with two or more faces
+first_detection_time  first relative detection time, nullable
+last_detection_time   last relative detection time, nullable
+camera_keyframes      produced camera_path keyframe count
+detection_preview     compact first detections for QA/debugging
+```
+
 ## Overlay Contract
 
 `overlay` is the legacy single-overlay object. `overlays` is the current
