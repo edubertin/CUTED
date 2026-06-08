@@ -161,13 +161,19 @@ close-up on only one face. After the model response, a dense local protection
 pass scans OpenCV samples again and inserts mandatory keyframes when the active
 crop would cut a reliable face or when a platform-specific group frame is
 required. This keeps OpenAI in the editorial/director role while local detection
-remains the source of truth for crop safety.
+remains the source of truth for crop safety. When a vertical platform cannot fit
+the detected group inside the crop even at the widest camera zoom, the protection
+pass writes a `group-fit` frame. Final render treats that frame as a contained
+foreground over a blurred full-frame background, which is intentionally
+reversible by removing the `group-fit` source/`fit = contain` marker.
 
 AI Cuts post-processes the validated path with OpenCV scene roles. When a
 secondary face is reliable, it emits a principal -> reaction -> principal pattern
 instead of only spacing model keyframes. Group-risk frames still open to
 `ai-director-cuts-group-safe`. If scene roles are too weak, AI Cuts falls back to
 spacing validated model keyframes and marking their source as `ai-director-cuts`.
+Wide group-risk frames may become `ai-director-cuts-group-fit` so the dry cut
+lands on a full-group contained view instead of a cropped close-up.
 Final render already treats each `camera_path` keyframe as a trimmed segment;
 the browser preview should also hold these frames and disable CSS transition on
 the video element instead of interpolating or visually panning between them.

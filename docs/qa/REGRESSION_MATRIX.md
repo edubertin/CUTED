@@ -41,6 +41,7 @@ review workspace, data contracts, or render pipeline.
 | Smart camera | AI Director on different platforms | Payload includes platform viewport dimensions and safe crop notes |
 | Smart camera | Use AI Director on a three-person frame | Result opens to group-safe framing instead of holding a close-up on one person |
 | Smart camera | AI Director with a long multi-face gap | Dense protection adds intermediate keyframes and diagnostics show max gap/risk data |
+| Smart camera | AI Director on a wide two-person TikTok frame | Group-fit keyframe renders contained foreground over blurred background so both people remain visible |
 | Smart camera | Use Auto Director on multi-face footage | Output includes primary-face tracking plus occasional group/reaction framing when detections are reliable |
 | Smart camera | Use Auto Director when a face is near the vertical crop edge | Camera shifts or opens framing before the face remains cut for several seconds |
 | Smart camera | Use Follow face on edge-risk multi-face footage | Follow mode still uses safe group framing instead of locking to a false central target |

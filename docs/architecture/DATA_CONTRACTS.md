@@ -177,22 +177,25 @@ reset back to the simple camera mode.
 AI Director writes keyframes with `source = ai-director`,
 `ai-director-group`, `ai-director-speaker`, `ai-director-reactions`, or
 `ai-director-cuts`. Safety post-processing may also write
-`ai-director-group-safe` or `ai-director-cuts-group-safe`. These keyframes use
+`ai-director-group-safe`, `ai-director-cuts-group-safe`,
+`ai-director-group-fit`, or `ai-director-cuts-group-fit`. These keyframes use
 the same numeric render path as OpenCV keyframes and must be validated before
 storage: times are relative to the adjusted clip, `x`/`y` are crop-center
 percentages, and `zoom` is clamped to a safe social-video range. Group-safe
 sources mean the model result was opened by the local safety pass to keep
-visible faces inside the crop. `ai-director-cuts*` sources also tell the browser
-preview to hold each shot instead of interpolating between keyframes. AI Cuts
-payloads may include scene-direction hints derived from OpenCV, such as
-reaction windows and group windows; those hints are advisory and never replace
-the final validated `camera_path` contract. AI Director payloads also include a
-`platform_viewport` object with width, height, aspect ratio, orientation, and
-safe crop notes so platform-specific camera decisions can be made for 9:16, 4:5,
-and 16:9 outputs. After validation, local dense protection may add additional
-`ai-director-dense-primary`, `ai-director-group-safe`, or
-`ai-director-cuts-group-safe` frames when OpenCV samples show the active crop
-would cut a visible face.
+visible faces inside the crop. Group-fit sources include `fit = contain` and
+mean the platform crop cannot safely contain the visible group, so render should
+use a contained foreground over a blurred background. `ai-director-cuts*`
+sources also tell the browser preview to hold each shot instead of interpolating
+between keyframes. AI Cuts payloads may include scene-direction hints derived
+from OpenCV, such as reaction windows and group windows; those hints are
+advisory and never replace the final validated `camera_path` contract. AI
+Director payloads also include a `platform_viewport` object with width, height,
+aspect ratio, orientation, and safe crop notes so platform-specific camera
+decisions can be made for 9:16, 4:5, and 16:9 outputs. After validation, local
+dense protection may add additional `ai-director-dense-primary`,
+`ai-director-group-safe`, `ai-director-cuts-group-safe`, or group-fit frames
+when OpenCV samples show the active crop would cut a visible face.
 
 The legacy camera presets (`center`, `face-left`, `alternate`, `jump-cut`, and
 similar) are manual controls. They may be used for compatibility and quick
