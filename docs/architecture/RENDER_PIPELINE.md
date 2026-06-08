@@ -135,11 +135,22 @@ Supported smart modes:
   simultaneous faces are detected, inserts wider group/reaction framing without
   requiring the user to pick a manual multi-face preset. If faces approach the
   horizontal crop edge, it uses safe group framing to avoid cutting a speaker.
-- `ai-director`: optional hosted layer. It runs the local OpenCV analysis first,
-  sends compact diagnostics, a few low-detail sampled frames, transcript
-  context, and the local Auto Director path to OpenAI, then validates the
-  returned `camera_path`. If OpenAI is unavailable or the response is invalid,
-  the endpoint falls back to the local Auto Director path.
+- `ai-director`: optional hosted layer for dynamic editorial framing.
+- `ai-director-group`: optional hosted layer biased toward group/podcast
+  framing when multiple people are visible.
+- `ai-director-speaker`: optional hosted layer biased toward the likely active
+  speaker while keeping visible context inside the crop.
+- `ai-director-reactions`: optional hosted layer biased toward reaction cuts
+  and alternating visible people with pauses.
+
+All AI Director modes run the local OpenCV analysis first, send compact
+diagnostics, a few low-detail sampled frames, transcript context, an editorial
+intent, and the local Auto Director path to OpenAI, then validate the returned
+`camera_path`. If OpenAI is unavailable or the response is invalid, the
+endpoint falls back to the local Auto Director path. The validated result is
+also checked against OpenCV multi-face detections so scenes with three visible
+people, or two people at risk of being cropped, open to group-safe framing
+instead of holding a close-up on only one face.
 - `follow-face`: tracks the primary face with smoothing, but also uses safe
   group framing when another detected face would be cut by the vertical crop.
 - `stable-face`: creates one stable median crop for the detected face.
@@ -175,8 +186,9 @@ result came from weak detection, a cropped/low-resolution analysis source, or
 path generation.
 
 AI Director diagnostics live under `diagnostics.ai_director` and should state
-whether OpenAI was enabled, whether a fallback was used, how many frames were
-sent, and a short summary when the model produced a valid path.
+the selected intent, whether OpenAI was enabled, whether a fallback was used,
+how many frames were sent, and a short summary when the model produced a valid
+path.
 
 ## Effects
 

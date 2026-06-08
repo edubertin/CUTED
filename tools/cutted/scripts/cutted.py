@@ -39,19 +39,40 @@ FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
 MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
 MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
-CAMERA_ANALYSIS_VERSION = "auto-face-v13"
+CAMERA_ANALYSIS_VERSION = "auto-face-v14"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
 CAMERA_ANALYSIS_MAX_FRAMES = 140
 CAMERA_SAFE_X_MIN = 30.0
 CAMERA_SAFE_X_MAX = 70.0
 SMART_CAMERA_MODES = {
     "auto-director": "Auto Director",
-    "ai-director": "AI Director",
+    "ai-director": "AI Dinamico",
+    "ai-director-group": "AI Grupo",
+    "ai-director-speaker": "AI Fala",
+    "ai-director-reactions": "AI Reacoes",
     "follow-face": "Seguir rosto",
     "stable-face": "Enquadramento estavel",
     "face-zoom": "Zoom no rosto",
     "alternate-faces": "Alternar rostos",
     "cut-between-faces": "Corte entre rostos",
+}
+AI_DIRECTOR_INTENTS = {
+    "ai-director": {
+        "label": "Dinamico",
+        "priority": "Misture plano aberto, foco em quem fala, punch-in leve e reacoes sem cortar pessoas visiveis.",
+    },
+    "ai-director-group": {
+        "label": "Grupo / podcast",
+        "priority": "Priorize plano aberto quando houver 2 ou mais pessoas, com close apenas quando a cena estiver claramente individual.",
+    },
+    "ai-director-speaker": {
+        "label": "Quem fala",
+        "priority": "Priorize o rosto principal e pistas do transcript, mas abra o quadro quando outras pessoas estiverem visiveis.",
+    },
+    "ai-director-reactions": {
+        "label": "Reacoes",
+        "priority": "Alterne foco entre pessoas visiveis com pausas editoriais e use planos abertos para manter contexto.",
+    },
 }
 
 
@@ -622,6 +643,14 @@ def normalize_camera_analysis_mode(value: object) -> str:
     return key if key in SMART_CAMERA_MODES else "auto-director"
 
 
+def camera_analysis_uses_ai(mode: str) -> bool:
+    return mode in AI_DIRECTOR_INTENTS
+
+
+def ai_director_intent(mode: str) -> dict[str, str]:
+    return AI_DIRECTOR_INTENTS.get(mode, AI_DIRECTOR_INTENTS["ai-director"])
+
+
 def optional_camera_float(value: object) -> float | None:
     try:
         if value is None or value == "":
@@ -750,19 +779,19 @@ def opencv_face_camera_analysis(
     finally:
         capture.release()
     safe_mode = normalize_camera_analysis_mode(mode)
-    local_mode = "auto-director" if safe_mode == "ai-director" else safe_mode
+    local_mode = "auto-director" if camera_analysis_uses_ai(safe_mode) else safe_mode
     camera_path = smart_camera_path(detections, safe_duration, local_mode)
     diagnostics = camera_analysis_diagnostics(input_kind, label, metadata, safe_start, safe_duration, sample_times, detections, camera_path)
     source = f"auto-face-{local_mode}"
-    if safe_mode == "ai-director":
+    if camera_analysis_uses_ai(safe_mode):
         ai_result = ai_director_camera_result(
-            input_ref, safe_start, safe_duration, platform, title, transcript, metadata, detections, camera_path
+            input_ref, safe_start, safe_duration, platform, title, transcript, metadata, detections, camera_path, safe_mode
         )
         diagnostics["ai_director"] = ai_result["diagnostics"]
         if ai_result["camera_path"]:
             camera_path = ai_result["camera_path"]
             diagnostics["camera_keyframes"] = len(camera_path)
-            source = "ai-director"
+            source = safe_mode
     return {
         "source": source,
         "detected_faces": max((len(row.get("faces", [])) for row in detections), default=0),
@@ -989,20 +1018,25 @@ def smart_camera_path(detections: list[dict[str, object]], duration: float, mode
 
 def ai_director_camera_result(
     input_ref: Path | str, start: float, duration: float, platform: str, title: str, transcript: str,
-    metadata: dict[str, object], detections: list[dict[str, object]], fallback_path: list[dict[str, object]]
+    metadata: dict[str, object], detections: list[dict[str, object]], fallback_path: list[dict[str, object]], mode: str
 ) -> dict[str, object]:
     diagnostics: dict[str, object] = {"enabled": bool(openai_api_key()), "fallback": "auto-director"}
+    diagnostics["intent"] = ai_director_intent(mode)["label"]
     if not openai_api_key():
         diagnostics["error"] = "OPENAI_API_KEY nao configurada."
         return {"camera_path": [], "diagnostics": diagnostics}
     try:
         frames = ai_director_frame_samples(input_ref, start, duration)
-        payload = request_ai_director_path(platform, title, transcript, metadata, detections, fallback_path, frames, duration)
-        path = validated_ai_director_path(payload, duration)
+        payload = request_ai_director_path(platform, title, transcript, metadata, detections, fallback_path, frames, duration, mode)
+        path = protected_ai_director_path(validated_ai_director_path(payload, duration), detections, duration)
     except Exception as error:
         diagnostics["error"] = str(error)
         return {"camera_path": [], "diagnostics": diagnostics}
-    diagnostics.update({"frame_samples": len(frames), "summary": str(payload.get("summary") or "")[:220]})
+    diagnostics.update({
+        "frame_samples": len(frames),
+        "summary": str(payload.get("summary") or "")[:220],
+        "multi_face_coverage": ai_director_multi_face_coverage(detections),
+    })
     return {"camera_path": path, "diagnostics": diagnostics}
 
 
@@ -1044,29 +1078,34 @@ def frame_to_jpeg_data_url(cv2: object, frame: object) -> str:
 def request_ai_director_path(
     platform: str, title: str, transcript: str, metadata: dict[str, object],
     detections: list[dict[str, object]], fallback_path: list[dict[str, object]],
-    frames: list[dict[str, object]], duration: float
+    frames: list[dict[str, object]], duration: float, mode: str
 ) -> dict[str, object]:
+    intent = ai_director_intent(mode)
     system = (
         "Voce e o AI Director do CUTED. Crie uma camera_path curta para video social vertical. "
         "Use os frames apenas para enquadramento e composicao; nao identifique pessoas. "
+        f"Intencao editorial: {intent['label']}. {intent['priority']} "
         "Prefira movimentos poucos, seguros e profissionais. Responda somente no schema JSON."
     )
-    user = ai_director_user_payload(platform, title, transcript, metadata, detections, fallback_path, duration)
+    user = ai_director_user_payload(platform, title, transcript, metadata, detections, fallback_path, duration, mode)
     return openai_vision_structured_response(system, user, frames, "cuted_ai_director", ai_director_schema(), "ai_director")
 
 
 def ai_director_user_payload(
     platform: str, title: str, transcript: str, metadata: dict[str, object],
-    detections: list[dict[str, object]], fallback_path: list[dict[str, object]], duration: float
+    detections: list[dict[str, object]], fallback_path: list[dict[str, object]], duration: float, mode: str
 ) -> str:
+    intent = ai_director_intent(mode)
     return json.dumps({
-        "task": "Decida quando seguir rosto, abrir quadro, segurar, alternar ou fazer punch-in.",
+        "task": "Decida quando focar uma pessoa, quando abrir para grupo, quando segurar, alternar ou fazer punch-in.",
+        "editorial_intent": intent,
         "platform": platform if platform in PLATFORM_PRESETS else "tiktok",
         "duration_seconds": round(duration, 3),
         "title": title,
         "transcript_excerpt": transcript[:2200],
         "video": metadata,
-        "opencv_detections": compact_detection_preview(detections),
+        "opencv_detection_summary": ai_director_detection_summary(detections),
+        "opencv_detections": ai_director_detection_context(detections),
         "local_auto_director_fallback": fallback_path[:16],
         "rules": [
             "x e y sao centros percentuais de crop, 0 a 100.",
@@ -1074,8 +1113,80 @@ def ai_director_user_payload(
             "Use 3 a 12 keyframes; menos e melhor.",
             "Sempre inclua um keyframe em time 0.",
             "Segure bons enquadramentos por alguns segundos; evite tremedeira.",
+            "Se 3 pessoas aparecem no mesmo frame, priorize plano aberto de grupo, nao close em uma so pessoa.",
+            "Se 2 ou mais rostos ficariam fora do crop, reduza zoom e centralize entre os rostos.",
+            "Use close em uma pessoa apenas quando os outros rostos nao estiverem visiveis ou nao importarem para a cena.",
         ],
     }, ensure_ascii=False)
+
+
+def ai_director_detection_summary(detections: list[dict[str, object]]) -> dict[str, object]:
+    rows = [ai_director_detection_row(row) for row in detections if reliable_faces(row)]
+    multi = [row for row in rows if int(row["face_count"]) >= 2]
+    group = [row for row in rows if int(row["face_count"]) >= 3 or float(row["spread"]) >= 24.0]
+    return {
+        "sampled_detection_frames": len(rows),
+        "multi_face_frames": len(multi),
+        "group_priority_frames": len(group),
+        "multi_face_coverage": ai_director_multi_face_coverage(detections),
+        "max_faces": max((int(row["face_count"]) for row in rows), default=0),
+        "group_intervals": ai_director_group_intervals(rows),
+    }
+
+
+def ai_director_detection_context(detections: list[dict[str, object]]) -> list[dict[str, object]]:
+    rows = [ai_director_detection_row(row) for row in detections if reliable_faces(row)]
+    if len(rows) <= 18:
+        return rows
+    step = max(1, int(math.ceil(len(rows) / 18.0)))
+    return rows[::step][:18]
+
+
+def ai_director_detection_row(row: dict[str, object]) -> dict[str, object]:
+    faces = sorted(reliable_faces(row), key=lambda item: face_x(item))
+    xs = [round(face_x(face), 2) for face in faces[:5]]
+    primary = row.get("primary") if isinstance(row.get("primary"), dict) else {}
+    return {
+        "time": round(float(row.get("time") or 0.0), 3),
+        "face_count": len(faces),
+        "spread": round(xs[-1] - xs[0], 2) if len(xs) >= 2 else 0.0,
+        "face_xs": xs,
+        "face_ys": [round(float(face.get("y") or 50.0), 2) for face in faces[:5]],
+        "face_zooms": [round(float(face.get("zoom") or 1.0), 3) for face in faces[:5]],
+        "primary_x": round(float(primary.get("x") or 50.0), 2),
+        "group_priority": len(faces) >= 3 or should_use_group_frame(faces),
+        "edge_risk": any(face_outside_safe_zone(face) for face in faces),
+    }
+
+
+def ai_director_group_intervals(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    intervals: list[dict[str, object]] = []
+    start: float | None = None
+    end = 0.0
+    max_faces = 0
+    for row in rows:
+        time_value = float(row["time"])
+        priority = bool(row["group_priority"])
+        if priority and start is None:
+            start = time_value
+            max_faces = int(row["face_count"])
+        if priority:
+            end = time_value
+            max_faces = max(max_faces, int(row["face_count"]))
+        elif start is not None:
+            intervals.append({"start": round(start, 3), "end": round(end, 3), "max_faces": max_faces})
+            start = None
+            max_faces = 0
+    if start is not None:
+        intervals.append({"start": round(start, 3), "end": round(end, 3), "max_faces": max_faces})
+    return intervals[:6]
+
+
+def ai_director_multi_face_coverage(detections: list[dict[str, object]]) -> float:
+    if not detections:
+        return 0.0
+    multi = sum(1 for row in detections if len(reliable_faces(row)) >= 2)
+    return round(multi / len(detections), 3)
 
 
 def ai_director_schema() -> dict[str, object]:
@@ -1111,6 +1222,60 @@ def validated_ai_director_path(payload: dict[str, object], duration: float) -> l
     if float(frames[0]["time"]) > 0.001:
         frames.insert(0, {**frames[0], "time": 0.0})
     return stable_camera_targets(frames)
+
+
+def protected_ai_director_path(
+    frames: list[dict[str, object]], detections: list[dict[str, object]], duration: float
+) -> list[dict[str, object]]:
+    protected: list[dict[str, object]] = []
+    for frame in frames:
+        safe = protected_ai_director_frame(frame, detections)
+        protected.append(safe)
+    return stable_camera_targets(compressed_camera_path(protected, duration, max_gap=2.6, x_threshold=1.4, zoom_threshold=0.012))
+
+
+def protected_ai_director_frame(frame: dict[str, object], detections: list[dict[str, object]]) -> dict[str, object]:
+    time_value = float(frame.get("time") or 0.0)
+    nearest = nearest_detection(time_value, detections)
+    if nearest is None:
+        return frame
+    faces = sorted(reliable_faces(nearest), key=lambda item: face_x(item))
+    if not faces or not ai_frame_needs_group_protection(frame, faces):
+        return frame
+    group = group_face_frame(faces, time_value)
+    return {
+        **frame,
+        "x": round(float(group["x"]), 2),
+        "y": round(float(group["y"]), 2),
+        "zoom": round(min(float(frame.get("zoom") or 1.0), float(group["zoom"])), 3),
+        "source": "ai-director-group-safe",
+        "confidence": max(float(frame.get("confidence") or 0.72), float(group.get("confidence") or 0.72)),
+    }
+
+
+def nearest_detection(time_value: float, detections: list[dict[str, object]]) -> dict[str, object] | None:
+    candidates = [row for row in detections if reliable_faces(row)]
+    if not candidates:
+        return None
+    nearest = min(candidates, key=lambda row: abs(float(row.get("time") or 0.0) - time_value))
+    return nearest if abs(float(nearest.get("time") or 0.0) - time_value) <= 2.6 else None
+
+
+def ai_frame_needs_group_protection(frame: dict[str, object], faces: list[dict[str, float]]) -> bool:
+    if len(faces) >= 3:
+        return True
+    if len(faces) < 2:
+        return False
+    return should_use_group_frame(faces) or camera_frame_cuts_faces(frame, faces)
+
+
+def camera_frame_cuts_faces(frame: dict[str, object], faces: list[dict[str, float]]) -> bool:
+    center = clamp(float(frame.get("x") or 50.0), 0.0, 100.0)
+    zoom = clamp(float(frame.get("zoom") or 1.0), 1.0, 1.45)
+    half_width = max(24.0, 50.0 / zoom)
+    left = center - half_width + 5.0
+    right = center + half_width - 5.0
+    return any(face_x(face) < left or face_x(face) > right for face in faces)
 
 
 def ai_director_frame_from_row(row: dict[str, object], duration: float) -> dict[str, float] | None:
@@ -4602,7 +4767,10 @@ const manualAlternateHoldSeconds = 3.5;
 const manualAlternateMoveSeconds = 1.2;
 const smartCameraModes = {
   "auto-director": { label: "Auto Director", note: "Escolhe o enquadramento usando rosto principal e contexto multi-rosto", featured: true },
-  "ai-director": { label: "AI Director", note: "Usa OpenCV, frames e transcript para decidir direcao", featured: true },
+  "ai-director": { label: "AI Dinamico", note: "Mistura grupo, foco, punch-in e reacoes com OpenCV + IA", featured: true },
+  "ai-director-group": { label: "AI Grupo", note: "Preserva duas ou mais pessoas antes de fechar em close" },
+  "ai-director-speaker": { label: "AI Fala", note: "Prioriza quem parece conduzir o trecho sem cortar contexto" },
+  "ai-director-reactions": { label: "AI Reacoes", note: "Alterna foco entre pessoas visiveis com pausas editoriais" },
   "follow-face": { label: "Seguir rosto", note: "Acompanha o rosto principal detectado" },
   "stable-face": { label: "Mais estavel", note: "Trava no enquadramento medio do rosto" },
   "face-zoom": { label: "Mais close", note: "Aproxima usando deteccao real" }
@@ -4998,7 +5166,8 @@ function cameraDiagnosticsText(diagnostics){
   const size = width && height ? `${width}x${height}` : "video";
   const parts = [input, `${detected}/${samples} frames`, size, `${keyframes} keyframes`];
   const ai = diagnostics.ai_director || {};
-  if (ai && ai.enabled) parts.push(ai.error ? "IA fallback local" : "IA aplicada");
+  const intent = ai && ai.intent ? `IA ${ai.intent}` : "IA";
+  if (ai && ai.enabled) parts.push(ai.error ? `${intent} fallback local` : `${intent} aplicada`);
   if (ai && !ai.enabled && ai.error) parts.push("IA sem chave");
   if (multi) parts.splice(1, 0, `${multi} multi-face`);
   if (edge) parts.splice(2, 0, `${edge} borda`);
