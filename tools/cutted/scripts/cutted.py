@@ -26,7 +26,7 @@ from types import SimpleNamespace
 
 BRAND_LOGO_FILE = "cuted-logo-transparent.png"
 RANGE_MEDIA_EXTENSIONS = {".m4v", ".mov", ".mp4", ".webm"}
-CAMERA_ANALYSIS_VERSION = "auto-face-v2"
+CAMERA_ANALYSIS_VERSION = "auto-face-v3"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.4
 CAMERA_ANALYSIS_MAX_FRAMES = 90
 SMART_CAMERA_MODES = {
@@ -115,6 +115,15 @@ class SourceMedia:
     transcribe_source: Path | str
     label: str
     cleanup_paths: tuple[Path, ...]
+
+
+@dataclass(frozen=True)
+class CameraAnalysisMedia:
+    ref: Path | str
+    cache_key: str
+    label: str
+    kind: str
+    start: float
 
 
 @dataclass(frozen=True)
@@ -535,48 +544,68 @@ def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, bas
     clip_file = clean_optional_text(payload.get("clip_file"), 1000)
     if not clip_file:
         raise ValueError("Missing clip_file.")
-    input_path = resolve_request_media_path(gallery_dir, clip_file)
+    clip_path = resolve_request_media_path(gallery_dir, clip_file)
     start = max(0.0, float(payload.get("trim_start_seconds") or 0.0))
     duration = max(0.3, float(payload.get("adjusted_duration") or payload.get("duration") or 0.0))
+    source_start = optional_camera_float(payload.get("source_start_seconds"))
     platform = str(payload.get("platform") or "tiktok")
     mode = normalize_camera_analysis_mode(payload.get("mode"))
-    cache_path = camera_analysis_cache_path(gallery_dir, input_path, start, duration, platform, mode)
-    if cache_path.exists():
-        cached = json.loads(cache_path.read_text(encoding="utf-8-sig"))
-        if isinstance(cached, dict) and isinstance(cached.get("camera_path"), list):
-            return {**cached, "ok": True, "cached": True}
-    analysis = opencv_face_camera_analysis(input_path, start, duration, mode)
-    camera_path = analysis["camera_path"]
-    if not camera_path:
-        return {
-            "ok": False,
-            "error": "Nenhum rosto confiavel foi detectado. Mantive a camera atual.",
-            "diagnostics": analysis.get("diagnostics", {}),
-        }
-    result = {
-        "ok": True,
-        "cached": False,
-        "version": CAMERA_ANALYSIS_VERSION,
-        "source": analysis["source"],
-        "mode": mode,
-        "mode_label": SMART_CAMERA_MODES[mode],
-        "platform": platform,
-        "clip_file": clip_file,
-        "trim_start_seconds": round(start, 3),
-        "adjusted_duration": round(duration, 3),
-        "detected_faces": analysis["detected_faces"],
-        "detection_frames": analysis["detection_frames"],
-        "diagnostics": analysis.get("diagnostics", {}),
-        "camera_path": camera_path,
+    last_analysis: dict[str, object] | None = None
+    last_error = ""
+    for media in camera_analysis_media_candidates(gallery_dir, clip_path, start, source_start):
+        cache_path = camera_analysis_cache_path(gallery_dir, media, duration, platform, mode)
+        if cache_path.exists():
+            cached = json.loads(cache_path.read_text(encoding="utf-8-sig"))
+            if isinstance(cached, dict) and isinstance(cached.get("camera_path"), list):
+                return {**cached, "ok": True, "cached": True}
+        try:
+            analysis = opencv_face_camera_analysis(media.ref, media.start, duration, mode, media.kind, media.label)
+        except RuntimeError as error:
+            last_error = str(error)
+            continue
+        last_analysis = analysis
+        camera_path = analysis["camera_path"]
+        if camera_path:
+            result = {
+                "ok": True,
+                "cached": False,
+                "version": CAMERA_ANALYSIS_VERSION,
+                "source": analysis["source"],
+                "mode": mode,
+                "mode_label": SMART_CAMERA_MODES[mode],
+                "platform": platform,
+                "clip_file": clip_file,
+                "trim_start_seconds": round(start, 3),
+                "source_start_seconds": round(media.start, 3) if media.kind == "source" else None,
+                "adjusted_duration": round(duration, 3),
+                "detected_faces": analysis["detected_faces"],
+                "detection_frames": analysis["detection_frames"],
+                "diagnostics": analysis.get("diagnostics", {}),
+                "camera_path": camera_path,
+            }
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            cache_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+            return result
+    diagnostics = last_analysis.get("diagnostics", {}) if last_analysis else {"analysis_error": last_error}
+    return {
+        "ok": False,
+        "error": "Nenhum rosto confiavel foi detectado. Mantive a camera atual.",
+        "diagnostics": diagnostics,
     }
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    return result
 
 
 def normalize_camera_analysis_mode(value: object) -> str:
     key = str(value or "follow-face").strip()
     return key if key in SMART_CAMERA_MODES else "follow-face"
+
+
+def optional_camera_float(value: object) -> float | None:
+    try:
+        if value is None or value == "":
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def resolve_request_media_path(gallery_dir: Path, clip_file: str) -> Path:
@@ -591,15 +620,69 @@ def resolve_request_media_path(gallery_dir: Path, clip_file: str) -> Path:
     return candidate
 
 
-def camera_analysis_cache_path(gallery_dir: Path, input_path: Path, start: float, duration: float, platform: str, mode: str) -> Path:
-    stat = input_path.stat()
+def camera_analysis_media_candidates(
+    gallery_dir: Path, clip_path: Path, clip_start: float, source_start: float | None
+) -> list[CameraAnalysisMedia]:
+    candidates: list[CameraAnalysisMedia] = []
+    source_media = resolve_camera_source_media(gallery_dir)
+    if source_media and source_start is not None:
+        candidates.append(CameraAnalysisMedia(source_media.ref, source_media.cache_key, source_media.label, "source", max(source_start, 0.0)))
+    candidates.append(CameraAnalysisMedia(clip_path, local_media_cache_key(clip_path), clip_path.name, "clip", clip_start))
+    return candidates
+
+
+def resolve_camera_source_media(gallery_dir: Path) -> CameraAnalysisMedia | None:
+    metadata = read_import_metadata(gallery_dir)
+    local = local_camera_source_media(metadata.get("source_path"))
+    if local:
+        return local
+    local = source_folder_camera_media(gallery_dir)
+    if local:
+        return local
+    source_url = str(metadata.get("source_url") or "").strip()
+    if source_url.startswith(("http://", "https://")):
+        try:
+            render_url = youtube_render_url(source_url)
+        except (subprocess.SubprocessError, RuntimeError, OSError):
+            return None
+        return CameraAnalysisMedia(render_url, f"url:{source_url}", "YouTube source", "source", 0.0)
+    return None
+
+
+def local_camera_source_media(value: object) -> CameraAnalysisMedia | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    path = Path(raw).expanduser()
+    if not path.exists() or not path.is_file() or path.suffix.lower() not in RANGE_MEDIA_EXTENSIONS:
+        return None
+    resolved = path.resolve()
+    return CameraAnalysisMedia(resolved, local_media_cache_key(resolved), resolved.name, "source", 0.0)
+
+
+def source_folder_camera_media(gallery_dir: Path) -> CameraAnalysisMedia | None:
+    source_dir = gallery_dir / "_source"
+    if not source_dir.exists():
+        return None
+    videos = sorted(path for path in source_dir.iterdir() if path.is_file() and path.suffix.lower() in RANGE_MEDIA_EXTENSIONS)
+    if not videos:
+        return None
+    resolved = videos[0].resolve()
+    return CameraAnalysisMedia(resolved, local_media_cache_key(resolved), resolved.name, "source", 0.0)
+
+
+def local_media_cache_key(path: Path) -> str:
+    stat = path.stat()
+    return json.dumps({"path": str(path.resolve()), "mtime": stat.st_mtime, "size": stat.st_size}, sort_keys=True)
+
+
+def camera_analysis_cache_path(gallery_dir: Path, media: CameraAnalysisMedia, duration: float, platform: str, mode: str) -> Path:
     fingerprint = json.dumps(
         {
             "version": CAMERA_ANALYSIS_VERSION,
-            "path": str(input_path.resolve()),
-            "mtime": stat.st_mtime,
-            "size": stat.st_size,
-            "start": round(start, 3),
+            "media": media.cache_key,
+            "kind": media.kind,
+            "start": round(media.start, 3),
             "duration": round(duration, 3),
             "platform": platform,
             "mode": mode,
@@ -607,18 +690,25 @@ def camera_analysis_cache_path(gallery_dir: Path, input_path: Path, start: float
         sort_keys=True,
     )
     digest = hashlib.sha1(fingerprint.encode("utf-8")).hexdigest()[:16]
-    return gallery_dir / "camera-analysis" / f"{input_path.stem}-{platform}-{mode}-{digest}.json"
+    stem = safe_cache_stem(media.label)
+    return gallery_dir / "camera-analysis" / f"{stem}-{media.kind}-{platform}-{mode}-{digest}.json"
+
+
+def safe_cache_stem(value: str) -> str:
+    stem = Path(value).stem or "media"
+    clean = re.sub(r"[^a-zA-Z0-9_.-]+", "-", stem).strip("-")
+    return clean[:48] or "media"
 
 
 def opencv_face_camera_path(input_path: Path, start: float, duration: float) -> list[dict[str, object]]:
-    return opencv_face_camera_analysis(input_path, start, duration, "follow-face")["camera_path"]
+    return opencv_face_camera_analysis(input_path, start, duration, "follow-face", "clip", Path(input_path).name)["camera_path"]
 
 
-def opencv_face_camera_analysis(input_path: Path, start: float, duration: float, mode: str) -> dict[str, object]:
+def opencv_face_camera_analysis(input_ref: Path | str, start: float, duration: float, mode: str, input_kind: str, label: str) -> dict[str, object]:
     cv2 = import_cv2()
-    capture = cv2.VideoCapture(str(input_path))
+    capture = cv2.VideoCapture(str(input_ref))
     if not capture.isOpened():
-        raise RuntimeError("OpenCV could not open the clip for camera analysis.")
+        raise RuntimeError(f"OpenCV could not open the {input_kind} for camera analysis.")
     try:
         metadata = opencv_video_metadata(capture)
         video_duration = float(metadata["duration"])
@@ -632,7 +722,7 @@ def opencv_face_camera_analysis(input_path: Path, start: float, duration: float,
     finally:
         capture.release()
     camera_path = smart_camera_path(detections, safe_duration, normalize_camera_analysis_mode(mode))
-    diagnostics = camera_analysis_diagnostics(input_path, metadata, safe_start, safe_duration, sample_times, detections, camera_path)
+    diagnostics = camera_analysis_diagnostics(input_kind, label, metadata, safe_start, safe_duration, sample_times, detections, camera_path)
     return {
         "source": f"auto-face-{normalize_camera_analysis_mode(mode)}",
         "detected_faces": max((len(row.get("faces", [])) for row in detections), default=0),
@@ -696,7 +786,8 @@ def opencv_face_detections(cv2: object, capture: object, cascade: object, start:
 
 
 def camera_analysis_diagnostics(
-    input_path: Path,
+    input_kind: str,
+    label: str,
     metadata: dict[str, object],
     start: float,
     duration: float,
@@ -710,8 +801,8 @@ def camera_analysis_diagnostics(
     detected_faces = max((len(row.get("faces", [])) for row in detections), default=0)
     detected_times = [float(row.get("time") or 0.0) for row in detections]
     return {
-        "analysis_input": "clip",
-        "analysis_file": input_path.name,
+        "analysis_input": input_kind,
+        "analysis_file": label,
         "video_width": metadata.get("width", 0),
         "video_height": metadata.get("height", 0),
         "video_fps": metadata.get("fps", 0.0),
@@ -4320,6 +4411,7 @@ async function analyzeCameraForCard(card, mode = "follow-face"){
         mode: smartMode,
         clip_file: moment?.clip_file || "",
         trim_start_seconds: values.trimStart,
+        source_start_seconds: Number(moment?.start || 0) + values.trimStart,
         adjusted_duration: Math.max(values.endPos - values.startPos, .3)
       })
     });
@@ -4354,9 +4446,10 @@ function cameraDiagnosticsText(diagnostics){
   const width = Number(diagnostics.video_width || 0);
   const height = Number(diagnostics.video_height || 0);
   const keyframes = Number(diagnostics.camera_keyframes || 0);
+  const input = diagnostics.analysis_input === "source" ? "source" : "clip";
   const multi = Number(diagnostics.multi_face_frames || 0);
   const size = width && height ? `${width}x${height}` : "video";
-  const parts = [`${detected}/${samples} frames`, size, `${keyframes} keyframes`];
+  const parts = [input, `${detected}/${samples} frames`, size, `${keyframes} keyframes`];
   if (multi) parts.splice(1, 0, `${multi} multi-face`);
   return parts.join(" | ");
 }

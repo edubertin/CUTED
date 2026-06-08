@@ -1446,6 +1446,7 @@ async function analyzeCameraForCard(card, mode = "follow-face"){
         mode: smartMode,
         clip_file: moment?.clip_file || "",
         trim_start_seconds: values.trimStart,
+        source_start_seconds: Number(moment?.start || 0) + values.trimStart,
         adjusted_duration: Math.max(values.endPos - values.startPos, .3)
       })
     });
@@ -1480,9 +1481,10 @@ function cameraDiagnosticsText(diagnostics){
   const width = Number(diagnostics.video_width || 0);
   const height = Number(diagnostics.video_height || 0);
   const keyframes = Number(diagnostics.camera_keyframes || 0);
+  const input = diagnostics.analysis_input === "source" ? "source" : "clip";
   const multi = Number(diagnostics.multi_face_frames || 0);
   const size = width && height ? `${width}x${height}` : "video";
-  const parts = [`${detected}/${samples} frames`, size, `${keyframes} keyframes`];
+  const parts = [input, `${detected}/${samples} frames`, size, `${keyframes} keyframes`];
   if (multi) parts.splice(1, 0, `${multi} multi-face`);
   return parts.join(" | ");
 }

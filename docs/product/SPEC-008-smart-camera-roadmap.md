@@ -39,8 +39,9 @@ face detection, tracking, and source-aware analysis.
 ## Acceptance Criteria
 
 - Smart Camera responses include diagnostic evidence.
+- Smart Camera prefers source footage when `source_start_seconds` and source
+  media are available, with clip fallback.
 - The UI explains whether detection was weak, single-face, or multi-face.
 - Multi-face modes do not silently behave like single-face mode without status.
 - Manual camera controls remain available for recovery.
 - Final render continues using `camera_path` as the source of truth.
-
