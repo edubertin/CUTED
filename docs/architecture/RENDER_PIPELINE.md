@@ -168,7 +168,9 @@ foreground over a blurred full-frame background, which is intentionally
 reversible by removing the `group-fit` source/`fit = contain` marker. The v19
 safety fallback also forces group-fit when a second pass still finds multi-face
 risk after dense protection, with extra attention to the final seconds of the
-clip.
+clip. Browser preview mirrors this composition with a muted synchronized
+background video so the editor does not show raw black letterbox bars for
+contained group shots.
 
 AI Cuts post-processes the validated path with OpenCV scene roles. When a
 secondary face is reliable, it emits a principal -> reaction -> principal pattern
