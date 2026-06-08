@@ -15,11 +15,14 @@ face detection, tracking, and source-aware analysis.
 
 ## Smart Camera Modes
 
+- Auto Director: default mode. Follows the primary face and inserts wider
+  reaction/group framing when multi-face context is reliable.
 - Follow main face.
 - Stable centered face.
 - Face zoom.
-- Alternate between detected faces.
-- Cut between detected faces.
+- Legacy compatibility: alternate between detected faces and cut between
+  detected faces remain supported by the API, but they are no longer the main
+  editing surface.
 - Future: active speaker focus when transcript/audio diarization is available.
 
 ## Implementation Stages
@@ -32,16 +35,17 @@ face detection, tracking, and source-aware analysis.
 3. Replace Haar Cascade as the primary detector with a stronger detector such
    as OpenCV YuNet or MediaPipe Face Detection, keeping Haar as fallback.
 4. Add lightweight tracking across frames so face identity is stable over time.
-5. Refactor the Camera tab around Smart Camera presets first, with manual path
-   editing hidden behind an advanced section.
+5. Refactor the Camera tab around Auto Director first, with manual path editing
+   and beginning/middle/end controls hidden behind an advanced section.
 6. Tune framing rules for headroom, shoulders, zoom, and fast switches.
 
 ## Acceptance Criteria
 
 - Smart Camera responses include diagnostic evidence.
+- Auto Director is the default camera analysis mode.
 - Smart Camera prefers source footage when `source_start_seconds` and source
   media are available, with clip fallback.
 - The UI explains whether detection was weak, single-face, or multi-face.
-- Multi-face modes do not silently behave like single-face mode without status.
+- Multi-face context influences Auto Director only when detections are reliable.
 - Manual camera controls remain available for recovery.
 - Final render continues using `camera_path` as the source of truth.
