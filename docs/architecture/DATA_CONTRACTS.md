@@ -189,7 +189,10 @@ reaction windows and group windows; those hints are advisory and never replace
 the final validated `camera_path` contract. AI Director payloads also include a
 `platform_viewport` object with width, height, aspect ratio, orientation, and
 safe crop notes so platform-specific camera decisions can be made for 9:16, 4:5,
-and 16:9 outputs.
+and 16:9 outputs. After validation, local dense protection may add additional
+`ai-director-dense-primary`, `ai-director-group-safe`, or
+`ai-director-cuts-group-safe` frames when OpenCV samples show the active crop
+would cut a visible face.
 
 The legacy camera presets (`center`, `face-left`, `alternate`, `jump-cut`, and
 similar) are manual controls. They may be used for compatibility and quick
@@ -215,6 +218,10 @@ multi_face_frames     sampled frames with two or more faces
 first_detection_time  first relative detection time, nullable
 last_detection_time   last relative detection time, nullable
 camera_keyframes      produced camera_path keyframe count
+camera_max_gap_seconds largest gap between produced camera keyframes
+camera_avg_gap_seconds average gap between produced camera keyframes
+camera_risk_frames    sampled frames where the final crop still cuts a face
+camera_protected_keyframes keyframes inserted or adjusted for safety
 ai_director           optional hosted decision diagnostics
 detection_preview     compact first detections for QA/debugging
 ```

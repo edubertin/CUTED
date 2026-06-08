@@ -39,9 +39,12 @@ FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
 MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
 MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
-CAMERA_ANALYSIS_VERSION = "auto-face-v16"
+CAMERA_ANALYSIS_VERSION = "auto-face-v17"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
 CAMERA_ANALYSIS_MAX_FRAMES = 140
+AI_DIRECTOR_MAX_FRAME_SAMPLES = 10
+AI_DIRECTOR_MAX_CONTEXT_ROWS = 36
+AI_DIRECTOR_MAX_FALLBACK_FRAMES = 28
 CAMERA_SAFE_X_MIN = 30.0
 CAMERA_SAFE_X_MAX = 70.0
 SMART_CAMERA_MODES = {
@@ -801,6 +804,7 @@ def opencv_face_camera_analysis(
             camera_path = ai_result["camera_path"]
             diagnostics["camera_keyframes"] = len(camera_path)
             source = safe_mode
+    diagnostics.update(camera_path_quality_diagnostics(detections, camera_path, safe_duration, platform))
     return {
         "source": source,
         "detected_faces": max((len(row.get("faces", [])) for row in detections), default=0),
@@ -899,6 +903,59 @@ def camera_analysis_diagnostics(
         "camera_keyframes": len(camera_path),
         "detection_preview": compact_detection_preview(detections),
     }
+
+
+def camera_path_quality_diagnostics(
+    detections: list[dict[str, object]], camera_path: list[dict[str, object]], duration: float, platform: str
+) -> dict[str, object]:
+    gaps = camera_path_gaps(camera_path, duration)
+    risks = camera_path_risk_count(camera_path, detections, platform)
+    protected = sum(1 for frame in camera_path if camera_frame_priority(frame) >= 2)
+    return {
+        "camera_keyframes": len(camera_path),
+        "camera_max_gap_seconds": round(max(gaps), 3) if gaps else 0.0,
+        "camera_avg_gap_seconds": round(sum(gaps) / len(gaps), 3) if gaps else 0.0,
+        "camera_risk_frames": risks,
+        "camera_protected_keyframes": protected,
+    }
+
+
+def dense_camera_diagnostics(
+    camera_path: list[dict[str, object]], detections: list[dict[str, object]], duration: float, platform: str
+) -> dict[str, object]:
+    quality = camera_path_quality_diagnostics(detections, camera_path, duration, platform)
+    return {
+        "final_keyframes": quality["camera_keyframes"],
+        "max_gap_seconds": quality["camera_max_gap_seconds"],
+        "avg_gap_seconds": quality["camera_avg_gap_seconds"],
+        "remaining_risk_frames": quality["camera_risk_frames"],
+        "protected_keyframes": quality["camera_protected_keyframes"],
+    }
+
+
+def camera_path_gaps(camera_path: list[dict[str, object]], duration: float) -> list[float]:
+    if not camera_path:
+        return [max(duration, 0.3)]
+    times = sorted(clamp(float(frame.get("time") or 0.0), 0.0, max(duration, 0.3)) for frame in camera_path)
+    if times[0] > 0.001:
+        times.insert(0, 0.0)
+    if times[-1] < max(duration, 0.3) - 0.05:
+        times.append(max(duration, 0.3))
+    return [times[index + 1] - times[index] for index in range(len(times) - 1)]
+
+
+def camera_path_risk_count(
+    camera_path: list[dict[str, object]], detections: list[dict[str, object]], platform: str
+) -> int:
+    risks = 0
+    for row in detections:
+        faces = sorted(reliable_faces(row), key=face_x)
+        if not faces:
+            continue
+        active = camera_path_frame_at_time(camera_path, float(row.get("time") or 0.0)) if camera_path else {}
+        if camera_frame_cuts_faces(active, faces):
+            risks += 1
+    return risks
 
 
 def compact_detection_preview(detections: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -1040,6 +1097,7 @@ def ai_director_camera_result(
         path = protected_ai_director_path(validated_ai_director_path(payload, duration), detections, duration, platform)
         if ai_director_uses_hard_cuts(mode):
             path = hard_cut_ai_director_path(path, detections, duration, platform)
+        path = dense_protected_camera_path(path, detections, duration, platform, mode)
     except Exception as error:
         diagnostics["error"] = str(error)
         return {"camera_path": [], "diagnostics": diagnostics}
@@ -1047,6 +1105,7 @@ def ai_director_camera_result(
         "frame_samples": len(frames),
         "summary": str(payload.get("summary") or "")[:220],
         "multi_face_coverage": ai_director_multi_face_coverage(detections),
+        "dense_camera": dense_camera_diagnostics(path, detections, duration, platform),
     })
     return {"camera_path": path, "diagnostics": diagnostics}
 
@@ -1070,7 +1129,7 @@ def ai_director_frame_samples(input_ref: Path | str, start: float, duration: flo
 
 def ai_director_sample_times(duration: float) -> list[float]:
     safe_duration = max(duration, 0.3)
-    count = min(6, max(3, int(math.ceil(safe_duration / 8.0)) + 1))
+    count = min(AI_DIRECTOR_MAX_FRAME_SAMPLES, max(4, int(math.ceil(safe_duration / 5.0)) + 1))
     if count <= 1:
         return [0.0]
     return [round((safe_duration * index) / (count - 1), 3) for index in range(count)]
@@ -1120,7 +1179,7 @@ def ai_director_user_payload(
         "opencv_detection_summary": ai_director_detection_summary(detections),
         "opencv_detections": ai_director_detection_context(detections),
         "scene_direction": ai_director_scene_context(detections, duration, platform),
-        "local_auto_director_fallback": fallback_path[:16],
+        "local_auto_director_fallback": fallback_path[:AI_DIRECTOR_MAX_FALLBACK_FRAMES],
         "rules": rules,
     }, ensure_ascii=False)
 
@@ -1153,7 +1212,7 @@ def ai_director_rules(mode: str) -> list[str]:
     rules = [
         "x e y sao centros percentuais de crop, 0 a 100.",
         "zoom deve ficar entre 1.0 e 1.45.",
-        "Use 3 a 12 keyframes; menos e melhor.",
+        "Use 6 a 20 keyframes quando houver deslocamento ou multiplos rostos; menos so se a cena for estavel.",
         "Sempre inclua um keyframe em time 0.",
         "Segure bons enquadramentos por alguns segundos; evite tremedeira.",
         "Se 3 pessoas aparecem no mesmo frame, priorize plano aberto de grupo, nao close em uma so pessoa.",
@@ -1189,10 +1248,10 @@ def ai_director_detection_summary(detections: list[dict[str, object]]) -> dict[s
 
 def ai_director_detection_context(detections: list[dict[str, object]]) -> list[dict[str, object]]:
     rows = [ai_director_detection_row(row) for row in detections if reliable_faces(row)]
-    if len(rows) <= 18:
+    if len(rows) <= AI_DIRECTOR_MAX_CONTEXT_ROWS:
         return rows
-    step = max(1, int(math.ceil(len(rows) / 18.0)))
-    return rows[::step][:18]
+    step = max(1, int(math.ceil(len(rows) / float(AI_DIRECTOR_MAX_CONTEXT_ROWS))))
+    return rows[::step][:AI_DIRECTOR_MAX_CONTEXT_ROWS]
 
 
 def ai_director_detection_row(row: dict[str, object]) -> dict[str, object]:
@@ -1366,6 +1425,102 @@ def hard_cut_spaced_ai_frames(frames: list[dict[str, object]], duration: float) 
     if float(result[0].get("time") or 0.0) > 0.001:
         result.insert(0, {**result[0], "time": 0.0})
     return result[:14]
+
+
+def dense_protected_camera_path(
+    frames: list[dict[str, object]], detections: list[dict[str, object]], duration: float, platform: str, mode: str
+) -> list[dict[str, object]]:
+    if not frames or not detections:
+        return frames
+    mandatory = dense_camera_risk_frames(frames, detections, duration, platform, mode)
+    if not mandatory:
+        return frames
+    merged = merge_camera_path_frames(frames, mandatory, duration)
+    return merged[:48]
+
+
+def dense_camera_risk_frames(
+    frames: list[dict[str, object]], detections: list[dict[str, object]], duration: float, platform: str, mode: str
+) -> list[dict[str, object]]:
+    mandatory: list[dict[str, object]] = []
+    hard_cut = ai_director_uses_hard_cuts(mode)
+    min_gap = 1.25 if hard_cut else 0.85
+    for row in detections:
+        time_value = float(row.get("time") or 0.0)
+        if time_value > max(duration, 0.3):
+            continue
+        active = camera_path_frame_at_time(frames, time_value)
+        target = dense_camera_target_for_row(row, active, platform, hard_cut)
+        if target is None or recent_similar_camera_frame(mandatory, target, min_gap):
+            continue
+        mandatory.append(target)
+    return mandatory
+
+
+def dense_camera_target_for_row(
+    row: dict[str, object], active: dict[str, object], platform: str, hard_cut: bool
+) -> dict[str, object] | None:
+    faces = sorted(reliable_faces(row), key=face_x)
+    if not faces:
+        return None
+    time_value = float(row.get("time") or 0.0)
+    source = "ai-director-cuts-group-safe" if hard_cut else "ai-director-group-safe"
+    group_required = should_use_platform_group_frame(faces, platform)
+    active_cuts = camera_frame_cuts_faces(active, faces)
+    if active_cuts or (group_required and not camera_frame_is_group_safe(active)):
+        return hard_cut_ai_director_frame(group_face_frame(faces, time_value, platform), time_value, source)
+    primary = row.get("primary") if isinstance(row.get("primary"), dict) else None
+    if isinstance(primary, dict) and not group_required and face_outside_safe_zone(primary):
+        primary_source = "ai-director-cuts-primary" if hard_cut else "ai-director-dense-primary"
+        return hard_cut_ai_director_frame({**primary, "time": time_value}, time_value, primary_source)
+    return None
+
+
+def camera_path_frame_at_time(frames: list[dict[str, object]], time_value: float) -> dict[str, object]:
+    ordered = sorted(frames, key=lambda item: float(item.get("time") or 0.0))
+    active = ordered[0]
+    for frame in ordered:
+        if float(frame.get("time") or 0.0) > time_value:
+            break
+        active = frame
+    return active
+
+
+def recent_similar_camera_frame(frames: list[dict[str, object]], target: dict[str, object], min_gap: float) -> bool:
+    if not frames:
+        return False
+    previous = frames[-1]
+    time_gap = float(target.get("time") or 0.0) - float(previous.get("time") or 0.0)
+    return time_gap < min_gap and camera_frames_are_similar(previous, target)
+
+
+def merge_camera_path_frames(
+    frames: list[dict[str, object]], mandatory: list[dict[str, object]], duration: float
+) -> list[dict[str, object]]:
+    merged = sorted([*frames, *mandatory], key=lambda item: float(item.get("time") or 0.0))
+    result: list[dict[str, object]] = []
+    for frame in merged:
+        time_value = clamp(float(frame.get("time") or 0.0), 0.0, max(duration, 0.3))
+        candidate = {**frame, "time": round(time_value, 3)}
+        if result and abs(time_value - float(result[-1].get("time") or 0.0)) < 0.45:
+            if camera_frame_priority(candidate) >= camera_frame_priority(result[-1]):
+                result[-1] = candidate
+            continue
+        result.append(candidate)
+    return result
+
+
+def camera_frame_priority(frame: dict[str, object]) -> int:
+    source = str(frame.get("source") or "")
+    if "group-safe" in source:
+        return 3
+    if "dense" in source or "cuts-primary" in source:
+        return 2
+    return 1
+
+
+def camera_frame_is_group_safe(frame: dict[str, object]) -> bool:
+    return "group-safe" in str(frame.get("source") or "")
 
 
 def cinematic_cut_scene_path(detections: list[dict[str, object]], duration: float, platform: str) -> list[dict[str, object]]:
@@ -5417,6 +5572,9 @@ function cameraDiagnosticsText(diagnostics){
   const input = diagnostics.analysis_input === "source" ? "source" : "clip";
   const multi = Number(diagnostics.multi_face_frames || 0);
   const edge = Number(diagnostics.edge_face_frames || 0);
+  const maxGap = Number(diagnostics.camera_max_gap_seconds || 0);
+  const risk = Number(diagnostics.camera_risk_frames || 0);
+  const protectedFrames = Number(diagnostics.camera_protected_keyframes || 0);
   const size = width && height ? `${width}x${height}` : "video";
   const parts = [input, `${detected}/${samples} frames`, size, `${keyframes} keyframes`];
   const ai = diagnostics.ai_director || {};
@@ -5425,6 +5583,9 @@ function cameraDiagnosticsText(diagnostics){
   if (ai && !ai.enabled && ai.error) parts.push("IA sem chave");
   if (multi) parts.splice(1, 0, `${multi} multi-face`);
   if (edge) parts.splice(2, 0, `${edge} borda`);
+  if (maxGap) parts.push(`gap max ${maxGap.toFixed(1)}s`);
+  if (protectedFrames) parts.push(`${protectedFrames} protegidos`);
+  if (risk) parts.push(`${risk} riscos`);
   return parts.join(" | ");
 }
 function cameraFrameForTime(camera, cameraPath, position, duration){
