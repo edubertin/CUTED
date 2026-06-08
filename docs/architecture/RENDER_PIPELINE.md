@@ -165,7 +165,10 @@ remains the source of truth for crop safety. When a vertical platform cannot fit
 the detected group inside the crop even at the widest camera zoom, the protection
 pass writes a `group-fit` frame. Final render treats that frame as a contained
 foreground over a blurred full-frame background, which is intentionally
-reversible by removing the `group-fit` source/`fit = contain` marker.
+reversible by removing the `group-fit` source/`fit = contain` marker. The v19
+safety fallback also forces group-fit when a second pass still finds multi-face
+risk after dense protection, with extra attention to the final seconds of the
+clip.
 
 AI Cuts post-processes the validated path with OpenCV scene roles. When a
 secondary face is reliable, it emits a principal -> reaction -> principal pattern

@@ -78,6 +78,9 @@ face detection, tracking, and source-aware analysis.
 - Very wide group-risk frames on vertical platforms may use group-fit framing:
   contained foreground over blurred background, preserving all visible people
   instead of forcing an impossible 9:16 crop.
+- If dense protection still reports multi-face crop risk, Smart Camera can
+  force group-fit as a final safety fallback, especially in the final seconds of
+  a clip.
 - AI Director intent variants keep the same render contract and fall back to
   local Auto Director when OpenAI is unavailable.
 - AI Cuts uses the same `camera_path` contract, but marks frames as hard-cut

@@ -39,7 +39,7 @@ FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
 MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
 MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
-CAMERA_ANALYSIS_VERSION = "auto-face-v18"
+CAMERA_ANALYSIS_VERSION = "auto-face-v19"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
 CAMERA_ANALYSIS_MAX_FRAMES = 140
 AI_DIRECTOR_MAX_FRAME_SAMPLES = 10
@@ -1432,11 +1432,13 @@ def dense_protected_camera_path(
 ) -> list[dict[str, object]]:
     if not frames or not detections:
         return frames
+    hard_cut = ai_director_uses_hard_cuts(mode)
     mandatory = dense_camera_risk_frames(frames, detections, duration, platform, mode)
-    if not mandatory:
-        return frames
-    merged = merge_camera_path_frames(frames, mandatory, duration)
-    return merged[:48]
+    merged = merge_camera_path_frames(frames, mandatory, duration) if mandatory else frames
+    fallback = forced_group_fit_camera_frames(merged, detections, duration, platform, hard_cut)
+    if fallback:
+        merged = merge_camera_path_frames(merged, fallback, duration)
+    return merged[:56]
 
 
 def dense_camera_risk_frames(
@@ -1474,6 +1476,66 @@ def dense_camera_target_for_row(
         primary_source = "ai-director-cuts-primary" if hard_cut else "ai-director-dense-primary"
         return hard_cut_ai_director_frame({**primary, "time": time_value}, time_value, primary_source)
     return None
+
+
+def forced_group_fit_camera_frames(
+    frames: list[dict[str, object]],
+    detections: list[dict[str, object]],
+    duration: float,
+    platform: str,
+    hard_cut: bool,
+) -> list[dict[str, object]]:
+    forced: list[dict[str, object]] = []
+    for row in risky_group_detection_rows(frames, detections, duration, platform):
+        faces = sorted(reliable_faces(row), key=face_x)
+        time_value = float(row.get("time") or 0.0)
+        target = forced_group_fit_frame(faces, time_value, platform, hard_cut)
+        if not recent_similar_camera_frame(forced, target, 0.7):
+            forced.append(target)
+    return forced
+
+
+def risky_group_detection_rows(
+    frames: list[dict[str, object]],
+    detections: list[dict[str, object]],
+    duration: float,
+    platform: str,
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    safe_duration = max(duration, 0.3)
+    for row in detections:
+        time_value = float(row.get("time") or 0.0)
+        faces = sorted(reliable_faces(row), key=face_x)
+        if len(faces) < 2:
+            continue
+        active = camera_path_frame_at_time(frames, time_value)
+        if camera_path_frame_uses_group_fit(active):
+            continue
+        if camera_frame_cuts_faces(active, faces) or is_final_section_group_risk(
+            faces, time_value, safe_duration, platform
+        ):
+            rows.append(row)
+    return rows
+
+
+def is_final_section_group_risk(
+    faces: list[dict[str, float]], time_value: float, duration: float, platform: str
+) -> bool:
+    final_window = max(duration - 5.0, duration * 0.82)
+    if time_value < final_window:
+        return False
+    return should_use_platform_group_frame(faces, platform) or any(face_outside_safe_zone(face) for face in faces)
+
+
+def forced_group_fit_frame(
+    faces: list[dict[str, float]],
+    time_value: float,
+    platform: str,
+    hard_cut: bool,
+) -> dict[str, object]:
+    frame: dict[str, object] = group_face_frame(faces, time_value, platform)
+    frame["fit"] = "contain"
+    return hard_cut_ai_director_frame(frame, time_value, group_frame_source(frame, hard_cut))
 
 
 def camera_path_frame_at_time(frames: list[dict[str, object]], time_value: float) -> dict[str, object]:
@@ -1826,8 +1888,9 @@ def should_use_group_fit_frame(faces: list[dict[str, float]], platform: str | No
     spread = face_x(sorted_faces[-1]) - face_x(sorted_faces[0])
     both_edges = face_x(sorted_faces[0]) <= 24.0 and face_x(sorted_faces[-1]) >= 76.0
     if aspect < 0.65:
-        return len(sorted_faces) >= 3 or spread >= 46.0 or both_edges
-    return len(sorted_faces) >= 3 and (spread >= 42.0 or both_edges)
+        has_edge = any(face_outside_safe_zone(face) for face in sorted_faces)
+        return len(sorted_faces) >= 3 or spread >= 34.0 or both_edges or (has_edge and spread >= 20.0)
+    return len(sorted_faces) >= 3 and (spread >= 34.0 or both_edges)
 
 
 def group_frame_source(frame: dict[str, object], hard_cut: bool) -> str:
