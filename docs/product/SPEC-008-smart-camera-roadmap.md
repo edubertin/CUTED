@@ -72,6 +72,9 @@ face detection, tracking, and source-aware analysis.
 - AI Director responses are validated and clamped before being stored.
 - AI Director paths are post-processed against OpenCV face positions so a model
   close-up cannot keep cutting visible people in multi-face scenes.
+- AI Director paths receive a dense local protection pass that can insert
+  mandatory keyframes between model keyframes when OpenCV samples indicate a
+  face would otherwise remain outside the crop.
 - AI Director intent variants keep the same render contract and fall back to
   local Auto Director when OpenAI is unavailable.
 - AI Cuts uses the same `camera_path` contract, but marks frames as hard-cut

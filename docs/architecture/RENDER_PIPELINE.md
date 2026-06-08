@@ -157,7 +157,11 @@ the response is invalid, the endpoint falls back to the local Auto Director
 path. The validated result is also checked against OpenCV multi-face detections
 and the selected platform viewport so scenes with three visible people, or two
 people at risk of being cropped, open to group-safe framing instead of holding a
-close-up on only one face.
+close-up on only one face. After the model response, a dense local protection
+pass scans OpenCV samples again and inserts mandatory keyframes when the active
+crop would cut a reliable face or when a platform-specific group frame is
+required. This keeps OpenAI in the editorial/director role while local detection
+remains the source of truth for crop safety.
 
 AI Cuts post-processes the validated path with OpenCV scene roles. When a
 secondary face is reliable, it emits a principal -> reaction -> principal pattern
@@ -204,7 +208,9 @@ path generation.
 AI Director diagnostics live under `diagnostics.ai_director` and should state
 the selected intent, whether OpenAI was enabled, whether a fallback was used,
 how many frames were sent, and a short summary when the model produced a valid
-path.
+path. Camera diagnostics also record final keyframe count, maximum/average gap
+between camera keyframes, protected keyframes, and remaining crop-risk frames so
+QA can compare dense reframing quality between runs.
 
 ## Effects
 
