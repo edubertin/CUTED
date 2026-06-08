@@ -106,6 +106,19 @@ The UI should keep the simple beginning/middle/end controls available because
 they are faster for most edits. Editing those simple controls clears any stale
 explicit path for the active platform, so preview and render cannot disagree.
 
+## Auto Camera Analysis
+
+The local gallery server exposes `/api/camera/analyze` for optional OpenCV
+face-based reframing. The endpoint reads the selected clip, respects the
+current trim start and adjusted duration, samples frames, detects the primary
+face, smooths the result, and returns explicit `camera_path` keyframes with
+`source: auto-face`.
+
+The result is cached in `camera-analysis/` using the clip fingerprint, trim
+window, platform, and analysis version. If OpenCV is not installed, the endpoint
+returns a user-safe install message and manual camera editing remains
+available.
+
 ## Effects
 
 The browser preview uses CSS filters and overlays, but final exports must use
