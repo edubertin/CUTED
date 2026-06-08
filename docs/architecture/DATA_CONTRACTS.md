@@ -145,10 +145,16 @@ path for that platform must be cleared and regenerated from the updated camera
 state. Future automatic reframing should also write into `camera_path` instead
 of replacing the simple `camera` compatibility field.
 
-OpenCV Auto camera writes explicit keyframes with `source: auto-face` and no
-legacy preset `key`, so the renderer uses the numeric `x`, `y`, and `zoom`
-values. These keyframes are still per-platform state and can be manually edited
-or reset back to the simple camera mode.
+OpenCV Smart camera writes explicit keyframes with sources such as
+`auto-face-follow-face`, `auto-face-stable-face`, `auto-face-face-zoom`,
+`auto-face-alternate-faces`, or `auto-face-cut-between-faces` and no legacy
+preset `key`, so the renderer uses the numeric `x`, `y`, and `zoom` values.
+These keyframes are still per-platform state and can be manually edited or
+reset back to the simple camera mode.
+
+The legacy camera presets (`center`, `face-left`, `alternate`, `jump-cut`, and
+similar) are manual controls. They may be used for compatibility and quick
+operator edits, but they do not imply OpenCV detected the face position.
 
 ## Overlay Contract
 
