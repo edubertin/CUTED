@@ -195,7 +195,10 @@ aspect ratio, orientation, and safe crop notes so platform-specific camera
 decisions can be made for 9:16, 4:5, and 16:9 outputs. After validation, local
 dense protection may add additional `ai-director-dense-primary`,
 `ai-director-group-safe`, `ai-director-cuts-group-safe`, or group-fit frames
-when OpenCV samples show the active crop would cut a visible face.
+when OpenCV samples show the active crop would cut a visible face. If any
+multi-face risk remains after that dense pass on a vertical platform, the v19
+safety fallback may force a group-fit keyframe, especially near the end of the
+clip where a final close-up is more likely to hide people at the edge.
 
 The legacy camera presets (`center`, `face-left`, `alternate`, `jump-cut`, and
 similar) are manual controls. They may be used for compatibility and quick
