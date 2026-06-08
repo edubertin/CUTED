@@ -33,8 +33,10 @@ review workspace, data contracts, or render pipeline.
 | Camera path | Reset to simple mode | Explicit path is cleared and preview returns to Inicio/Meio/Fim behavior |
 | Smart camera | Click Auto Director | Face-based `camera_path` is applied to the active platform |
 | Smart camera | Use Auto Director on multi-face footage | Output includes primary-face tracking plus occasional group/reaction framing when detections are reliable |
+| Smart camera | Use Auto Director when a face is near the vertical crop edge | Camera shifts or opens framing before the face remains cut for several seconds |
+| Smart camera | Use Follow face on edge-risk multi-face footage | Follow mode still uses safe group framing instead of locking to a false central target |
 | Smart camera | Open advanced camera controls | Manual Inicio/Meio/Fim and keyframe controls remain available without being the default workflow |
-| Smart camera | Inspect analysis status | Status includes sampled frames, detected frames, dimensions, and keyframe count |
+| Smart camera | Inspect analysis status | Status includes sampled frames, detected frames, edge-risk frames, dimensions, and keyframe count |
 | Smart camera | Analyze import with source media | Diagnostics show `analysis_input: source` |
 | Smart camera | Source media unavailable | Endpoint falls back to `clip` and still returns diagnostics |
 | Smart camera | Failed detection | Error keeps manual camera intact and includes diagnostic counts |

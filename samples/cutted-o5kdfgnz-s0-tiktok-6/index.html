@@ -1482,9 +1482,11 @@ function cameraDiagnosticsText(diagnostics){
   const keyframes = Number(diagnostics.camera_keyframes || 0);
   const input = diagnostics.analysis_input === "source" ? "source" : "clip";
   const multi = Number(diagnostics.multi_face_frames || 0);
+  const edge = Number(diagnostics.edge_face_frames || 0);
   const size = width && height ? `${width}x${height}` : "video";
   const parts = [input, `${detected}/${samples} frames`, size, `${keyframes} keyframes`];
   if (multi) parts.splice(1, 0, `${multi} multi-face`);
+  if (edge) parts.splice(2, 0, `${edge} borda`);
   return parts.join(" | ");
 }
 function cameraFrameForTime(camera, cameraPath, position, duration){

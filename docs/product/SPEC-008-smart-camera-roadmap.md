@@ -16,8 +16,10 @@ face detection, tracking, and source-aware analysis.
 ## Smart Camera Modes
 
 - Auto Director: default mode. Follows the primary face and inserts wider
-  reaction/group framing when multi-face context is reliable.
-- Follow main face.
+  reaction/group framing when multi-face context is reliable or when detected
+  faces sit near the vertical crop edge.
+- Follow main face, with safe group framing when a second face would be cut by
+  the vertical crop.
 - Stable centered face.
 - Face zoom.
 - Legacy compatibility: alternate between detected faces and cut between
@@ -37,7 +39,8 @@ face detection, tracking, and source-aware analysis.
 4. Add lightweight tracking across frames so face identity is stable over time.
 5. Refactor the Camera tab around Auto Director first, with manual path editing
    and beginning/middle/end controls hidden behind an advanced section.
-6. Tune framing rules for headroom, shoulders, zoom, and fast switches.
+6. Tune framing rules for headroom, shoulders, zoom, safe horizontal crop, and
+   fast switches.
 
 ## Acceptance Criteria
 
@@ -45,7 +48,10 @@ face detection, tracking, and source-aware analysis.
 - Auto Director is the default camera analysis mode.
 - Smart Camera prefers source footage when `source_start_seconds` and source
   media are available, with clip fallback.
-- The UI explains whether detection was weak, single-face, or multi-face.
+- The UI explains whether detection was weak, single-face, multi-face, or
+  edge-risk.
 - Multi-face context influences Auto Director only when detections are reliable.
+- Face detections near the vertical crop edge should trigger wider or shifted
+  framing instead of leaving a face cut for several seconds.
 - Manual camera controls remain available for recovery.
 - Final render continues using `camera_path` as the source of truth.
