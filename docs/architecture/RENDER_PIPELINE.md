@@ -142,6 +142,9 @@ Supported smart modes:
   speaker while keeping visible context inside the crop.
 - `ai-director-reactions`: optional hosted layer biased toward reaction cuts
   and alternating visible people with pauses.
+- `ai-director-cuts`: optional hosted layer biased toward dry editorial cuts
+  between stable shot choices, with 2.5-4.5 second holds and no gradual pan
+  intent.
 
 All AI Director modes run the local OpenCV analysis first, send compact
 diagnostics, a few low-detail sampled frames, transcript context, an editorial
@@ -151,6 +154,12 @@ endpoint falls back to the local Auto Director path. The validated result is
 also checked against OpenCV multi-face detections so scenes with three visible
 people, or two people at risk of being cropped, open to group-safe framing
 instead of holding a close-up on only one face.
+
+AI Cuts post-processes the validated path by spacing keyframes apart and marking
+their source as `ai-director-cuts` or `ai-director-cuts-group-safe`. Final
+render already treats each `camera_path` keyframe as a trimmed segment; the
+browser preview should also hold these frames instead of interpolating between
+them.
 - `follow-face`: tracks the primary face with smoothing, but also uses safe
   group framing when another detected face would be cut by the vertical crop.
 - `stable-face`: creates one stable median crop for the detected face.

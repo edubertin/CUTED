@@ -21,8 +21,9 @@ face detection, tracking, and source-aware analysis.
 - AI Director: optional hosted layer. Uses OpenCV diagnostics, a small set of
   low-detail sampled frames, transcript context, an editorial intent, and the
   local Auto Director fallback path to decide a more editorial `camera_path`.
-  Available intents are dynamic, group/podcast, speaker focus, and reactions.
-  Multi-person scenes should bias toward group framing before close-ups.
+  Available intents are dynamic, group/podcast, speaker focus, reactions, and
+  hard cuts. Multi-person scenes should bias toward group framing before
+  close-ups.
 - Follow main face, with safe group framing when a second face would be cut by
   the vertical crop.
 - Stable centered face.
@@ -69,3 +70,6 @@ face detection, tracking, and source-aware analysis.
   close-up cannot keep cutting visible people in multi-face scenes.
 - AI Director intent variants keep the same render contract and fall back to
   local Auto Director when OpenAI is unavailable.
+- AI Cuts uses the same `camera_path` contract, but marks frames as hard-cut
+  sources so browser preview holds each shot instead of interpolating between
+  keyframes.

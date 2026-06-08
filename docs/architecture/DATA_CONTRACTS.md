@@ -176,11 +176,14 @@ reset back to the simple camera mode.
 
 AI Director writes keyframes with `source = ai-director`,
 `ai-director-group`, `ai-director-speaker`, `ai-director-reactions`, or
-`ai-director-group-safe`. These keyframes use the same numeric render path as
-OpenCV keyframes and must be validated before storage: times are relative to
-the adjusted clip, `x`/`y` are crop-center percentages, and `zoom` is clamped to
-a safe social-video range. `ai-director-group-safe` means the model result was
-opened by the local safety pass to keep visible faces inside the crop.
+`ai-director-cuts`. Safety post-processing may also write
+`ai-director-group-safe` or `ai-director-cuts-group-safe`. These keyframes use
+the same numeric render path as OpenCV keyframes and must be validated before
+storage: times are relative to the adjusted clip, `x`/`y` are crop-center
+percentages, and `zoom` is clamped to a safe social-video range. Group-safe
+sources mean the model result was opened by the local safety pass to keep
+visible faces inside the crop. `ai-director-cuts*` sources also tell the browser
+preview to hold each shot instead of interpolating between keyframes.
 
 The legacy camera presets (`center`, `face-left`, `alternate`, `jump-cut`, and
 similar) are manual controls. They may be used for compatibility and quick
