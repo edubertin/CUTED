@@ -4869,6 +4869,7 @@ def card_html(moment: Moment) -> str:
             </div>
             <div class="media camera-surface" data-overlay-surface>
               {video_tag}
+              <video class="camera-fit-bg" data-camera-fit-bg playsinline muted preload="none" aria-hidden="true" tabindex="-1"></video>
               <div class="camera-reticle"></div>
               <div data-overlay-layer-list></div>
               <div class="overlay-menu" data-overlay-menu hidden></div>
@@ -5153,7 +5154,7 @@ main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-panel{display:none;border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:12px}.tool-panel.active{display:block}.tool-summary{margin-bottom:10px;color:#d8d8d8}.timeline-editor{padding:0}.timeline-head,.timeline-timebar,.timeline-values{display:flex;justify-content:space-between;gap:12px;color:var(--color-text-muted);font-size:12px}.timeline-head output,.timeline-timebar output{color:var(--color-text);text-align:right}.timeline-timebar{margin-top:10px}.timeline-timebar span:last-child{color:#777;text-align:right}.timeline-scrub{position:relative;height:42px;margin-top:8px}.timeline-scrub-track{position:absolute;left:0;right:0;top:17px;height:8px;border:1px solid #343434;border-radius:999px;background:linear-gradient(90deg,var(--color-surface-muted),#252525);overflow:hidden}.timeline-selected{position:absolute;top:0;bottom:0;background:rgba(175,207,42,.22);border-left:1px solid var(--color-brand-green);border-right:1px solid var(--color-brand-green)}.timeline-playhead{position:absolute;top:-8px;bottom:-8px;width:2px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7)}.timeline-playhead:before{content:"";position:absolute;left:50%;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--color-brand-white);transform:translateX(-50%)}.timeline-scrub input{position:absolute;inset:0;width:100%;height:42px;margin:0;background:transparent;opacity:0;cursor:pointer}.timeline{position:relative;height:38px;margin-top:6px}.timeline-track{position:absolute;left:0;right:0;top:16px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:var(--color-brand-white);border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:38px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}.timeline-tools button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);padding:7px 9px}.timeline-values{margin-top:6px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .export-dock{display:grid;gap:8px;margin-top:2px;padding:12px;border:1px solid #303030;border-radius:8px;background:#111}.export-dock strong{display:block;font-size:13px}.export-dock span{color:#a8a8a8;font-size:12px}
 .platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:var(--color-text);border-color:var(--color-brand-green)}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:var(--color-brand-blue)}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.camera-path-editor,.camera-manual-panel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-path-head,.camera-panel-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.camera-path-head strong,.camera-panel-title strong{font-size:12px}.camera-path-head span,.camera-panel-title span{color:var(--color-text-muted);font-size:12px}.camera-smart-panel{display:grid;gap:8px;padding:10px;border:1px solid rgba(17,162,207,.28);border-radius:8px;background:linear-gradient(135deg,rgba(17,162,207,.12),rgba(175,207,42,.06))}.camera-smart-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.camera-smart-grid button{background:rgba(17,162,207,.1);color:var(--color-text);border:1px solid rgba(17,162,207,.34);text-align:center}.camera-smart-grid button:hover{border-color:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.14)}.camera-path-track{position:relative;height:34px}.camera-path-rail{position:absolute;left:0;right:0;top:15px;height:5px;border-radius:999px;background:#292929}.camera-path-marker{position:absolute;top:7px;width:20px;height:20px;min-width:20px;padding:0;border-radius:999px;transform:translateX(-50%);background:var(--color-surface-control);border:1px solid var(--color-border-strong)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:var(--color-brand-blue);box-shadow:0 0 0 4px rgba(17,162,207,.18)}.camera-path-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-keyframe-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}.camera-auto-status{min-height:18px;color:var(--color-text-muted);font-size:12px}.camera-path-delete{color:var(--color-danger)!important}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:160px 180px;gap:12px;max-width:380px}
-.camera-smart-panel p{margin:0;color:var(--color-text-muted);font-size:12px}.camera-smart-grid{grid-template-columns:1fr}.camera-smart-grid button{display:grid;gap:3px;justify-items:center}.camera-smart-grid button span{color:var(--color-text-muted);font-size:11px}.camera-director-action{min-height:72px;background:linear-gradient(135deg,rgba(17,162,207,.32),rgba(231,231,232,.08))!important;border-color:rgba(17,162,207,.72)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 34px rgba(17,162,207,.1)}.camera-director-action strong{font-size:15px}.camera-smart-secondary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-smart-secondary button{min-height:54px}.camera-advanced{display:grid;gap:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.025)}.camera-advanced summary{display:flex;justify-content:space-between;gap:10px;align-items:center;cursor:pointer;color:var(--color-text-soft)}.camera-advanced summary small{color:var(--color-text-muted);font-size:12px}.camera-advanced[open] summary{padding-bottom:8px;border-bottom:1px solid rgba(231,231,232,.08)}.camera-advanced .camera-manual-panel{padding:0;border:0;background:transparent}.camera-surface video{object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position .12s linear,transform .12s linear}.camera-surface[data-camera-cut=hard] video{transition:none}.camera-surface[data-camera-fit=contain]{background:#050505}.camera-surface[data-camera-fit=contain] video{object-fit:contain;object-position:center;transform:none;transform-origin:center}.camera-reticle{position:absolute;inset:14% 22%;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}
+.camera-smart-panel p{margin:0;color:var(--color-text-muted);font-size:12px}.camera-smart-grid{grid-template-columns:1fr}.camera-smart-grid button{display:grid;gap:3px;justify-items:center}.camera-smart-grid button span{color:var(--color-text-muted);font-size:11px}.camera-director-action{min-height:72px;background:linear-gradient(135deg,rgba(17,162,207,.32),rgba(231,231,232,.08))!important;border-color:rgba(17,162,207,.72)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 34px rgba(17,162,207,.1)}.camera-director-action strong{font-size:15px}.camera-smart-secondary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-smart-secondary button{min-height:54px}.camera-advanced{display:grid;gap:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.025)}.camera-advanced summary{display:flex;justify-content:space-between;gap:10px;align-items:center;cursor:pointer;color:var(--color-text-soft)}.camera-advanced summary small{color:var(--color-text-muted);font-size:12px}.camera-advanced[open] summary{padding-bottom:8px;border-bottom:1px solid rgba(231,231,232,.08)}.camera-advanced .camera-manual-panel{padding:0;border:0;background:transparent}.camera-surface video{position:relative;z-index:1;object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position .12s linear,transform .12s linear}.camera-surface[data-camera-cut=hard] video:not(.camera-fit-bg){transition:none}.camera-fit-bg{position:absolute!important;inset:-7%;z-index:0;width:114%!important;height:114%!important;display:none!important;object-fit:cover!important;object-position:center!important;transform:none!important;filter:blur(22px) saturate(.88) brightness(.62)!important;pointer-events:none}.camera-surface[data-camera-fit=contain]{background:#050505}.camera-surface[data-camera-fit=contain] .camera-fit-bg{display:block!important}.camera-surface[data-camera-fit=contain] video:not(.camera-fit-bg){object-fit:contain;object-position:center;transform:none;transform-origin:center;background:transparent}.camera-reticle{position:absolute;inset:14% 22%;z-index:2;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}
 .card[data-effect=light-grain] .media video,.card[data-effect=light-grain] .media img{filter:contrast(1.08) brightness(1.02)}.card[data-effect=old-film] .media video,.card[data-effect=old-film] .media img{filter:sepia(.48) contrast(1.2) saturate(.62) brightness(.92)}.card[data-effect=vhs] .media video,.card[data-effect=vhs] .media img{filter:saturate(.62) contrast(1.22) brightness(.9) hue-rotate(-7deg)}.card[data-effect=bw-old] .media video,.card[data-effect=bw-old] .media img{filter:grayscale(1) contrast(1.22) brightness(.9)}.card[data-effect=light-grain] .media:after,.card[data-effect=old-film] .media:after,.card[data-effect=vhs] .media:after,.card[data-effect=bw-old] .media:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--effect-opacity,.24);background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 70% 65%,rgba(0,0,0,.95) 0 1px,transparent 1.8px);background-size:4px 4px,6px 6px;mix-blend-mode:overlay}.card[data-effect=old-film] .media:before,.card[data-effect=bw-old] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at center,transparent 44%,rgba(0,0,0,.46) 100%)}.card[data-effect=vhs] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 4px);mix-blend-mode:overlay}
 .overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,var(--color-brand-green));border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none;pointer-events:auto}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-text-box{display:grid;align-items:center;min-width:96px;min-height:34px;padding:8px 12px;border-left:0;background:rgba(var(--overlay-bg-rgb,0,0,0),var(--overlay-bg-opacity,.7));box-shadow:none;color:var(--overlay-color,#fff);font-weight:700;font-size:clamp(13px,var(--overlay-font-size,20px),36px);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.overlay-text-box[data-overlay-bg=off]{background:transparent;box-shadow:none}.overlay-text-box span{opacity:var(--overlay-opacity,1);overflow:hidden;text-overflow:ellipsis}.overlay-box.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.overlay-image-box{display:grid;place-items:center;min-width:72px;min-height:72px;padding:6px;border:1px dashed rgba(255,255,255,.42);background:rgba(0,0,0,.12);box-shadow:0 8px 24px rgba(0,0,0,.22)}.overlay-image-box img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none;background:transparent}.overlay-resize{position:absolute;right:3px;bottom:3px;z-index:4;width:22px;height:22px;padding:0;border:1px solid rgba(255,255,255,.52);border-radius:5px;background:rgba(255,255,255,.2);cursor:nwse-resize;touch-action:none;pointer-events:auto}.overlay-menu{position:absolute;z-index:6;display:grid;gap:8px;width:min(360px,94%);padding:8px;border:1px solid var(--color-border-strong);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel);touch-action:none}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px;cursor:move}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-inspector{display:grid;gap:8px}.overlay-inspector label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.overlay-inspector input[type=text],.overlay-inspector input[type=number]{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.overlay-inspector input[type=color]{width:42px;height:32px;padding:2px;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black)}.overlay-inspector-row{display:flex;gap:8px;align-items:center}.overlay-inspector-row>*{flex:1}.overlay-inspector-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.overlay-inspector-check input{width:auto}.overlay-danger{color:var(--color-danger)!important;border-color:#5b2626!important;background:#251111!important}.image-upload{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-empty{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;color:var(--color-text-muted)}
 p{color:#bebebe}.peak{color:#fff;font-size:16px}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}.transcript-panel details{border-top:1px solid #242424;margin-top:12px;padding-top:10px}.transcript-panel summary{cursor:pointer;color:#ddd}
@@ -5768,10 +5769,64 @@ function applyCameraSurface(surface, camera, position = 0, duration = 0, cameraP
   surface.dataset.cameraCut = cameraFrameUsesHardCut(frame) ? "hard" : "smooth";
   surface.dataset.cameraFit = cameraFrameUsesGroupFit(frame) ? "contain" : "cover";
   surface.setAttribute("style", cameraPreviewStyleFromFrame(frame));
+  syncCameraFitBackground(surface);
+}
+function primaryCameraVideo(scope){
+  return scope?.querySelector("video:not(.camera-fit-bg)") || null;
+}
+function cameraFitBackgroundFor(scope){
+  const surface = scope?.classList?.contains("camera-surface") ? scope : scope?.querySelector(".camera-surface");
+  if (!surface) return null;
+  const existing = surface.querySelector(".camera-fit-bg");
+  if (existing) return existing;
+  const bg = document.createElement("video");
+  bg.className = "camera-fit-bg";
+  bg.dataset.cameraFitBg = "1";
+  bg.muted = true;
+  bg.playsInline = true;
+  bg.preload = "none";
+  bg.setAttribute("aria-hidden", "true");
+  bg.setAttribute("tabindex", "-1");
+  const main = primaryCameraVideo(surface);
+  if (main) main.insertAdjacentElement("afterend", bg);
+  else surface.prepend(bg);
+  return bg;
+}
+function syncCameraFitBackground(scope){
+  const surface = scope?.classList?.contains("camera-surface") ? scope : scope?.querySelector(".camera-surface");
+  if (!surface) return;
+  const main = primaryCameraVideo(surface);
+  const bg = cameraFitBackgroundFor(surface);
+  if (!main || !bg) return;
+  const nextSrc = main.currentSrc || main.getAttribute("src") || main.dataset.src || "";
+  if (nextSrc && bg.getAttribute("src") !== nextSrc) {
+    bg.setAttribute("src", nextSrc);
+    bg.load();
+  }
+  bg.muted = true;
+  bg.playsInline = true;
+  if (bg.readyState > 0 && Number.isFinite(main.currentTime) && Math.abs(bg.currentTime - main.currentTime) > .12) {
+    bg.currentTime = main.currentTime;
+  }
+  if (surface.dataset.cameraFit === "contain" && !main.paused && !main.ended) {
+    const playback = bg.play();
+    if (playback && typeof playback.catch === "function") playback.catch(() => {
+      bg.dataset.playbackBlocked = "1";
+    });
+  } else {
+    bg.pause();
+  }
+}
+function unloadCameraFitBackground(scope){
+  const bg = cameraFitBackgroundFor(scope?.classList?.contains("camera-surface") ? scope : scope?.querySelector(".camera-surface"));
+  if (!bg) return;
+  bg.pause();
+  bg.removeAttribute("src");
+  bg.load();
 }
 function cameraContextForCard(card, time = null){
   const values = trimValues(card);
-  const video = card.querySelector("video");
+  const video = primaryCameraVideo(card);
   const raw = time === null && video && Number.isFinite(video.currentTime) ? video.currentTime : time;
   const current = clampPreviewTime(values, Number(raw ?? values.trimStart));
   return {
@@ -6549,7 +6604,7 @@ function updateTrimUi(card){
 }
 function updateTimelinePlayhead(card, time = null){
   const values = trimValues(card);
-  const video = card.querySelector("video");
+  const video = primaryCameraVideo(card);
   const raw = time === null && video && Number.isFinite(video.currentTime) ? video.currentTime : time;
   const current = clampPreviewTime(values, Number(raw ?? values.trimStart));
   if (time === null && video && trimRangeActive(values) && Math.abs(Number(video.currentTime || 0) - current) > .05) {
@@ -6583,7 +6638,7 @@ function applyPendingTimelineSeek(card, video){
   return applied;
 }
 function seekTimeline(card, time, options = {}){
-  const video = card.querySelector("video");
+  const video = primaryCameraVideo(card);
   const values = trimValues(card);
   const current = clampPreviewTime(values, Number(time));
   const mode = trimRangeActive(values) && options.mode === "free" ? "trim" : options.mode;
@@ -6601,7 +6656,7 @@ function seekTimeline(card, time, options = {}){
   updateTimelinePlayhead(card, current);
 }
 function seekPreview(card){
-  const video = card.querySelector("video");
+  const video = primaryCameraVideo(card);
   if (!video) return;
   loadCardVideo(card);
   const values = trimValues(card);
@@ -6609,7 +6664,7 @@ function seekPreview(card){
   seekTimeline(card, values.trimStart, { mode: "range" });
 }
 function seekTrimHandle(card, handle){
-  const video = card.querySelector("video");
+  const video = primaryCameraVideo(card);
   if (video) video.pause();
   const values = trimValues(card);
   const target = handle === "end" ? values.endPos : values.startPos;
@@ -6642,7 +6697,7 @@ function pauseAtTrimEnd(card, video, values){
   return true;
 }
 function togglePreviewPlayback(card){
-  const video = card.querySelector("video");
+  const video = primaryCameraVideo(card);
   if (!video) return;
   loadCardVideo(card);
   applyPreviewVolume(video);
@@ -6661,7 +6716,7 @@ function applyPreviewVolume(video){
   }
 }
 function setPreviewVolume(card, value){
-  const video = card.querySelector("video");
+  const video = primaryCameraVideo(card);
   if (!video) return;
   video.dataset.volumeReady = "1";
   video.volume = clampNumber(value, 0, 1);
@@ -6670,7 +6725,7 @@ function setPreviewVolume(card, value){
 }
 function syncPreviewPlayButton(card){
   const button = card.querySelector("[data-preview-play]");
-  const video = card.querySelector("video");
+  const video = primaryCameraVideo(card);
   if (!button) return;
   if (!video) {
     button.hidden = true;
@@ -6682,14 +6737,14 @@ function syncPreviewPlayButton(card){
   button.title = video.paused ? "Reproduzir" : "Pausar";
 }
 function togglePreviewVolume(card){
-  const video = card.querySelector("video");
+  const video = primaryCameraVideo(card);
   if (!video) return;
   applyPreviewVolume(video);
   video.muted = !video.muted;
   syncPreviewVolumeButton(card);
 }
 function stepPreviewVolume(card, direction){
-  const video = card.querySelector("video");
+  const video = primaryCameraVideo(card);
   if (!video) return;
   applyPreviewVolume(video);
   setPreviewVolume(card, (video.muted ? 0 : video.volume) + (direction * previewVolumeStep));
@@ -6697,7 +6752,7 @@ function stepPreviewVolume(card, direction){
 function syncPreviewVolumeButton(card){
   const button = card.querySelector("[data-preview-volume]");
   const value = card.querySelector("[data-preview-volume-value]");
-  const video = card.querySelector("video");
+  const video = primaryCameraVideo(card);
   if (!button) return;
   if (!video) {
     button.hidden = true;
@@ -6723,20 +6778,22 @@ function previewIcon(name){
   return icons[name] || "";
 }
 function loadCardVideo(card){
-  const video = card.querySelector("video[data-src]");
+  const video = card.querySelector("video:not(.camera-fit-bg)[data-src]");
   if (!video || video.getAttribute("src")) return;
   video.setAttribute("src", video.dataset.src);
   applyPreviewVolume(video);
   video.load();
+  syncCameraFitBackground(card);
   syncPreviewPlayButton(card);
   syncPreviewVolumeButton(card);
 }
 function unloadCardVideo(card){
-  const video = card.querySelector("video[data-src]");
+  const video = card.querySelector("video:not(.camera-fit-bg)[data-src]");
   if (!video || !video.getAttribute("src")) return;
   video.pause();
   video.removeAttribute("src");
   video.load();
+  unloadCameraFitBackground(card);
   syncPreviewPlayButton(card);
   syncPreviewVolumeButton(card);
 }
@@ -6945,6 +7002,7 @@ function cameraPreviewItemHtml(item){
   return `<article class="caption-item" data-rank="${escapeAttr(item.rank)}" data-platform="${escapeAttr(item.platform)}" data-camera-duration="${escapeAttr(item.adjusted_duration || 0)}">
     <div class="caption-preview camera-surface" data-camera-key="${escapeAttr(previewFrame.key || "path")}" data-camera-cut="${cameraFrameUsesHardCut(previewFrame) ? "hard" : "smooth"}" data-camera-fit="${cameraFrameUsesGroupFit(previewFrame) ? "contain" : "cover"}" style="${escapeAttr(cameraPreviewStyleFromFrame(previewFrame))}">
       <video controls preload="metadata" src="${escapeAttr(src)}"></video>
+      <video class="camera-fit-bg" data-camera-fit-bg playsinline muted preload="metadata" src="${escapeAttr(src)}" aria-hidden="true" tabindex="-1"></video>
       <div class="camera-reticle"></div>
     </div>
     <div class="caption-item-body">
@@ -7048,7 +7106,7 @@ function bindCameraPreviewControls(){
   document.querySelectorAll("[data-camera-preview] .caption-item").forEach(item => {
     const rank = item.dataset.rank;
     const updatePreviewSurface = () => {
-      const video = item.querySelector("video");
+      const video = primaryCameraVideo(item);
       const edit = platformEditForRank(rank, item.dataset.platform);
       const duration = Number(item.dataset.cameraDuration || video?.duration || 0);
       applyCameraSurface(item.querySelector(".camera-surface"), edit.camera, Number(video?.currentTime || 0), duration, cameraPathForEdit(edit, duration));
@@ -7056,7 +7114,7 @@ function bindCameraPreviewControls(){
       if (summary) summary.textContent = cameraEditLabel(edit, duration);
     };
     updatePreviewSurface();
-    const video = item.querySelector("video");
+    const video = primaryCameraVideo(item);
     if (video) {
       ["loadedmetadata", "durationchange", "seeked", "timeupdate"].forEach(eventName => {
         video.addEventListener(eventName, updatePreviewSurface);
@@ -7781,7 +7839,7 @@ document.querySelectorAll(".card").forEach(card => {
       stepPreviewVolume(card, 1);
     });
   }
-  const video = card.querySelector("video");
+  const video = primaryCameraVideo(card);
   if (video) {
     applyPreviewVolume(video);
     video.addEventListener("play", () => {
@@ -7791,14 +7849,17 @@ document.querySelectorAll(".card").forEach(card => {
       delete card.dataset.timelineSeekIntent;
       if (Math.abs(video.currentTime - nextTime) > .05) video.currentTime = nextTime;
       startCameraFrameSync(video, () => updateCameraSurfaceForCard(card));
+      syncCameraFitBackground(card);
       syncPreviewPlayButton(card);
     });
     video.addEventListener("pause", () => {
       stopCameraFrameSync(video, () => updateCameraSurfaceForCard(card));
+      syncCameraFitBackground(card);
       syncPreviewPlayButton(card);
     });
     video.addEventListener("ended", () => {
       stopCameraFrameSync(video, () => updateCameraSurfaceForCard(card));
+      syncCameraFitBackground(card);
       syncPreviewPlayButton(card);
     });
     video.addEventListener("volumechange", () => {
@@ -7812,6 +7873,7 @@ document.querySelectorAll(".card").forEach(card => {
     video.addEventListener("timeupdate", () => {
       const values = trimValues(card);
       updateTimelinePlayhead(card);
+      syncCameraFitBackground(card);
       if (trimRangeActive(values) && video.currentTime >= values.duration - values.trimEnd) {
         pauseAtTrimEnd(card, video, values);
       }
