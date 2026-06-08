@@ -44,9 +44,10 @@ FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
 MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
 MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
-CAMERA_ANALYSIS_VERSION = "auto-face-v19"
+CAMERA_ANALYSIS_VERSION = "auto-face-v20"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
 CAMERA_ANALYSIS_MAX_FRAMES = 140
+CAMERA_UNCERTAIN_MIN_SECONDS = 0.85
 AI_DIRECTOR_MAX_FRAME_SAMPLES = 10
 AI_DIRECTOR_MAX_CONTEXT_ROWS = 36
 AI_DIRECTOR_MAX_FALLBACK_FRAMES = 28
@@ -790,9 +791,9 @@ def opencv_face_camera_analysis(
         safe_duration = duration
         if video_duration:
             safe_duration = min(duration, max(video_duration - safe_start, 0.3))
-        cascade = opencv_face_cascade(cv2)
+        cascades = opencv_face_cascades(cv2)
         sample_times = camera_sample_times(safe_duration)
-        detections = opencv_face_detections(cv2, capture, cascade, safe_start, sample_times)
+        detections = opencv_face_detections(cv2, capture, cascades, safe_start, sample_times)
     finally:
         capture.release()
     safe_mode = normalize_camera_analysis_mode(mode)
@@ -813,7 +814,7 @@ def opencv_face_camera_analysis(
     return {
         "source": source,
         "detected_faces": max((len(row.get("faces", [])) for row in detections), default=0),
-        "detection_frames": len(detections),
+        "detection_frames": detection_frame_count(detections),
         "diagnostics": diagnostics,
         "camera_path": camera_path,
     }
@@ -846,15 +847,30 @@ def opencv_video_duration(capture: object) -> float:
     return float(opencv_video_metadata(capture)["duration"])
 
 
-def opencv_face_cascade(cv2: object) -> object:
+def opencv_face_cascades(cv2: object) -> list[dict[str, object]]:
     cascade_path = Path(cv2.data.haarcascades) / "haarcascade_frontalface_default.xml"
     cascade = cv2.CascadeClassifier(str(cascade_path))
     if cascade.empty():
         raise RuntimeError("OpenCV face cascade is unavailable.")
-    return cascade
+    cascades: list[dict[str, object]] = [{"kind": "frontal", "cascade": cascade, "mirror": False, "confidence_weight": 1.0}]
+    profile_path = Path(cv2.data.haarcascades) / "haarcascade_profileface.xml"
+    if profile_path.exists():
+        profile = cv2.CascadeClassifier(str(profile_path))
+        if not profile.empty():
+            cascades.extend([
+                {"kind": "profile", "cascade": profile, "mirror": False, "confidence_weight": 0.88},
+                {"kind": "profile-mirror", "cascade": profile, "mirror": True, "confidence_weight": 0.88},
+            ])
+    return cascades
 
 
-def opencv_face_detections(cv2: object, capture: object, cascade: object, start: float, sample_times: list[float]) -> list[dict[str, object]]:
+def opencv_face_cascade(cv2: object) -> object:
+    return opencv_face_cascades(cv2)[0]["cascade"]
+
+
+def opencv_face_detections(
+    cv2: object, capture: object, cascades: list[dict[str, object]], start: float, sample_times: list[float]
+) -> list[dict[str, object]]:
     detections: list[dict[str, object]] = []
     previous_x = 50.0
     for relative_time in sample_times:
@@ -862,13 +878,15 @@ def opencv_face_detections(cv2: object, capture: object, cascade: object, start:
         ok, frame = capture.read()
         if not ok or frame is None:
             continue
-        faces = detect_frame_faces(cv2, cascade, frame)
-        if not faces:
+        faces = detect_frame_faces(cv2, cascades, frame)
+        reliable = [face for face in faces if float(face.get("confidence") or 0.0) >= 0.35]
+        if not reliable:
+            detections.append({"time": round(relative_time, 3), "primary": None, "faces": [], "missing": True})
             continue
-        primary = select_primary_face(faces, previous_x)
+        primary = select_primary_face(reliable, previous_x)
         if primary:
             previous_x = float(primary["x"])
-            detections.append({"time": round(relative_time, 3), "primary": primary, "faces": faces})
+            detections.append({"time": round(relative_time, 3), "primary": primary, "faces": reliable})
     return detections
 
 
@@ -883,11 +901,12 @@ def camera_analysis_diagnostics(
     camera_path: list[dict[str, object]],
 ) -> dict[str, object]:
     sample_count = len(sample_times)
-    detection_frames = len(detections)
+    detection_frames = detection_frame_count(detections)
+    missing_frames = sum(1 for row in detections if not reliable_faces(row))
     multi_face_frames = sum(1 for row in detections if len(row.get("faces", [])) > 1)
     edge_face_frames = sum(1 for row in detections if row_has_edge_face(row))
     detected_faces = max((len(row.get("faces", [])) for row in detections), default=0)
-    detected_times = [float(row.get("time") or 0.0) for row in detections]
+    detected_times = [float(row.get("time") or 0.0) for row in detections if reliable_faces(row)]
     return {
         "analysis_input": input_kind,
         "analysis_file": label,
@@ -898,7 +917,9 @@ def camera_analysis_diagnostics(
         "analysis_start": round(start, 3),
         "analysis_duration": round(duration, 3),
         "sample_count": sample_count,
+        "sample_rows": len(detections),
         "detection_frames": detection_frames,
+        "missing_detection_frames": missing_frames,
         "detection_rate": round(detection_frames / sample_count, 3) if sample_count else 0.0,
         "detected_faces_max": detected_faces,
         "multi_face_frames": multi_face_frames,
@@ -908,6 +929,10 @@ def camera_analysis_diagnostics(
         "camera_keyframes": len(camera_path),
         "detection_preview": compact_detection_preview(detections),
     }
+
+
+def detection_frame_count(detections: list[dict[str, object]]) -> int:
+    return sum(1 for row in detections if reliable_faces(row))
 
 
 def camera_path_quality_diagnostics(
@@ -974,7 +999,9 @@ def compact_detection_preview(detections: list[dict[str, object]]) -> list[dict[
             "y": primary.get("y"),
             "zoom": primary.get("zoom"),
             "confidence": primary.get("confidence"),
+            "missing": not reliable_faces(row),
             "face_xs": [face.get("x") for face in row.get("faces", [])[:4] if isinstance(face, dict)],
+            "face_widths": [face.get("width") for face in row.get("faces", [])[:4] if isinstance(face, dict)],
         })
     return preview
 
@@ -995,32 +1022,66 @@ def camera_sample_times(duration: float) -> list[float]:
     return sorted(set(times))
 
 
-def detect_frame_faces(cv2: object, cascade: object, frame: object) -> list[dict[str, float]]:
+def detect_frame_faces(cv2: object, cascades: list[dict[str, object]], frame: object) -> list[dict[str, float]]:
     height, width = frame.shape[:2]
     scale = min(1.0, 640.0 / max(width, height))
     small = cv2.resize(frame, (int(width * scale), int(height * scale))) if scale < 1.0 else frame
     gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
-    faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(36, 36))
-    if len(faces) == 0:
-        return []
+    rows: list[dict[str, float]] = []
+    for spec in cascades:
+        mirror = bool(spec.get("mirror"))
+        source_gray = cv2.flip(gray, 1) if mirror else gray
+        cascade = spec["cascade"]
+        faces = cascade.detectMultiScale(source_gray, scaleFactor=1.1, minNeighbors=5, minSize=(36, 36))
+        rows.extend(face_rows_from_detections(faces, width, height, scale, mirror, float(spec.get("confidence_weight") or 1.0)))
+    return dedupe_detected_faces(rows)
+
+
+def face_rows_from_detections(
+    faces: object, width: int, height: int, scale: float, mirror: bool, confidence_weight: float
+) -> list[dict[str, float]]:
     rows: list[dict[str, float]] = []
     for face in faces:
         x, y, face_w, face_h = [float(value) for value in face]
-        if face_w <= 0 or face_h <= 0:
+        row = face_row_from_detection(x, y, face_w, face_h, width, height, scale, mirror, confidence_weight)
+        if row is not None:
+            rows.append(row)
+    return rows
+
+
+def face_row_from_detection(
+    x: float, y: float, face_w: float, face_h: float, width: int, height: int, scale: float, mirror: bool, confidence_weight: float
+) -> dict[str, float] | None:
+    if face_w <= 0 or face_h <= 0:
+        return None
+    source_w = face_w / scale
+    source_h = face_h / scale
+    center_x = ((x + face_w / 2.0) / scale) / width * 100.0
+    center_y = ((y + face_h / 2.0) / scale) / height * 100.0
+    if mirror:
+        center_x = 100.0 - center_x
+    area_ratio = (source_w * source_h) / max(width * height, 1)
+    return {
+        "x": round(clamp(center_x, 8.0, 92.0), 2),
+        "y": round(clamp(center_y, 35.0, 65.0), 2),
+        "zoom": round(face_zoom(source_w, width), 3),
+        "confidence": round(clamp((area_ratio / 0.08) * confidence_weight, 0.3, 1.0), 3),
+        "area": round(source_w * source_h, 3),
+        "width": round(source_w / max(width, 1) * 100.0, 2),
+    }
+
+
+def dedupe_detected_faces(rows: list[dict[str, float]]) -> list[dict[str, float]]:
+    result: list[dict[str, float]] = []
+    for candidate in sorted(rows, key=lambda item: item["area"], reverse=True):
+        if any(face_rows_overlap(candidate, existing) for existing in result):
             continue
-        source_w = face_w / scale
-        source_h = face_h / scale
-        center_x = ((x + face_w / 2.0) / scale) / width * 100.0
-        center_y = ((y + face_h / 2.0) / scale) / height * 100.0
-        area_ratio = (source_w * source_h) / max(width * height, 1)
-        rows.append({
-            "x": round(clamp(center_x, 8.0, 92.0), 2),
-            "y": round(clamp(center_y, 35.0, 65.0), 2),
-            "zoom": round(face_zoom(source_w, width), 3),
-            "confidence": round(clamp(area_ratio / 0.08, 0.35, 1.0), 3),
-            "area": round(source_w * source_h, 3),
-        })
-    return sorted(rows, key=lambda item: item["area"], reverse=True)
+        result.append(candidate)
+    return result
+
+
+def face_rows_overlap(first: dict[str, float], second: dict[str, float]) -> bool:
+    return abs(face_x(first) - face_x(second)) < 7.0 and abs(float(first.get("y") or 50.0) - float(second.get("y") or 50.0)) < 8.0
 
 
 def select_primary_face(faces: list[dict[str, float]], previous_x: float) -> dict[str, float] | None:
@@ -1040,6 +1101,18 @@ def select_primary_face(faces: list[dict[str, float]], previous_x: float) -> dic
 
 def face_x(face: dict[str, float]) -> float:
     return float(face.get("x") or 50.0)
+
+
+def face_width(face: dict[str, float]) -> float:
+    return max(float(face.get("width") or 0.0), 0.0)
+
+
+def face_left_edge(face: dict[str, float]) -> float:
+    return face_x(face) - face_width(face) * 0.55
+
+
+def face_right_edge(face: dict[str, float]) -> float:
+    return face_x(face) + face_width(face) * 0.55
 
 
 def face_outside_safe_zone(face: dict[str, float]) -> bool:
@@ -1223,6 +1296,7 @@ def ai_director_rules(mode: str) -> list[str]:
         "Se 3 pessoas aparecem no mesmo frame, priorize plano aberto de grupo, nao close em uma so pessoa.",
         "Se 2 ou mais rostos ficariam fora do crop, reduza zoom e centralize entre os rostos.",
         "Use close em uma pessoa apenas quando os outros rostos nao estiverem visiveis ou nao importarem para a cena.",
+        "Quando scene_direction.uncertain_windows indicar baixa deteccao, nao persiga rosto antigo; prefira centro aberto ou segure o ultimo grupo seguro.",
     ]
     if ai_director_uses_hard_cuts(mode):
         rules.extend([
@@ -1242,7 +1316,9 @@ def ai_director_detection_summary(detections: list[dict[str, object]]) -> dict[s
     multi = [row for row in rows if int(row["face_count"]) >= 2]
     group = [row for row in rows if int(row["face_count"]) >= 3 or float(row["spread"]) >= 24.0]
     return {
+        "sample_rows": len(detections),
         "sampled_detection_frames": len(rows),
+        "uncertain_frames": max(len(detections) - len(rows), 0),
         "multi_face_frames": len(multi),
         "group_priority_frames": len(group),
         "multi_face_coverage": ai_director_multi_face_coverage(detections),
@@ -1270,6 +1346,7 @@ def ai_director_detection_row(row: dict[str, object]) -> dict[str, object]:
         "face_xs": xs,
         "face_ys": [round(float(face.get("y") or 50.0), 2) for face in faces[:5]],
         "face_zooms": [round(float(face.get("zoom") or 1.0), 3) for face in faces[:5]],
+        "face_widths": [round(face_width(face), 2) for face in faces[:5]],
         "primary_x": round(float(primary.get("x") or 50.0), 2),
         "group_priority": len(faces) >= 3 or should_use_group_frame(faces),
         "edge_risk": any(face_outside_safe_zone(face) for face in faces),
@@ -1314,8 +1391,34 @@ def ai_director_scene_context(detections: list[dict[str, object]], duration: flo
         "primary_track": ai_director_primary_track(rows),
         "reaction_windows": ai_director_reaction_windows(rows, duration),
         "group_windows": ai_director_group_windows(rows, platform),
+        "uncertain_windows": detection_uncertainty_windows(detections, duration),
         "cut_pattern": "principal -> reaction 2-3s -> principal; use group when close would cut visible faces",
     }
+
+
+def detection_uncertainty_windows(detections: list[dict[str, object]], duration: float) -> list[dict[str, object]]:
+    windows: list[dict[str, object]] = []
+    start: float | None = None
+    end = 0.0
+    for row in sorted(detections, key=lambda item: float(item.get("time") or 0.0)):
+        time_value = clamp(float(row.get("time") or 0.0), 0.0, max(duration, 0.3))
+        if not reliable_faces(row):
+            if start is None:
+                start = time_value
+            end = time_value
+            continue
+        if start is not None:
+            append_uncertainty_window(windows, start, end)
+            start = None
+    if start is not None:
+        append_uncertainty_window(windows, start, max(end, max(duration, 0.3)))
+    return windows[:8]
+
+
+def append_uncertainty_window(windows: list[dict[str, object]], start: float, end: float) -> None:
+    length = max(end - start, 0.0)
+    if length >= CAMERA_UNCERTAIN_MIN_SECONDS:
+        windows.append({"start": round(start, 3), "end": round(end, 3), "duration": round(length, 3)})
 
 
 def ai_director_primary_track(rows: list[dict[str, object]]) -> dict[str, object]:
@@ -1443,6 +1546,9 @@ def dense_protected_camera_path(
     fallback = forced_group_fit_camera_frames(merged, detections, duration, platform, hard_cut)
     if fallback:
         merged = merge_camera_path_frames(merged, fallback, duration)
+    uncertain = uncertain_center_camera_frames(merged, detections, duration, hard_cut)
+    if uncertain:
+        merged = merge_camera_path_frames(merged, uncertain, duration)
     return stabilize_ai_director_path(merged, duration, hard_cut)[:56]
 
 
@@ -1540,6 +1646,30 @@ def forced_group_fit_camera_frames(
     return forced
 
 
+def uncertain_center_camera_frames(
+    frames: list[dict[str, object]], detections: list[dict[str, object]], duration: float, hard_cut: bool
+) -> list[dict[str, object]]:
+    forced: list[dict[str, object]] = []
+    source = "ai-director-cuts-uncertain-center" if hard_cut else "ai-director-uncertain-center"
+    for window in detection_uncertainty_windows(detections, duration):
+        time_value = float(window.get("start") or 0.0)
+        active = camera_path_frame_at_time(frames, time_value)
+        if camera_frame_is_open_center(active):
+            continue
+        target = hard_cut_ai_director_frame(open_center_camera_frame(time_value), time_value, source)
+        if not recent_similar_camera_frame(forced, target, 1.1):
+            forced.append(target)
+    return forced
+
+
+def camera_frame_is_open_center(frame: dict[str, object]) -> bool:
+    return abs(float(frame.get("x") or 50.0) - 50.0) <= 4.0 and float(frame.get("zoom") or 1.0) <= 1.06
+
+
+def open_center_camera_frame(time_value: float) -> dict[str, object]:
+    return {"time": round(time_value, 3), "x": 50.0, "y": 50.0, "zoom": 1.0, "confidence": 0.55}
+
+
 def risky_group_detection_rows(
     frames: list[dict[str, object]],
     detections: list[dict[str, object]],
@@ -1623,6 +1753,8 @@ def camera_frame_priority(frame: dict[str, object]) -> int:
         return 4
     if "group-safe" in source:
         return 3
+    if "uncertain-center" in source:
+        return 2
     if "dense" in source or "cuts-primary" in source:
         return 2
     return 1
@@ -1768,7 +1900,7 @@ def camera_frame_cuts_faces(frame: dict[str, object], faces: list[dict[str, floa
     half_width = max(24.0, 50.0 / zoom)
     left = center - half_width + 5.0
     right = center + half_width - 5.0
-    return any(face_x(face) < left or face_x(face) > right for face in faces)
+    return any(face_left_edge(face) < left or face_right_edge(face) > right for face in faces)
 
 
 def ai_director_frame_from_row(row: dict[str, object], duration: float) -> dict[str, float] | None:
@@ -1931,11 +2063,12 @@ def should_use_group_fit_frame(faces: list[dict[str, float]], platform: str | No
         return False
     sorted_faces = sorted(faces, key=face_x)
     spread = face_x(sorted_faces[-1]) - face_x(sorted_faces[0])
-    both_edges = face_x(sorted_faces[0]) <= 24.0 and face_x(sorted_faces[-1]) >= 76.0
+    face_span = face_right_edge(sorted_faces[-1]) - face_left_edge(sorted_faces[0])
+    both_edges = face_left_edge(sorted_faces[0]) <= 24.0 and face_right_edge(sorted_faces[-1]) >= 76.0
     if aspect < 0.65:
         has_edge = any(face_outside_safe_zone(face) for face in sorted_faces)
-        return len(sorted_faces) >= 3 or spread >= 38.0 or both_edges or (has_edge and spread >= 30.0)
-    return len(sorted_faces) >= 3 and (spread >= 34.0 or both_edges)
+        return len(sorted_faces) >= 3 or spread >= 38.0 or face_span >= 52.0 or both_edges or (has_edge and spread >= 30.0)
+    return len(sorted_faces) >= 3 and (spread >= 34.0 or face_span >= 48.0 or both_edges)
 
 
 def group_frame_source(frame: dict[str, object], hard_cut: bool) -> str:
