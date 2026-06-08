@@ -135,7 +135,9 @@ Supported smart modes:
   simultaneous faces are detected, inserts wider group/reaction framing without
   requiring the user to pick a manual multi-face preset. If faces approach the
   horizontal crop edge, it uses safe group framing to avoid cutting a speaker.
-- `ai-director`: optional hosted layer for dynamic editorial framing.
+- `ai-director`: optional hosted layer for dynamic editorial framing. It may
+  include punctual editorial cuts, but should not force every change to be a dry
+  cut.
 - `ai-director-group`: optional hosted layer biased toward group/podcast
   framing when multiple people are visible.
 - `ai-director-speaker`: optional hosted layer biased toward the likely active
@@ -144,7 +146,8 @@ Supported smart modes:
   and alternating visible people with pauses.
 - `ai-director-cuts`: optional hosted layer biased toward dry editorial cuts
   between stable shot choices, with 2.5-4.5 second holds and no gradual pan
-  intent.
+  intent. The payload includes scene-direction hints for primary faces,
+  secondary/reaction windows, and group windows.
 
 All AI Director modes run the local OpenCV analysis first, send compact
 diagnostics, a few low-detail sampled frames, transcript context, an editorial
@@ -155,11 +158,14 @@ also checked against OpenCV multi-face detections so scenes with three visible
 people, or two people at risk of being cropped, open to group-safe framing
 instead of holding a close-up on only one face.
 
-AI Cuts post-processes the validated path by spacing keyframes apart and marking
-their source as `ai-director-cuts` or `ai-director-cuts-group-safe`. Final
-render already treats each `camera_path` keyframe as a trimmed segment; the
-browser preview should also hold these frames instead of interpolating between
-them.
+AI Cuts post-processes the validated path with OpenCV scene roles. When a
+secondary face is reliable, it emits a principal -> reaction -> principal pattern
+instead of only spacing model keyframes. Group-risk frames still open to
+`ai-director-cuts-group-safe`. If scene roles are too weak, AI Cuts falls back to
+spacing validated model keyframes and marking their source as `ai-director-cuts`.
+Final render already treats each `camera_path` keyframe as a trimmed segment;
+the browser preview should also hold these frames instead of interpolating
+between them.
 - `follow-face`: tracks the primary face with smoothing, but also uses safe
   group framing when another detected face would be cut by the vertical crop.
 - `stable-face`: creates one stable median crop for the detected face.

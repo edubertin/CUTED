@@ -39,7 +39,7 @@ FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
 MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
 MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
-CAMERA_ANALYSIS_VERSION = "auto-face-v14"
+CAMERA_ANALYSIS_VERSION = "auto-face-v15"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
 CAMERA_ANALYSIS_MAX_FRAMES = 140
 CAMERA_SAFE_X_MIN = 30.0
@@ -1039,7 +1039,7 @@ def ai_director_camera_result(
         payload = request_ai_director_path(platform, title, transcript, metadata, detections, fallback_path, frames, duration, mode)
         path = protected_ai_director_path(validated_ai_director_path(payload, duration), detections, duration)
         if ai_director_uses_hard_cuts(mode):
-            path = hard_cut_ai_director_path(path, duration)
+            path = hard_cut_ai_director_path(path, detections, duration)
     except Exception as error:
         diagnostics["error"] = str(error)
         return {"camera_path": [], "diagnostics": diagnostics}
@@ -1118,6 +1118,7 @@ def ai_director_user_payload(
         "video": metadata,
         "opencv_detection_summary": ai_director_detection_summary(detections),
         "opencv_detections": ai_director_detection_context(detections),
+        "scene_direction": ai_director_scene_context(detections, duration),
         "local_auto_director_fallback": fallback_path[:16],
         "rules": rules,
     }, ensure_ascii=False)
@@ -1139,7 +1140,11 @@ def ai_director_rules(mode: str) -> list[str]:
             "Este modo deve parecer corte seco: nao crie keyframes para pans graduais.",
             "Prefira 2.5 a 4.5 segundos entre cortes, salvo mudanca clara de fala ou reacao.",
             "Alterne entre close, grupo e reacao quando houver rostos confiaveis.",
+            "Quando cortar para uma pessoa secundaria, volte para a pessoa principal depois de 2 a 3 segundos.",
+            "Use as janelas em scene_direction.reaction_windows como candidatos preferenciais de corte.",
         ])
+    elif mode == "ai-director":
+        rules.append("Pode usar cortes editoriais pontuais, mas mantenha o modo dinamico misturando holds, leves ajustes e reacoes.")
     return rules
 
 
@@ -1212,6 +1217,59 @@ def ai_director_multi_face_coverage(detections: list[dict[str, object]]) -> floa
     return round(multi / len(detections), 3)
 
 
+def ai_director_scene_context(detections: list[dict[str, object]], duration: float) -> dict[str, object]:
+    rows = [row for row in detections if reliable_faces(row)]
+    return {
+        "duration_seconds": round(max(duration, 0.3), 3),
+        "primary_track": ai_director_primary_track(rows),
+        "reaction_windows": ai_director_reaction_windows(rows, duration),
+        "group_windows": ai_director_group_windows(rows),
+        "cut_pattern": "principal -> reaction 2-3s -> principal; use group when close would cut visible faces",
+    }
+
+
+def ai_director_primary_track(rows: list[dict[str, object]]) -> dict[str, object]:
+    primary_rows = [row for row in rows if isinstance(row.get("primary"), dict)]
+    if not primary_rows:
+        return {"coverage": 0.0}
+    xs = [face_x(row["primary"]) for row in primary_rows if isinstance(row.get("primary"), dict)]
+    areas = [float(row["primary"].get("area") or 0.0) for row in primary_rows if isinstance(row.get("primary"), dict)]
+    return {
+        "coverage": round(len(primary_rows) / max(len(rows), 1), 3),
+        "median_x": round(median_value(sorted(xs)), 2),
+        "avg_area": round(sum(areas) / max(len(areas), 1), 3),
+    }
+
+
+def ai_director_reaction_windows(rows: list[dict[str, object]], duration: float) -> list[dict[str, object]]:
+    windows: list[dict[str, object]] = []
+    last_time = -999.0
+    for row in rows:
+        time_value = float(row.get("time") or 0.0)
+        secondary = secondary_face_for_row(row)
+        if secondary is None or time_value < 1.2 or time_value - last_time < 3.0:
+            continue
+        windows.append({
+            "time": round(time_value, 3),
+            "return_time": round(min(time_value + 2.6, max(duration, 0.3)), 3),
+            "secondary_x": round(face_x(secondary), 2),
+            "secondary_zoom": round(min(float(secondary.get("zoom") or 1.0) + 0.08, 1.34), 3),
+            "face_count": len(reliable_faces(row)),
+        })
+        last_time = time_value
+        if len(windows) >= 8:
+            break
+    return windows
+
+
+def ai_director_group_windows(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    return [
+        {"time": round(float(row.get("time") or 0.0), 3), "face_count": len(reliable_faces(row))}
+        for row in rows
+        if len(reliable_faces(row)) >= 3 or should_use_group_frame(sorted(reliable_faces(row), key=face_x))
+    ][:8]
+
+
 def ai_director_schema() -> dict[str, object]:
     frame_schema = {
         "type": "object",
@@ -1257,7 +1315,16 @@ def protected_ai_director_path(
     return stable_camera_targets(compressed_camera_path(protected, duration, max_gap=2.6, x_threshold=1.4, zoom_threshold=0.012))
 
 
-def hard_cut_ai_director_path(frames: list[dict[str, object]], duration: float) -> list[dict[str, object]]:
+def hard_cut_ai_director_path(
+    frames: list[dict[str, object]], detections: list[dict[str, object]], duration: float
+) -> list[dict[str, object]]:
+    scene_path = cinematic_cut_scene_path(detections, duration)
+    if scene_path:
+        return scene_path
+    return hard_cut_spaced_ai_frames(frames, duration)
+
+
+def hard_cut_spaced_ai_frames(frames: list[dict[str, object]], duration: float) -> list[dict[str, object]]:
     if not frames:
         return []
     safe_duration = max(duration, 0.3)
@@ -1275,12 +1342,85 @@ def hard_cut_ai_director_path(frames: list[dict[str, object]], duration: float) 
     return result[:14]
 
 
-def hard_cut_ai_director_frame(frame: dict[str, object], time_value: float) -> dict[str, object]:
+def cinematic_cut_scene_path(detections: list[dict[str, object]], duration: float) -> list[dict[str, object]]:
+    rows = [row for row in detections if reliable_faces(row)]
+    if not rows:
+        return []
+    safe_duration = max(duration, 0.3)
+    frames = [cinematic_primary_frame(rows[0], 0.0)]
+    last_return = 0.0
+    for row in rows:
+        time_value = float(row.get("time") or 0.0)
+        if time_value < 1.6 or time_value - last_return < 2.8:
+            continue
+        target = cinematic_reaction_frame(row, time_value)
+        if target is None or camera_frames_are_similar(frames[-1], target):
+            continue
+        frames.append(target)
+        return_time = min(time_value + 2.6, safe_duration)
+        if return_time - time_value >= 1.2:
+            frames.append(cinematic_primary_frame(nearest_scene_row(return_time, rows), return_time))
+            last_return = return_time
+        if len(frames) >= 13:
+            break
+    return frames if len(frames) > 1 else []
+
+
+def cinematic_reaction_frame(row: dict[str, object], time_value: float) -> dict[str, object] | None:
+    faces = sorted(reliable_faces(row), key=face_x)
+    if len(faces) >= 3:
+        return hard_cut_ai_director_frame(group_face_frame(faces, time_value), time_value, "ai-director-cuts-group-safe")
+    secondary = secondary_face_for_row(row)
+    if secondary is None:
+        if should_use_group_frame(faces):
+            return hard_cut_ai_director_frame(group_face_frame(faces, time_value), time_value, "ai-director-cuts-group-safe")
+        return None
+    return hard_cut_ai_director_frame({
+        **secondary,
+        "time": time_value,
+        "zoom": min(float(secondary.get("zoom") or 1.0) + 0.08, 1.34),
+    }, time_value, "ai-director-cuts-reaction")
+
+
+def cinematic_primary_frame(row: dict[str, object], time_value: float) -> dict[str, object]:
+    faces = sorted(reliable_faces(row), key=face_x)
+    if len(faces) >= 3 and should_use_group_frame(faces):
+        return hard_cut_ai_director_frame(group_face_frame(faces, time_value), time_value, "ai-director-cuts-group-safe")
+    primary = row.get("primary") if isinstance(row.get("primary"), dict) else None
+    source = primary if isinstance(primary, dict) else (faces[0] if faces else {})
+    return hard_cut_ai_director_frame({**source, "time": time_value}, time_value, "ai-director-cuts-primary")
+
+
+def secondary_face_for_row(row: dict[str, object]) -> dict[str, float] | None:
+    primary = row.get("primary") if isinstance(row.get("primary"), dict) else None
+    if primary is None:
+        return None
+    primary_x = face_x(primary)
+    candidates = [face for face in reliable_faces(row) if abs(face_x(face) - primary_x) >= 9.0]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda face: float(face.get("confidence") or 0.0) * max(float(face.get("area") or 1.0), 1.0))
+
+
+def nearest_scene_row(time_value: float, rows: list[dict[str, object]]) -> dict[str, object]:
+    return min(rows, key=lambda row: abs(float(row.get("time") or 0.0) - time_value))
+
+
+def camera_frames_are_similar(first: dict[str, object], second: dict[str, object]) -> bool:
+    return abs(float(first.get("x") or 50.0) - float(second.get("x") or 50.0)) < 5.0
+
+
+def hard_cut_ai_director_frame(
+    frame: dict[str, object], time_value: float, source_override: str | None = None
+) -> dict[str, object]:
     source = str(frame.get("source") or "ai-director")
-    next_source = "ai-director-cuts-group-safe" if source == "ai-director-group-safe" else "ai-director-cuts"
+    next_source = source_override or ("ai-director-cuts-group-safe" if source == "ai-director-group-safe" else "ai-director-cuts")
     return {
         **frame,
         "time": round(time_value, 3),
+        "x": round(float(frame.get("x") or 50.0), 2),
+        "y": round(float(frame.get("y") or 50.0), 2),
+        "zoom": round(float(frame.get("zoom") or 1.0), 3),
         "source": next_source,
     }
 
