@@ -19,8 +19,10 @@ face detection, tracking, and source-aware analysis.
   reaction/group framing when multi-face context is reliable or when detected
   faces sit near the vertical crop edge.
 - AI Director: optional hosted layer. Uses OpenCV diagnostics, a small set of
-  low-detail sampled frames, transcript context, and the local Auto Director
-  fallback path to decide a more editorial `camera_path`.
+  low-detail sampled frames, transcript context, an editorial intent, and the
+  local Auto Director fallback path to decide a more editorial `camera_path`.
+  Available intents are dynamic, group/podcast, speaker focus, and reactions.
+  Multi-person scenes should bias toward group framing before close-ups.
 - Follow main face, with safe group framing when a second face would be cut by
   the vertical crop.
 - Stable centered face.
@@ -63,3 +65,7 @@ face detection, tracking, and source-aware analysis.
 - Final render continues using `camera_path` as the source of truth.
 - AI Director never becomes a hard dependency for camera editing.
 - AI Director responses are validated and clamped before being stored.
+- AI Director paths are post-processed against OpenCV face positions so a model
+  close-up cannot keep cutting visible people in multi-face scenes.
+- AI Director intent variants keep the same render contract and fall back to
+  local Auto Director when OpenAI is unavailable.

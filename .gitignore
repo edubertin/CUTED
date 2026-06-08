@@ -1,5 +1,8 @@
 samples/**/cutted-serve-*.log
 samples/**/cutted-serve-*.err.log
+samples/**/_imports/
+samples/**/overlay-assets/
+.codex-cuted-*.log
 __pycache__/
 *.pyc
 .env
