@@ -13,6 +13,7 @@ A generated sample folder normally contains:
 ```text
 index.html
 moments.json
+_source/source-metadata.json
 clips/
 frames/
 caption-queue.json
@@ -22,6 +23,27 @@ overlay-assets/
 
 Not every folder has every file. Some are generated only after browser export
 or final render.
+
+## `_source/source-metadata.json`
+
+Optional import diagnostic written when CUTED can probe the source media. For
+YouTube imports, the analyzer first tries to materialize a high-quality local
+source in `_source/` and records the selected format and probe output here. This
+file is the first place to check when a vertical crop or Smart Camera render
+looks soft: if the source entered as 480p or 720p, the final 1080x1920 export is
+already working from limited pixels.
+
+Important fields:
+
+```text
+kind
+label
+render_source_kind
+render_source_file
+format_selector
+download_error
+probe
+```
 
 ## `moments.json`
 

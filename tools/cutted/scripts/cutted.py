@@ -26,6 +26,17 @@ from types import SimpleNamespace
 
 BRAND_LOGO_FILE = "cuted-logo-transparent.png"
 RANGE_MEDIA_EXTENSIONS = {".m4v", ".mov", ".mp4", ".webm"}
+YOUTUBE_HIGH_QUALITY_FORMAT = (
+    "bv*[height<=1440][vcodec^=avc1]+ba[ext=m4a]/"
+    "bv*[height<=1440]+ba/"
+    "b[height<=1440]/"
+    "bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]/"
+    "b[height<=1080]/best"
+)
+YOUTUBE_STREAM_FALLBACK_FORMAT = "b[height<=1080]/b[height<=720]/18/b[height<=480]/best"
+PREVIEW_VIDEO_CRF = "20"
+FINAL_VIDEO_CRF = "20"
+FINAL_EFFECT_VIDEO_CRF = "19"
 CAMERA_ANALYSIS_VERSION = "auto-face-v13"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
 CAMERA_ANALYSIS_MAX_FRAMES = 140
@@ -118,6 +129,7 @@ class SourceMedia:
     transcribe_source: Path | str
     label: str
     cleanup_paths: tuple[Path, ...]
+    metadata: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -292,7 +304,8 @@ def analyze(args: argparse.Namespace) -> None:
     config = build_config(args)
     ffmpeg = find_ffmpeg()
     ffprobe = find_ffprobe()
-    source = prepare_source(args, out_dir, ffmpeg)
+    source = prepare_source(args, out_dir, ffmpeg, ffprobe)
+    write_source_metadata(out_dir, source.metadata)
     duration = probe_duration(source.render_source, ffprobe)
     segments = load_segments(args, source.transcribe_source)
     moments = pick_moments_for_import(args, segments, config, duration)
@@ -2245,14 +2258,14 @@ def render_command(
 def mp4_output_args(row: dict[str, object]) -> list[str]:
     return [
         "-c:v", "libx264",
-        "-preset", "veryfast",
+        "-preset", "medium",
         "-profile:v", "main",
         "-level", "4.1",
         "-pix_fmt", "yuv420p",
         "-r", "30",
         "-crf", video_crf(row),
         "-c:a", "aac",
-        "-b:a", "128k",
+        "-b:a", "192k",
         "-ar", "44100",
         "-movflags", "+faststart",
     ]
@@ -2622,7 +2635,7 @@ def effect_filter(row: dict[str, object]) -> str:
 
 
 def video_crf(row: dict[str, object]) -> str:
-    return "24" if effect_from_row(row)["key"] != "none" else "23"
+    return FINAL_EFFECT_VIDEO_CRF if effect_from_row(row)["key"] != "none" else FINAL_VIDEO_CRF
 
 
 def visible_effect_intensity(intensity: float) -> float:
@@ -2895,26 +2908,37 @@ def build_config(args: argparse.Namespace) -> CuttedConfig:
     )
 
 
-def prepare_source(args: argparse.Namespace, out_dir: Path, ffmpeg: str) -> SourceMedia:
+def prepare_source(args: argparse.Namespace, out_dir: Path, ffmpeg: str, ffprobe: str | None) -> SourceMedia:
     if args.youtube_url:
-        return prepare_youtube_source(args, out_dir, ffmpeg)
+        return prepare_youtube_source(args, out_dir, ffmpeg, ffprobe)
     if not args.video:
         raise RuntimeError("Provide a local video path or --youtube-url.")
     video = args.video.resolve()
     require_file(video)
-    return SourceMedia(str(video), video, video.name, ())
+    metadata = source_media_metadata("local", video.name, str(video), probe_media_metadata(video, ffprobe), None, None)
+    return SourceMedia(str(video), video, video.name, (), metadata)
 
 
-def prepare_youtube_source(args: argparse.Namespace, out_dir: Path, ffmpeg: str) -> SourceMedia:
+def prepare_youtube_source(args: argparse.Namespace, out_dir: Path, ffmpeg: str, ffprobe: str | None) -> SourceMedia:
     url = args.youtube_url
     temp_dir = out_dir / "_source"
     temp_dir.mkdir(exist_ok=True)
     label = youtube_title(url)
     transcript = try_youtube_transcript(url, temp_dir, args.language) if args.youtube_captions else None
     transcribe_source = transcript or download_youtube_audio(url, temp_dir / "audio.m4a", ffmpeg)
-    render_source = youtube_render_url(url)
+    download_error: str | None = None
+    format_selector = youtube_high_quality_format()
+    try:
+        render_source_path = download_youtube_render_source(url, temp_dir, ffmpeg, format_selector)
+        render_source = str(render_source_path)
+        probe = probe_media_metadata(render_source_path, ffprobe)
+    except (RuntimeError, subprocess.SubprocessError, OSError) as exc:
+        download_error = str(exc)
+        render_source = youtube_render_url(url)
+        probe = probe_media_metadata(render_source, ffprobe)
+    metadata = source_media_metadata("youtube", label, render_source, probe, format_selector, download_error)
     cleanup = (transcribe_source,) if isinstance(transcribe_source, Path) else ()
-    return SourceMedia(render_source, transcribe_source, label, cleanup)
+    return SourceMedia(render_source, transcribe_source, label, cleanup, metadata)
 
 
 def require_file(path: Path) -> None:
@@ -2953,6 +2977,53 @@ def probe_duration(video: Path | str, ffprobe: str | None) -> float:
     return float(data["format"]["duration"])
 
 
+def probe_media_metadata(video: Path | str, ffprobe: str | None) -> dict[str, object]:
+    if not ffprobe:
+        return {"probe_available": False}
+    command = [
+        ffprobe, "-v", "error",
+        "-show_entries",
+        "stream=index,codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate,bit_rate:format=duration,bit_rate,format_name",
+        "-of", "json", str(video),
+    ]
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
+    except subprocess.SubprocessError as exc:
+        return {"probe_available": True, "probe_error": str(exc)}
+    data = json.loads(result.stdout or "{}")
+    data["probe_available"] = True
+    return data
+
+
+def source_media_metadata(
+    kind: str, label: str, render_source: str, probe: dict[str, object],
+    format_selector: str | None, download_error: str | None
+) -> dict[str, object]:
+    is_remote = render_source.startswith(("http://", "https://"))
+    path = Path(render_source) if not is_remote else None
+    is_local = bool(path and path.exists())
+    metadata: dict[str, object] = {
+        "kind": kind,
+        "label": label,
+        "render_source_kind": "local-file" if is_local else "remote-url",
+        "render_source_file": path.name if path and is_local else "",
+        "format_selector": format_selector or "",
+        "download_error": download_error or "",
+        "probe": probe,
+    }
+    return metadata
+
+
+def write_source_metadata(out_dir: Path, metadata: dict[str, object] | None) -> None:
+    if not metadata:
+        return
+    source_dir = out_dir / "_source"
+    source_dir.mkdir(exist_ok=True)
+    (source_dir / "source-metadata.json").write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
 def yt_dlp_command() -> list[str]:
     path_bin = shutil.which("yt-dlp")
     command = [path_bin] if path_bin else [sys.executable, "-m", "yt_dlp"]
@@ -2978,6 +3049,10 @@ def yt_dlp_extra_args() -> list[str]:
     return shlex.split(raw) if raw else []
 
 
+def youtube_high_quality_format() -> str:
+    return os.environ.get("CUTED_YOUTUBE_RENDER_FORMAT", "").strip() or YOUTUBE_HIGH_QUALITY_FORMAT
+
+
 def youtube_title(url: str) -> str:
     command = yt_dlp_command() + ["--no-playlist", "--print", "%(title)s", url]
     result = subprocess.run(command, capture_output=True, text=True, check=True)
@@ -2985,12 +3060,40 @@ def youtube_title(url: str) -> str:
 
 
 def youtube_render_url(url: str) -> str:
-    command = yt_dlp_command() + ["-f", "18/b[height<=480]/best", "-g", "--no-playlist", url]
+    command = yt_dlp_command() + ["-f", YOUTUBE_STREAM_FALLBACK_FORMAT, "-g", "--no-playlist", url]
     result = subprocess.run(command, capture_output=True, text=True, check=True)
     urls = [line.strip() for line in result.stdout.splitlines() if line.strip().startswith(("http://", "https://"))]
     if not urls:
         raise RuntimeError("Could not resolve a renderable YouTube media URL.")
     return urls[0]
+
+
+def download_youtube_render_source(url: str, temp_dir: Path, ffmpeg: str, format_selector: str) -> Path:
+    output_template = temp_dir / "source.%(ext)s"
+    command = yt_dlp_command() + [
+        "--no-playlist",
+        "--ffmpeg-location", ffmpeg,
+        "-f", format_selector,
+        "--merge-output-format", "mp4",
+        "--remux-video", "mp4",
+        "-o", str(output_template),
+        url,
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        message = (result.stderr or result.stdout or "yt-dlp high quality download failed").strip()
+        raise RuntimeError(message)
+    return resolved_youtube_render_file(temp_dir)
+
+
+def resolved_youtube_render_file(temp_dir: Path) -> Path:
+    candidates = sorted(
+        path for path in temp_dir.glob("source.*")
+        if path.is_file() and path.suffix.lower() in RANGE_MEDIA_EXTENSIONS
+    )
+    if not candidates:
+        raise RuntimeError("High quality YouTube source download did not produce a media file.")
+    return candidates[-1].resolve()
 
 
 def try_youtube_transcript(url: str, temp_dir: Path, language: str | None) -> Path | None:
@@ -3694,8 +3797,8 @@ def render_one(video: Path | str, clips_dir: Path, frames_dir: Path, moment: Mom
 
 def cut_clip(video: Path | str, output: Path, start: float, end: float, ffmpeg: str) -> None:
     command = [ffmpeg, "-y", "-ss", fmt_time(start), "-i", str(video), "-t", fmt_time(end - start),
-               "-c:v", "libx264", "-preset", "veryfast", "-profile:v", "main", "-level", "4.1",
-               "-pix_fmt", "yuv420p", "-r", "30", "-crf", "23", "-c:a", "aac", "-b:a", "128k",
+               "-c:v", "libx264", "-preset", "medium", "-profile:v", "main", "-level", "4.1",
+               "-pix_fmt", "yuv420p", "-r", "30", "-crf", PREVIEW_VIDEO_CRF, "-c:a", "aac", "-b:a", "192k",
                "-ar", "44100", "-movflags", "+faststart", str(output)]
     subprocess.run(command, check=True, capture_output=True, text=True)
 
