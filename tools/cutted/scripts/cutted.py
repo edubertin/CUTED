@@ -44,10 +44,13 @@ FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
 MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
 MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
-CAMERA_ANALYSIS_VERSION = "auto-face-v20"
+CAMERA_ANALYSIS_VERSION = "auto-face-v21"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
 CAMERA_ANALYSIS_MAX_FRAMES = 140
 CAMERA_UNCERTAIN_MIN_SECONDS = 0.85
+CAMERA_TWO_FAR_SPREAD = 30.0
+CAMERA_GROUP_FIT_SPREAD = 38.0
+CAMERA_GROUP_FIT_SPAN = 52.0
 AI_DIRECTOR_MAX_FRAME_SAMPLES = 10
 AI_DIRECTOR_MAX_CONTEXT_ROWS = 36
 AI_DIRECTOR_MAX_FALLBACK_FRAMES = 28
@@ -1254,8 +1257,8 @@ def ai_director_user_payload(
         "title": title,
         "transcript_excerpt": transcript[:2200],
         "video": metadata,
-        "opencv_detection_summary": ai_director_detection_summary(detections),
-        "opencv_detections": ai_director_detection_context(detections),
+        "opencv_detection_summary": ai_director_detection_summary(detections, platform),
+        "opencv_detections": ai_director_detection_context(detections, platform),
         "scene_direction": ai_director_scene_context(detections, duration, platform),
         "local_auto_director_fallback": fallback_path[:AI_DIRECTOR_MAX_FALLBACK_FRAMES],
         "rules": rules,
@@ -1296,7 +1299,8 @@ def ai_director_rules(mode: str) -> list[str]:
         "Se 3 pessoas aparecem no mesmo frame, priorize plano aberto de grupo, nao close em uma so pessoa.",
         "Se 2 ou mais rostos ficariam fora do crop, reduza zoom e centralize entre os rostos.",
         "Use close em uma pessoa apenas quando os outros rostos nao estiverem visiveis ou nao importarem para a cena.",
-        "Quando scene_direction.uncertain_windows indicar baixa deteccao, nao persiga rosto antigo; prefira centro aberto ou segure o ultimo grupo seguro.",
+        "Quando scene_direction.uncertain_windows indicar baixa deteccao, nao persiga rosto antigo; prefira plano aberto com blur.",
+        "Siga scene_direction.scene_intent_windows: solo=center, two_close=movimento suave, two_far=corte seco, group_close=alternar focos, group_fit=plano aberto com blur.",
     ]
     if ai_director_uses_hard_cuts(mode):
         rules.extend([
@@ -1311,8 +1315,8 @@ def ai_director_rules(mode: str) -> list[str]:
     return rules
 
 
-def ai_director_detection_summary(detections: list[dict[str, object]]) -> dict[str, object]:
-    rows = [ai_director_detection_row(row) for row in detections if reliable_faces(row)]
+def ai_director_detection_summary(detections: list[dict[str, object]], platform: str) -> dict[str, object]:
+    rows = [ai_director_detection_row(row, platform) for row in detections if reliable_faces(row)]
     multi = [row for row in rows if int(row["face_count"]) >= 2]
     group = [row for row in rows if int(row["face_count"]) >= 3 or float(row["spread"]) >= 24.0]
     return {
@@ -1327,18 +1331,19 @@ def ai_director_detection_summary(detections: list[dict[str, object]]) -> dict[s
     }
 
 
-def ai_director_detection_context(detections: list[dict[str, object]]) -> list[dict[str, object]]:
-    rows = [ai_director_detection_row(row) for row in detections if reliable_faces(row)]
+def ai_director_detection_context(detections: list[dict[str, object]], platform: str) -> list[dict[str, object]]:
+    rows = [ai_director_detection_row(row, platform) for row in detections if reliable_faces(row)]
     if len(rows) <= AI_DIRECTOR_MAX_CONTEXT_ROWS:
         return rows
     step = max(1, int(math.ceil(len(rows) / float(AI_DIRECTOR_MAX_CONTEXT_ROWS))))
     return rows[::step][:AI_DIRECTOR_MAX_CONTEXT_ROWS]
 
 
-def ai_director_detection_row(row: dict[str, object]) -> dict[str, object]:
+def ai_director_detection_row(row: dict[str, object], platform: str) -> dict[str, object]:
     faces = sorted(reliable_faces(row), key=lambda item: face_x(item))
     xs = [round(face_x(face), 2) for face in faces[:5]]
     primary = row.get("primary") if isinstance(row.get("primary"), dict) else {}
+    intent = camera_scene_intent_for_faces(faces, platform)
     return {
         "time": round(float(row.get("time") or 0.0), 3),
         "face_count": len(faces),
@@ -1350,6 +1355,8 @@ def ai_director_detection_row(row: dict[str, object]) -> dict[str, object]:
         "primary_x": round(float(primary.get("x") or 50.0), 2),
         "group_priority": len(faces) >= 3 or should_use_group_frame(faces),
         "edge_risk": any(face_outside_safe_zone(face) for face in faces),
+        "scene_intent": intent["intent"],
+        "scene_motion": intent["motion"],
     }
 
 
@@ -1391,9 +1398,85 @@ def ai_director_scene_context(detections: list[dict[str, object]], duration: flo
         "primary_track": ai_director_primary_track(rows),
         "reaction_windows": ai_director_reaction_windows(rows, duration),
         "group_windows": ai_director_group_windows(rows, platform),
+        "scene_intent_windows": camera_scene_intent_windows(detections, duration, platform),
         "uncertain_windows": detection_uncertainty_windows(detections, duration),
         "cut_pattern": "principal -> reaction 2-3s -> principal; use group when close would cut visible faces",
     }
+
+
+def camera_scene_intent_windows(
+    detections: list[dict[str, object]], duration: float, platform: str
+) -> list[dict[str, object]]:
+    windows: list[dict[str, object]] = []
+    current: dict[str, object] | None = None
+    for row in sorted(detections, key=lambda item: float(item.get("time") or 0.0)):
+        time_value = clamp(float(row.get("time") or 0.0), 0.0, max(duration, 0.3))
+        intent = camera_scene_intent_for_row(row, platform)
+        if current is None or current.get("intent") != intent["intent"]:
+            if current is not None:
+                windows.append(current)
+            current = {**intent, "start": round(time_value, 3), "end": round(time_value, 3)}
+            continue
+        current["end"] = round(time_value, 3)
+    if current is not None:
+        current["end"] = round(max(float(current.get("end") or 0.0), max(duration, 0.3)), 3)
+        windows.append(current)
+    return windows[:12]
+
+
+def camera_scene_intent_for_row(row: dict[str, object], platform: str) -> dict[str, object]:
+    faces = sorted(reliable_faces(row), key=face_x)
+    if not faces:
+        return camera_scene_intent("uncertain_fit", 0, 0.0, 0.0, "fit")
+    return camera_scene_intent_for_faces(faces, platform)
+
+
+def camera_scene_intent_for_faces(faces: list[dict[str, float]], platform: str) -> dict[str, object]:
+    count = len(faces)
+    spread = camera_face_spread(faces)
+    span = camera_face_span(faces)
+    if count <= 0:
+        return camera_scene_intent("uncertain_fit", 0, 0.0, 0.0, "fit")
+    if count == 1:
+        return camera_scene_intent("solo_center", count, spread, span, "smooth")
+    if should_use_group_fit_frame(faces, platform):
+        return camera_scene_intent("group_fit", count, spread, span, "fit")
+    if count == 2:
+        motion = "hard_cut" if camera_two_faces_are_far(faces, platform) else "smooth_pan"
+        intent = "two_far_cut" if motion == "hard_cut" else "two_close_pan"
+        return camera_scene_intent(intent, count, spread, span, motion)
+    return camera_scene_intent("group_close_alternate", count, spread, span, "focus_alternate")
+
+
+def camera_scene_intent(intent: str, count: int, spread: float, span: float, motion: str) -> dict[str, object]:
+    return {
+        "intent": intent,
+        "face_count": count,
+        "spread": round(spread, 2),
+        "span": round(span, 2),
+        "motion": motion,
+    }
+
+
+def camera_two_faces_are_far(faces: list[dict[str, float]], platform: str) -> bool:
+    preset = PLATFORM_PRESETS.get(platform, PLATFORM_PRESETS["tiktok"])
+    aspect = preset.width / max(preset.height, 1)
+    threshold = CAMERA_TWO_FAR_SPREAD if aspect < 0.95 else CAMERA_TWO_FAR_SPREAD + 8.0
+    return camera_face_spread(faces) >= threshold or camera_face_span(faces) >= threshold + 18.0
+
+
+def camera_face_spread(faces: list[dict[str, float]]) -> float:
+    if len(faces) < 2:
+        return 0.0
+    ordered = sorted(faces, key=face_x)
+    return max(face_x(ordered[-1]) - face_x(ordered[0]), 0.0)
+
+
+def camera_face_span(faces: list[dict[str, float]]) -> float:
+    if len(faces) < 2:
+        return face_width(faces[0]) if faces else 0.0
+    ordered = sorted(faces, key=face_x)
+    return max(face_right_edge(ordered[-1]) - face_left_edge(ordered[0]), 0.0)
 
 
 def detection_uncertainty_windows(detections: list[dict[str, object]], duration: float) -> list[dict[str, object]]:
@@ -1543,6 +1626,9 @@ def dense_protected_camera_path(
     hard_cut = ai_director_uses_hard_cuts(mode)
     mandatory = dense_camera_risk_frames(frames, detections, duration, platform, mode)
     merged = merge_camera_path_frames(frames, mandatory, duration) if mandatory else frames
+    grammar = scene_grammar_camera_frames(detections, duration, platform, hard_cut)
+    if grammar:
+        merged = merge_camera_path_frames(merged, grammar, duration)
     fallback = forced_group_fit_camera_frames(merged, detections, duration, platform, hard_cut)
     if fallback:
         merged = merge_camera_path_frames(merged, fallback, duration)
@@ -1617,6 +1703,11 @@ def dense_camera_target_for_row(
     if not faces:
         return None
     time_value = float(row.get("time") or 0.0)
+    scene_intent = str(camera_scene_intent_for_faces(faces, platform)["intent"])
+    if scene_intent == "group_fit":
+        return forced_group_fit_frame(faces, time_value, platform, hard_cut)
+    if scene_intent in {"two_far_cut", "group_close_alternate"}:
+        return None
     group_required = should_use_platform_group_frame(faces, platform)
     active_cuts = camera_frame_cuts_faces(active, faces)
     if active_cuts or (group_required and not camera_frame_is_group_safe(active)):
@@ -1627,6 +1718,36 @@ def dense_camera_target_for_row(
         primary_source = "ai-director-cuts-primary" if hard_cut else "ai-director-dense-primary"
         return hard_cut_ai_director_frame({**primary, "time": time_value}, time_value, primary_source)
     return None
+
+
+def scene_grammar_camera_frames(
+    detections: list[dict[str, object]], duration: float, platform: str, hard_cut: bool
+) -> list[dict[str, object]]:
+    frames: list[dict[str, object]] = []
+    last_time = -999.0
+    for row in detections:
+        time_value = float(row.get("time") or 0.0)
+        if time_value > max(duration, 0.3) or time_value - last_time < 2.6:
+            continue
+        target = scene_grammar_target_for_row(row, time_value, platform, hard_cut)
+        if target is None or recent_similar_camera_frame(frames, target, 2.2):
+            continue
+        frames.append(target)
+        last_time = time_value
+    return frames
+
+
+def scene_grammar_target_for_row(
+    row: dict[str, object], time_value: float, platform: str, hard_cut: bool
+) -> dict[str, object] | None:
+    faces = sorted(reliable_faces(row), key=face_x)
+    intent = str(camera_scene_intent_for_faces(faces, platform)["intent"])
+    if intent == "group_fit":
+        return forced_group_fit_frame(faces, time_value, platform, hard_cut)
+    if intent not in {"two_far_cut", "group_close_alternate"}:
+        return None
+    source = "ai-director-cuts-reaction" if intent == "two_far_cut" or hard_cut else "ai-director-dense-reaction"
+    return hard_cut_ai_director_frame(director_alternate_target(row, time_value, intent), time_value, source)
 
 
 def forced_group_fit_camera_frames(
@@ -1650,7 +1771,7 @@ def uncertain_center_camera_frames(
     frames: list[dict[str, object]], detections: list[dict[str, object]], duration: float, hard_cut: bool
 ) -> list[dict[str, object]]:
     forced: list[dict[str, object]] = []
-    source = "ai-director-cuts-uncertain-center" if hard_cut else "ai-director-uncertain-center"
+    source = "ai-director-cuts-uncertain-fit" if hard_cut else "ai-director-uncertain-fit"
     for window in detection_uncertainty_windows(detections, duration):
         time_value = float(window.get("start") or 0.0)
         active = camera_path_frame_at_time(frames, time_value)
@@ -1663,11 +1784,13 @@ def uncertain_center_camera_frames(
 
 
 def camera_frame_is_open_center(frame: dict[str, object]) -> bool:
-    return abs(float(frame.get("x") or 50.0) - 50.0) <= 4.0 and float(frame.get("zoom") or 1.0) <= 1.06
+    return camera_path_frame_uses_group_fit(frame) or (
+        abs(float(frame.get("x") or 50.0) - 50.0) <= 4.0 and float(frame.get("zoom") or 1.0) <= 1.06
+    )
 
 
 def open_center_camera_frame(time_value: float) -> dict[str, object]:
-    return {"time": round(time_value, 3), "x": 50.0, "y": 50.0, "zoom": 1.0, "confidence": 0.55}
+    return {"time": round(time_value, 3), "x": 50.0, "y": 50.0, "zoom": 1.0, "confidence": 0.55, "fit": "contain"}
 
 
 def risky_group_detection_rows(
@@ -1749,20 +1872,22 @@ def merge_camera_path_frames(
 
 def camera_frame_priority(frame: dict[str, object]) -> int:
     source = str(frame.get("source") or "")
+    if camera_path_frame_uses_group_fit(frame):
+        return 4
     if "group-fit" in source:
         return 4
     if "group-safe" in source:
         return 3
-    if "uncertain-center" in source:
+    if "uncertain" in source:
         return 2
-    if "dense" in source or "cuts-primary" in source:
+    if "dense" in source or "cuts-primary" in source or "cuts-reaction" in source:
         return 2
     return 1
 
 
 def camera_frame_is_group_safe(frame: dict[str, object]) -> bool:
     source = str(frame.get("source") or "")
-    return "group-safe" in source or "group-fit" in source
+    return camera_path_frame_uses_group_fit(frame) or "group-safe" in source or "group-fit" in source
 
 
 def cinematic_cut_scene_path(detections: list[dict[str, object]], duration: float, platform: str) -> list[dict[str, object]]:
@@ -1791,7 +1916,8 @@ def cinematic_cut_scene_path(detections: list[dict[str, object]], duration: floa
 
 def cinematic_reaction_frame(row: dict[str, object], time_value: float, platform: str) -> dict[str, object] | None:
     faces = sorted(reliable_faces(row), key=face_x)
-    if len(faces) >= 3:
+    scene_intent = str(camera_scene_intent_for_faces(faces, platform)["intent"])
+    if scene_intent == "group_fit":
         group = group_face_frame(faces, time_value, platform)
         return hard_cut_ai_director_frame(group, time_value, group_frame_source(group, True))
     secondary = secondary_face_for_row(row)
@@ -1809,7 +1935,7 @@ def cinematic_reaction_frame(row: dict[str, object], time_value: float, platform
 
 def cinematic_primary_frame(row: dict[str, object], time_value: float, platform: str) -> dict[str, object]:
     faces = sorted(reliable_faces(row), key=face_x)
-    if len(faces) >= 3 and should_use_platform_group_frame(faces, platform):
+    if str(camera_scene_intent_for_faces(faces, platform)["intent"]) == "group_fit":
         group = group_face_frame(faces, time_value, platform)
         return hard_cut_ai_director_frame(group, time_value, group_frame_source(group, True))
     primary = row.get("primary") if isinstance(row.get("primary"), dict) else None
@@ -1948,7 +2074,8 @@ def safe_follow_frames(detections: list[dict[str, object]]) -> list[dict[str, fl
         time_value = float(row.get("time") or 0.0)
         faces = sorted(reliable_faces(row), key=lambda item: face_x(item))
         primary = row.get("primary") if isinstance(row.get("primary"), dict) else None
-        if should_use_group_frame(faces):
+        intent = str(camera_scene_intent_for_faces(faces, "tiktok")["intent"])
+        if intent == "group_fit":
             frames.append(group_face_frame(faces, time_value))
         elif isinstance(primary, dict):
             frames.append({**primary, "time": time_value})
@@ -1974,8 +2101,12 @@ def director_multi_face_path(detections: list[dict[str, object]], duration: floa
         time_value = float(row.get("time") or 0.0)
         faces = sorted(reliable_faces(row), key=lambda item: float(item.get("x") or 50.0))
         target = row.get("primary") if isinstance(row.get("primary"), dict) else None
-        if should_use_group_frame(faces) or (len(faces) >= 2 and time_value - last_reaction >= 3.0):
+        intent = str(camera_scene_intent_for_faces(faces, "tiktok")["intent"])
+        if intent == "group_fit":
             frames.append(group_face_frame(faces, time_value))
+            last_reaction = time_value
+        elif len(faces) >= 2 and time_value - last_reaction >= 3.0:
+            frames.append(director_alternate_target(row, time_value, intent))
             last_reaction = time_value
         elif isinstance(target, dict):
             frames.append({**target, "time": time_value})
@@ -1984,6 +2115,14 @@ def director_multi_face_path(detections: list[dict[str, object]], duration: floa
     rows = smoothed_camera_frames(frames, "auto-face-auto-director", x_weight=0.58, y_weight=0.38, zoom_weight=0.34)
     path = compressed_camera_path(rows, duration, max_gap=1.8, x_threshold=1.8, zoom_threshold=0.014)
     return stable_camera_targets(path)
+
+
+def director_alternate_target(row: dict[str, object], time_value: float, intent: str) -> dict[str, float]:
+    faces = sorted(reliable_faces(row), key=face_x)
+    secondary = secondary_face_for_row(row)
+    target = secondary if secondary is not None else (faces[-1] if faces else {})
+    boost = 0.1 if intent == "two_far_cut" else 0.04
+    return {**target, "time": time_value, "zoom": min(float(target.get("zoom") or 1.0) + boost, 1.34)}
 
 
 def should_use_group_frame(faces: list[dict[str, float]]) -> bool:
@@ -2067,8 +2206,10 @@ def should_use_group_fit_frame(faces: list[dict[str, float]], platform: str | No
     both_edges = face_left_edge(sorted_faces[0]) <= 24.0 and face_right_edge(sorted_faces[-1]) >= 76.0
     if aspect < 0.65:
         has_edge = any(face_outside_safe_zone(face) for face in sorted_faces)
-        return len(sorted_faces) >= 3 or spread >= 38.0 or face_span >= 52.0 or both_edges or (has_edge and spread >= 30.0)
-    return len(sorted_faces) >= 3 and (spread >= 34.0 or face_span >= 48.0 or both_edges)
+        many_spread = len(sorted_faces) >= 4 and face_span >= CAMERA_GROUP_FIT_SPAN - 6.0
+        return spread >= CAMERA_GROUP_FIT_SPREAD or face_span >= CAMERA_GROUP_FIT_SPAN or both_edges or many_spread or (has_edge and spread >= 30.0)
+    many_spread = len(sorted_faces) >= 3 and face_span >= 48.0
+    return many_spread or both_edges
 
 
 def group_frame_source(frame: dict[str, object], hard_cut: bool) -> str:
