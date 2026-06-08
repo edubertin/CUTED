@@ -22,8 +22,9 @@ face detection, tracking, and source-aware analysis.
   low-detail sampled frames, transcript context, an editorial intent, and the
   local Auto Director fallback path to decide a more editorial `camera_path`.
   Available intents are dynamic, group/podcast, speaker focus, reactions, and
-  hard cuts. Multi-person scenes should bias toward group framing before
-  close-ups.
+  cinematic hard cuts. Multi-person scenes should bias toward group framing
+  before close-ups. Dynamic may use punctual editorial cuts, but AI Cuts is the
+  dedicated principal/reaction/principal mode.
 - Follow main face, with safe group framing when a second face would be cut by
   the vertical crop.
 - Stable centered face.
@@ -72,4 +73,6 @@ face detection, tracking, and source-aware analysis.
   local Auto Director when OpenAI is unavailable.
 - AI Cuts uses the same `camera_path` contract, but marks frames as hard-cut
   sources so browser preview holds each shot instead of interpolating between
-  keyframes.
+  keyframes. When OpenCV detects reliable secondary faces, AI Cuts should prefer
+  principal -> reaction for 2-3 seconds -> principal instead of evenly spaced
+  cuts.

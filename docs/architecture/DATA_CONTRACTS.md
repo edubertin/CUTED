@@ -183,7 +183,10 @@ storage: times are relative to the adjusted clip, `x`/`y` are crop-center
 percentages, and `zoom` is clamped to a safe social-video range. Group-safe
 sources mean the model result was opened by the local safety pass to keep
 visible faces inside the crop. `ai-director-cuts*` sources also tell the browser
-preview to hold each shot instead of interpolating between keyframes.
+preview to hold each shot instead of interpolating between keyframes. AI Cuts
+payloads may include scene-direction hints derived from OpenCV, such as
+reaction windows and group windows; those hints are advisory and never replace
+the final validated `camera_path` contract.
 
 The legacy camera presets (`center`, `face-left`, `alternate`, `jump-cut`, and
 similar) are manual controls. They may be used for compatibility and quick
