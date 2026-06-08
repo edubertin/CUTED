@@ -174,6 +174,11 @@ preset `key`, so the renderer uses the numeric `x`, `y`, and `zoom` values.
 These keyframes are still per-platform state and can be manually edited or
 reset back to the simple camera mode.
 
+AI Director writes keyframes with `source = ai-director`. These keyframes use
+the same numeric render path as OpenCV keyframes and must be validated before
+storage: times are relative to the adjusted clip, `x`/`y` are crop-center
+percentages, and `zoom` is clamped to a safe social-video range.
+
 The legacy camera presets (`center`, `face-left`, `alternate`, `jump-cut`, and
 similar) are manual controls. They may be used for compatibility and quick
 operator edits, but they do not imply OpenCV detected the face position.
@@ -198,6 +203,7 @@ multi_face_frames     sampled frames with two or more faces
 first_detection_time  first relative detection time, nullable
 last_detection_time   last relative detection time, nullable
 camera_keyframes      produced camera_path keyframe count
+ai_director           optional hosted decision diagnostics
 detection_preview     compact first detections for QA/debugging
 ```
 
