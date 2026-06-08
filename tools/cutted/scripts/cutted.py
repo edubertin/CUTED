@@ -50,6 +50,7 @@ SMART_CAMERA_MODES = {
     "ai-director-group": "AI Grupo",
     "ai-director-speaker": "AI Fala",
     "ai-director-reactions": "AI Reacoes",
+    "ai-director-cuts": "AI Cortes",
     "follow-face": "Seguir rosto",
     "stable-face": "Enquadramento estavel",
     "face-zoom": "Zoom no rosto",
@@ -72,6 +73,10 @@ AI_DIRECTOR_INTENTS = {
     "ai-director-reactions": {
         "label": "Reacoes",
         "priority": "Alterne foco entre pessoas visiveis com pausas editoriais e use planos abertos para manter contexto.",
+    },
+    "ai-director-cuts": {
+        "label": "Cortes",
+        "priority": "Use cortes secos entre enquadramentos, sem pan suave. Segure cada foco por 2.5 a 4.5 segundos.",
     },
 }
 
@@ -651,6 +656,10 @@ def ai_director_intent(mode: str) -> dict[str, str]:
     return AI_DIRECTOR_INTENTS.get(mode, AI_DIRECTOR_INTENTS["ai-director"])
 
 
+def ai_director_uses_hard_cuts(mode: str) -> bool:
+    return mode == "ai-director-cuts"
+
+
 def optional_camera_float(value: object) -> float | None:
     try:
         if value is None or value == "":
@@ -1029,6 +1038,8 @@ def ai_director_camera_result(
         frames = ai_director_frame_samples(input_ref, start, duration)
         payload = request_ai_director_path(platform, title, transcript, metadata, detections, fallback_path, frames, duration, mode)
         path = protected_ai_director_path(validated_ai_director_path(payload, duration), detections, duration)
+        if ai_director_uses_hard_cuts(mode):
+            path = hard_cut_ai_director_path(path, duration)
     except Exception as error:
         diagnostics["error"] = str(error)
         return {"camera_path": [], "diagnostics": diagnostics}
@@ -1096,6 +1107,7 @@ def ai_director_user_payload(
     detections: list[dict[str, object]], fallback_path: list[dict[str, object]], duration: float, mode: str
 ) -> str:
     intent = ai_director_intent(mode)
+    rules = ai_director_rules(mode)
     return json.dumps({
         "task": "Decida quando focar uma pessoa, quando abrir para grupo, quando segurar, alternar ou fazer punch-in.",
         "editorial_intent": intent,
@@ -1107,17 +1119,28 @@ def ai_director_user_payload(
         "opencv_detection_summary": ai_director_detection_summary(detections),
         "opencv_detections": ai_director_detection_context(detections),
         "local_auto_director_fallback": fallback_path[:16],
-        "rules": [
-            "x e y sao centros percentuais de crop, 0 a 100.",
-            "zoom deve ficar entre 1.0 e 1.45.",
-            "Use 3 a 12 keyframes; menos e melhor.",
-            "Sempre inclua um keyframe em time 0.",
-            "Segure bons enquadramentos por alguns segundos; evite tremedeira.",
-            "Se 3 pessoas aparecem no mesmo frame, priorize plano aberto de grupo, nao close em uma so pessoa.",
-            "Se 2 ou mais rostos ficariam fora do crop, reduza zoom e centralize entre os rostos.",
-            "Use close em uma pessoa apenas quando os outros rostos nao estiverem visiveis ou nao importarem para a cena.",
-        ],
+        "rules": rules,
     }, ensure_ascii=False)
+
+
+def ai_director_rules(mode: str) -> list[str]:
+    rules = [
+        "x e y sao centros percentuais de crop, 0 a 100.",
+        "zoom deve ficar entre 1.0 e 1.45.",
+        "Use 3 a 12 keyframes; menos e melhor.",
+        "Sempre inclua um keyframe em time 0.",
+        "Segure bons enquadramentos por alguns segundos; evite tremedeira.",
+        "Se 3 pessoas aparecem no mesmo frame, priorize plano aberto de grupo, nao close em uma so pessoa.",
+        "Se 2 ou mais rostos ficariam fora do crop, reduza zoom e centralize entre os rostos.",
+        "Use close em uma pessoa apenas quando os outros rostos nao estiverem visiveis ou nao importarem para a cena.",
+    ]
+    if ai_director_uses_hard_cuts(mode):
+        rules.extend([
+            "Este modo deve parecer corte seco: nao crie keyframes para pans graduais.",
+            "Prefira 2.5 a 4.5 segundos entre cortes, salvo mudanca clara de fala ou reacao.",
+            "Alterne entre close, grupo e reacao quando houver rostos confiaveis.",
+        ])
+    return rules
 
 
 def ai_director_detection_summary(detections: list[dict[str, object]]) -> dict[str, object]:
@@ -1232,6 +1255,34 @@ def protected_ai_director_path(
         safe = protected_ai_director_frame(frame, detections)
         protected.append(safe)
     return stable_camera_targets(compressed_camera_path(protected, duration, max_gap=2.6, x_threshold=1.4, zoom_threshold=0.012))
+
+
+def hard_cut_ai_director_path(frames: list[dict[str, object]], duration: float) -> list[dict[str, object]]:
+    if not frames:
+        return []
+    safe_duration = max(duration, 0.3)
+    sorted_frames = sorted(frames, key=lambda item: float(item.get("time") or 0.0))
+    result: list[dict[str, object]] = []
+    for frame in sorted_frames:
+        time_value = clamp(float(frame.get("time") or 0.0), 0.0, safe_duration)
+        if result and time_value - float(result[-1].get("time") or 0.0) < 2.35:
+            continue
+        result.append(hard_cut_ai_director_frame(frame, time_value))
+    if not result:
+        return []
+    if float(result[0].get("time") or 0.0) > 0.001:
+        result.insert(0, {**result[0], "time": 0.0})
+    return result[:14]
+
+
+def hard_cut_ai_director_frame(frame: dict[str, object], time_value: float) -> dict[str, object]:
+    source = str(frame.get("source") or "ai-director")
+    next_source = "ai-director-cuts-group-safe" if source == "ai-director-group-safe" else "ai-director-cuts"
+    return {
+        **frame,
+        "time": round(time_value, 3),
+        "source": next_source,
+    }
 
 
 def protected_ai_director_frame(frame: dict[str, object], detections: list[dict[str, object]]) -> dict[str, object]:
@@ -4771,6 +4822,7 @@ const smartCameraModes = {
   "ai-director-group": { label: "AI Grupo", note: "Preserva duas ou mais pessoas antes de fechar em close" },
   "ai-director-speaker": { label: "AI Fala", note: "Prioriza quem parece conduzir o trecho sem cortar contexto" },
   "ai-director-reactions": { label: "AI Reacoes", note: "Alterna foco entre pessoas visiveis com pausas editoriais" },
+  "ai-director-cuts": { label: "AI Cortes", note: "Troca enquadramentos em cortes secos com pausas editoriais" },
   "follow-face": { label: "Seguir rosto", note: "Acompanha o rosto principal detectado" },
   "stable-face": { label: "Mais estavel", note: "Trava no enquadramento medio do rosto" },
   "face-zoom": { label: "Mais close", note: "Aproxima usando deteccao real" }
@@ -5189,8 +5241,8 @@ function cameraFrameForTime(camera, cameraPath, position, duration){
       break;
     }
   }
-  if (previous.key) {
-    return cameraFrameFromSegment(previous, safePosition, Math.max(0, safePosition - previous.time));
+  if (previous.key || cameraFrameUsesHardCut(previous)) {
+    return previous.key ? cameraFrameFromSegment(previous, safePosition, Math.max(0, safePosition - previous.time)) : previous;
   }
   if (previous === next || next.time <= previous.time) return previous;
   const ratio = (safePosition - previous.time) / (next.time - previous.time);
@@ -5202,6 +5254,9 @@ function cameraFrameForTime(camera, cameraPath, position, duration){
     source: previous.source || "manual-path",
     confidence: Math.min(previous.confidence ?? 1, next.confidence ?? 1)
   };
+}
+function cameraFrameUsesHardCut(frame){
+  return String(frame?.source || "").includes("ai-director-cuts");
 }
 function cameraPreviewStyle(camera, elapsed = 0){
   const current = normalizeSingleCamera(camera);
