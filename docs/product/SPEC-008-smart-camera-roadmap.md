@@ -63,6 +63,9 @@ face detection, tracking, and source-aware analysis.
 - Multi-face context influences Auto Director only when detections are reliable.
 - Face detections near the vertical crop edge should trigger wider or shifted
   framing instead of leaving a face cut for several seconds.
+- Smart Camera and AI Director should consider the active export platform
+  viewport, because TikTok/Shorts/Instagram, Facebook, and YouTube have
+  different crop safety constraints.
 - Manual camera controls remain available for recovery.
 - Final render continues using `camera_path` as the source of truth.
 - AI Director never becomes a hard dependency for camera editing.
@@ -76,3 +79,5 @@ face detection, tracking, and source-aware analysis.
   keyframes. When OpenCV detects reliable secondary faces, AI Cuts should prefer
   principal -> reaction for 2-3 seconds -> principal instead of evenly spaced
   cuts.
+- AI Cuts preview must disable CSS camera transitions so hard cuts do not look
+  like fast manual focus pans.

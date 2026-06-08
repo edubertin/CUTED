@@ -151,12 +151,13 @@ Supported smart modes:
 
 All AI Director modes run the local OpenCV analysis first, send compact
 diagnostics, a few low-detail sampled frames, transcript context, an editorial
-intent, and the local Auto Director path to OpenAI, then validate the returned
-`camera_path`. If OpenAI is unavailable or the response is invalid, the
-endpoint falls back to the local Auto Director path. The validated result is
-also checked against OpenCV multi-face detections so scenes with three visible
-people, or two people at risk of being cropped, open to group-safe framing
-instead of holding a close-up on only one face.
+intent, the selected platform viewport, and the local Auto Director path to
+OpenAI, then validate the returned `camera_path`. If OpenAI is unavailable or
+the response is invalid, the endpoint falls back to the local Auto Director
+path. The validated result is also checked against OpenCV multi-face detections
+and the selected platform viewport so scenes with three visible people, or two
+people at risk of being cropped, open to group-safe framing instead of holding a
+close-up on only one face.
 
 AI Cuts post-processes the validated path with OpenCV scene roles. When a
 secondary face is reliable, it emits a principal -> reaction -> principal pattern
@@ -164,8 +165,8 @@ instead of only spacing model keyframes. Group-risk frames still open to
 `ai-director-cuts-group-safe`. If scene roles are too weak, AI Cuts falls back to
 spacing validated model keyframes and marking their source as `ai-director-cuts`.
 Final render already treats each `camera_path` keyframe as a trimmed segment;
-the browser preview should also hold these frames instead of interpolating
-between them.
+the browser preview should also hold these frames and disable CSS transition on
+the video element instead of interpolating or visually panning between them.
 - `follow-face`: tracks the primary face with smoothing, but also uses safe
   group framing when another detected face would be cut by the vertical crop.
 - `stable-face`: creates one stable median crop for the detected face.
