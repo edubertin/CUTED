@@ -43,8 +43,8 @@ end-to-end clipping, per-video camera reframing, effects, calls-to-action,
 captions, and final video review workflow before extracting a fuller application
 structure.
 
-The current camera MVP uses local FFmpeg crop/scale presets only, including a
-three-part camera line for beginning, middle, and end reframes. OpenCV itself
-does not add API cost; future cost would come only from optional cloud APIs or
-paid model hosting if automatic face/speaker detection moves outside the local
-machine.
+The current camera MVP uses local FFmpeg crop/scale presets plus an optional
+OpenCV Auto camera pass that writes face-based `camera_path` keyframes. OpenCV
+itself does not add API cost; future cost would come only from optional cloud
+APIs or paid model hosting if automatic face/speaker detection moves outside
+the local machine.

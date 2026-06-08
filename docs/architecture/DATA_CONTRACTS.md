@@ -145,6 +145,11 @@ path for that platform must be cleared and regenerated from the updated camera
 state. Future automatic reframing should also write into `camera_path` instead
 of replacing the simple `camera` compatibility field.
 
+OpenCV Auto camera writes explicit keyframes with `source: auto-face` and no
+legacy preset `key`, so the renderer uses the numeric `x`, `y`, and `zoom`
+values. These keyframes are still per-platform state and can be manually edited
+or reset back to the simple camera mode.
+
 ## Overlay Contract
 
 `overlay` is the legacy single-overlay object. `overlays` is the current

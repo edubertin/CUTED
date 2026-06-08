@@ -249,7 +249,7 @@ This avoids downloading the full video file for rendering. Captions also avoid f
 Install local helpers if needed:
 
 ```powershell
-python -m pip install imageio-ffmpeg faster-whisper yt-dlp
+python -m pip install imageio-ffmpeg faster-whisper yt-dlp opencv-python-headless
 ```
 
 The script looks for FFmpeg in this order:
@@ -259,6 +259,10 @@ The script looks for FFmpeg in this order:
 3. the Python package `imageio-ffmpeg`.
 
 `yt-dlp` is used only for YouTube test URLs.
+
+`opencv-python-headless` is used only by the in-app Auto camera action. The
+gallery, manual camera controls, and final render still work without OpenCV,
+but `/api/camera/analyze` will return an install message until it is available.
 
 ## Output
 

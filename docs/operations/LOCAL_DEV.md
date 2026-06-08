@@ -26,6 +26,12 @@ latest script.
 
 ## Useful Commands
 
+Install optional local helpers:
+
+```powershell
+python -m pip install imageio-ffmpeg faster-whisper yt-dlp opencv-python-headless
+```
+
 Check branch and dirty files:
 
 ```powershell

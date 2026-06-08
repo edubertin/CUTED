@@ -26,6 +26,9 @@ from types import SimpleNamespace
 
 BRAND_LOGO_FILE = "cuted-logo-transparent.png"
 RANGE_MEDIA_EXTENSIONS = {".m4v", ".mov", ".mp4", ".webm"}
+CAMERA_ANALYSIS_VERSION = "auto-face-v1"
+CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.4
+CAMERA_ANALYSIS_MAX_FRAMES = 90
 
 
 TERMINAL_ENDINGS = (".", "!", "?", "…")
@@ -343,6 +346,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if path == "/api/import-jobs":
                 self.handle_import_job(base_dir)
                 return
+            if path == "/api/camera/analyze":
+                self.handle_camera_analyze(base_dir)
+                return
             if path == "/api/select-folder":
                 self.handle_select_folder()
                 return
@@ -438,6 +444,13 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             result = cancel_import_job(job_id)
             send_json_response(self, 200 if result.get("ok") else 404, result)
 
+        def handle_camera_analyze(self, request_base_dir: Path) -> None:
+            try:
+                result = analyze_camera_from_request(self, request_base_dir)
+                send_json_response(self, 200 if result.get("ok") else 422, result)
+            except Exception as error:
+                send_json_response(self, 500, {"ok": False, "error": str(error)})
+
         def handle_select_folder(self) -> None:
             try:
                 path = select_folder_path()
@@ -507,6 +520,223 @@ def finalize_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir:
         manifest["export_dir"] = str(export_dir)
     (out_dir / "captioned-clips.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"ok": True, "count": len(captioned), "files": finalized_file_urls(captioned, gallery_dir), "export_dir": str(export_dir) if export_dir else ""}
+
+
+def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
+    payload = read_json_body(handler)
+    gallery_dir = resolve_request_gallery_dir(base_dir, payload)
+    clip_file = clean_optional_text(payload.get("clip_file"), 1000)
+    if not clip_file:
+        raise ValueError("Missing clip_file.")
+    input_path = resolve_request_media_path(gallery_dir, clip_file)
+    start = max(0.0, float(payload.get("trim_start_seconds") or 0.0))
+    duration = max(0.3, float(payload.get("adjusted_duration") or payload.get("duration") or 0.0))
+    platform = str(payload.get("platform") or "tiktok")
+    cache_path = camera_analysis_cache_path(gallery_dir, input_path, start, duration, platform)
+    if cache_path.exists():
+        cached = json.loads(cache_path.read_text(encoding="utf-8-sig"))
+        if isinstance(cached, dict) and isinstance(cached.get("camera_path"), list):
+            return {**cached, "ok": True, "cached": True}
+    camera_path = opencv_face_camera_path(input_path, start, duration)
+    if not camera_path:
+        return {"ok": False, "error": "Nenhum rosto confiavel foi detectado. Mantive a camera atual."}
+    result = {
+        "ok": True,
+        "cached": False,
+        "version": CAMERA_ANALYSIS_VERSION,
+        "source": "auto-face",
+        "platform": platform,
+        "clip_file": clip_file,
+        "trim_start_seconds": round(start, 3),
+        "adjusted_duration": round(duration, 3),
+        "camera_path": camera_path,
+    }
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    return result
+
+
+def resolve_request_media_path(gallery_dir: Path, clip_file: str) -> Path:
+    candidate = resolve_media_path(gallery_dir, clip_file).resolve()
+    try:
+        candidate.relative_to(gallery_dir.resolve())
+    except ValueError as error:
+        raise ValueError("Invalid clip_file path.") from error
+    require_file(candidate)
+    if candidate.suffix.lower() not in RANGE_MEDIA_EXTENSIONS:
+        raise ValueError("Camera analysis requires a local video clip.")
+    return candidate
+
+
+def camera_analysis_cache_path(gallery_dir: Path, input_path: Path, start: float, duration: float, platform: str) -> Path:
+    stat = input_path.stat()
+    fingerprint = json.dumps(
+        {
+            "version": CAMERA_ANALYSIS_VERSION,
+            "path": str(input_path.resolve()),
+            "mtime": stat.st_mtime,
+            "size": stat.st_size,
+            "start": round(start, 3),
+            "duration": round(duration, 3),
+            "platform": platform,
+        },
+        sort_keys=True,
+    )
+    digest = hashlib.sha1(fingerprint.encode("utf-8")).hexdigest()[:16]
+    return gallery_dir / "camera-analysis" / f"{input_path.stem}-{platform}-{digest}.json"
+
+
+def opencv_face_camera_path(input_path: Path, start: float, duration: float) -> list[dict[str, object]]:
+    cv2 = import_cv2()
+    capture = cv2.VideoCapture(str(input_path))
+    if not capture.isOpened():
+        raise RuntimeError("OpenCV could not open the clip for camera analysis.")
+    try:
+        video_duration = opencv_video_duration(capture)
+        safe_start = min(max(start, 0.0), max(video_duration - 0.3, 0.0)) if video_duration else max(start, 0.0)
+        safe_duration = duration
+        if video_duration:
+            safe_duration = min(duration, max(video_duration - safe_start, 0.3))
+        cascade = opencv_face_cascade(cv2)
+        detections = opencv_face_detections(cv2, capture, cascade, safe_start, safe_duration)
+    finally:
+        capture.release()
+    return compressed_camera_path(smoothed_camera_frames(detections), safe_duration)
+
+
+def import_cv2():
+    try:
+        import cv2  # type: ignore[import-not-found]
+    except ModuleNotFoundError as error:
+        raise RuntimeError("OpenCV nao esta instalado. Rode: python -m pip install opencv-python-headless") from error
+    return cv2
+
+
+def opencv_video_duration(capture: object) -> float:
+    fps = float(capture.get(5) or 0.0)
+    frames = float(capture.get(7) or 0.0)
+    return frames / fps if fps > 0 and frames > 0 else 0.0
+
+
+def opencv_face_cascade(cv2: object) -> object:
+    cascade_path = Path(cv2.data.haarcascades) / "haarcascade_frontalface_default.xml"
+    cascade = cv2.CascadeClassifier(str(cascade_path))
+    if cascade.empty():
+        raise RuntimeError("OpenCV face cascade is unavailable.")
+    return cascade
+
+
+def opencv_face_detections(cv2: object, capture: object, cascade: object, start: float, duration: float) -> list[dict[str, float]]:
+    detections: list[dict[str, float]] = []
+    previous_x = 50.0
+    for relative_time in camera_sample_times(duration):
+        capture.set(0, (start + relative_time) * 1000.0)
+        ok, frame = capture.read()
+        if not ok or frame is None:
+            continue
+        detection = detect_primary_face(cv2, cascade, frame, relative_time, previous_x)
+        if detection:
+            previous_x = detection["x"]
+            detections.append(detection)
+    return detections
+
+
+def camera_sample_times(duration: float) -> list[float]:
+    safe_duration = max(duration, 0.3)
+    step = max(CAMERA_ANALYSIS_SAMPLE_SECONDS, safe_duration / CAMERA_ANALYSIS_MAX_FRAMES)
+    times = [round(min(index * step, safe_duration), 3) for index in range(int(math.ceil(safe_duration / step)) + 1)]
+    if times[-1] < safe_duration - 0.05:
+        times.append(round(safe_duration, 3))
+    return sorted(set(times))
+
+
+def detect_primary_face(cv2: object, cascade: object, frame: object, relative_time: float, previous_x: float) -> dict[str, float] | None:
+    height, width = frame.shape[:2]
+    scale = min(1.0, 640.0 / max(width, height))
+    small = cv2.resize(frame, (int(width * scale), int(height * scale))) if scale < 1.0 else frame
+    gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+    faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(36, 36))
+    if len(faces) == 0:
+        return None
+    x, y, face_w, face_h = select_primary_face(faces, previous_x, small.shape[1])
+    center_x = ((x + face_w / 2.0) / scale) / width * 100.0
+    center_y = ((y + face_h / 2.0) / scale) / height * 100.0
+    zoom = face_zoom(face_w / scale, width)
+    area_ratio = ((face_w / scale) * (face_h / scale)) / max(width * height, 1)
+    confidence = clamp(area_ratio / 0.08, 0.35, 1.0)
+    return {
+        "time": round(relative_time, 3),
+        "x": round(clamp(center_x, 8.0, 92.0), 2),
+        "y": round(clamp(center_y, 35.0, 65.0), 2),
+        "zoom": round(zoom, 3),
+        "confidence": round(confidence, 3),
+    }
+
+
+def select_primary_face(faces: object, previous_x: float, width: int) -> tuple[float, float, float, float]:
+    best: tuple[float, float, float, float] | None = None
+    best_score = -1.0
+    previous_px = previous_x / 100.0 * width
+    for face in faces:
+        x, y, face_w, face_h = [float(value) for value in face]
+        center = x + face_w / 2.0
+        area = face_w * face_h
+        stability_penalty = abs(center - previous_px) * max(face_h, 1.0) * 0.18
+        score = area - stability_penalty
+        if score > best_score:
+            best = (x, y, face_w, face_h)
+            best_score = score
+    if best is None:
+        raise RuntimeError("OpenCV returned faces but no primary face could be selected.")
+    return best
+
+
+def face_zoom(face_width: float, frame_width: float) -> float:
+    ratio = face_width / max(frame_width, 1.0)
+    if ratio < 0.12:
+        return 1.28
+    if ratio < 0.18:
+        return 1.2
+    if ratio < 0.26:
+        return 1.12
+    return 1.04
+
+
+def smoothed_camera_frames(detections: list[dict[str, float]]) -> list[dict[str, object]]:
+    frames: list[dict[str, object]] = []
+    smooth_x: float | None = None
+    smooth_y: float | None = None
+    smooth_zoom: float | None = None
+    for detection in detections:
+        smooth_x = detection["x"] if smooth_x is None else smooth_x * 0.68 + detection["x"] * 0.32
+        smooth_y = detection["y"] if smooth_y is None else smooth_y * 0.75 + detection["y"] * 0.25
+        smooth_zoom = detection["zoom"] if smooth_zoom is None else smooth_zoom * 0.78 + detection["zoom"] * 0.22
+        frames.append({
+            "time": detection["time"],
+            "x": round(smooth_x, 2),
+            "y": round(smooth_y, 2),
+            "zoom": round(smooth_zoom, 3),
+            "source": "auto-face",
+            "confidence": detection["confidence"],
+        })
+    return frames
+
+
+def compressed_camera_path(frames: list[dict[str, object]], duration: float) -> list[dict[str, object]]:
+    if not frames:
+        return []
+    compressed = [frames[0]]
+    for frame in frames[1:]:
+        last = compressed[-1]
+        time_gap = float(frame["time"]) - float(last["time"])
+        x_delta = abs(float(frame["x"]) - float(last["x"]))
+        zoom_delta = abs(float(frame["zoom"]) - float(last["zoom"]))
+        if time_gap >= 1.2 and (x_delta >= 3.0 or zoom_delta >= 0.025):
+            compressed.append(frame)
+    last_frame = frames[-1]
+    if compressed[-1] is not last_frame and float(last_frame["time"]) < max(duration, 0.3) - 0.05:
+        compressed.append(last_frame)
+    return compressed[:36]
 
 
 def resolve_request_gallery_dir(base_dir: Path, payload: dict[str, object]) -> Path:
@@ -3420,7 +3650,7 @@ main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px
 .editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;justify-items:center;gap:10px}.preview-frame{display:grid;gap:10px;width:100%;max-width:520px}.media{position:relative;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000;pointer-events:none}.placeholder{display:grid;place-items:center;height:100%;color:#777}.preview-bar{display:grid;grid-template-columns:1fr;gap:8px;justify-items:center;width:100%;padding:8px;border:1px solid #252525;border-radius:8px;background:#0a0a0a}.preview-controls,.preview-volume-group{display:flex;gap:6px;align-items:center}.preview-controls{justify-content:center;padding:4px;border:1px solid #202020;border-radius:999px;background:var(--color-surface-raised)}.preview-volume-group{padding-left:4px;border-left:1px solid #2d2d2d}.preview-icon,.preview-step{display:inline-grid;place-items:center;width:32px;height:32px;min-width:32px;padding:0;border:1px solid var(--color-border-strong);border-radius:999px;background:var(--color-surface-control);color:var(--color-text-soft)}.preview-play{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}.preview-icon svg{width:16px;height:16px;display:block;stroke:currentColor}.preview-step{width:26px;height:26px;min-width:26px;font-weight:700}.preview-volume-group output{min-width:32px;color:#d8d8d8;font-size:12px;text-align:center}.card[data-preview-format=tiktok] .preview-frame,.card[data-preview-format=shorts] .preview-frame,.card[data-preview-format=instagram] .preview-frame{max-width:min(100%,calc(72vh * 9 / 16))}.card[data-preview-format=facebook] .preview-frame{max-width:min(100%,calc(72vh * 4 / 5))}.card[data-preview-format=youtube] .preview-frame{max-width:min(100%,520px)}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip,.card-tabs{display:flex;gap:6px;flex-wrap:wrap}.preview-strip{justify-content:center;overflow:visible;padding-bottom:1px}.preview-strip button,.card-tabs button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 10px}.preview-strip button{min-height:34px;border-radius:999px;white-space:nowrap}.preview-strip button.active,.card-tabs button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-panel{display:none;border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:12px}.tool-panel.active{display:block}.tool-summary{margin-bottom:10px;color:#d8d8d8}.timeline-editor{padding:0}.timeline-head,.timeline-timebar,.timeline-values{display:flex;justify-content:space-between;gap:12px;color:var(--color-text-muted);font-size:12px}.timeline-head output,.timeline-timebar output{color:var(--color-text);text-align:right}.timeline-timebar{margin-top:10px}.timeline-timebar span:last-child{color:#777;text-align:right}.timeline-scrub{position:relative;height:42px;margin-top:8px}.timeline-scrub-track{position:absolute;left:0;right:0;top:17px;height:8px;border:1px solid #343434;border-radius:999px;background:linear-gradient(90deg,var(--color-surface-muted),#252525);overflow:hidden}.timeline-selected{position:absolute;top:0;bottom:0;background:rgba(175,207,42,.22);border-left:1px solid var(--color-brand-green);border-right:1px solid var(--color-brand-green)}.timeline-playhead{position:absolute;top:-8px;bottom:-8px;width:2px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7)}.timeline-playhead:before{content:"";position:absolute;left:50%;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--color-brand-white);transform:translateX(-50%)}.timeline-scrub input{position:absolute;inset:0;width:100%;height:42px;margin:0;background:transparent;opacity:0;cursor:pointer}.timeline{position:relative;height:38px;margin-top:6px}.timeline-track{position:absolute;left:0;right:0;top:16px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:var(--color-brand-white);border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:38px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}.timeline-tools button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);padding:7px 9px}.timeline-values{margin-top:6px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .export-dock{display:grid;gap:8px;margin-top:2px;padding:12px;border:1px solid #303030;border-radius:8px;background:#111}.export-dock strong{display:block;font-size:13px}.export-dock span{color:#a8a8a8;font-size:12px}
-.platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:var(--color-text);border-color:var(--color-brand-green)}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:var(--color-brand-blue)}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.camera-path-editor{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-path-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.camera-path-head strong{font-size:12px}.camera-path-head span{color:var(--color-text-muted);font-size:12px}.camera-path-track{position:relative;height:34px}.camera-path-rail{position:absolute;left:0;right:0;top:15px;height:5px;border-radius:999px;background:#292929}.camera-path-marker{position:absolute;top:7px;width:20px;height:20px;min-width:20px;padding:0;border-radius:999px;transform:translateX(-50%);background:var(--color-surface-control);border:1px solid var(--color-border-strong)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:var(--color-brand-blue);box-shadow:0 0 0 4px rgba(17,162,207,.18)}.camera-path-actions,.camera-keyframe-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-keyframe-panel{align-items:end}.camera-path-delete{color:var(--color-danger)!important}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:160px 180px;gap:12px;max-width:380px}
+.platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:var(--color-text);border-color:var(--color-brand-green)}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:var(--color-brand-blue)}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.camera-path-editor{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-path-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.camera-path-head strong{font-size:12px}.camera-path-head span{color:var(--color-text-muted);font-size:12px}.camera-path-track{position:relative;height:34px}.camera-path-rail{position:absolute;left:0;right:0;top:15px;height:5px;border-radius:999px;background:#292929}.camera-path-marker{position:absolute;top:7px;width:20px;height:20px;min-width:20px;padding:0;border-radius:999px;transform:translateX(-50%);background:var(--color-surface-control);border:1px solid var(--color-border-strong)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:var(--color-brand-blue);box-shadow:0 0 0 4px rgba(17,162,207,.18)}.camera-path-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.camera-keyframe-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}.camera-auto-status{min-height:18px;color:var(--color-text-muted);font-size:12px}.camera-path-delete{color:var(--color-danger)!important}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:160px 180px;gap:12px;max-width:380px}
 .camera-surface video{object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position .12s linear,transform .12s linear}.camera-reticle{position:absolute;inset:14% 22%;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}
 .card[data-effect=light-grain] .media video,.card[data-effect=light-grain] .media img{filter:contrast(1.08) brightness(1.02)}.card[data-effect=old-film] .media video,.card[data-effect=old-film] .media img{filter:sepia(.48) contrast(1.2) saturate(.62) brightness(.92)}.card[data-effect=vhs] .media video,.card[data-effect=vhs] .media img{filter:saturate(.62) contrast(1.22) brightness(.9) hue-rotate(-7deg)}.card[data-effect=bw-old] .media video,.card[data-effect=bw-old] .media img{filter:grayscale(1) contrast(1.22) brightness(.9)}.card[data-effect=light-grain] .media:after,.card[data-effect=old-film] .media:after,.card[data-effect=vhs] .media:after,.card[data-effect=bw-old] .media:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--effect-opacity,.24);background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 70% 65%,rgba(0,0,0,.95) 0 1px,transparent 1.8px);background-size:4px 4px,6px 6px;mix-blend-mode:overlay}.card[data-effect=old-film] .media:before,.card[data-effect=bw-old] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at center,transparent 44%,rgba(0,0,0,.46) 100%)}.card[data-effect=vhs] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 4px);mix-blend-mode:overlay}
 .overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,var(--color-brand-green));border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none;pointer-events:auto}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-text-box{display:grid;align-items:center;min-width:96px;min-height:34px;padding:8px 12px;border-left:0;background:rgba(var(--overlay-bg-rgb,0,0,0),var(--overlay-bg-opacity,.7));box-shadow:none;color:var(--overlay-color,#fff);font-weight:700;font-size:clamp(13px,var(--overlay-font-size,20px),36px);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.overlay-text-box[data-overlay-bg=off]{background:transparent;box-shadow:none}.overlay-text-box span{opacity:var(--overlay-opacity,1);overflow:hidden;text-overflow:ellipsis}.overlay-box.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.overlay-image-box{display:grid;place-items:center;min-width:72px;min-height:72px;padding:6px;border:1px dashed rgba(255,255,255,.42);background:rgba(0,0,0,.12);box-shadow:0 8px 24px rgba(0,0,0,.22)}.overlay-image-box img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none;background:transparent}.overlay-resize{position:absolute;right:3px;bottom:3px;z-index:4;width:22px;height:22px;padding:0;border:1px solid rgba(255,255,255,.52);border-radius:5px;background:rgba(255,255,255,.2);cursor:nwse-resize;touch-action:none;pointer-events:auto}.overlay-menu{position:absolute;z-index:6;display:grid;gap:8px;width:min(360px,94%);padding:8px;border:1px solid var(--color-border-strong);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel);touch-action:none}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px;cursor:move}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-inspector{display:grid;gap:8px}.overlay-inspector label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.overlay-inspector input[type=text],.overlay-inspector input[type=number]{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.overlay-inspector input[type=color]{width:42px;height:32px;padding:2px;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black)}.overlay-inspector-row{display:flex;gap:8px;align-items:center}.overlay-inspector-row>*{flex:1}.overlay-inspector-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.overlay-inspector-check input{width:auto}.overlay-danger{color:var(--color-danger)!important;border-color:#5b2626!important;background:#251111!important}.image-upload{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-empty{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;color:var(--color-text-muted)}
@@ -3870,6 +4100,45 @@ function resetCameraPathForCard(card){
   setSelectedCameraPathIndex(card, 0);
   setCameraPathForRank(rank, [], platform);
 }
+async function analyzeCameraForCard(card){
+  const rank = card.dataset.rank;
+  const platform = activePlatformForRank(rank);
+  const button = card.querySelector("[data-camera-auto]");
+  setCameraAutoStatus(card, "Analisando camera...");
+  if (button) button.disabled = true;
+  try {
+    const moment = (window.CUTTED_DATA.moments || []).find(item => String(item.rank) === String(rank));
+    const values = trimValues(card);
+    const response = await fetch("/api/camera/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        gallery_path: currentGalleryPath(),
+        rank,
+        platform,
+        clip_file: moment?.clip_file || "",
+        trim_start_seconds: values.trimStart,
+        adjusted_duration: Math.max(values.endPos - values.startPos, .3)
+      })
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao analisar camera.");
+    const path = normalizeCameraPath(payload.camera_path);
+    if (!path.length) throw new Error("A analise nao retornou keyframes.");
+    setSelectedCameraPathIndex(card, 0);
+    setCameraPathForRank(rank, path, platform);
+    setCameraAutoStatus(card, payload.cached ? "Auto camera aplicada do cache." : "Auto camera aplicada.");
+  } catch (error) {
+    setCameraAutoStatus(card, error.message || "Falha na auto camera.");
+  } finally {
+    const nextButton = card.querySelector("[data-camera-auto]");
+    if (nextButton) nextButton.disabled = false;
+  }
+}
+function setCameraAutoStatus(card, message){
+  const status = card.querySelector("[data-camera-auto-status]");
+  if (status) status.textContent = message || "";
+}
 function cameraFrameForTime(camera, cameraPath, position, duration){
   const path = normalizeCameraPath(cameraPath);
   if (!path.length) {
@@ -4164,6 +4433,7 @@ function bindCardCameraControls(card){
     });
   });
   card.querySelector("[data-camera-path-add]")?.addEventListener("click", () => addCameraPathFrameForCard(card));
+  card.querySelector("[data-camera-auto]")?.addEventListener("click", () => analyzeCameraForCard(card));
   card.querySelector("[data-camera-path-reset]")?.addEventListener("click", () => resetCameraPathForCard(card));
   card.querySelector("[data-camera-path-set-time]")?.addEventListener("click", () => moveCameraPathFrameToPlayhead(card));
   card.querySelector("[data-camera-path-delete]")?.addEventListener("click", () => deleteCameraPathFrameForCard(card));
@@ -5124,10 +5394,12 @@ function cameraPathEditorHtml(card, edit, duration){
       ${markers}
     </div>
     <div class="camera-path-actions">
+      <button data-camera-auto type="button">Auto camera</button>
       <button data-camera-path-add type="button">+ no playhead</button>
       <button data-camera-path-set-time type="button"${explicit.length ? "" : " disabled"}>Mover para playhead</button>
       <button data-camera-path-reset type="button"${explicit.length ? "" : " disabled"}>Usar simples</button>
     </div>
+    <div class="camera-auto-status" data-camera-auto-status></div>
     <div class="camera-keyframe-panel">
       <label>Keyframe
         <select data-camera-path-key${explicit.length ? "" : " disabled"}>${cameraOptionsHtml(selected?.key || "center")}</select>

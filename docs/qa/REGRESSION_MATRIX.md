@@ -31,6 +31,9 @@ review workspace, data contracts, or render pipeline.
 | Camera path | Add keyframe at playhead | Camera panel switches to explicit path and marker appears at the current adjusted time |
 | Camera path | Edit keyframe preset/strength | Preview updates for the active platform without changing other platforms |
 | Camera path | Reset to simple mode | Explicit path is cleared and preview returns to Inicio/Meio/Fim behavior |
+| Auto camera | Click Auto camera with OpenCV installed | Face-based `camera_path` is applied to the active platform |
+| Auto camera | Click Auto camera without OpenCV | User-safe install message appears and manual camera controls still work |
+| Auto camera | Repeat the same analysis | Cached `camera-analysis` result is reused |
 | Volume | Open any video | Volume starts at 20 percent |
 | Platform | Switch TikTok to Facebook | Preset state changes without losing TikTok edits |
 | Text layer | Add text layer | Layer appears, moves, resizes, edits, deletes |
