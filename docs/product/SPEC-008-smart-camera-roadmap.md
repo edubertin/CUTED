@@ -75,6 +75,9 @@ face detection, tracking, and source-aware analysis.
 - AI Director paths receive a dense local protection pass that can insert
   mandatory keyframes between model keyframes when OpenCV samples indicate a
   face would otherwise remain outside the crop.
+- Very wide group-risk frames on vertical platforms may use group-fit framing:
+  contained foreground over blurred background, preserving all visible people
+  instead of forcing an impossible 9:16 crop.
 - AI Director intent variants keep the same render contract and fall back to
   local Auto Director when OpenAI is unavailable.
 - AI Cuts uses the same `camera_path` contract, but marks frames as hard-cut
