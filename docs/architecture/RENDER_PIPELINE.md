@@ -30,11 +30,12 @@ python tools/cutted/scripts/cutted.py render-selected "samples/example/selected-
 
 ## Processing Stages
 
-1. Source preparation.
+1. Source preparation. YouTube imports should prefer a local high-quality source
+   up to 1440p when available, then fall back through lower qualities.
 2. Transcript loading or transcription.
 3. Highlight candidate selection.
 4. Candidate diversity guardrails.
-5. Preview clip render.
+5. Preview clip render from the best available source.
 6. Frame extraction.
 7. HTML review workspace generation.
 8. Browser edit state collection.
@@ -58,6 +59,20 @@ copies only the final MP4 files to:
 
 The UI may keep using the workspace MP4 for browser preview, but the user-facing
 final file is the manifest/response `final_file` or `local_file` path.
+
+## Import Quality
+
+The analyzer materializes YouTube sources into `_source/source.*` when possible
+instead of relying on a low-resolution direct stream. The default selector
+prefers up to 1440p and H.264 video with M4A audio when available, then falls
+back through compatible 1080p and best available formats. Operators can override
+the selector with `CUTED_YOUTUBE_RENDER_FORMAT` for debugging.
+
+`_source/source-metadata.json` records the selected format, whether the render
+source is local or a remote fallback, and FFprobe diagnostics when available.
+This is the QA checkpoint for soft Smart Camera exports: vertical 1080x1920
+renders and zoomed camera paths need substantially more source resolution than
+the old 360p/480p stream fallback provided.
 
 ## Filter Order
 
