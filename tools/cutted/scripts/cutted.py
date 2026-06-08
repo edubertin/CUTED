@@ -39,7 +39,7 @@ FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
 MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
 MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
-CAMERA_ANALYSIS_VERSION = "auto-face-v15"
+CAMERA_ANALYSIS_VERSION = "auto-face-v16"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
 CAMERA_ANALYSIS_MAX_FRAMES = 140
 CAMERA_SAFE_X_MIN = 30.0
@@ -1037,9 +1037,9 @@ def ai_director_camera_result(
     try:
         frames = ai_director_frame_samples(input_ref, start, duration)
         payload = request_ai_director_path(platform, title, transcript, metadata, detections, fallback_path, frames, duration, mode)
-        path = protected_ai_director_path(validated_ai_director_path(payload, duration), detections, duration)
+        path = protected_ai_director_path(validated_ai_director_path(payload, duration), detections, duration, platform)
         if ai_director_uses_hard_cuts(mode):
-            path = hard_cut_ai_director_path(path, detections, duration)
+            path = hard_cut_ai_director_path(path, detections, duration, platform)
     except Exception as error:
         diagnostics["error"] = str(error)
         return {"camera_path": [], "diagnostics": diagnostics}
@@ -1112,16 +1112,41 @@ def ai_director_user_payload(
         "task": "Decida quando focar uma pessoa, quando abrir para grupo, quando segurar, alternar ou fazer punch-in.",
         "editorial_intent": intent,
         "platform": platform if platform in PLATFORM_PRESETS else "tiktok",
+        "platform_viewport": platform_viewport(platform),
         "duration_seconds": round(duration, 3),
         "title": title,
         "transcript_excerpt": transcript[:2200],
         "video": metadata,
         "opencv_detection_summary": ai_director_detection_summary(detections),
         "opencv_detections": ai_director_detection_context(detections),
-        "scene_direction": ai_director_scene_context(detections, duration),
+        "scene_direction": ai_director_scene_context(detections, duration, platform),
         "local_auto_director_fallback": fallback_path[:16],
         "rules": rules,
     }, ensure_ascii=False)
+
+
+def platform_viewport(platform: str) -> dict[str, object]:
+    preset = PLATFORM_PRESETS.get(platform, PLATFORM_PRESETS["tiktok"])
+    aspect = preset.width / max(preset.height, 1)
+    orientation = "landscape" if preset.width > preset.height else "portrait"
+    return {
+        "key": preset.key,
+        "label": preset.label,
+        "width": preset.width,
+        "height": preset.height,
+        "aspect_ratio": round(aspect, 4),
+        "orientation": orientation,
+        "format_note": preset.note,
+        "safe_crop_notes": platform_safe_crop_notes(preset),
+    }
+
+
+def platform_safe_crop_notes(preset: PlatformPreset) -> str:
+    if preset.width < preset.height and preset.width / max(preset.height, 1) < 0.65:
+        return "Vertical estreito: abra o quadro cedo quando 2+ rostos estiverem distantes ou houver 3+ pessoas."
+    if preset.width < preset.height:
+        return "Feed vertical moderado: preserve grupo quando houver 3+ pessoas, mas permite closes de reacao com 2 pessoas."
+    return "Landscape: preserve contexto lateral e evite zoom excessivo em grupos."
 
 
 def ai_director_rules(mode: str) -> list[str]:
@@ -1217,13 +1242,14 @@ def ai_director_multi_face_coverage(detections: list[dict[str, object]]) -> floa
     return round(multi / len(detections), 3)
 
 
-def ai_director_scene_context(detections: list[dict[str, object]], duration: float) -> dict[str, object]:
+def ai_director_scene_context(detections: list[dict[str, object]], duration: float, platform: str) -> dict[str, object]:
     rows = [row for row in detections if reliable_faces(row)]
     return {
         "duration_seconds": round(max(duration, 0.3), 3),
+        "platform_viewport": platform_viewport(platform),
         "primary_track": ai_director_primary_track(rows),
         "reaction_windows": ai_director_reaction_windows(rows, duration),
-        "group_windows": ai_director_group_windows(rows),
+        "group_windows": ai_director_group_windows(rows, platform),
         "cut_pattern": "principal -> reaction 2-3s -> principal; use group when close would cut visible faces",
     }
 
@@ -1262,11 +1288,11 @@ def ai_director_reaction_windows(rows: list[dict[str, object]], duration: float)
     return windows
 
 
-def ai_director_group_windows(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+def ai_director_group_windows(rows: list[dict[str, object]], platform: str) -> list[dict[str, object]]:
     return [
         {"time": round(float(row.get("time") or 0.0), 3), "face_count": len(reliable_faces(row))}
         for row in rows
-        if len(reliable_faces(row)) >= 3 or should_use_group_frame(sorted(reliable_faces(row), key=face_x))
+        if should_use_platform_group_frame(sorted(reliable_faces(row), key=face_x), platform)
     ][:8]
 
 
@@ -1306,19 +1332,19 @@ def validated_ai_director_path(payload: dict[str, object], duration: float) -> l
 
 
 def protected_ai_director_path(
-    frames: list[dict[str, object]], detections: list[dict[str, object]], duration: float
+    frames: list[dict[str, object]], detections: list[dict[str, object]], duration: float, platform: str
 ) -> list[dict[str, object]]:
     protected: list[dict[str, object]] = []
     for frame in frames:
-        safe = protected_ai_director_frame(frame, detections)
+        safe = protected_ai_director_frame(frame, detections, platform)
         protected.append(safe)
     return stable_camera_targets(compressed_camera_path(protected, duration, max_gap=2.6, x_threshold=1.4, zoom_threshold=0.012))
 
 
 def hard_cut_ai_director_path(
-    frames: list[dict[str, object]], detections: list[dict[str, object]], duration: float
+    frames: list[dict[str, object]], detections: list[dict[str, object]], duration: float, platform: str
 ) -> list[dict[str, object]]:
-    scene_path = cinematic_cut_scene_path(detections, duration)
+    scene_path = cinematic_cut_scene_path(detections, duration, platform)
     if scene_path:
         return scene_path
     return hard_cut_spaced_ai_frames(frames, duration)
@@ -1342,38 +1368,38 @@ def hard_cut_spaced_ai_frames(frames: list[dict[str, object]], duration: float) 
     return result[:14]
 
 
-def cinematic_cut_scene_path(detections: list[dict[str, object]], duration: float) -> list[dict[str, object]]:
+def cinematic_cut_scene_path(detections: list[dict[str, object]], duration: float, platform: str) -> list[dict[str, object]]:
     rows = [row for row in detections if reliable_faces(row)]
     if not rows:
         return []
     safe_duration = max(duration, 0.3)
-    frames = [cinematic_primary_frame(rows[0], 0.0)]
+    frames = [cinematic_primary_frame(rows[0], 0.0, platform)]
     last_return = 0.0
     for row in rows:
         time_value = float(row.get("time") or 0.0)
         if time_value < 1.6 or time_value - last_return < 2.8:
             continue
-        target = cinematic_reaction_frame(row, time_value)
+        target = cinematic_reaction_frame(row, time_value, platform)
         if target is None or camera_frames_are_similar(frames[-1], target):
             continue
         frames.append(target)
         return_time = min(time_value + 2.6, safe_duration)
         if return_time - time_value >= 1.2:
-            frames.append(cinematic_primary_frame(nearest_scene_row(return_time, rows), return_time))
+            frames.append(cinematic_primary_frame(nearest_scene_row(return_time, rows), return_time, platform))
             last_return = return_time
         if len(frames) >= 13:
             break
     return frames if len(frames) > 1 else []
 
 
-def cinematic_reaction_frame(row: dict[str, object], time_value: float) -> dict[str, object] | None:
+def cinematic_reaction_frame(row: dict[str, object], time_value: float, platform: str) -> dict[str, object] | None:
     faces = sorted(reliable_faces(row), key=face_x)
     if len(faces) >= 3:
-        return hard_cut_ai_director_frame(group_face_frame(faces, time_value), time_value, "ai-director-cuts-group-safe")
+        return hard_cut_ai_director_frame(group_face_frame(faces, time_value, platform), time_value, "ai-director-cuts-group-safe")
     secondary = secondary_face_for_row(row)
     if secondary is None:
-        if should_use_group_frame(faces):
-            return hard_cut_ai_director_frame(group_face_frame(faces, time_value), time_value, "ai-director-cuts-group-safe")
+        if should_use_platform_group_frame(faces, platform):
+            return hard_cut_ai_director_frame(group_face_frame(faces, time_value, platform), time_value, "ai-director-cuts-group-safe")
         return None
     return hard_cut_ai_director_frame({
         **secondary,
@@ -1382,10 +1408,10 @@ def cinematic_reaction_frame(row: dict[str, object], time_value: float) -> dict[
     }, time_value, "ai-director-cuts-reaction")
 
 
-def cinematic_primary_frame(row: dict[str, object], time_value: float) -> dict[str, object]:
+def cinematic_primary_frame(row: dict[str, object], time_value: float, platform: str) -> dict[str, object]:
     faces = sorted(reliable_faces(row), key=face_x)
-    if len(faces) >= 3 and should_use_group_frame(faces):
-        return hard_cut_ai_director_frame(group_face_frame(faces, time_value), time_value, "ai-director-cuts-group-safe")
+    if len(faces) >= 3 and should_use_platform_group_frame(faces, platform):
+        return hard_cut_ai_director_frame(group_face_frame(faces, time_value, platform), time_value, "ai-director-cuts-group-safe")
     primary = row.get("primary") if isinstance(row.get("primary"), dict) else None
     source = primary if isinstance(primary, dict) else (faces[0] if faces else {})
     return hard_cut_ai_director_frame({**source, "time": time_value}, time_value, "ai-director-cuts-primary")
@@ -1425,15 +1451,15 @@ def hard_cut_ai_director_frame(
     }
 
 
-def protected_ai_director_frame(frame: dict[str, object], detections: list[dict[str, object]]) -> dict[str, object]:
+def protected_ai_director_frame(frame: dict[str, object], detections: list[dict[str, object]], platform: str) -> dict[str, object]:
     time_value = float(frame.get("time") or 0.0)
     nearest = nearest_detection(time_value, detections)
     if nearest is None:
         return frame
     faces = sorted(reliable_faces(nearest), key=lambda item: face_x(item))
-    if not faces or not ai_frame_needs_group_protection(frame, faces):
+    if not faces or not ai_frame_needs_group_protection(frame, faces, platform):
         return frame
-    group = group_face_frame(faces, time_value)
+    group = group_face_frame(faces, time_value, platform)
     return {
         **frame,
         "x": round(float(group["x"]), 2),
@@ -1452,12 +1478,12 @@ def nearest_detection(time_value: float, detections: list[dict[str, object]]) ->
     return nearest if abs(float(nearest.get("time") or 0.0) - time_value) <= 2.6 else None
 
 
-def ai_frame_needs_group_protection(frame: dict[str, object], faces: list[dict[str, float]]) -> bool:
+def ai_frame_needs_group_protection(frame: dict[str, object], faces: list[dict[str, float]], platform: str) -> bool:
     if len(faces) >= 3:
         return True
     if len(faces) < 2:
         return False
-    return should_use_group_frame(faces) or camera_frame_cuts_faces(frame, faces)
+    return should_use_platform_group_frame(faces, platform) or camera_frame_cuts_faces(frame, faces)
 
 
 def camera_frame_cuts_faces(frame: dict[str, object], faces: list[dict[str, float]]) -> bool:
@@ -1559,26 +1585,62 @@ def should_use_group_frame(faces: list[dict[str, float]]) -> bool:
     return spread >= 24.0 or any(face_outside_safe_zone(face) for face in faces)
 
 
-def group_face_frame(faces: list[dict[str, float]], time_value: float) -> dict[str, float]:
+def should_use_platform_group_frame(faces: list[dict[str, float]], platform: str) -> bool:
+    if len(faces) < 2:
+        return False
+    spread = face_x(faces[-1]) - face_x(faces[0])
+    preset = PLATFORM_PRESETS.get(platform, PLATFORM_PRESETS["tiktok"])
+    aspect = preset.width / max(preset.height, 1)
+    if len(faces) >= 3:
+        return True
+    if aspect < 0.65:
+        return spread >= 20.0 or any(face_outside_safe_zone(face) for face in faces)
+    if aspect < 0.95:
+        return spread >= 28.0 or any(face_outside_safe_zone(face) for face in faces)
+    return spread >= 34.0 or any(face_outside_safe_zone(face) for face in faces)
+
+
+def group_face_frame(faces: list[dict[str, float]], time_value: float, platform: str | None = None) -> dict[str, float]:
     left = faces[0]
     right = faces[-1]
     confidence = max(float(left.get("confidence") or 0.35), float(right.get("confidence") or 0.35))
     spread = max(face_x(right) - face_x(left), 0.0)
+    min_x, max_x = platform_group_x_bounds(platform)
     return {
         "time": time_value,
-        "x": clamp((face_x(left) + face_x(right)) / 2.0, 18.0, 82.0),
+        "x": clamp((face_x(left) + face_x(right)) / 2.0, min_x, max_x),
         "y": clamp((float(left.get("y") or 50.0) + float(right.get("y") or 50.0)) / 2.0, 38.0, 62.0),
-        "zoom": group_face_zoom(spread),
+        "zoom": group_face_zoom(spread, len(faces), platform),
         "confidence": confidence,
     }
 
 
-def group_face_zoom(spread: float) -> float:
+def platform_group_x_bounds(platform: str | None) -> tuple[float, float]:
+    if platform == "youtube":
+        return (8.0, 92.0)
+    if platform == "facebook":
+        return (14.0, 86.0)
+    return (16.0, 84.0)
+
+
+def group_face_zoom(spread: float, face_count: int = 2, platform: str | None = None) -> float:
     if spread >= 42.0:
-        return 1.0
-    if spread >= 30.0:
-        return 1.03
-    return 1.07
+        base = 1.0
+    elif spread >= 30.0:
+        base = 1.03
+    else:
+        base = 1.07
+    preset = PLATFORM_PRESETS.get(platform or "", PLATFORM_PRESETS["tiktok"])
+    aspect = preset.width / max(preset.height, 1)
+    if aspect < 0.65 and face_count >= 3:
+        return min(base, 1.0)
+    if aspect < 0.65:
+        return min(base, 1.02)
+    if aspect < 0.95 and face_count >= 3:
+        return min(base, 1.02)
+    if aspect >= 1.0 and face_count >= 2:
+        return min(base, 1.0)
+    return base
 
 
 def boost_face_zoom(detections: list[dict[str, float]]) -> list[dict[str, float]]:
@@ -4814,7 +4876,7 @@ main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-panel{display:none;border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:12px}.tool-panel.active{display:block}.tool-summary{margin-bottom:10px;color:#d8d8d8}.timeline-editor{padding:0}.timeline-head,.timeline-timebar,.timeline-values{display:flex;justify-content:space-between;gap:12px;color:var(--color-text-muted);font-size:12px}.timeline-head output,.timeline-timebar output{color:var(--color-text);text-align:right}.timeline-timebar{margin-top:10px}.timeline-timebar span:last-child{color:#777;text-align:right}.timeline-scrub{position:relative;height:42px;margin-top:8px}.timeline-scrub-track{position:absolute;left:0;right:0;top:17px;height:8px;border:1px solid #343434;border-radius:999px;background:linear-gradient(90deg,var(--color-surface-muted),#252525);overflow:hidden}.timeline-selected{position:absolute;top:0;bottom:0;background:rgba(175,207,42,.22);border-left:1px solid var(--color-brand-green);border-right:1px solid var(--color-brand-green)}.timeline-playhead{position:absolute;top:-8px;bottom:-8px;width:2px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7)}.timeline-playhead:before{content:"";position:absolute;left:50%;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--color-brand-white);transform:translateX(-50%)}.timeline-scrub input{position:absolute;inset:0;width:100%;height:42px;margin:0;background:transparent;opacity:0;cursor:pointer}.timeline{position:relative;height:38px;margin-top:6px}.timeline-track{position:absolute;left:0;right:0;top:16px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:var(--color-brand-white);border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:38px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}.timeline-tools button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);padding:7px 9px}.timeline-values{margin-top:6px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .export-dock{display:grid;gap:8px;margin-top:2px;padding:12px;border:1px solid #303030;border-radius:8px;background:#111}.export-dock strong{display:block;font-size:13px}.export-dock span{color:#a8a8a8;font-size:12px}
 .platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:var(--color-text);border-color:var(--color-brand-green)}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:var(--color-brand-blue)}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.camera-path-editor,.camera-manual-panel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-path-head,.camera-panel-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.camera-path-head strong,.camera-panel-title strong{font-size:12px}.camera-path-head span,.camera-panel-title span{color:var(--color-text-muted);font-size:12px}.camera-smart-panel{display:grid;gap:8px;padding:10px;border:1px solid rgba(17,162,207,.28);border-radius:8px;background:linear-gradient(135deg,rgba(17,162,207,.12),rgba(175,207,42,.06))}.camera-smart-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.camera-smart-grid button{background:rgba(17,162,207,.1);color:var(--color-text);border:1px solid rgba(17,162,207,.34);text-align:center}.camera-smart-grid button:hover{border-color:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.14)}.camera-path-track{position:relative;height:34px}.camera-path-rail{position:absolute;left:0;right:0;top:15px;height:5px;border-radius:999px;background:#292929}.camera-path-marker{position:absolute;top:7px;width:20px;height:20px;min-width:20px;padding:0;border-radius:999px;transform:translateX(-50%);background:var(--color-surface-control);border:1px solid var(--color-border-strong)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:var(--color-brand-blue);box-shadow:0 0 0 4px rgba(17,162,207,.18)}.camera-path-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-keyframe-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}.camera-auto-status{min-height:18px;color:var(--color-text-muted);font-size:12px}.camera-path-delete{color:var(--color-danger)!important}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:160px 180px;gap:12px;max-width:380px}
-.camera-smart-panel p{margin:0;color:var(--color-text-muted);font-size:12px}.camera-smart-grid{grid-template-columns:1fr}.camera-smart-grid button{display:grid;gap:3px;justify-items:center}.camera-smart-grid button span{color:var(--color-text-muted);font-size:11px}.camera-director-action{min-height:72px;background:linear-gradient(135deg,rgba(17,162,207,.32),rgba(231,231,232,.08))!important;border-color:rgba(17,162,207,.72)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 34px rgba(17,162,207,.1)}.camera-director-action strong{font-size:15px}.camera-smart-secondary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-smart-secondary button{min-height:54px}.camera-advanced{display:grid;gap:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.025)}.camera-advanced summary{display:flex;justify-content:space-between;gap:10px;align-items:center;cursor:pointer;color:var(--color-text-soft)}.camera-advanced summary small{color:var(--color-text-muted);font-size:12px}.camera-advanced[open] summary{padding-bottom:8px;border-bottom:1px solid rgba(231,231,232,.08)}.camera-advanced .camera-manual-panel{padding:0;border:0;background:transparent}.camera-surface video{object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position .12s linear,transform .12s linear}.camera-reticle{position:absolute;inset:14% 22%;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}
+.camera-smart-panel p{margin:0;color:var(--color-text-muted);font-size:12px}.camera-smart-grid{grid-template-columns:1fr}.camera-smart-grid button{display:grid;gap:3px;justify-items:center}.camera-smart-grid button span{color:var(--color-text-muted);font-size:11px}.camera-director-action{min-height:72px;background:linear-gradient(135deg,rgba(17,162,207,.32),rgba(231,231,232,.08))!important;border-color:rgba(17,162,207,.72)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 34px rgba(17,162,207,.1)}.camera-director-action strong{font-size:15px}.camera-smart-secondary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-smart-secondary button{min-height:54px}.camera-advanced{display:grid;gap:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.025)}.camera-advanced summary{display:flex;justify-content:space-between;gap:10px;align-items:center;cursor:pointer;color:var(--color-text-soft)}.camera-advanced summary small{color:var(--color-text-muted);font-size:12px}.camera-advanced[open] summary{padding-bottom:8px;border-bottom:1px solid rgba(231,231,232,.08)}.camera-advanced .camera-manual-panel{padding:0;border:0;background:transparent}.camera-surface video{object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position .12s linear,transform .12s linear}.camera-surface[data-camera-cut=hard] video{transition:none}.camera-reticle{position:absolute;inset:14% 22%;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}
 .card[data-effect=light-grain] .media video,.card[data-effect=light-grain] .media img{filter:contrast(1.08) brightness(1.02)}.card[data-effect=old-film] .media video,.card[data-effect=old-film] .media img{filter:sepia(.48) contrast(1.2) saturate(.62) brightness(.92)}.card[data-effect=vhs] .media video,.card[data-effect=vhs] .media img{filter:saturate(.62) contrast(1.22) brightness(.9) hue-rotate(-7deg)}.card[data-effect=bw-old] .media video,.card[data-effect=bw-old] .media img{filter:grayscale(1) contrast(1.22) brightness(.9)}.card[data-effect=light-grain] .media:after,.card[data-effect=old-film] .media:after,.card[data-effect=vhs] .media:after,.card[data-effect=bw-old] .media:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--effect-opacity,.24);background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 70% 65%,rgba(0,0,0,.95) 0 1px,transparent 1.8px);background-size:4px 4px,6px 6px;mix-blend-mode:overlay}.card[data-effect=old-film] .media:before,.card[data-effect=bw-old] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at center,transparent 44%,rgba(0,0,0,.46) 100%)}.card[data-effect=vhs] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 4px);mix-blend-mode:overlay}
 .overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,var(--color-brand-green));border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none;pointer-events:auto}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-text-box{display:grid;align-items:center;min-width:96px;min-height:34px;padding:8px 12px;border-left:0;background:rgba(var(--overlay-bg-rgb,0,0,0),var(--overlay-bg-opacity,.7));box-shadow:none;color:var(--overlay-color,#fff);font-weight:700;font-size:clamp(13px,var(--overlay-font-size,20px),36px);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.overlay-text-box[data-overlay-bg=off]{background:transparent;box-shadow:none}.overlay-text-box span{opacity:var(--overlay-opacity,1);overflow:hidden;text-overflow:ellipsis}.overlay-box.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.overlay-image-box{display:grid;place-items:center;min-width:72px;min-height:72px;padding:6px;border:1px dashed rgba(255,255,255,.42);background:rgba(0,0,0,.12);box-shadow:0 8px 24px rgba(0,0,0,.22)}.overlay-image-box img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none;background:transparent}.overlay-resize{position:absolute;right:3px;bottom:3px;z-index:4;width:22px;height:22px;padding:0;border:1px solid rgba(255,255,255,.52);border-radius:5px;background:rgba(255,255,255,.2);cursor:nwse-resize;touch-action:none;pointer-events:auto}.overlay-menu{position:absolute;z-index:6;display:grid;gap:8px;width:min(360px,94%);padding:8px;border:1px solid var(--color-border-strong);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel);touch-action:none}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px;cursor:move}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-inspector{display:grid;gap:8px}.overlay-inspector label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.overlay-inspector input[type=text],.overlay-inspector input[type=number]{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.overlay-inspector input[type=color]{width:42px;height:32px;padding:2px;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black)}.overlay-inspector-row{display:flex;gap:8px;align-items:center}.overlay-inspector-row>*{flex:1}.overlay-inspector-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.overlay-inspector-check input{width:auto}.overlay-danger{color:var(--color-danger)!important;border-color:#5b2626!important;background:#251111!important}.image-upload{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-empty{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;color:var(--color-text-muted)}
 p{color:#bebebe}.peak{color:#fff;font-size:16px}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}.transcript-panel details{border-top:1px solid #242424;margin-top:12px;padding-top:10px}.transcript-panel summary{cursor:pointer;color:#ddd}
@@ -5415,6 +5477,7 @@ function applyCameraSurface(surface, camera, position = 0, duration = 0, cameraP
   if (!surface) return;
   const frame = cameraFrameForTime(camera, cameraPath, position, duration);
   surface.dataset.cameraKey = frame.key || "path";
+  surface.dataset.cameraCut = cameraFrameUsesHardCut(frame) ? "hard" : "smooth";
   surface.setAttribute("style", cameraPreviewStyleFromFrame(frame));
 }
 function cameraContextForCard(card, time = null){
@@ -6591,7 +6654,7 @@ function cameraPreviewItemHtml(item){
   const src = cacheBustedPreview(item.clip_file || "", `camera-${item.rank}-${item.adjusted_start}-${item.adjusted_end}`);
   const duration = Number(item.adjusted_duration || 0);
   return `<article class="caption-item" data-rank="${escapeAttr(item.rank)}" data-platform="${escapeAttr(item.platform)}" data-camera-duration="${escapeAttr(item.adjusted_duration || 0)}">
-    <div class="caption-preview camera-surface" data-camera-key="${escapeAttr(previewFrame.key || "path")}" style="${escapeAttr(cameraPreviewStyleFromFrame(previewFrame))}">
+    <div class="caption-preview camera-surface" data-camera-key="${escapeAttr(previewFrame.key || "path")}" data-camera-cut="${cameraFrameUsesHardCut(previewFrame) ? "hard" : "smooth"}" style="${escapeAttr(cameraPreviewStyleFromFrame(previewFrame))}">
       <video controls preload="metadata" src="${escapeAttr(src)}"></video>
       <div class="camera-reticle"></div>
     </div>
