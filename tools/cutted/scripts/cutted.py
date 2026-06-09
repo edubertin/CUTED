@@ -447,6 +447,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if path == "/api/select-folder":
                 self.handle_select_folder()
                 return
+            if path == "/api/open-folder":
+                self.handle_open_folder()
+                return
             if path == "/api/settings/openai":
                 self.handle_openai_settings_save()
                 return
@@ -552,6 +555,14 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
                 send_json_response(self, 200, {"ok": True, "path": path})
             except Exception as error:
                 send_json_response(self, 500, {"ok": False, "error": str(error)})
+
+        def handle_open_folder(self) -> None:
+            try:
+                payload = read_json_body(self)
+                path = open_local_folder(payload.get("path"))
+                send_json_response(self, 200, {"ok": True, "path": str(path)})
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
 
         def handle_openai_settings_get(self) -> None:
             send_json_response(self, 200, {"ok": True, "settings": openai_settings_payload(), "usage": usage_summary_payload()})
@@ -3248,6 +3259,25 @@ def select_folder_path() -> str:
     if not selected:
         raise RuntimeError("Nenhuma pasta selecionada.")
     return selected
+
+
+def open_local_folder(value: object) -> Path:
+    raw = clean_optional_text(value, 2000)
+    if not raw:
+        raise ValueError("Missing folder path.")
+    path = Path(raw).expanduser()
+    if path.is_file():
+        path = path.parent
+    if not path.exists() or not path.is_dir():
+        raise ValueError("Folder not found.")
+    resolved = path.resolve()
+    if sys.platform.startswith("win"):
+        os.startfile(str(resolved))  # type: ignore[attr-defined]
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(resolved)])
+    else:
+        subprocess.Popen(["xdg-open", str(resolved)])
+    return resolved
 
 
 def clean_smart_boundaries(value: object) -> str:
@@ -8608,12 +8638,40 @@ function renderFinalizeResults(files){
           <div class="result-actions">
             <a href="${escapeAttr(file.url)}" target="_blank" rel="noopener">Abrir preview</a>
             <a class="secondary" href="${escapeAttr(file.url)}" download="${escapeAttr(downloadName)}">Baixar preview</a>
+            ${finalDir ? `<button class="secondary" type="button" data-open-folder="${escapeAttr(finalDir)}">Abrir pasta</button>` : ""}
             ${finalFile ? `<button class="secondary" type="button" data-copy-path="${escapeAttr(finalFile)}">Copiar caminho</button>` : ""}
           </div>
         </div>
       </div>
     </details>`;
   }).join("");
+}
+async function openResultFolder(path, button){
+  if (!path) return;
+  const previous = button?.textContent || "Abrir pasta";
+  try {
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Abrindo...";
+    }
+    const response = await fetch("/api/open-folder", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({path})
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao abrir pasta.");
+    if (button) button.textContent = "Pasta aberta";
+  } catch (error) {
+    if (button) button.textContent = "Falhou";
+    alert(error.message || String(error));
+  } finally {
+    window.setTimeout(() => {
+      if (!button) return;
+      button.disabled = false;
+      button.textContent = previous;
+    }, 1400);
+  }
 }
 async function copyResultPath(path, button){
   try {
@@ -8864,9 +8922,15 @@ document.querySelectorAll(".card").forEach(card => {
 document.getElementById("reset-ui").addEventListener("click", startNewProject);
 document.getElementById("finalize-videos").addEventListener("click", finalizeVideos);
 document.querySelector("[data-render-results]")?.addEventListener("click", event => {
-  const button = event.target instanceof Element ? event.target.closest("[data-copy-path]") : null;
-  if (!button) return;
-  copyResultPath(button.dataset.copyPath || "", button);
+  const target = event.target instanceof Element ? event.target : null;
+  const folderButton = target?.closest("[data-open-folder]");
+  if (folderButton) {
+    openResultFolder(folderButton.dataset.openFolder || "", folderButton);
+    return;
+  }
+  const copyButton = target?.closest("[data-copy-path]");
+  if (!copyButton) return;
+  copyResultPath(copyButton.dataset.copyPath || "", copyButton);
 });
 document.querySelectorAll("[data-caption-lines],[data-caption-width],[data-caption-enabled]").forEach(input => {
   const update = () => {
