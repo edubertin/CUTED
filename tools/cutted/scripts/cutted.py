@@ -6090,11 +6090,17 @@ def card_html(moment: Moment) -> str:
                 <button data-card-format-preview="youtube">YouTube</button>
               </div>
               <div class="preview-controls" aria-label="Controles do preview">
-                <button class="preview-icon preview-play" data-preview-play type="button" aria-label="Reproduzir" title="Reproduzir"></button>
-                <div class="preview-camera-timeline" data-preview-camera-timeline aria-label="Timeline de camera"></div>
-                <div class="preview-volume-group" aria-label="Volume do preview">
-                  <button class="preview-icon preview-volume" data-preview-volume type="button" aria-label="Alternar mudo" title="Alternar mudo"></button>
+                <div class="preview-transport-group" aria-label="Player e volume">
+                  <button class="preview-icon preview-play" data-preview-play type="button" aria-label="Reproduzir" title="Reproduzir"></button>
+                  <div class="preview-volume-group" aria-label="Volume do preview">
+                    <button class="preview-icon preview-volume" data-preview-volume type="button" aria-label="Volume" title="Volume"></button>
+                    <div class="preview-volume-popover" data-preview-volume-popover hidden>
+                      <input class="preview-volume-slider" data-preview-volume-slider type="range" min="0" max="100" step="5" value="70" aria-label="Volume do preview">
+                      <button class="preview-volume-zero" data-preview-volume-zero type="button" aria-label="Zerar volume" title="Zerar volume"></button>
+                    </div>
+                  </div>
                 </div>
+                <div class="preview-camera-timeline" data-preview-camera-timeline aria-label="Timeline de camera"></div>
               </div>
             </div>
             <div class="media camera-surface" data-overlay-surface>
@@ -6419,7 +6425,7 @@ header{background:linear-gradient(180deg,rgba(5,5,5,.92),rgba(5,5,5,.68));backdr
 .preview-icon,.preview-step{border-color:var(--glass-border);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.035)),rgba(231,231,232,.08);color:var(--color-text);box-shadow:inset 0 1px 0 rgba(255,255,255,.36),inset 0 -8px 14px rgba(0,0,0,.14)}
 .preview-play{width:38px;height:38px;min-width:38px;background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
 .preview-volume-group{border-left:1px solid rgba(231,231,232,.12)}.preview-volume-group output{color:rgba(231,231,232,.72);font-variant-numeric:tabular-nums}
-.preview-controls{display:grid;grid-template-columns:32px minmax(140px,1fr) 32px;width:100%;max-width:100%;border-radius:18px}.preview-volume-group{padding-left:0;border-left:0}.preview-camera-timeline{position:relative;align-self:stretch;min-width:120px;display:grid;align-items:center;padding:0 4px}.preview-camera-rail{position:relative;width:100%;height:28px;cursor:pointer;touch-action:none}.preview-camera-track{position:absolute;left:0;right:0;top:12px;height:4px;border-radius:999px;background:linear-gradient(90deg,rgba(17,162,207,.34),rgba(231,231,232,.12));box-shadow:inset 0 0 0 1px rgba(255,255,255,.04)}.preview-camera-playhead{position:absolute;top:5px;width:2px;height:18px;border-radius:999px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7);transform:translateX(-50%);pointer-events:none}.preview-camera-marker{position:absolute;top:5px;width:18px;height:18px;min-width:18px;padding:0;border:1px solid rgba(17,162,207,.8);border-radius:999px;background:rgba(17,162,207,.24);box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 0 0 3px rgba(17,162,207,.08);transform:translateX(-50%);cursor:pointer}.preview-camera-marker.active{background:var(--color-brand-blue);box-shadow:0 0 0 4px rgba(17,162,207,.18),0 0 18px rgba(17,162,207,.32)}.preview-camera-popover{position:absolute;z-index:8;top:34px;left:50%;display:grid;gap:8px;width:min(260px,92vw);padding:10px;border:1px solid var(--glass-border);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel);transform:translateX(-50%)}.preview-camera-popover[hidden]{display:none}.preview-camera-popover label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.preview-camera-popover select{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.preview-camera-popover input{width:100%;accent-color:var(--color-brand-blue)}.preview-camera-popover button{min-height:32px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}
+.preview-bar,.preview-controls,.preview-camera-timeline,.preview-volume-group{overflow:visible}.preview-controls{display:grid;grid-template-columns:auto minmax(160px,1fr);align-items:center;gap:10px;width:100%;max-width:100%;padding:0;border:0;background:transparent;box-shadow:none;backdrop-filter:none}.preview-transport-group{display:flex;align-items:center;gap:6px;padding:5px 6px;border:1px solid var(--glass-border);border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.025)),rgba(5,5,5,.26);box-shadow:inset 0 1px 0 var(--glass-edge),0 8px 22px rgba(0,0,0,.18);backdrop-filter:blur(18px) saturate(1.45)}.preview-volume-group{position:relative;padding-left:0;border-left:0}.preview-camera-timeline{position:relative;min-width:160px;display:grid;align-items:center;min-height:42px;padding:6px 12px;border:1px solid var(--glass-border);border-radius:999px;background:linear-gradient(180deg,rgba(17,162,207,.11),rgba(255,255,255,.025)),rgba(5,5,5,.24);box-shadow:inset 0 1px 0 var(--glass-edge),0 8px 22px rgba(0,0,0,.18);backdrop-filter:blur(18px) saturate(1.45)}.preview-camera-rail{position:relative;width:100%;height:24px;cursor:pointer;touch-action:none}.preview-camera-track{position:absolute;left:0;right:0;top:50%;height:3px;border-radius:999px;background:linear-gradient(90deg,rgba(17,162,207,.5),rgba(231,231,232,.12));box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);transform:translateY(-50%)}.preview-camera-playhead{position:absolute;top:50%;width:2px;height:20px;border-radius:999px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7);transform:translate(-50%,-50%);pointer-events:none}.preview-camera-marker{position:absolute;top:50%;width:13px;height:24px;min-width:13px;padding:0;border:1px solid rgba(17,162,207,.84);border-radius:999px;background:rgba(17,162,207,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 0 0 2px rgba(17,162,207,.07);transform:translate(-50%,-50%);cursor:pointer}.preview-camera-marker.active{width:15px;background:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.16),0 0 14px rgba(17,162,207,.28)}.preview-camera-popover,.preview-volume-popover{position:absolute;z-index:30;display:grid;gap:8px;padding:10px;border:1px solid var(--glass-border);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel)}.preview-camera-popover{bottom:calc(100% + 8px);left:50%;width:min(260px,92vw);transform:translateX(-50%)}.preview-camera-popover[hidden],.preview-volume-popover[hidden]{display:none}.preview-camera-popover label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.preview-camera-popover select{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.preview-camera-popover input,.preview-volume-slider{width:100%;accent-color:var(--color-brand-blue)}.preview-camera-popover button{min-height:32px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.preview-volume-popover{right:0;bottom:calc(100% + 8px);width:164px}.preview-volume-zero{display:inline-grid;place-items:center;min-height:30px;border:1px solid var(--color-border-strong);border-radius:999px;background:#242424;color:var(--color-text-soft)}
 .media{border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-panel);background:#000;box-shadow:0 14px 44px rgba(0,0,0,.32)}
 .tool-section,.export-dock,.overlay-menu,.settings-panel{border-color:var(--glass-border);border-radius:var(--radius-panel);background:linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.025) 36%,rgba(0,0,0,.08) 100%),var(--glass-bg-strong);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-edge),inset 0 -18px 28px rgba(0,0,0,.14);backdrop-filter:blur(24px) saturate(1.45)}
 .tool-section>summary{color:rgba(231,231,232,.9)}.export-dock{padding:14px}.export-dock span{color:rgba(231,231,232,.6)}
@@ -6437,7 +6443,7 @@ button[data-action=discard],.result-actions a.secondary,.result-actions button.s
 .result-item{border-color:var(--glass-border);background:rgba(9,9,9,.82)}.result-item[open]{border-color:rgba(231,231,232,.25)}
 .result-body video{border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-panel)}
 @supports not (backdrop-filter:blur(1px)){.preview-bar,.preview-controls,.tool-section,.export-dock,.overlay-menu,header,.tabs{background:#111}}
-@media(max-width:860px){.brand-logo{width:min(360px,86vw);height:58px}.tabs{justify-content:flex-start}.tabs button{min-width:auto}.preview-bar{padding:8px}.preview-controls{max-width:100%;justify-content:center}.preview-volume-group{flex-wrap:nowrap}}
+@media(max-width:860px){.brand-logo{width:min(360px,86vw);height:58px}.tabs{justify-content:flex-start}.tabs button{min-width:auto}.preview-bar{padding:8px}.preview-controls{grid-template-columns:1fr;max-width:100%;justify-content:stretch}.preview-transport-group{justify-self:center}.preview-camera-timeline{width:100%}.preview-volume-group{flex-wrap:nowrap}}
 """
 
 
@@ -6504,7 +6510,6 @@ const platformMeta = {
   youtube: { label: "YouTube", width: 1920, height: 1080 }
 };
 const defaultPreviewVolume = 0.2;
-const previewVolumeStep = 0.1;
 const effectMeta = {
   none: { label: "Sem efeito", note: "Preview limpo" },
   "light-grain": { label: "Chuvisco Leve", note: "Granulado sutil" },
@@ -8145,6 +8150,7 @@ function seekPreviewCameraTimeline(card, event, rail){
 function openPreviewCameraPopover(card){
   const popover = card.querySelector("[data-preview-camera-popover]");
   if (!popover) return;
+  closePreviewVolumePopover(card);
   const state = previewCameraTimelineContext(card);
   const index = selectedCameraPathIndex(card, state.path);
   const frame = state.path[index] || state.path[0] || normalizeCameraPathFrame({ time: 0, key: "center", strength: 60 });
@@ -8282,21 +8288,10 @@ function syncPreviewPlayButton(card){
   button.setAttribute("aria-label", video.paused ? "Reproduzir" : "Pausar");
   button.title = video.paused ? "Reproduzir" : "Pausar";
 }
-function togglePreviewVolume(card){
-  const video = primaryCameraVideo(card);
-  if (!video) return;
-  applyPreviewVolume(video);
-  video.muted = !video.muted;
-  syncPreviewVolumeButton(card);
-}
-function stepPreviewVolume(card, direction){
-  const video = primaryCameraVideo(card);
-  if (!video) return;
-  applyPreviewVolume(video);
-  setPreviewVolume(card, (video.muted ? 0 : video.volume) + (direction * previewVolumeStep));
-}
 function syncPreviewVolumeButton(card){
   const button = card.querySelector("[data-preview-volume]");
+  const slider = card.querySelector("[data-preview-volume-slider]");
+  const zero = card.querySelector("[data-preview-volume-zero]");
   const video = primaryCameraVideo(card);
   if (!button) return;
   if (!video) {
@@ -8304,10 +8299,44 @@ function syncPreviewVolumeButton(card){
     return;
   }
   applyPreviewVolume(video);
+  const value = video.muted ? 0 : Math.round(video.volume * 100);
   button.hidden = false;
   button.innerHTML = previewIcon(video.muted || video.volume <= 0 ? "volume-off" : "volume");
-  button.setAttribute("aria-label", video.muted ? "Ativar volume" : "Silenciar");
-  button.title = video.muted ? "Ativar volume" : "Silenciar";
+  button.setAttribute("aria-label", "Volume");
+  button.title = "Volume";
+  if (slider) slider.value = String(value);
+  if (zero) {
+    zero.innerHTML = previewIcon(value <= 0 ? "volume" : "volume-off");
+    zero.setAttribute("aria-label", value <= 0 ? "Restaurar volume" : "Zerar volume");
+    zero.title = value <= 0 ? "Restaurar volume" : "Zerar volume";
+  }
+}
+function openPreviewVolumePopover(card){
+  const popover = card.querySelector("[data-preview-volume-popover]");
+  if (!popover) return;
+  closePreviewCameraPopover(card);
+  syncPreviewVolumeButton(card);
+  popover.hidden = false;
+}
+function closePreviewVolumePopover(card){
+  const popover = card.querySelector("[data-preview-volume-popover]");
+  if (popover) popover.hidden = true;
+}
+function togglePreviewVolumePopover(card){
+  const popover = card.querySelector("[data-preview-volume-popover]");
+  if (!popover) return;
+  if (popover.hidden) openPreviewVolumePopover(card);
+  else closePreviewVolumePopover(card);
+}
+function bindPreviewVolumeDismiss(){
+  if (document.body.dataset.previewVolumeDismissBound) return;
+  document.body.dataset.previewVolumeDismissBound = "1";
+  document.addEventListener("click", event => {
+    document.querySelectorAll("[data-preview-volume-popover]").forEach(popover => {
+      const group = popover.closest(".preview-volume-group");
+      if (!group || !group.contains(event.target)) popover.hidden = true;
+    });
+  });
 }
 function previewIcon(name){
   const icons = {
@@ -9397,9 +9426,28 @@ document.querySelectorAll(".card").forEach(card => {
     volumeButton.addEventListener("click", event => {
       event.preventDefault();
       event.stopPropagation();
-      togglePreviewVolume(card);
+      togglePreviewVolumePopover(card);
     });
   }
+  const volumeSlider = card.querySelector("[data-preview-volume-slider]");
+  if (volumeSlider) {
+    volumeSlider.addEventListener("input", event => {
+      event.stopPropagation();
+      setPreviewVolume(card, Number(event.target.value || 0) / 100);
+    });
+  }
+  const volumeZero = card.querySelector("[data-preview-volume-zero]");
+  if (volumeZero) {
+    volumeZero.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const video = primaryCameraVideo(card);
+      if (!video) return;
+      applyPreviewVolume(video);
+      setPreviewVolume(card, video.muted || video.volume <= 0 ? defaultPreviewVolume : 0);
+    });
+  }
+  bindPreviewVolumeDismiss();
   const video = primaryCameraVideo(card);
   if (video) {
     applyPreviewVolume(video);
