@@ -1429,6 +1429,7 @@ async function analyzeCameraForCard(card, mode = "auto-director"){
   const rank = card.dataset.rank;
   const platform = activePlatformForRank(rank);
   const smartMode = smartCameraModes[mode] ? mode : "auto-director";
+  const forceRefresh = smartMode === "ai-director";
   const button = card.querySelector(`[data-camera-smart-mode="${smartMode}"]`) || card.querySelector("[data-camera-auto]");
   setCameraAutoStatus(card, `Analisando ${smartCameraModes[smartMode].label}...`);
   if (button) button.disabled = true;
@@ -1443,6 +1444,7 @@ async function analyzeCameraForCard(card, mode = "auto-director"){
         rank,
         platform,
         mode: smartMode,
+        force_refresh: forceRefresh,
         clip_file: moment?.clip_file || "",
         trim_start_seconds: values.trimStart,
         source_start_seconds: Number(moment?.start || 0) + values.trimStart,
@@ -1461,7 +1463,8 @@ async function analyzeCameraForCard(card, mode = "auto-director"){
     setCameraPathForRank(rank, path, platform);
     const label = payload.mode_label || smartCameraModes[smartMode].label;
     const suffix = diagnosticText ? ` (${diagnosticText})` : "";
-    setCameraAutoStatus(card, `${payload.cached ? `${label} aplicado do cache` : `${label} aplicado`}.${suffix}`);
+    const applied = payload.cached ? `${label} aplicado do cache` : payload.cache_bypassed ? `${label} recalculado` : `${label} aplicado`;
+    setCameraAutoStatus(card, `${applied}.${suffix}`);
   } catch (error) {
     setCameraAutoStatus(card, error.message || "Falha na auto camera.");
   } finally {
