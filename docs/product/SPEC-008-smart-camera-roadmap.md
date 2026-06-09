@@ -46,6 +46,9 @@ face detection, tracking, and source-aware analysis.
 4. Add lightweight tracking across frames so person/face identity is stable over time.
 5. Refactor the Camera tab around Auto Director first, with manual path editing
    and beginning/middle/end controls hidden behind an advanced section.
+5a. Surface the active `camera_path` in the preview toolbar as a compact blue
+    timeline so common keyframe edits can happen without opening the advanced
+    Camera panel.
 6. Tune framing rules for headroom, shoulders, zoom, safe horizontal crop, and
    fast switches.
 7. Add AI Director as an optional layer over OpenCV. It must be cached, bounded

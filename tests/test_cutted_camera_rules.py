@@ -53,6 +53,29 @@ def missing_detection(time_value: float) -> dict[str, object]:
 
 
 class CuttedCameraRuleTests(unittest.TestCase):
+    def test_card_preview_uses_compact_camera_timeline(self) -> None:
+        moment = CUTTED.Moment(
+            rank=1,
+            start=0.0,
+            end=12.0,
+            peak=4.0,
+            score=0.8,
+            title="Teste",
+            reason="",
+            transcript="texto",
+            peak_text="texto",
+            clip_file="clips/clip-001.mp4",
+            frame_file="frames/clip-001.jpg",
+        )
+
+        html = CUTTED.card_html(moment)
+
+        self.assertIn("data-preview-camera-timeline", html)
+        self.assertIn("data-preview-volume", html)
+        self.assertNotIn("data-preview-volume-down", html)
+        self.assertNotIn("data-preview-volume-up", html)
+        self.assertNotIn("data-preview-volume-value", html)
+
     def test_yolo_person_box_converts_to_camera_subject(self) -> None:
         row = CUTTED.yolo_person_row_from_box([100.0, 100.0, 300.0, 800.0], 1000, 1000, 0.78)
 

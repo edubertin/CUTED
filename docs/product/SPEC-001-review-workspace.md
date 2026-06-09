@@ -32,8 +32,8 @@ into a dedicated app.
 - Only the active card should load and play its video preview.
 - Each clip owns its own platform switcher; there is no global Format toolbar in
   the Edit tab.
-- The preview stack order is platform switcher, compact playback controls, then
-  the video composition canvas.
+- The preview stack order is platform switcher, compact playback/timeline
+  controls, then the video composition canvas.
 - Preview playback controls should live outside the video, not on top of the
   composition canvas.
 - Platform edit tags and compact playback controls are centered relative to the
@@ -45,7 +45,13 @@ into a dedicated app.
 - Clicking the video canvas must not start playback.
 - Playback starts only from the explicit play control.
 - Volume defaults to 20 percent for every opened video.
-- The preview supports mute and small volume step controls.
+- The preview exposes a single volume button for mute/unmute. It does not show
+  volume percentages or step controls in the main toolbar.
+- The preview controls include a compact camera timeline between play and
+  volume. The line shows camera keyframes in CUTED blue, follows the playhead,
+  and lets the user seek by clicking the line.
+- Clicking a camera keyframe opens a small picker for changing the camera preset
+  and strength for the active platform.
 - Canvas clicks create or open the layer insertion menu only when the target is
   the canvas, not an existing layer.
 - Existing layers can be selected, moved, resized, edited, and deleted without
@@ -56,6 +62,7 @@ into a dedicated app.
 Each platform preset owns its own edit state:
 
 - `camera`
+- `camera_path`
 - `effect`
 - text overlays
 - image overlays
