@@ -31,6 +31,14 @@ GROUP_FIT_LOGO_OPACITY = 0.9
 GROUP_FIT_MIN_HOLD_SECONDS = 3.0
 AI_DIRECTOR_MIN_MOVE_HOLD_SECONDS = 4.0
 RANGE_MEDIA_EXTENSIONS = {".m4v", ".mov", ".mp4", ".webm"}
+BUMPER_VIDEO_MIME_EXTENSIONS = {
+    "video/mp4": "mp4",
+    "video/quicktime": "mov",
+    "video/webm": "webm",
+    "video/x-m4v": "m4v",
+}
+BUMPER_MAX_SOURCE_BYTES = 48_000_000
+BUMPER_SLOTS = {"intro", "outro"}
 YOUTUBE_HIGH_QUALITY_FORMAT = (
     "bv*[height<=1440][vcodec^=avc1]+ba[ext=m4a]/"
     "bv*[height<=1440]+ba/"
@@ -444,6 +452,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if path == "/api/camera/analyze":
                 self.handle_camera_analyze(base_dir)
                 return
+            if path == "/api/bumper-assets":
+                self.handle_bumper_asset(base_dir)
+                return
             if path == "/api/select-folder":
                 self.handle_select_folder()
                 return
@@ -549,6 +560,13 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             except Exception as error:
                 send_json_response(self, 500, {"ok": False, "error": str(error)})
 
+        def handle_bumper_asset(self, request_base_dir: Path) -> None:
+            try:
+                result = save_bumper_asset_from_request(self, request_base_dir)
+                send_json_response(self, 200, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
+
         def handle_select_folder(self) -> None:
             try:
                 path = select_folder_path()
@@ -616,6 +634,7 @@ def finalize_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir:
     out_dir = gallery_dir / "captioned-clips"
     out_dir.mkdir(parents=True, exist_ok=True)
     materialize_queue_image_assets(queue, gallery_dir / "overlay-assets")
+    materialize_queue_bumper_assets(queue, gallery_dir / "bumper-assets")
     caption_path.write_text(json.dumps(queue, ensure_ascii=False, indent=2), encoding="utf-8")
     rows = caption_rows_from_data(queue)
     options = SimpleNamespace(
@@ -692,6 +711,71 @@ def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, bas
         "error": "Nenhum rosto confiavel foi detectado. Mantive a camera atual.",
         "diagnostics": diagnostics,
     }
+
+
+def save_bumper_asset_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
+    payload = read_json_body(handler)
+    gallery_dir = resolve_request_gallery_dir(base_dir, payload)
+    slot = normalize_bumper_slot(payload.get("slot"))
+    platform = str(payload.get("platform") or "tiktok")
+    if platform not in PLATFORM_PRESETS:
+        raise ValueError("Plataforma invalida para vinheta.")
+    preset = PLATFORM_PRESETS[platform]
+    width = int(float(payload.get("width") or 0))
+    height = int(float(payload.get("height") or 0))
+    if width != preset.width or height != preset.height:
+        raise ValueError(f"Use um video {preset.width}x{preset.height} para {preset.label}.")
+    duration = clamp(float(payload.get("duration") or 0.0), 0.0, 3600.0)
+    if duration <= 0:
+        raise ValueError("Nao consegui ler a duracao da vinheta.")
+    label = clean_bumper_label(payload.get("label"))
+    video_bytes, extension = decode_data_url_video(str(payload.get("data_url") or ""))
+    if len(video_bytes) > BUMPER_MAX_SOURCE_BYTES:
+        raise ValueError("Vinheta muito pesada. Use um video menor para o MVP local.")
+    asset_dir = gallery_dir / "bumper-assets"
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha256(video_bytes).hexdigest()[:16]
+    asset_path = asset_dir / f"{slot}-{platform}-{digest}.{extension}"
+    if not asset_path.exists():
+        asset_path.write_bytes(video_bytes)
+    rel_path = asset_path.resolve().relative_to(gallery_dir.resolve()).as_posix()
+    bumper = {
+        "id": f"bumper-{slot}-{digest}",
+        "slot": slot,
+        "label": label,
+        "asset_file": rel_path,
+        "width": width,
+        "height": height,
+        "duration": round(duration, 3),
+    }
+    return {"ok": True, "bumper": bumper}
+
+
+def normalize_bumper_slot(value: object) -> str:
+    slot = str(value or "").strip().lower()
+    if slot not in BUMPER_SLOTS:
+        raise ValueError("Slot de vinheta invalido.")
+    return slot
+
+
+def clean_bumper_label(value: object) -> str:
+    label = clean_optional_text(value, 180)
+    return Path(label).name if label else "vinheta.mp4"
+
+
+def decode_data_url_video(value: str) -> tuple[bytes, str]:
+    if not value.startswith("data:") or ";base64," not in value:
+        raise ValueError("Envie uma vinheta em video.")
+    header, encoded = value.split(";base64,", 1)
+    mime = header.removeprefix("data:").lower()
+    extension = BUMPER_VIDEO_MIME_EXTENSIONS.get(mime)
+    if extension is None:
+        raise ValueError("Use MP4, MOV, M4V ou WebM para a vinheta.")
+    try:
+        video_bytes = base64.b64decode(encoded, validate=True)
+    except ValueError as exc:
+        raise ValueError("Vinheta invalida ou corrompida.") from exc
+    return video_bytes, extension
 
 
 def normalize_camera_analysis_mode(value: object) -> str:
@@ -3595,6 +3679,28 @@ def materialize_queue_image_assets(data: object, asset_dir: Path) -> None:
             materialize_image_layer(layer, asset_dir)
 
 
+def materialize_queue_bumper_assets(data: object, asset_dir: Path) -> None:
+    rows = queue_rows_for_assets(data)
+    for row in rows:
+        bumpers = normalize_bumpers_from_row(row)
+        for slot, bumper in bumpers.items():
+            if str(bumper.get("asset_file") or ""):
+                continue
+            data_url = str(bumper.get("video_data_url") or "")
+            if not data_url:
+                continue
+            video_bytes, extension = decode_data_url_video(data_url)
+            asset_dir.mkdir(parents=True, exist_ok=True)
+            digest = hashlib.sha256(video_bytes).hexdigest()[:16]
+            path = asset_dir / f"{slot}-{digest}.{extension}"
+            if not path.exists():
+                path.write_bytes(video_bytes)
+            bumper["asset_file"] = str(path)
+            bumper["video_data_url"] = ""
+        if bumpers:
+            row["bumpers"] = bumpers
+
+
 def queue_rows_for_assets(data: object) -> list[dict[str, object]]:
     if isinstance(data, list):
         return [row for row in data if isinstance(row, dict)]
@@ -3669,7 +3775,7 @@ def platform_edit_from_row(row: dict[str, object], platform: str) -> dict[str, o
     if not isinstance(raw, dict):
         return {}
     result: dict[str, object] = {}
-    for key in ("camera", "effect", "overlay", "overlays"):
+    for key in ("camera", "effect", "overlay", "overlays", "bumpers"):
         if key in raw:
             result[key] = raw[key]
     return result
@@ -3720,8 +3826,10 @@ def caption_selected_rows(
         output_path = out_dir / f"{stem}-captioned.mp4"
         if subtitle_path:
             write_ass_subtitles(subtitle_path, row, preset, args.chars_per_line, args.max_lines)
-        render_captioned_clip(input_path, output_path, subtitle_path, row, preset, out_dir, ffmpeg)
-        captioned.append(captioned_row(row, preset, output_path, subtitle_path))
+        bumper_info = render_captioned_clip(input_path, output_path, subtitle_path, row, preset, base_dir, out_dir, ffmpeg)
+        result = captioned_row(row, preset, output_path, subtitle_path)
+        result.update(bumper_info)
+        captioned.append(result)
     return captioned
 
 
@@ -3925,8 +4033,8 @@ def ass_time(value: float) -> str:
 
 def render_captioned_clip(
     input_path: Path, output_path: Path, subtitle_path: Path | None, row: dict[str, object],
-    preset: PlatformPreset, out_dir: Path, ffmpeg: str
-) -> None:
+    preset: PlatformPreset, base_dir: Path, out_dir: Path, ffmpeg: str
+) -> dict[str, object]:
     filters = [f"ass={subtitle_filter_path(subtitle_path, out_dir)}"] if subtitle_path else []
     effect = effect_filter(row)
     if effect:
@@ -3936,6 +4044,7 @@ def render_captioned_clip(
         filters.append(overlay)
     command = captioned_ffmpeg_command(input_path, output_path, row, preset, ffmpeg, filters)
     subprocess.run(command, check=True, capture_output=True, text=True, cwd=str(out_dir))
+    return apply_bumpers_to_output(output_path, row, preset, base_dir, out_dir, ffmpeg)
 
 
 def captioned_ffmpeg_command(
@@ -3962,6 +4071,7 @@ def subtitle_filter_path(subtitle_path: Path, out_dir: Path) -> str:
 def captioned_row(
     row: dict[str, object], preset: PlatformPreset, output_path: Path, subtitle_path: Path | None
 ) -> dict[str, object]:
+    base_duration = caption_duration(row)
     return {
         "rank": row.get("rank"),
         "platform": preset.key,
@@ -3973,14 +4083,167 @@ def captioned_row(
         "captions_enabled": bool(subtitle_path),
         "adjusted_start": row.get("adjusted_start"),
         "adjusted_end": row.get("adjusted_end"),
-        "adjusted_duration": caption_duration(row),
+        "adjusted_duration": base_duration,
+        "base_duration": base_duration,
+        "final_duration": base_duration,
         "publish_metadata": row.get("publish_metadata") if isinstance(row.get("publish_metadata"), dict) else {},
         "camera": camera_from_row(row),
-        "camera_path": camera_path_from_row(row, caption_duration(row)),
+        "camera_path": camera_path_from_row(row, base_duration),
         "effect": effect_from_row(row),
         "overlay": overlay_from_row(row),
         "overlays": overlay_layers_from_row(row),
+        "bumpers": normalize_bumpers_from_row(row),
     }
+
+
+def apply_bumpers_to_output(
+    output_path: Path, row: dict[str, object], preset: PlatformPreset, base_dir: Path, out_dir: Path, ffmpeg: str
+) -> dict[str, object]:
+    bumpers = normalize_bumpers_from_row(row)
+    if not bumpers:
+        return {}
+    base_duration = caption_duration(row)
+    work_dir = out_dir / "bumper-work" / output_path.stem
+    if work_dir.exists():
+        shutil.rmtree(work_dir)
+    work_dir.mkdir(parents=True, exist_ok=True)
+    core_source = work_dir / "core-source.mp4"
+    shutil.copy2(output_path, core_source)
+    segments: list[Path] = []
+    intro_duration = 0.0
+    outro_duration = 0.0
+    if "intro" in bumpers:
+        intro = resolve_bumper_asset_path(base_dir, bumpers["intro"])
+        intro_duration = bumper_duration(bumpers["intro"], intro, ffmpeg)
+        intro_segment = work_dir / "intro.mp4"
+        normalize_bumper_segment(intro, intro_segment, intro_duration, preset, ffmpeg)
+        segments.append(intro_segment)
+    core_segment = work_dir / "core.mp4"
+    normalize_bumper_segment(core_source, core_segment, base_duration, preset, ffmpeg)
+    segments.append(core_segment)
+    if "outro" in bumpers:
+        outro = resolve_bumper_asset_path(base_dir, bumpers["outro"])
+        outro_duration = bumper_duration(bumpers["outro"], outro, ffmpeg)
+        outro_segment = work_dir / "outro.mp4"
+        normalize_bumper_segment(outro, outro_segment, outro_duration, preset, ffmpeg)
+        segments.append(outro_segment)
+    concat_path = work_dir / "concat.txt"
+    concat_path.write_text("".join(concat_file_entry(path) for path in segments), encoding="utf-8")
+    temp_output = work_dir / "final.mp4"
+    command = [ffmpeg, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_path), "-c", "copy", "-movflags", "+faststart", str(temp_output)]
+    subprocess.run(command, check=True, capture_output=True, text=True)
+    shutil.copy2(temp_output, output_path)
+    shutil.rmtree(work_dir, ignore_errors=True)
+    final_duration = base_duration + intro_duration + outro_duration
+    return {
+        "bumpers": bumpers,
+        "base_duration": round(base_duration, 3),
+        "intro_duration": round(intro_duration, 3),
+        "outro_duration": round(outro_duration, 3),
+        "final_duration": round(final_duration, 3),
+    }
+
+
+def normalize_bumper_segment(source: Path, output: Path, duration: float, preset: PlatformPreset, ffmpeg: str) -> None:
+    safe_duration = max(float(duration or 0.0), 0.1)
+    video_filter_arg = ",".join([
+        f"scale={preset.width}:{preset.height}:force_original_aspect_ratio=increase",
+        f"crop={preset.width}:{preset.height}",
+        "setsar=1",
+        "fps=30",
+        "format=yuv420p",
+    ])
+    command = [ffmpeg, "-y", "-i", str(source)]
+    if media_has_audio(source, ffmpeg):
+        command.extend(["-t", fmt_time(safe_duration), "-vf", video_filter_arg, "-map", "0:v:0", "-map", "0:a:0"])
+    else:
+        command.extend([
+            "-f", "lavfi", "-t", fmt_time(safe_duration), "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+            "-t", fmt_time(safe_duration), "-vf", video_filter_arg, "-map", "0:v:0", "-map", "1:a:0", "-shortest",
+        ])
+    command.extend([
+        "-c:v", "libx264",
+        "-preset", "medium",
+        "-profile:v", "main",
+        "-level", "4.1",
+        "-pix_fmt", "yuv420p",
+        "-r", "30",
+        "-crf", FINAL_VIDEO_CRF,
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-ar", "44100",
+        "-movflags", "+faststart",
+        str(output),
+    ])
+    subprocess.run(command, check=True, capture_output=True, text=True)
+
+
+def media_has_audio(path: Path, ffmpeg: str) -> bool:
+    command = [ffmpeg, "-hide_banner", "-i", str(path)]
+    result = subprocess.run(command, capture_output=True, text=True)
+    return "Audio:" in f"{result.stdout}\n{result.stderr}"
+
+
+def bumper_duration(bumper: dict[str, object], path: Path, ffmpeg: str) -> float:
+    duration = float(bumper.get("duration") or 0.0)
+    if duration > 0:
+        return duration
+    return max(ffmpeg_media_duration(path, ffmpeg), 0.1)
+
+
+def ffmpeg_media_duration(path: Path, ffmpeg: str) -> float:
+    command = [ffmpeg, "-hide_banner", "-i", str(path)]
+    result = subprocess.run(command, capture_output=True, text=True)
+    match = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", f"{result.stdout}\n{result.stderr}")
+    if not match:
+        return 0.0
+    hours, minutes, seconds = match.groups()
+    return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+
+
+def concat_file_entry(path: Path) -> str:
+    normalized = path.resolve().as_posix().replace("'", r"'\''")
+    return f"file '{normalized}'\n"
+
+
+def resolve_bumper_asset_path(base_dir: Path, bumper: dict[str, object]) -> Path:
+    asset_file = str(bumper.get("asset_file") or "")
+    if not asset_file:
+        raise ValueError("Vinheta sem arquivo local.")
+    candidate = resolve_media_path(base_dir, asset_file).resolve()
+    try:
+        candidate.relative_to(base_dir.resolve())
+    except ValueError as error:
+        raise ValueError("Caminho de vinheta invalido.") from error
+    if not candidate.exists() or not candidate.is_file():
+        raise FileNotFoundError(f"Vinheta nao encontrada: {candidate}")
+    return candidate
+
+
+def normalize_bumpers_from_row(row: dict[str, object]) -> dict[str, dict[str, object]]:
+    raw = row.get("bumpers")
+    if not isinstance(raw, dict):
+        return {}
+    result: dict[str, dict[str, object]] = {}
+    for slot in ("intro", "outro"):
+        value = raw.get(slot)
+        if not isinstance(value, dict):
+            continue
+        asset_file = str(value.get("asset_file") or "")
+        data_url = str(value.get("video_data_url") or "")
+        if not asset_file and not data_url:
+            continue
+        result[slot] = {
+            "id": str(value.get("id") or f"bumper-{slot}"),
+            "slot": slot,
+            "label": clean_bumper_label(value.get("label")),
+            "asset_file": asset_file,
+            "video_data_url": data_url,
+            "width": int(float(value.get("width") or 0)),
+            "height": int(float(value.get("height") or 0)),
+            "duration": round(max(float(value.get("duration") or 0.0), 0.0), 3),
+        }
+    return result
 
 
 def normalize_platforms(value: object) -> list[str]:
@@ -4753,6 +5016,7 @@ def rendered_row(row: dict[str, object], preset: PlatformPreset, output_path: Pa
         "effect": effect_from_row(row),
         "overlay": overlay_from_row(row),
         "overlays": overlay_layers_from_row(row),
+        "bumpers": normalize_bumpers_from_row(row),
     }
 
 
@@ -5845,6 +6109,7 @@ def card_html(moment: Moment) -> str:
               <input data-overlay-image type="file" accept="image/png,image/webp,image/jpeg" hidden>
             </div>
             <div class="layer-strip" data-layer-strip></div>
+            <div class="bumper-sequence" data-bumper-sequence></div>
           </div>
         </div>
         <div class="editor-tools">
@@ -6112,11 +6377,11 @@ header{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:minmax
 main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px}.card{border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface);overflow:hidden}.card[open]{border-color:var(--color-metal-gray);background:var(--color-surface-raised)}.card.liked{border-color:var(--color-brand-green)}.card.discarded{opacity:.46}.clip-summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;min-height:62px;padding:12px 14px;cursor:pointer;list-style:none}.clip-summary::-webkit-details-marker{display:none}.clip-rank{color:var(--color-metal-gray);font-weight:700}.clip-title{display:grid;gap:2px;min-width:0}.clip-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}.clip-title small{color:var(--color-text-muted)}.clip-status{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.clip-status span,.format-previews span{display:inline-flex;align-items:center;min-height:26px;padding:4px 8px;border-radius:999px;background:#242424;color:var(--color-text-soft);font-size:12px}
 .app-notice{position:sticky;top:0;z-index:30;margin:0;padding:10px 14px;background:#2b1717;color:#ffd7d7;border-bottom:1px solid #6d2b2b;font-size:13px;text-align:center}.app-notice[hidden]{display:none}
 .import-stage{display:none;max-width:1080px;margin:18px auto;padding:0 18px}.import-panel{display:grid;gap:14px;padding:18px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised)}.import-panel p{margin:4px 0 0;color:var(--color-text-muted)}.import-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.import-panel label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.import-panel input,.import-panel select,.import-panel textarea{width:100%;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black);color:var(--color-text);padding:9px 10px;font:inherit}.import-panel textarea{resize:vertical;min-height:112px}.import-path-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px}.import-path-row button{min-height:38px;background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.duration-profile{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0}.duration-profile legend{grid-column:1/-1;color:var(--color-text-muted);font-size:12px}.duration-profile label{position:relative;display:grid!important}.duration-profile input{position:absolute;opacity:0;pointer-events:none}.duration-profile span{display:grid;gap:2px;min-height:54px;padding:10px 12px;border:1px solid var(--color-border-strong);border-radius:8px;background:var(--color-surface-muted);color:var(--color-text-soft)}.duration-profile input:checked+span{border-color:var(--color-brand-green);background:#182011;color:var(--color-text)}.duration-profile small{color:var(--color-text-muted)}.import-context{display:grid}.import-status{min-height:20px;color:var(--color-text-muted)}.import-result{display:flex;gap:8px;flex-wrap:wrap}.import-result a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.import-result code{display:block;width:100%;padding:10px;border:1px solid #3a2525;border-radius:6px;background:#180d0d;color:#ffcccc;white-space:pre-wrap}
-.layer-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:100%;min-height:0}.layer-strip:empty{display:none}.layer-chip{display:inline-flex;gap:6px;align-items:center;max-width:100%;min-height:30px;padding:4px 5px 4px 9px;border:1px solid #303030;border-radius:999px;background:var(--color-surface-muted);color:var(--color-text-soft);font-size:12px}.layer-chip.is-selected{border-color:var(--color-focus);background:#182011;color:var(--color-text)}.layer-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.layer-chip button{display:inline-grid;place-items:center;width:22px;height:22px;min-width:22px;padding:0;border:1px solid #3a3a3a;border-radius:999px;background:#242424;color:var(--color-text-soft);font-size:14px;line-height:1}
+.layer-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:100%;min-height:0}.layer-strip:empty{display:none}.bumper-sequence{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;min-height:24px;color:var(--color-text-muted);font-size:12px}.bumper-sequence:empty{display:none}.bumper-sequence span{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bumper-sequence b{color:var(--color-brand-green);font-weight:800}.layer-chip{display:inline-flex;gap:6px;align-items:center;max-width:100%;min-height:30px;padding:4px 5px 4px 9px;border:1px solid #303030;border-radius:999px;background:var(--color-surface-muted);color:var(--color-text-soft);font-size:12px}.layer-chip.is-selected{border-color:var(--color-focus);background:#182011;color:var(--color-text)}.layer-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.layer-chip button{display:inline-grid;place-items:center;width:22px;height:22px;min-width:22px;padding:0;border:1px solid #3a3a3a;border-radius:999px;background:#242424;color:var(--color-text-soft);font-size:14px;line-height:1}
 .editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;justify-items:center;gap:10px}.preview-frame{display:grid;gap:10px;width:100%;max-width:520px}.media{position:relative;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000;pointer-events:none}.placeholder{display:grid;place-items:center;height:100%;color:#777}.preview-bar{display:grid;grid-template-columns:1fr;gap:8px;justify-items:center;width:100%;padding:8px;border:1px solid #252525;border-radius:8px;background:#0a0a0a}.preview-controls,.preview-volume-group{display:flex;gap:6px;align-items:center}.preview-controls{justify-content:center;padding:4px;border:1px solid #202020;border-radius:999px;background:var(--color-surface-raised)}.preview-volume-group{padding-left:4px;border-left:1px solid #2d2d2d}.preview-icon,.preview-step{display:inline-grid;place-items:center;width:32px;height:32px;min-width:32px;padding:0;border:1px solid var(--color-border-strong);border-radius:999px;background:var(--color-surface-control);color:var(--color-text-soft)}.preview-play{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}.preview-icon svg{width:16px;height:16px;display:block;stroke:currentColor}.preview-step{width:26px;height:26px;min-width:26px;font-weight:700}.preview-volume-group output{min-width:32px;color:#d8d8d8;font-size:12px;text-align:center}.card[data-preview-format=tiktok] .preview-frame,.card[data-preview-format=shorts] .preview-frame,.card[data-preview-format=instagram] .preview-frame{max-width:min(100%,calc(72vh * 9 / 16))}.card[data-preview-format=facebook] .preview-frame{max-width:min(100%,calc(72vh * 4 / 5))}.card[data-preview-format=youtube] .preview-frame{max-width:min(100%,520px)}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;overflow:visible;padding-bottom:1px}.preview-strip button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 10px;min-height:34px;border-radius:999px;white-space:nowrap}.preview-strip button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-stack{display:grid;gap:10px}.tool-section{border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:0;overflow:hidden}.tool-section>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:10px 12px;cursor:pointer;list-style:none;color:var(--color-text);font-weight:800}.tool-section>summary::-webkit-details-marker{display:none}.tool-section>summary:after{content:"";width:8px;height:8px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg);opacity:.62;transition:transform .16s ease}.tool-section[open]>summary:after{transform:rotate(225deg)}.tool-section>summary small{color:var(--color-text-muted);font-size:12px;font-weight:600;text-align:right}.tool-section[open]>summary{border-bottom:1px solid rgba(231,231,232,.08)}.tool-section>*:not(summary){margin:12px}.timeline-editor{padding:0}.timeline-head,.timeline-timebar,.timeline-values{display:flex;justify-content:space-between;gap:12px;color:var(--color-text-muted);font-size:12px}.timeline-head output,.timeline-timebar output{color:var(--color-text);text-align:right}.timeline-timebar{margin-top:10px}.timeline-timebar span:last-child{color:#777;text-align:right}.timeline-scrub{position:relative;height:42px;margin-top:8px}.timeline-scrub-track{position:absolute;left:0;right:0;top:17px;height:8px;border:1px solid #343434;border-radius:999px;background:linear-gradient(90deg,var(--color-surface-muted),#252525);overflow:hidden}.timeline-selected{position:absolute;top:0;bottom:0;background:rgba(175,207,42,.22);border-left:1px solid var(--color-brand-green);border-right:1px solid var(--color-brand-green)}.timeline-playhead{position:absolute;top:-8px;bottom:-8px;width:2px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7)}.timeline-playhead:before{content:"";position:absolute;left:50%;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--color-brand-white);transform:translateX(-50%)}.timeline-scrub input{position:absolute;inset:0;width:100%;height:42px;margin:0;background:transparent;opacity:0;cursor:pointer}.timeline{position:relative;height:38px;margin-top:6px}.timeline-track{position:absolute;left:0;right:0;top:16px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:var(--color-brand-white);border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:38px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{margin-top:6px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .export-dock{display:grid;gap:8px;margin-top:2px;padding:12px;border:1px solid #303030;border-radius:8px;background:#111}.export-dock strong{display:block;font-size:13px}.export-dock span{color:#a8a8a8;font-size:12px}
-.platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:var(--color-text);border-color:var(--color-brand-green)}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:var(--color-brand-blue)}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.camera-path-editor,.camera-manual-panel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-path-head,.camera-panel-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.camera-path-head strong,.camera-panel-title strong{font-size:12px}.camera-path-head span,.camera-panel-title span{color:var(--color-text-muted);font-size:12px}.camera-smart-panel{display:grid;gap:9px;padding:10px;border:1px solid rgba(17,162,207,.28);border-radius:8px;background:linear-gradient(135deg,rgba(17,162,207,.12),rgba(175,207,42,.06))}.camera-smart-row,.camera-smart-ai{display:grid;gap:8px}.camera-smart-row{grid-template-columns:repeat(3,minmax(0,1fr))}.camera-smart-ai{grid-template-columns:repeat(5,minmax(0,1fr))}.camera-smart-panel button{display:grid;gap:3px;justify-items:center;background:rgba(17,162,207,.1);color:var(--color-text);border:1px solid rgba(17,162,207,.34);text-align:center}.camera-smart-panel button:hover{border-color:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.14)}.camera-path-track{position:relative;height:34px}.camera-path-rail{position:absolute;left:0;right:0;top:15px;height:5px;border-radius:999px;background:#292929}.camera-path-marker{position:absolute;top:7px;width:20px;height:20px;min-width:20px;padding:0;border-radius:999px;transform:translateX(-50%);background:var(--color-surface-control);border:1px solid var(--color-border-strong)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:var(--color-brand-blue);box-shadow:0 0 0 4px rgba(17,162,207,.18)}.camera-path-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-keyframe-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}.camera-auto-status{min-height:18px;color:var(--color-text-muted);font-size:12px}.camera-path-delete{color:var(--color-danger)!important}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:minmax(160px,1fr) 120px 150px;gap:12px;max-width:none}.caption-toggle{align-content:center}.caption-toggle input{justify-self:start;width:auto;min-height:20px;accent-color:var(--color-brand-blue)}
+.platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:var(--color-text);border-color:var(--color-brand-green)}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.effect-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.75fr);gap:10px}.effect-subpanel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.effect-subpanel strong{font-size:12px}.bumper-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.bumper-upload{display:grid;gap:6px;align-content:start;min-height:64px;padding:9px;border:1px dashed var(--color-border-strong);border-radius:8px;background:var(--color-surface-control);cursor:pointer}.bumper-upload input{font-size:11px}.bumper-strip{display:flex;gap:6px;flex-wrap:wrap;min-height:28px}.bumper-empty{color:var(--color-text-muted);font-size:12px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:var(--color-brand-blue)}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.camera-path-editor,.camera-manual-panel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-path-head,.camera-panel-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.camera-path-head strong,.camera-panel-title strong{font-size:12px}.camera-path-head span,.camera-panel-title span{color:var(--color-text-muted);font-size:12px}.camera-smart-panel{display:grid;gap:9px;padding:10px;border:1px solid rgba(17,162,207,.28);border-radius:8px;background:linear-gradient(135deg,rgba(17,162,207,.12),rgba(175,207,42,.06))}.camera-smart-row,.camera-smart-ai{display:grid;gap:8px}.camera-smart-row{grid-template-columns:repeat(3,minmax(0,1fr))}.camera-smart-ai{grid-template-columns:repeat(5,minmax(0,1fr))}.camera-smart-panel button{display:grid;gap:3px;justify-items:center;background:rgba(17,162,207,.1);color:var(--color-text);border:1px solid rgba(17,162,207,.34);text-align:center}.camera-smart-panel button:hover{border-color:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.14)}.camera-path-track{position:relative;height:34px}.camera-path-rail{position:absolute;left:0;right:0;top:15px;height:5px;border-radius:999px;background:#292929}.camera-path-marker{position:absolute;top:7px;width:20px;height:20px;min-width:20px;padding:0;border-radius:999px;transform:translateX(-50%);background:var(--color-surface-control);border:1px solid var(--color-border-strong)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:var(--color-brand-blue);box-shadow:0 0 0 4px rgba(17,162,207,.18)}.camera-path-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-keyframe-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}.camera-auto-status{min-height:18px;color:var(--color-text-muted);font-size:12px}.camera-path-delete{color:var(--color-danger)!important}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:minmax(160px,1fr) 120px 150px;gap:12px;max-width:none}.caption-toggle{align-content:center}.caption-toggle input{justify-self:start;width:auto;min-height:20px;accent-color:var(--color-brand-blue)}
 .camera-smart-panel p{margin:0;color:var(--color-text-muted);font-size:12px}.camera-smart-panel button span{color:var(--color-text-muted);font-size:11px}.camera-director-action{min-height:72px;background:linear-gradient(135deg,rgba(17,162,207,.32),rgba(231,231,232,.08))!important;border-color:rgba(17,162,207,.72)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 34px rgba(17,162,207,.1)}.camera-director-action strong{font-size:15px}.camera-smart-row button{min-height:54px}.camera-smart-ai button{min-height:50px}.camera-advanced{display:grid;gap:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.025)}.camera-advanced summary{display:flex;justify-content:space-between;gap:10px;align-items:center;cursor:pointer;color:var(--color-text-soft)}.camera-advanced summary small{color:var(--color-text-muted);font-size:12px}.camera-advanced[open] summary{padding-bottom:8px;border-bottom:1px solid rgba(231,231,232,.08)}.camera-advanced .camera-manual-panel{padding:0;border:0;background:transparent}.camera-surface video{position:relative;z-index:1;object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position .18s linear,transform .18s linear}.camera-surface[data-camera-cut=hard] video:not(.camera-fit-bg){transition:none}.camera-surface .camera-fit-bg{position:absolute!important;inset:-7%;z-index:0!important;width:114%!important;height:114%!important;display:none!important;object-fit:cover!important;object-position:center!important;transform:none!important;filter:blur(22px) saturate(.88) brightness(.62)!important;pointer-events:none}.camera-surface .camera-fit-logo{position:absolute;top:11%;left:50%;z-index:1;width:38%!important;max-width:240px;height:auto!important;display:none!important;object-fit:contain!important;object-position:center;background:transparent!important;transform:translateX(-50%);opacity:.9;pointer-events:none}.camera-surface[data-camera-fit=contain]{background:#050505}.camera-surface[data-camera-fit=contain] .camera-fit-bg{display:block!important}.camera-surface[data-camera-fit=contain] .camera-fit-logo{display:block!important}.camera-surface[data-camera-fit=contain] video:not(.camera-fit-bg){z-index:2;object-fit:contain;object-position:center;transform:none;transform-origin:center;background:transparent}.camera-reticle{position:absolute;inset:14% 22%;z-index:3;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}
 .card[data-effect=light-grain] .media video,.card[data-effect=light-grain] .media img{filter:contrast(1.08) brightness(1.02)}.card[data-effect=old-film] .media video,.card[data-effect=old-film] .media img{filter:sepia(.48) contrast(1.2) saturate(.62) brightness(.92)}.card[data-effect=vhs] .media video,.card[data-effect=vhs] .media img{filter:saturate(.62) contrast(1.22) brightness(.9) hue-rotate(-7deg)}.card[data-effect=bw-old] .media video,.card[data-effect=bw-old] .media img{filter:grayscale(1) contrast(1.22) brightness(.9)}.card[data-effect=light-grain] .media:after,.card[data-effect=old-film] .media:after,.card[data-effect=vhs] .media:after,.card[data-effect=bw-old] .media:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--effect-opacity,.24);background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 70% 65%,rgba(0,0,0,.95) 0 1px,transparent 1.8px);background-size:4px 4px,6px 6px;mix-blend-mode:overlay}.card[data-effect=old-film] .media:before,.card[data-effect=bw-old] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at center,transparent 44%,rgba(0,0,0,.46) 100%)}.card[data-effect=vhs] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 4px);mix-blend-mode:overlay}
 .overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,var(--color-brand-green));border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none;pointer-events:auto}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-text-box{display:grid;align-items:center;min-width:96px;min-height:34px;padding:8px 12px;border-left:0;background:rgba(var(--overlay-bg-rgb,0,0,0),var(--overlay-bg-opacity,.7));box-shadow:none;color:var(--overlay-color,#fff);font-weight:700;font-size:clamp(13px,var(--overlay-font-size,20px),36px);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.overlay-text-box[data-overlay-bg=off]{background:transparent;box-shadow:none}.overlay-text-box span{opacity:var(--overlay-opacity,1);overflow:hidden;text-overflow:ellipsis}.overlay-box.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.overlay-image-box{display:grid;place-items:center;min-width:72px;min-height:72px;padding:6px;border:1px dashed rgba(255,255,255,.42);background:rgba(0,0,0,.12);box-shadow:0 8px 24px rgba(0,0,0,.22)}.overlay-image-box img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none;background:transparent}.overlay-resize{position:absolute;right:3px;bottom:3px;z-index:4;width:22px;height:22px;padding:0;border:1px solid rgba(255,255,255,.52);border-radius:5px;background:rgba(255,255,255,.2);cursor:nwse-resize;touch-action:none;pointer-events:auto}.overlay-menu{position:absolute;z-index:6;display:grid;gap:8px;width:min(360px,94%);padding:8px;border:1px solid var(--color-border-strong);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel);touch-action:none}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px;cursor:move}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-inspector{display:grid;gap:8px}.overlay-inspector label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.overlay-inspector input[type=text],.overlay-inspector input[type=number]{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.overlay-inspector input[type=color]{width:42px;height:32px;padding:2px;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black)}.overlay-inspector-row{display:flex;gap:8px;align-items:center}.overlay-inspector-row>*{flex:1}.overlay-inspector-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.overlay-inspector-check input{width:auto}.overlay-danger{color:var(--color-danger)!important;border-color:#5b2626!important;background:#251111!important}.image-upload{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-empty{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;color:var(--color-text-muted)}
@@ -6125,7 +6390,7 @@ body[data-tab=import] main,body[data-tab=import] .final-stage{display:none}body[
 .empty-project-stage{display:none;max-width:720px;margin:18px auto;padding:0 18px}.empty-project-panel{display:grid;gap:10px;padding:18px;border:1px solid var(--glass-border);border-radius:var(--radius-panel);background:var(--glass-bg-strong);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(24px) saturate(1.45);text-align:center}.empty-project-panel p{margin:0;color:var(--color-text-muted)}.empty-project-panel button{justify-self:center}body[data-project-empty=true][data-tab=edit] main{display:none}body[data-project-empty=true][data-tab=edit] .empty-project-stage{display:block}
 .settings-backdrop{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:18px;background:rgba(0,0,0,.58)}.settings-backdrop[hidden]{display:none}.settings-panel{width:min(560px,100%);border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised);box-shadow:var(--shadow-panel);padding:16px}.settings-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.settings-head p{margin:3px 0 0;color:var(--color-text-muted)}.settings-form{display:grid;gap:12px;margin-top:14px}.settings-form label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.settings-form input,.settings-form select{width:100%;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black);color:var(--color-text);padding:9px 10px;font:inherit}.settings-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.settings-status,.settings-usage{padding:10px;border:1px solid var(--color-border);border-radius:8px;background:#0b0b0b;color:var(--color-text-soft)}.settings-usage{display:grid;gap:3px;color:var(--color-text-muted)}.settings-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}.settings-form small{color:var(--color-text-muted)}
 button{background:var(--color-brand-white);color:var(--color-brand-black);border:0;border-radius:6px;padding:9px 12px;cursor:pointer}#reset-ui,button[data-action=discard]{background:#242424;color:var(--color-text-soft)}
-@media(max-width:860px){header{position:relative;grid-template-columns:1fr;justify-items:center}.header-actions{justify-content:center}.brand-logo{width:min(390px,88vw);height:64px}.brand-lockup p{max-width:86vw}.tabs{top:0;overflow:auto}.preview-strip button{font-size:12px;padding:7px 9px}main{padding:12px}.clip-summary{grid-template-columns:auto minmax(0,1fr);align-items:start}.clip-status{grid-column:1/-1;justify-content:flex-start}.editor-shell,.result-body,.camera-segments,.camera-smart-row,.camera-smart-ai,.camera-path-actions,.camera-keyframe-panel,.caption-settings,.preview-bar,.import-grid,.duration-profile,.import-path-row,.settings-grid{grid-template-columns:1fr}.preview-frame{max-width:100%}.preview-strip{justify-content:center}.preview-controls{width:max-content;max-width:100%;flex-wrap:wrap}.media{max-height:none}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons,.overlay-menu{grid-template-columns:1fr}}
+@media(max-width:860px){header{position:relative;grid-template-columns:1fr;justify-items:center}.header-actions{justify-content:center}.brand-logo{width:min(390px,88vw);height:64px}.brand-lockup p{max-width:86vw}.tabs{top:0;overflow:auto}.preview-strip button{font-size:12px;padding:7px 9px}main{padding:12px}.clip-summary{grid-template-columns:auto minmax(0,1fr);align-items:start}.clip-status{grid-column:1/-1;justify-content:flex-start}.editor-shell,.result-body,.camera-segments,.camera-smart-row,.camera-smart-ai,.camera-path-actions,.camera-keyframe-panel,.caption-settings,.preview-bar,.import-grid,.duration-profile,.import-path-row,.settings-grid,.effect-split,.bumper-actions{grid-template-columns:1fr}.preview-frame{max-width:100%}.preview-strip{justify-content:center}.preview-controls{width:max-content;max-width:100%;flex-wrap:wrap}.media{max-height:none}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons,.overlay-menu{grid-template-columns:1fr}}
 """
 
 
@@ -6190,6 +6455,7 @@ const emptyGalleryStorageKey = "cutted-empty-gallery";
 const maxOverlayImageBytes = 1800000;
 const maxOverlayImageSourceBytes = 6000000;
 const maxOverlayImagePixels = 1600;
+const maxBumperVideoBytes = 48000000;
 function save(){
   try {
     localStorage.setItem("cutted-state", JSON.stringify(state));
@@ -6218,13 +6484,14 @@ function clearAppNotice(){
 }
 function cardState(rank){
   const raw = state[rank];
-  if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], platformEdits: {} };
-  const next = Object.assign({ status: null, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], platformEdits: {} }, raw || {});
+  if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], bumpers: defaultBumpers(), platformEdits: {} };
+  const next = Object.assign({ status: null, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], bumpers: defaultBumpers(), platformEdits: {} }, raw || {});
   next.platforms = next.status === "discarded" ? [] : uniquePlatforms(next.platforms);
   next.camera = normalizeCamera(next.camera);
   next.effect = normalizeEffect(next.effect);
   next.overlay = normalizeOverlay(next.overlay);
   next.overlays = normalizeOverlayLayers(next.overlays, next.overlay);
+  next.bumpers = normalizeBumpers(next.bumpers);
   next.platformEdits = normalizePlatformEdits(next.platformEdits, next);
   return next;
 }
@@ -6313,7 +6580,8 @@ function normalizePlatformEdit(edit, fallback){
     camera_path: normalizeCameraPath(pathSource),
     effect: normalizeEffect(source.effect || base.effect || defaultEffect()),
     overlay: overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
-    overlays
+    overlays,
+    bumpers: normalizeBumpers(source.bumpers || base.bumpers || defaultBumpers())
   };
 }
 function normalizePlatformEdits(edits, fallback){
@@ -6854,6 +7122,64 @@ function effectOpacity(effect){
   const current = normalizeEffect(effect);
   return current.key === "none" ? 0 : Math.max(.12, current.intensity / 185);
 }
+function defaultBumpers(){ return {}; }
+function normalizeBumperSlot(slot){ return slot === "outro" ? "outro" : "intro"; }
+function normalizeBumper(bumper, slot){
+  if (!bumper || typeof bumper !== "object") return null;
+  const assetFile = String(bumper.asset_file || "");
+  const dataUrl = String(bumper.video_data_url || "");
+  if (!assetFile && !dataUrl) return null;
+  const safeSlot = normalizeBumperSlot(slot || bumper.slot);
+  return {
+    id: String(bumper.id || `bumper-${safeSlot}-${Date.now().toString(36)}`),
+    slot: safeSlot,
+    label: String(bumper.label || "vinheta.mp4"),
+    asset_file: assetFile,
+    video_data_url: dataUrl,
+    width: Number(bumper.width || 0),
+    height: Number(bumper.height || 0),
+    duration: Math.max(Number(bumper.duration || 0), 0)
+  };
+}
+function normalizeBumpers(bumpers){
+  if (!bumpers || typeof bumpers !== "object") return defaultBumpers();
+  const result = {};
+  ["intro", "outro"].forEach(slot => {
+    const bumper = normalizeBumper(bumpers[slot], slot);
+    if (bumper) result[slot] = bumper;
+  });
+  return result;
+}
+function bumpersForRank(rank, platform = activePlatformForRank(rank)){ return platformEditForRank(rank, platform).bumpers; }
+function setBumperForRank(rank, slot, bumper, platform = activePlatformForRank(rank)){
+  const key = validPlatform(platform);
+  const safeSlot = normalizeBumperSlot(slot);
+  const current = bumpersForRank(rank, key);
+  const next = Object.assign({}, current, { [safeSlot]: normalizeBumper(bumper, safeSlot) });
+  if (!next[safeSlot]) delete next[safeSlot];
+  setPlatformEditForRank(rank, key, { bumpers: normalizeBumpers(next) });
+  const card = cardForRank(rank);
+  if (card) updateEffectUi(card);
+  renderFinalStage();
+}
+function removeBumperForRank(rank, slot, platform = activePlatformForRank(rank)){
+  const key = validPlatform(platform);
+  const safeSlot = normalizeBumperSlot(slot);
+  const next = Object.assign({}, bumpersForRank(rank, key));
+  delete next[safeSlot];
+  setPlatformEditForRank(rank, key, { bumpers: normalizeBumpers(next) });
+  const card = cardForRank(rank);
+  if (card) updateEffectUi(card);
+  renderFinalStage();
+}
+function bumperSlotLabel(slot){ return normalizeBumperSlot(slot) === "intro" ? "Entrada" : "Saida"; }
+function bumperSummary(bumpers){
+  const current = normalizeBumpers(bumpers);
+  const labels = [];
+  if (current.intro) labels.push("Entrada");
+  if (current.outro) labels.push("Saida");
+  return labels.length ? labels.join(" + ") : "Sem vinheta";
+}
 function defaultOverlay(){ return { id: "", kind: "cta", key: "none", label: overlayMeta.none.label, x: .62, y: .78, width: .34, opacity: 95 }; }
 function overlayId(){
   return `layer-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -7063,19 +7389,67 @@ function bindCardCameraControls(card){
 }
 function updateEffectUi(card){
   const effect = effectForRank(card.dataset.rank);
+  const bumpers = bumpersForRank(card.dataset.rank);
   card.dataset.effect = effect.key;
   card.style.setProperty("--effect-opacity", effectOpacity(effect));
   const summary = card.querySelector("[data-effect-current]");
-  if (summary) summary.textContent = effectLabel(effect);
+  if (summary) summary.textContent = `${effectLabel(effect)} | ${bumperSummary(bumpers)}`;
   const container = card.querySelector("[data-card-effect]");
   if (!container) return;
+  renderBumperSequence(card, bumpers);
   container.innerHTML = `<div class="effect-card-controls">
-    <div class="effect-card-buttons" role="group" aria-label="Efeito do corte ${escapeAttr(card.dataset.rank)}">${effectButtonsHtml(effect)}</div>
-    <label>Intensidade
-      <input data-preview-effect-intensity type="range" min="0" max="100" step="5" value="${effect.intensity}">
-    </label>
+    <div class="effect-split">
+      <section class="effect-subpanel">
+        <strong>Visual</strong>
+        <div class="effect-card-buttons" role="group" aria-label="Efeito do corte ${escapeAttr(card.dataset.rank)}">${effectButtonsHtml(effect)}</div>
+        <label>Intensidade
+          <input data-preview-effect-intensity type="range" min="0" max="100" step="5" value="${effect.intensity}">
+        </label>
+      </section>
+      <section class="effect-subpanel">
+        <strong>Vinhetas</strong>
+        <div class="bumper-actions">
+          ${bumperUploadHtml("intro", card.dataset.rank)}
+          ${bumperUploadHtml("outro", card.dataset.rank)}
+        </div>
+        <div class="bumper-strip" data-bumper-strip>${bumperChipsHtml(bumpers)}</div>
+        <small data-bumper-current>${escapeHtml(bumperSummary(bumpers))}</small>
+      </section>
+    </div>
   </div>`;
   bindCardEffectControls(card);
+}
+function renderBumperSequence(card, bumpers){
+  const target = card.querySelector("[data-bumper-sequence]");
+  if (!target) return;
+  const current = normalizeBumpers(bumpers);
+  const parts = [];
+  if (current.intro) parts.push(`Entrada: ${current.intro.label}`);
+  parts.push("Corte");
+  if (current.outro) parts.push(`Saida: ${current.outro.label}`);
+  target.innerHTML = parts.length > 1
+    ? parts.map(part => `<span>${escapeHtml(part)}</span>`).join('<b>-></b>')
+    : "";
+}
+function bumperUploadHtml(slot, rank){
+  const label = bumperSlotLabel(slot);
+  return `<label class="bumper-upload">
+    <span>${escapeHtml(label)}</span>
+    <input data-bumper-video="${escapeAttr(slot)}" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-m4v">
+  </label>`;
+}
+function bumperChipsHtml(bumpers){
+  const current = normalizeBumpers(bumpers);
+  const chips = ["intro", "outro"].map(slot => {
+    const bumper = current[slot];
+    if (!bumper) return "";
+    const meta = [bumper.width && bumper.height ? `${bumper.width}x${bumper.height}` : "", bumper.duration ? fixed(bumper.duration) : ""].filter(Boolean).join(" - ");
+    return `<span class="layer-chip bumper-chip" data-bumper-chip="${escapeAttr(slot)}">
+      <span>${escapeHtml(bumperSlotLabel(slot))}: ${escapeHtml(bumper.label)}${meta ? ` (${escapeHtml(meta)})` : ""}</span>
+      <button data-bumper-remove="${escapeAttr(slot)}" type="button" title="Remover vinheta" aria-label="Remover vinheta">x</button>
+    </span>`;
+  }).filter(Boolean).join("");
+  return chips || '<span class="bumper-empty">Sem vinheta nesta plataforma</span>';
 }
 function bindCardEffectControls(card){
   const rank = card.dataset.rank;
@@ -7083,9 +7457,85 @@ function bindCardEffectControls(card){
     button.addEventListener("click", () => setEffectForRank(rank, { key: button.dataset.previewEffect }));
   });
   const intensity = card.querySelector("[data-preview-effect-intensity]");
-  if (!intensity) return;
-  intensity.addEventListener("input", () => setEffectForRank(rank, { intensity: Number(intensity.value) }));
-  intensity.addEventListener("change", () => setEffectForRank(rank, { intensity: Number(intensity.value) }));
+  if (intensity) {
+    intensity.addEventListener("input", () => setEffectForRank(rank, { intensity: Number(intensity.value) }));
+    intensity.addEventListener("change", () => setEffectForRank(rank, { intensity: Number(intensity.value) }));
+  }
+  card.querySelectorAll("[data-bumper-video]").forEach(input => {
+    input.addEventListener("change", () => addBumperFromInput(card, input));
+  });
+  card.querySelectorAll("[data-bumper-remove]").forEach(button => {
+    button.addEventListener("click", () => removeBumperForRank(rank, button.dataset.bumperRemove));
+  });
+}
+async function addBumperFromInput(card, input){
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const rank = card.dataset.rank;
+  const slot = normalizeBumperSlot(input.dataset.bumperVideo);
+  const platform = activePlatformForRank(rank);
+  const preset = platformMeta[platform] || platformMeta.tiktok;
+  try {
+    if (file.size > maxBumperVideoBytes) throw new Error("Vinheta muito pesada. Use um video menor para o MVP local.");
+    const metadata = await videoMetadataForFile(file);
+    if (metadata.width !== preset.width || metadata.height !== preset.height) {
+      throw new Error(`Use um video ${preset.width}x${preset.height} para ${preset.label}.`);
+    }
+    showAppNotice(`Enviando vinheta de ${bumperSlotLabel(slot).toLowerCase()}...`);
+    const dataUrl = await readFileAsDataUrl(file);
+    const bumper = await uploadBumperAsset({
+      slot,
+      platform,
+      label: file.name,
+      width: metadata.width,
+      height: metadata.height,
+      duration: metadata.duration,
+      data_url: dataUrl,
+      gallery_path: currentGalleryPath()
+    });
+    setBumperForRank(rank, slot, bumper, platform);
+    clearAppNotice();
+  } catch (error) {
+    showAppNotice(error.message || "Nao foi possivel usar esta vinheta.");
+    console.warn("CUTED bumper was rejected", error);
+  } finally {
+    input.value = "";
+  }
+}
+function videoMetadataForFile(file){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      const metadata = {
+        width: Number(video.videoWidth || 0),
+        height: Number(video.videoHeight || 0),
+        duration: Number(video.duration || 0)
+      };
+      URL.revokeObjectURL(url);
+      if (!metadata.width || !metadata.height || !metadata.duration) {
+        reject(new Error("Nao consegui ler os metadados da vinheta."));
+        return;
+      }
+      resolve(metadata);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Video de vinheta invalido ou corrompido."));
+    };
+    video.src = url;
+  });
+}
+async function uploadBumperAsset(payload){
+  const response = await fetch("/api/bumper-assets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok || !data.bumper) throw new Error(data.error || "Falha ao salvar a vinheta.");
+  return data.bumper;
 }
 function updateOverlayUi(card){
   const layers = overlayLayersForRank(card.dataset.rank);
@@ -7808,6 +8258,7 @@ function adjustedMoment(moment){
     effect: effectForRank(moment.rank),
     overlay: primaryOverlayForRank(moment.rank),
     overlays: overlayLayersForRank(moment.rank),
+    bumpers: bumpersForRank(moment.rank),
     platform_edits: current.platformEdits
   });
 }
@@ -7838,6 +8289,7 @@ function buildExportData(){
       effect: edit.effect,
       overlay: overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
       overlays,
+      bumpers: edit.bumpers,
       captions_enabled: captionEnabled(),
       clip_file: moment.clip_file,
       title: moment.title,
@@ -8305,8 +8757,9 @@ function renderFinalStage(){
     const cameraCount = queue.filter(item => cameraEditHasMovement(item)).length;
     const effectCount = queue.filter(item => normalizeEffect(item.effect).key !== "none").length;
     const overlayCount = queue.reduce((count, item) => count + normalizeOverlayLayers(item.overlays, item.overlay).length, 0);
+    const bumperCount = queue.reduce((count, item) => count + Object.keys(normalizeBumpers(item.bumpers)).length, 0);
     summary.textContent = queue.length
-      ? `${queue.length} na fila; ${cameraCount} camera; ${effectCount} efeito; ${overlayCount} camada.`
+      ? `${queue.length} na fila; ${cameraCount} camera; ${effectCount} efeito; ${overlayCount} camada; ${bumperCount} vinheta.`
       : "Nada na fila.";
   }
 }
@@ -8607,13 +9060,16 @@ function renderFinalizeResults(files){
     const camera = normalizeCamera(file.camera);
     const effect = normalizeEffect(file.effect);
     const overlay = normalizeOverlay(file.overlay);
+    const bumpers = normalizeBumpers(file.bumpers);
+    const bumperText = bumperSummary(bumpers);
     const title = `#${String(file.rank || "").padStart(2, "0")} ${file.label || file.platform || "video"}`;
     const meta = [
       file.width && file.height ? `${file.width}x${file.height}` : "",
-      file.adjusted_duration ? fixed(file.adjusted_duration) : "",
+      file.final_duration ? fixed(file.final_duration) : file.adjusted_duration ? fixed(file.adjusted_duration) : "",
       cameraHasMovement(camera) ? cameraLabel(camera) : "",
       effect.key !== "none" ? effect.label : "",
-      overlay.key !== "none" ? overlay.label : ""
+      overlay.key !== "none" ? overlay.label : "",
+      Object.keys(bumpers).length ? bumperText : ""
     ].filter(Boolean).join(" - ");
     const open = index === 0 ? " open" : "";
     const downloadName = file.download_name || file.url?.split("/").pop() || "cuted-video.mp4";
@@ -8628,10 +9084,11 @@ function renderFinalizeResults(files){
           <dl>
             <dt>Status</dt><dd>${escapeHtml(fileStatus)}</dd>
             <dt>Formato</dt><dd>${escapeHtml(file.label || file.platform || "-")}</dd>
-            <dt>Duracao</dt><dd>${escapeHtml(file.adjusted_duration ? fixed(file.adjusted_duration) : "-")}</dd>
+            <dt>Duracao</dt><dd>${escapeHtml(file.final_duration ? fixed(file.final_duration) : file.adjusted_duration ? fixed(file.adjusted_duration) : "-")}</dd>
             <dt>Camera</dt><dd>${escapeHtml(cameraLabel(camera))}</dd>
             <dt>Efeito</dt><dd>${escapeHtml(effect.label)}</dd>
             <dt>Chamada</dt><dd>${escapeHtml(overlay.label)}</dd>
+            <dt>Vinhetas</dt><dd>${escapeHtml(bumperText)}</dd>
             ${finalFile ? `<dt>Arquivo final</dt><dd><span class="result-path">${escapeHtml(finalFile)}</span></dd>` : ""}
             ${finalDir ? `<dt>Pasta final</dt><dd><span class="result-path">${escapeHtml(finalDir)}</span></dd>` : ""}
           </dl>

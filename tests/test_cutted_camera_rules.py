@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import base64
 import sys
 import unittest
 from pathlib import Path
@@ -310,6 +311,49 @@ class CuttedCameraRuleTests(unittest.TestCase):
 
         self.assertIn("cameraFrameUsesHardCut(next)", source)
         self.assertIn("cameraFrameUsesGroupFit(next)", source)
+
+    def test_platform_edit_from_row_includes_bumpers(self) -> None:
+        row = {
+            "platform_edits": {
+                "tiktok": {
+                    "bumpers": {
+                        "intro": {
+                            "label": "intro.mp4",
+                            "asset_file": "bumper-assets/intro.mp4",
+                            "width": 1080,
+                            "height": 1920,
+                            "duration": 2.5,
+                        }
+                    }
+                }
+            }
+        }
+
+        edit = CUTTED.platform_edit_from_row(row, "tiktok")
+
+        self.assertIn("bumpers", edit)
+        self.assertEqual(edit["bumpers"]["intro"]["asset_file"], "bumper-assets/intro.mp4")
+
+    def test_normalize_bumpers_filters_empty_slots(self) -> None:
+        row = {
+            "bumpers": {
+                "intro": {"label": "intro.mp4", "asset_file": "bumper-assets/intro.mp4", "width": 1080, "height": 1920},
+                "outro": {"label": "missing.mp4"},
+            }
+        }
+
+        bumpers = CUTTED.normalize_bumpers_from_row(row)
+
+        self.assertEqual(list(bumpers), ["intro"])
+        self.assertEqual(bumpers["intro"]["slot"], "intro")
+
+    def test_decode_data_url_video_accepts_mp4(self) -> None:
+        payload = base64.b64encode(b"tiny-video").decode("ascii")
+
+        data, extension = CUTTED.decode_data_url_video(f"data:video/mp4;base64,{payload}")
+
+        self.assertEqual(data, b"tiny-video")
+        self.assertEqual(extension, "mp4")
 
 
 if __name__ == "__main__":

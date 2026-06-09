@@ -59,6 +59,9 @@ review workspace, data contracts, or render pipeline.
 | Platform | Switch TikTok to Facebook | Preset state changes without losing TikTok edits |
 | Text layer | Add text layer | Layer appears, moves, resizes, edits, deletes |
 | Image layer | Add PNG/WebP logo | Transparency preserved in preview and render |
+| Bumpers | Add intro video on TikTok | Intro chip appears only for TikTok |
+| Bumpers | Add outro video on TikTok | Outro chip appears only for TikTok |
+| Bumpers | Remove a bumper chip | Bumper disappears from preview and final queue |
 | Export | Add multiple platforms | Queue contains each selected platform |
 | Finalize | Render final queue | MP4 files and manifest are created |
 | Finalize | Render with import output path | Final MP4 is copied to `CUTED Renders/<import>` and UI shows the final path |
@@ -92,6 +95,8 @@ review workspace, data contracts, or render pipeline.
 | Remove platform from export | Platform is absent from final queue |
 | Discard clip with platform selected | Discarded clip is absent from final queue and shows no active platform |
 | Render TikTok and YouTube | Output dimensions differ as expected |
+| Add TikTok bumper, switch Facebook | Facebook has no inherited bumper |
+| Add Facebook bumper, return TikTok | TikTok bumper is restored |
 
 ## Render Checks
 
@@ -104,6 +109,10 @@ review workspace, data contracts, or render pipeline.
 | Image overlay plus effect | Image remains visible |
 | PNG logo overlay | Alpha is preserved |
 | JPEG overlay | Image renders opaque |
+| Intro bumper only | Final MP4 duration includes intro before the edited cut |
+| Outro bumper only | Final MP4 duration includes outro after the edited cut |
+| Intro plus outro bumpers | Final MP4 duration includes both bumpers |
+| Wrong bumper dimensions | Upload is rejected before render |
 
 ## Quality Gates
 

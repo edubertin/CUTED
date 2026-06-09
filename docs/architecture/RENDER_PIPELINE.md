@@ -41,9 +41,10 @@ python tools/cutted/scripts/cutted.py render-selected "samples/example/selected-
 8. Browser edit state collection.
 9. Final queue submission to `/api/finalize`.
 10. Caption, camera, effect, and overlay filter construction.
-11. Final MP4 render.
-12. Final MP4 copy to the configured render destination when available.
-13. Output manifest update.
+11. Optional intro/outro bumper normalization and concatenation.
+12. Final MP4 render.
+13. Final MP4 copy to the configured render destination when available.
+14. Output manifest update.
 
 ## Output Locations
 
@@ -239,13 +240,30 @@ still produce a visible MP4 difference, because subtle pure noise can disappear
 after H.264 compression. Regression checks should cover `light-grain`,
 `old-film`, `vhs`, and `bw-old` individually.
 
+## Video Bumpers
+
+Video bumpers are intro/outro files attached to the active platform edit. They
+are not overlays and should not enter the visual layer stack. The render path
+first produces the edited CUTED clip exactly as it does without bumpers, then
+normalizes any selected bumper files to the target platform dimensions and
+concatenates:
+
+```text
+intro -> edited cut -> outro
+```
+
+The first implementation should reject bumper files whose browser-readable
+metadata does not match the active platform dimensions. The server-side render
+still normalizes codec, frame rate, pixel format, and audio so FFmpeg concat
+receives compatible inputs.
+
 ## Platform Presets
 
 ```text
 TikTok:    1080x1920
 Shorts:    1080x1920
 Instagram: 1080x1920
-Facebook:  1080x1920
+Facebook:  1080x1350
 YouTube:   1920x1080
 ```
 
@@ -271,4 +289,5 @@ YouTube:   1920x1080
 - Per-platform edits must render with the correct platform dimensions.
 - Captions must render after trim timing is normalized.
 - Effects must render without removing captions or overlays.
+- Intro/outro bumpers must concatenate without removing captions or overlays.
 - The output manifest must reflect every successful platform render.
