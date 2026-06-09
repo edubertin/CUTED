@@ -41,9 +41,9 @@ face detection, tracking, and source-aware analysis.
    and whether multiple faces were visible.
 2. Analyze source footage when available instead of only analyzing the generated
    preview clip, then map detections into the selected platform crop.
-3. Replace Haar Cascade as the primary detector with a stronger detector such
-   as OpenCV YuNet or MediaPipe Face Detection, keeping Haar as fallback.
-4. Add lightweight tracking across frames so face identity is stable over time.
+3. Add the local hybrid Vision Engine: OpenCV face detection remains fallback,
+   while optional YOLO person detection improves multi-person scene coverage.
+4. Add lightweight tracking across frames so person/face identity is stable over time.
 5. Refactor the Camera tab around Auto Director first, with manual path editing
    and beginning/middle/end controls hidden behind an advanced section.
 6. Tune framing rules for headroom, shoulders, zoom, safe horizontal crop, and
@@ -55,6 +55,8 @@ face detection, tracking, and source-aware analysis.
 ## Acceptance Criteria
 
 - Smart Camera responses include diagnostic evidence.
+- Diagnostics report the active vision engine and distinguish face coverage
+  from person coverage.
 - Auto Director is the default camera analysis mode.
 - Smart Camera prefers source footage when `source_start_seconds` and source
   media are available, with clip fallback.

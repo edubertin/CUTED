@@ -207,6 +207,11 @@ operator edits, but they do not imply OpenCV detected the face position.
 Smart camera API responses may include a `diagnostics` object:
 
 ```text
+vision_engine          detector stack used: opencv or hybrid-yolo
+vision_model           optional local person detector model
+person_detection_frames sampled frames with at least one detected person
+multi_person_frames    sampled frames with two or more detected people
+detected_persons_max   largest person count in one sampled frame
 source_start_seconds  optional absolute source timestamp requested by UI
 analysis_input        clip or source
 analysis_file         file name analyzed by OpenCV
@@ -231,6 +236,11 @@ camera_protected_keyframes keyframes inserted or adjusted for safety
 ai_director           optional hosted decision diagnostics
 detection_preview     compact first detections for QA/debugging
 ```
+
+When YOLO is available, detections may include `persons` in addition to
+`faces`. Person detections are normalized into the same timeline coordinate
+space and may be used for group safety, fit shots, and AI Director scene
+planning. Face detections remain preferred for tight close-ups when reliable.
 
 When `source_start_seconds` is present, the server should prefer the import's
 original source media from `source_path`, `_source/`, or `source_url`. If that
