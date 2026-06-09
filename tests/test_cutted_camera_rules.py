@@ -27,6 +27,21 @@ def face(x: float, width: float = 8.0) -> dict[str, float]:
     }
 
 
+def person(x: float, width: float = 18.0) -> dict[str, object]:
+    return {
+        "x": x,
+        "y": 43.0,
+        "width": width,
+        "height": 62.0,
+        "area": width * 62.0 * 0.08,
+        "body_area": width * 62.0,
+        "confidence": 0.82,
+        "zoom": 1.12,
+        "kind": "person",
+        "source": "yolo-person",
+    }
+
+
 def detection(time_value: float, faces: list[dict[str, float]]) -> dict[str, object]:
     primary = max(faces, key=lambda item: float(item["area"])) if faces else None
     return {"time": time_value, "faces": faces, "primary": primary}
@@ -37,6 +52,53 @@ def missing_detection(time_value: float) -> dict[str, object]:
 
 
 class CuttedCameraRuleTests(unittest.TestCase):
+    def test_yolo_person_box_converts_to_camera_subject(self) -> None:
+        row = CUTTED.yolo_person_row_from_box([100.0, 100.0, 300.0, 800.0], 1000, 1000, 0.78)
+
+        self.assertIsNotNone(row)
+        self.assertEqual(row["kind"], "person")
+        self.assertAlmostEqual(float(row["x"]), 20.0)
+        self.assertGreaterEqual(float(row["y"]), 35.0)
+        self.assertAlmostEqual(float(row["width"]), 20.0)
+        self.assertAlmostEqual(float(row["confidence"]), 0.78)
+
+    def test_yolo_persons_merge_without_duplicating_opencv_faces(self) -> None:
+        merged = CUTTED.merge_vision_subjects([face(42.0)], [person(43.0), person(75.0)])
+
+        self.assertEqual(len(merged), 2)
+        self.assertTrue(any(item.get("kind") == "person" and item["x"] == 75.0 for item in merged))
+        self.assertTrue(any(item.get("kind") != "person" and item["x"] == 42.0 for item in merged))
+
+    def test_vision_diagnostics_reports_person_coverage(self) -> None:
+        detections = [
+            {"time": 0.0, "faces": [person(30.0), person(70.0)], "persons": [person(30.0), person(70.0)]},
+            {"time": 1.0, "faces": [person(50.0)], "persons": [person(50.0)]},
+        ]
+
+        result = CUTTED.vision_engine_diagnostics(detections)
+
+        self.assertEqual(result["person_detection_frames"], 2)
+        self.assertEqual(result["multi_person_frames"], 1)
+        self.assertEqual(result["detected_persons_max"], 2)
+
+    def test_ai_director_payload_includes_vision_context(self) -> None:
+        detections = [
+            {
+                "time": 0.0,
+                "faces": [face(48.0), person(74.0)],
+                "opencv_faces": [face(48.0)],
+                "persons": [person(74.0)],
+                "primary": face(48.0),
+            }
+        ]
+
+        payload = CUTTED.ai_director_user_payload("tiktok", "Teste", "", {}, detections, [], 8.0, "ai-director")
+        data = CUTTED.json.loads(payload)
+
+        self.assertIn("vision_detection_summary", data)
+        self.assertIn("vision_detections", data)
+        self.assertEqual(data["vision_detections"][0]["person_count"], 1)
+
     def test_solo_dominant_scene_removes_hard_cut_jitter(self) -> None:
         detections = [
             detection(0.0, [face(48.0)]),
@@ -242,6 +304,12 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertTrue(CUTTED.camera_analysis_bypasses_cache(payload, "ai-director-cuts"))
         self.assertFalse(CUTTED.camera_analysis_bypasses_cache(payload, "auto-director"))
         self.assertFalse(CUTTED.camera_analysis_bypasses_cache({}, "ai-director"))
+
+    def test_preview_holds_before_upcoming_hard_cut_or_fit(self) -> None:
+        source = MODULE_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("cameraFrameUsesHardCut(next)", source)
+        self.assertIn("cameraFrameUsesGroupFit(next)", source)
 
 
 if __name__ == "__main__":

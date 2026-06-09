@@ -1508,10 +1508,11 @@ function cameraFrameForTime(camera, cameraPath, position, duration){
       break;
     }
   }
-  if (previous.key) {
+  if (previous.key || cameraFrameUsesHardCut(previous) || cameraFrameUsesGroupFit(previous)) {
     return cameraFrameFromSegment(previous, safePosition, Math.max(0, safePosition - previous.time));
   }
   if (previous === next || next.time <= previous.time) return previous;
+  if (cameraFrameUsesHardCut(next) || cameraFrameUsesGroupFit(next)) return previous;
   const ratio = (safePosition - previous.time) / (next.time - previous.time);
   return {
     time: Number(safePosition.toFixed(3)),
@@ -1521,6 +1522,12 @@ function cameraFrameForTime(camera, cameraPath, position, duration){
     source: previous.source || "manual-path",
     confidence: Math.min(previous.confidence ?? 1, next.confidence ?? 1)
   };
+}
+function cameraFrameUsesHardCut(frame){
+  return String(frame?.source || "").includes("ai-director-cuts");
+}
+function cameraFrameUsesGroupFit(frame){
+  return String(frame?.fit || "").toLowerCase() === "contain" || String(frame?.source || "").includes("group-fit");
 }
 function cameraPreviewStyle(camera, elapsed = 0){
   const current = normalizeSingleCamera(camera);

@@ -129,6 +129,14 @@ face-based reframing. The endpoint reads the selected clip, respects the
 current trim start and adjusted duration, samples frames, detects faces, and
 returns explicit `camera_path` keyframes.
 
+The current Smart Camera analyzer can also run a local hybrid Vision Engine.
+When the optional `ultralytics` package and configured YOLO model are available,
+the analyzer adds person detections to the OpenCV face detections before
+building local safety frames and AI Director context. This improves scenes where
+people are visible but faces are side-on, turned away, or too weak for Haar
+cascades. If YOLO cannot load, the analyzer falls back to OpenCV without
+blocking camera editing.
+
 Supported smart modes:
 
 - `auto-director`: default mode. Tracks the primary face and, when enough

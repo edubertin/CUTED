@@ -44,9 +44,11 @@ FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
 MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
 MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
-CAMERA_ANALYSIS_VERSION = "auto-face-v28"
+CAMERA_ANALYSIS_VERSION = "auto-face-v29"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
 CAMERA_ANALYSIS_MAX_FRAMES = 140
+YOLO_PERSON_CONFIDENCE = 0.34
+YOLO_DEFAULT_MODEL = "yolo26n.pt"
 CAMERA_UNCERTAIN_MIN_SECONDS = 0.85
 CAMERA_TWO_CLOSE_PAN_SPREAD = 10.0
 CAMERA_TWO_CLOSE_PAN_SPAN = 20.0
@@ -256,6 +258,8 @@ class ImportJob:
 
 IMPORT_JOBS: dict[str, ImportJob] = {}
 IMPORT_JOBS_LOCK = threading.Lock()
+YOLO_MODEL_CACHE: dict[str, object | None] = {}
+YOLO_MODEL_ERRORS: dict[str, str] = {}
 
 
 PLATFORM_PRESETS = {
@@ -823,14 +827,16 @@ def opencv_face_camera_analysis(
         if video_duration:
             safe_duration = min(duration, max(video_duration - safe_start, 0.3))
         cascades = opencv_face_cascades(cv2)
+        yolo_model = load_yolo_person_model()
         sample_times = camera_sample_times(safe_duration)
-        detections = opencv_face_detections(cv2, capture, cascades, safe_start, sample_times)
+        detections = opencv_face_detections(cv2, capture, cascades, safe_start, sample_times, yolo_model)
     finally:
         capture.release()
     safe_mode = normalize_camera_analysis_mode(mode)
     local_mode = "auto-director" if camera_analysis_uses_ai(safe_mode) else safe_mode
     camera_path = smart_camera_path(detections, safe_duration, local_mode)
     diagnostics = camera_analysis_diagnostics(input_kind, label, metadata, safe_start, safe_duration, sample_times, detections, camera_path)
+    diagnostics.update(vision_engine_diagnostics(detections))
     source = f"auto-face-{local_mode}"
     if camera_analysis_uses_ai(safe_mode):
         ai_result = ai_director_camera_result(
@@ -844,7 +850,7 @@ def opencv_face_camera_analysis(
     diagnostics.update(camera_path_quality_diagnostics(detections, camera_path, safe_duration, platform))
     return {
         "source": source,
-        "detected_faces": max((len(row.get("faces", [])) for row in detections), default=0),
+        "detected_faces": max((len(reliable_faces(row)) for row in detections), default=0),
         "detection_frames": detection_frame_count(detections),
         "diagnostics": diagnostics,
         "camera_path": camera_path,
@@ -899,8 +905,50 @@ def opencv_face_cascade(cv2: object) -> object:
     return opencv_face_cascades(cv2)[0]["cascade"]
 
 
+def yolo_vision_enabled() -> bool:
+    value = os.environ.get("CUTED_VISION_ENGINE", "hybrid").strip().lower()
+    return value not in {"opencv", "off", "disabled", "none"}
+
+
+def yolo_model_name() -> str:
+    return os.environ.get("CUTED_YOLO_MODEL", "").strip() or YOLO_DEFAULT_MODEL
+
+
+def yolo_model_reference() -> str:
+    model_name = yolo_model_name()
+    model_path = Path(model_name)
+    if model_path.is_absolute() or model_path.parent != Path(".") or model_name.startswith(("http://", "https://")):
+        return model_name
+    model_dir = Path(os.environ.get("CUTED_YOLO_MODEL_DIR", "") or Path.home() / ".cuted" / "models")
+    model_dir.mkdir(parents=True, exist_ok=True)
+    return str(model_dir / model_name)
+
+
+def load_yolo_person_model() -> object | None:
+    if not yolo_vision_enabled():
+        return None
+    model_reference = yolo_model_reference()
+    if model_reference in YOLO_MODEL_CACHE:
+        return YOLO_MODEL_CACHE[model_reference]
+    try:
+        from ultralytics import YOLO  # type: ignore[import-not-found]
+
+        model = YOLO(model_reference)
+    except Exception as error:
+        YOLO_MODEL_ERRORS[yolo_model_name()] = str(error)
+        YOLO_MODEL_CACHE[model_reference] = None
+        return None
+    YOLO_MODEL_CACHE[model_reference] = model
+    return model
+
+
 def opencv_face_detections(
-    cv2: object, capture: object, cascades: list[dict[str, object]], start: float, sample_times: list[float]
+    cv2: object,
+    capture: object,
+    cascades: list[dict[str, object]],
+    start: float,
+    sample_times: list[float],
+    yolo_model: object | None = None,
 ) -> list[dict[str, object]]:
     detections: list[dict[str, object]] = []
     previous_x = 50.0
@@ -909,15 +957,30 @@ def opencv_face_detections(
         ok, frame = capture.read()
         if not ok or frame is None:
             continue
-        faces = detect_frame_faces(cv2, cascades, frame)
+        opencv_faces = detect_frame_faces(cv2, cascades, frame)
+        persons = detect_frame_people_yolo(yolo_model, frame) if yolo_model is not None else []
+        faces = merge_vision_subjects(opencv_faces, persons)
         reliable = [face for face in faces if float(face.get("confidence") or 0.0) >= 0.35]
         if not reliable:
-            detections.append({"time": round(relative_time, 3), "primary": None, "faces": [], "missing": True})
+            detections.append({
+                "time": round(relative_time, 3),
+                "primary": None,
+                "faces": [],
+                "opencv_faces": opencv_faces,
+                "persons": persons,
+                "missing": True,
+            })
             continue
         primary = select_primary_face(reliable, previous_x)
         if primary:
             previous_x = float(primary["x"])
-            detections.append({"time": round(relative_time, 3), "primary": primary, "faces": reliable})
+            detections.append({
+                "time": round(relative_time, 3),
+                "primary": primary,
+                "faces": reliable,
+                "opencv_faces": opencv_faces,
+                "persons": persons,
+            })
     return detections
 
 
@@ -934,9 +997,9 @@ def camera_analysis_diagnostics(
     sample_count = len(sample_times)
     detection_frames = detection_frame_count(detections)
     missing_frames = sum(1 for row in detections if not reliable_faces(row))
-    multi_face_frames = sum(1 for row in detections if len(row.get("faces", [])) > 1)
+    multi_face_frames = sum(1 for row in detections if len(reliable_opencv_faces(row)) > 1)
     edge_face_frames = sum(1 for row in detections if row_has_edge_face(row))
-    detected_faces = max((len(row.get("faces", [])) for row in detections), default=0)
+    detected_faces = max((len(reliable_opencv_faces(row)) for row in detections), default=0)
     detected_times = [float(row.get("time") or 0.0) for row in detections if reliable_faces(row)]
     return {
         "analysis_input": input_kind,
@@ -959,6 +1022,24 @@ def camera_analysis_diagnostics(
         "last_detection_time": round(max(detected_times), 3) if detected_times else None,
         "camera_keyframes": len(camera_path),
         "detection_preview": compact_detection_preview(detections),
+    }
+
+
+def vision_engine_diagnostics(detections: list[dict[str, object]]) -> dict[str, object]:
+    model_name = yolo_model_name()
+    model_reference = yolo_model_reference()
+    yolo_loaded = YOLO_MODEL_CACHE.get(model_reference) is not None
+    person_frames = sum(1 for row in detections if reliable_persons(row))
+    multi_person_frames = sum(1 for row in detections if len(reliable_persons(row)) >= 2)
+    detected_persons = max((len(reliable_persons(row)) for row in detections), default=0)
+    return {
+        "vision_engine": "hybrid-yolo" if yolo_loaded else "opencv",
+        "vision_model": model_name if yolo_loaded else "",
+        "vision_error": YOLO_MODEL_ERRORS.get(model_name, ""),
+        "person_detection_frames": person_frames,
+        "person_detection_rate": round(person_frames / len(detections), 3) if detections else 0.0,
+        "multi_person_frames": multi_person_frames,
+        "detected_persons_max": detected_persons,
     }
 
 
@@ -1025,23 +1106,22 @@ def compact_detection_preview(detections: list[dict[str, object]]) -> list[dict[
         primary = row.get("primary") if isinstance(row.get("primary"), dict) else {}
         preview.append({
             "time": row.get("time", 0.0),
-            "faces": len(row.get("faces", [])),
+            "faces": len(reliable_faces(row)),
+            "opencv_faces": len(reliable_opencv_faces(row)),
+            "persons": len(reliable_persons(row)),
             "x": primary.get("x"),
             "y": primary.get("y"),
             "zoom": primary.get("zoom"),
             "confidence": primary.get("confidence"),
             "missing": not reliable_faces(row),
-            "face_xs": [face.get("x") for face in row.get("faces", [])[:4] if isinstance(face, dict)],
-            "face_widths": [face.get("width") for face in row.get("faces", [])[:4] if isinstance(face, dict)],
+            "face_xs": [face.get("x") for face in reliable_faces(row)[:4]],
+            "face_widths": [face.get("width") for face in reliable_faces(row)[:4]],
         })
     return preview
 
 
 def row_has_edge_face(row: dict[str, object]) -> bool:
-    faces = row.get("faces")
-    if not isinstance(faces, list):
-        return False
-    return any(isinstance(face, dict) and face_outside_safe_zone(face) for face in faces)
+    return any(face_outside_safe_zone(face) for face in reliable_faces(row))
 
 
 def camera_sample_times(duration: float) -> list[float]:
@@ -1065,6 +1145,103 @@ def detect_frame_faces(cv2: object, cascades: list[dict[str, object]], frame: ob
         cascade = spec["cascade"]
         faces = cascade.detectMultiScale(source_gray, scaleFactor=1.1, minNeighbors=5, minSize=(36, 36))
         rows.extend(face_rows_from_detections(faces, width, height, scale, mirror, float(spec.get("confidence_weight") or 1.0)))
+    return dedupe_detected_faces(rows)
+
+
+def detect_frame_people_yolo(yolo_model: object, frame: object) -> list[dict[str, float]]:
+    height, width = frame.shape[:2]
+    try:
+        predict = getattr(yolo_model, "predict")
+        results = predict(frame, classes=[0], conf=YOLO_PERSON_CONFIDENCE, verbose=False)
+    except Exception as error:
+        YOLO_MODEL_ERRORS[yolo_model_name()] = str(error)
+        return []
+    return yolo_person_rows_from_results(results, int(width), int(height))
+
+
+def yolo_person_rows_from_results(results: object, width: int, height: int) -> list[dict[str, float]]:
+    rows: list[dict[str, float]] = []
+    for result in list(results or [])[:1]:
+        boxes = getattr(result, "boxes", None)
+        if boxes is None:
+            continue
+        xyxy_rows = tensor_rows_to_list(getattr(boxes, "xyxy", []))
+        confidences = tensor_values_to_list(getattr(boxes, "conf", []))
+        classes = tensor_values_to_list(getattr(boxes, "cls", []))
+        for index, box in enumerate(xyxy_rows):
+            class_value = int(float(classes[index])) if index < len(classes) else 0
+            if class_value != 0:
+                continue
+            confidence = float(confidences[index]) if index < len(confidences) else YOLO_PERSON_CONFIDENCE
+            row = yolo_person_row_from_box(box, width, height, confidence)
+            if row is not None:
+                rows.append(row)
+    return dedupe_detected_faces(rows)
+
+
+def tensor_values_to_list(value: object) -> list[float]:
+    converted = tensor_to_python(value)
+    if isinstance(converted, list):
+        return [float(item) for item in converted]
+    return []
+
+
+def tensor_rows_to_list(value: object) -> list[list[float]]:
+    converted = tensor_to_python(value)
+    if not isinstance(converted, list):
+        return []
+    return [[float(item) for item in row] for row in converted if isinstance(row, list) and len(row) >= 4]
+
+
+def tensor_to_python(value: object) -> object:
+    for method in ("detach", "cpu"):
+        if hasattr(value, method):
+            value = getattr(value, method)()
+    return value.tolist() if hasattr(value, "tolist") else value
+
+
+def yolo_person_row_from_box(box: list[float], width: int, height: int, confidence: float) -> dict[str, float] | None:
+    if len(box) < 4:
+        return None
+    x1, y1, x2, y2 = box[:4]
+    source_w = max(x2 - x1, 0.0)
+    source_h = max(y2 - y1, 0.0)
+    if source_w <= 1.0 or source_h <= 1.0:
+        return None
+    center_x = (x1 + source_w / 2.0) / max(width, 1) * 100.0
+    focus_y = (y1 + source_h * 0.28) / max(height, 1) * 100.0
+    area = source_w * source_h
+    return {
+        "x": round(clamp(center_x, 8.0, 92.0), 2),
+        "y": round(clamp(focus_y, 35.0, 65.0), 2),
+        "zoom": round(person_zoom(source_w, width), 3),
+        "confidence": round(clamp(confidence, 0.0, 1.0), 3),
+        "area": round(area * 0.08, 3),
+        "body_area": round(area, 3),
+        "width": round(source_w / max(width, 1) * 100.0, 2),
+        "height": round(source_h / max(height, 1) * 100.0, 2),
+        "kind": "person",
+        "source": "yolo-person",
+    }
+
+
+def person_zoom(person_width: float, frame_width: float) -> float:
+    ratio = person_width / max(frame_width, 1.0)
+    if ratio < 0.16:
+        return 1.28
+    if ratio < 0.26:
+        return 1.18
+    if ratio < 0.38:
+        return 1.1
+    return 1.04
+
+
+def merge_vision_subjects(opencv_faces: list[dict[str, float]], persons: list[dict[str, float]]) -> list[dict[str, float]]:
+    rows = [dict(face) for face in opencv_faces]
+    for person in persons:
+        if any(face_rows_overlap(person, face) for face in rows):
+            continue
+        rows.append(dict(person))
     return dedupe_detected_faces(rows)
 
 
@@ -1287,6 +1464,8 @@ def ai_director_user_payload(
         "video": metadata,
         "opencv_detection_summary": ai_director_detection_summary(detections, platform),
         "opencv_detections": ai_director_detection_context(detections, platform),
+        "vision_detection_summary": ai_director_vision_summary(detections),
+        "vision_detections": ai_director_vision_context(detections, platform),
         "scene_direction": ai_director_scene_context(detections, duration, platform),
         "local_auto_director_fallback": fallback_path[:AI_DIRECTOR_MAX_FALLBACK_FRAMES],
         "rules": rules,
@@ -1370,16 +1549,41 @@ def ai_director_detection_context(detections: list[dict[str, object]], platform:
     return rows[::step][:AI_DIRECTOR_MAX_CONTEXT_ROWS]
 
 
+def ai_director_vision_summary(detections: list[dict[str, object]]) -> dict[str, object]:
+    person_rows = [row for row in detections if reliable_persons(row)]
+    multi_person = [row for row in person_rows if len(reliable_persons(row)) >= 2]
+    return {
+        "sample_rows": len(detections),
+        "person_detection_frames": len(person_rows),
+        "person_detection_rate": round(len(person_rows) / len(detections), 3) if detections else 0.0,
+        "multi_person_frames": len(multi_person),
+        "max_persons": max((len(reliable_persons(row)) for row in detections), default=0),
+    }
+
+
+def ai_director_vision_context(detections: list[dict[str, object]], platform: str) -> list[dict[str, object]]:
+    rows = [ai_director_detection_row(row, platform) for row in detections if reliable_faces(row) or reliable_persons(row)]
+    if len(rows) <= AI_DIRECTOR_MAX_CONTEXT_ROWS:
+        return rows
+    step = max(1, int(math.ceil(len(rows) / float(AI_DIRECTOR_MAX_CONTEXT_ROWS))))
+    return rows[::step][:AI_DIRECTOR_MAX_CONTEXT_ROWS]
+
+
 def ai_director_detection_row(row: dict[str, object], platform: str) -> dict[str, object]:
     faces = sorted(reliable_faces(row), key=lambda item: face_x(item))
+    opencv_faces = sorted(reliable_opencv_faces(row), key=lambda item: face_x(item))
+    persons = sorted(reliable_persons(row), key=lambda item: face_x(item))
     xs = [round(face_x(face), 2) for face in faces[:5]]
     primary = row.get("primary") if isinstance(row.get("primary"), dict) else {}
     intent = camera_scene_intent_for_faces(faces, platform)
     return {
         "time": round(float(row.get("time") or 0.0), 3),
         "face_count": len(faces),
+        "opencv_face_count": len(opencv_faces),
+        "person_count": len(persons),
         "spread": round(xs[-1] - xs[0], 2) if len(xs) >= 2 else 0.0,
         "face_xs": xs,
+        "person_xs": [round(face_x(person), 2) for person in persons[:5]],
         "face_ys": [round(float(face.get("y") or 50.0), 2) for face in faces[:5]],
         "face_zooms": [round(float(face.get("zoom") or 1.0), 3) for face in faces[:5]],
         "face_widths": [round(face_width(face), 2) for face in faces[:5]],
@@ -2462,6 +2666,20 @@ def reliable_faces(row: dict[str, object]) -> list[dict[str, float]]:
     if not isinstance(faces, list):
         return []
     return [face for face in faces if isinstance(face, dict) and float(face.get("confidence") or 0.0) >= 0.35]
+
+
+def reliable_opencv_faces(row: dict[str, object]) -> list[dict[str, float]]:
+    faces = row.get("opencv_faces")
+    if isinstance(faces, list):
+        return [face for face in faces if isinstance(face, dict) and float(face.get("confidence") or 0.0) >= 0.35]
+    return [face for face in reliable_faces(row) if str(face.get("kind") or "face") != "person"]
+
+
+def reliable_persons(row: dict[str, object]) -> list[dict[str, float]]:
+    persons = row.get("persons")
+    if isinstance(persons, list):
+        return [person for person in persons if isinstance(person, dict) and float(person.get("confidence") or 0.0) >= 0.35]
+    return [face for face in reliable_faces(row) if str(face.get("kind") or "") == "person"]
 
 
 def director_multi_face_path(detections: list[dict[str, object]], duration: float) -> list[dict[str, object]]:
@@ -6449,6 +6667,7 @@ function cameraFrameForTime(camera, cameraPath, position, duration){
     return previous.key ? cameraFrameFromSegment(previous, safePosition, Math.max(0, safePosition - previous.time)) : previous;
   }
   if (previous === next || next.time <= previous.time) return previous;
+  if (cameraFrameUsesHardCut(next) || cameraFrameUsesGroupFit(next)) return previous;
   const ratio = (safePosition - previous.time) / (next.time - previous.time);
   return {
     time: Number(safePosition.toFixed(3)),
