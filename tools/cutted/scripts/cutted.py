@@ -44,7 +44,7 @@ FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
 MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
 MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
-CAMERA_ANALYSIS_VERSION = "auto-face-v24"
+CAMERA_ANALYSIS_VERSION = "auto-face-v25"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
 CAMERA_ANALYSIS_MAX_FRAMES = 140
 CAMERA_UNCERTAIN_MIN_SECONDS = 0.85
@@ -57,8 +57,12 @@ CAMERA_MIN_TARGET_SHIFT = 10.0
 CAMERA_GROUP_FIT_SPREAD = 38.0
 CAMERA_GROUP_FIT_SPAN = 52.0
 CAMERA_SOLO_MAX_MULTI_FACE_RATIO = 0.08
+CAMERA_SOLO_MAX_EDGE_FACE_RATIO = 0.35
 CAMERA_SOLO_MIN_HOLD_SECONDS = 5.5
 CAMERA_DISTANT_FACE_PAN_X_DELTA = 12.0
+CAMERA_LOW_CONFIDENCE_DETECTION_RATE = 0.18
+CAMERA_LOW_CONFIDENCE_EDGE_RATIO = 0.55
+CAMERA_LOW_CONFIDENCE_FIT_INTERVAL = 6.0
 AI_DIRECTOR_MAX_FRAME_SAMPLES = 10
 AI_DIRECTOR_MAX_CONTEXT_ROWS = 36
 AI_DIRECTOR_MAX_FALLBACK_FRAMES = 28
@@ -619,13 +623,14 @@ def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, bas
     source_start = optional_camera_float(payload.get("source_start_seconds"))
     platform = str(payload.get("platform") or "tiktok")
     mode = normalize_camera_analysis_mode(payload.get("mode"))
+    force_refresh = camera_analysis_bypasses_cache(payload, mode)
     title = clean_optional_text(payload.get("title"), 240)
     transcript = clean_optional_text(payload.get("transcript"), 3500)
     last_analysis: dict[str, object] | None = None
     last_error = ""
     for media in camera_analysis_media_candidates(gallery_dir, clip_path, start, source_start):
         cache_path = camera_analysis_cache_path(gallery_dir, media, duration, platform, mode)
-        if cache_path.exists():
+        if not force_refresh and cache_path.exists():
             cached = json.loads(cache_path.read_text(encoding="utf-8-sig"))
             if isinstance(cached, dict) and isinstance(cached.get("camera_path"), list):
                 return {**cached, "ok": True, "cached": True}
@@ -642,6 +647,7 @@ def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, bas
             result = {
                 "ok": True,
                 "cached": False,
+                "cache_bypassed": force_refresh,
                 "version": CAMERA_ANALYSIS_VERSION,
                 "source": analysis["source"],
                 "mode": mode,
@@ -674,6 +680,10 @@ def normalize_camera_analysis_mode(value: object) -> str:
 
 def camera_analysis_uses_ai(mode: str) -> bool:
     return mode in AI_DIRECTOR_INTENTS
+
+
+def camera_analysis_bypasses_cache(payload: dict[str, object], mode: str) -> bool:
+    return bool(payload.get("force_refresh")) and camera_analysis_uses_ai(mode)
 
 
 def ai_director_intent(mode: str) -> dict[str, str]:
@@ -1675,7 +1685,30 @@ def solo_dominant_camera_scene(detections: list[dict[str, object]]) -> bool:
         return False
     multi = [row for row in rows if len(reliable_faces(row)) >= 2]
     ratio = len(multi) / max(len(rows), 1)
-    return len(multi) <= 1 and ratio <= CAMERA_SOLO_MAX_MULTI_FACE_RATIO
+    return (
+        len(multi) <= 1
+        and ratio <= CAMERA_SOLO_MAX_MULTI_FACE_RATIO
+        and solo_edge_face_ratio(rows) <= CAMERA_SOLO_MAX_EDGE_FACE_RATIO
+    )
+
+
+def solo_edge_face_ratio(rows: list[dict[str, object]]) -> float:
+    faces = [primary_reliable_face(row) for row in rows]
+    reliable = [face for face in faces if face is not None]
+    if not reliable:
+        return 1.0
+    edge_count = sum(1 for face in reliable if face_outside_safe_zone(face))
+    return edge_count / max(len(reliable), 1)
+
+
+def primary_reliable_face(row: dict[str, object]) -> dict[str, float] | None:
+    primary = row.get("primary")
+    if isinstance(primary, dict) and float(primary.get("confidence") or 0.0) >= 0.35:
+        return primary
+    faces = reliable_faces(row)
+    if not faces:
+        return None
+    return max(faces, key=lambda face: float(face.get("area") or 0.0))
 
 
 def solo_stable_ai_director_path(detections: list[dict[str, object]], duration: float) -> list[dict[str, object]]:
@@ -1915,15 +1948,43 @@ def uncertain_center_camera_frames(
 ) -> list[dict[str, object]]:
     forced: list[dict[str, object]] = []
     source = "ai-director-cuts-uncertain-fit" if hard_cut else "ai-director-uncertain-fit"
+    low_confidence = low_confidence_camera_scene(detections)
     for window in detection_uncertainty_windows(detections, duration):
-        time_value = float(window.get("start") or 0.0)
-        active = camera_path_frame_at_time(frames, time_value)
-        if camera_frame_is_open_center(active):
-            continue
-        target = hard_cut_ai_director_frame(open_center_camera_frame(time_value), time_value, source)
-        if not recent_similar_camera_frame(forced, target, 1.1):
-            forced.append(target)
+        for time_value in uncertainty_fit_times(window, low_confidence):
+            active = camera_path_frame_at_time(frames, time_value)
+            if camera_frame_is_open_center(active) and not low_confidence:
+                continue
+            target = hard_cut_ai_director_frame(open_center_camera_frame(time_value), time_value, source)
+            if not recent_similar_camera_frame(forced, target, 1.1):
+                forced.append(target)
     return forced
+
+
+def low_confidence_camera_scene(detections: list[dict[str, object]]) -> bool:
+    sample_count = max(len(detections), 1)
+    detected = detection_frame_count(detections)
+    if detected <= 0:
+        return True
+    edge_ratio = sum(1 for row in detections if row_has_edge_face(row)) / max(detected, 1)
+    detection_rate = detected / sample_count
+    return (
+        sample_count >= 8
+        and detection_rate <= CAMERA_LOW_CONFIDENCE_DETECTION_RATE
+        and edge_ratio >= CAMERA_LOW_CONFIDENCE_EDGE_RATIO
+    )
+
+
+def uncertainty_fit_times(window: dict[str, object], low_confidence: bool) -> list[float]:
+    start = float(window.get("start") or 0.0)
+    end = float(window.get("end") or start)
+    if not low_confidence:
+        return [start]
+    times = [start]
+    next_time = start + CAMERA_LOW_CONFIDENCE_FIT_INTERVAL
+    while next_time < end - 0.5:
+        times.append(round(next_time, 3))
+        next_time += CAMERA_LOW_CONFIDENCE_FIT_INTERVAL
+    return times
 
 
 def camera_frame_is_open_center(frame: dict[str, object]) -> bool:
@@ -6130,6 +6191,7 @@ async function analyzeCameraForCard(card, mode = "auto-director"){
   const rank = card.dataset.rank;
   const platform = activePlatformForRank(rank);
   const smartMode = smartCameraModes[mode] ? mode : "auto-director";
+  const forceRefresh = smartMode === "ai-director";
   const button = card.querySelector(`[data-camera-smart-mode="${smartMode}"]`) || card.querySelector("[data-camera-auto]");
   setCameraAutoStatus(card, `Analisando ${smartCameraModes[smartMode].label}...`);
   if (button) button.disabled = true;
@@ -6144,6 +6206,7 @@ async function analyzeCameraForCard(card, mode = "auto-director"){
         rank,
         platform,
         mode: smartMode,
+        force_refresh: forceRefresh,
         clip_file: moment?.clip_file || "",
         title: moment?.title || "",
         transcript: moment?.transcript || moment?.text || "",
@@ -6164,7 +6227,8 @@ async function analyzeCameraForCard(card, mode = "auto-director"){
     setCameraPathForRank(rank, path, platform);
     const label = payload.mode_label || smartCameraModes[smartMode].label;
     const suffix = diagnosticText ? ` (${diagnosticText})` : "";
-    setCameraAutoStatus(card, `${payload.cached ? `${label} aplicado do cache` : `${label} aplicado`}.${suffix}`);
+    const applied = payload.cached ? `${label} aplicado do cache` : payload.cache_bypassed ? `${label} recalculado` : `${label} aplicado`;
+    setCameraAutoStatus(card, `${applied}.${suffix}`);
   } catch (error) {
     setCameraAutoStatus(card, error.message || "Falha na auto camera.");
   } finally {

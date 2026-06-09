@@ -32,6 +32,10 @@ def detection(time_value: float, faces: list[dict[str, float]]) -> dict[str, obj
     return {"time": time_value, "faces": faces, "primary": primary}
 
 
+def missing_detection(time_value: float) -> dict[str, object]:
+    return {"time": time_value, "faces": [], "primary": None, "missing": True}
+
+
 class CuttedCameraRuleTests(unittest.TestCase):
     def test_solo_dominant_scene_removes_hard_cut_jitter(self) -> None:
         detections = [
@@ -52,6 +56,52 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertGreaterEqual(len(result), 1)
         self.assertLessEqual(len(result), 3)
         self.assertTrue(all(frame["source"] == "ai-director-solo" for frame in result))
+
+    def test_edge_heavy_solo_scene_keeps_ai_director_path(self) -> None:
+        detections = [
+            detection(0.0, [face(78.0)]),
+            detection(2.0, [face(80.0)]),
+            detection(4.0, [face(82.0)]),
+            detection(6.0, [face(79.0)]),
+            detection(8.0, [face(81.0)]),
+        ]
+        frames = [
+            {"time": 0.0, "x": 50.0, "y": 50.0, "zoom": 1.0, "source": "ai-director"},
+            {"time": 2.0, "x": 78.0, "y": 50.0, "zoom": 1.16, "source": "ai-director-dense-primary"},
+            {"time": 5.0, "x": 80.0, "y": 50.0, "zoom": 1.16, "source": "ai-director-dense-primary"},
+        ]
+
+        result = CUTTED.enforce_editorial_motion_rules(frames, detections, 10.0, "tiktok", False)
+
+        self.assertEqual(result, frames)
+        self.assertTrue(all(frame["source"] != "ai-director-solo" for frame in result))
+
+    def test_low_confidence_scene_forces_fit_even_when_center_is_open(self) -> None:
+        detections = [
+            missing_detection(0.0),
+            missing_detection(3.0),
+            missing_detection(6.0),
+            missing_detection(9.0),
+            missing_detection(12.0),
+            missing_detection(15.0),
+            missing_detection(18.0),
+            missing_detection(21.0),
+            detection(24.0, [face(81.0)]),
+            missing_detection(27.0),
+            missing_detection(30.0),
+        ]
+        frames = [
+            {"time": 0.0, "x": 50.0, "y": 50.0, "zoom": 1.0, "source": "ai-director"},
+            {"time": 12.0, "x": 50.0, "y": 48.0, "zoom": 1.02, "source": "ai-director"},
+        ]
+
+        result = CUTTED.uncertain_center_camera_frames(frames, detections, 30.0, False)
+        times = [frame["time"] for frame in result]
+
+        self.assertIn(0.0, times)
+        self.assertIn(6.0, times)
+        self.assertIn(12.0, times)
+        self.assertTrue(all(frame["fit"] == "contain" for frame in result))
 
     def test_close_two_face_transition_stays_smooth(self) -> None:
         detections = [
@@ -84,6 +134,14 @@ class CuttedCameraRuleTests(unittest.TestCase):
 
         self.assertEqual(result[0]["source"], "ai-director-cuts-hold")
         self.assertEqual(result[1]["source"], "ai-director-cuts-distant")
+
+    def test_camera_cache_bypass_is_limited_to_ai_modes(self) -> None:
+        payload = {"force_refresh": True}
+
+        self.assertTrue(CUTTED.camera_analysis_bypasses_cache(payload, "ai-director"))
+        self.assertTrue(CUTTED.camera_analysis_bypasses_cache(payload, "ai-director-cuts"))
+        self.assertFalse(CUTTED.camera_analysis_bypasses_cache(payload, "auto-director"))
+        self.assertFalse(CUTTED.camera_analysis_bypasses_cache({}, "ai-director"))
 
 
 if __name__ == "__main__":
