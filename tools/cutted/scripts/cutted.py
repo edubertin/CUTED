@@ -44,7 +44,7 @@ FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
 MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
 MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
-CAMERA_ANALYSIS_VERSION = "auto-face-v27"
+CAMERA_ANALYSIS_VERSION = "auto-face-v28"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
 CAMERA_ANALYSIS_MAX_FRAMES = 140
 CAMERA_UNCERTAIN_MIN_SECONDS = 0.85
@@ -65,7 +65,8 @@ CAMERA_LOW_CONFIDENCE_EDGE_RATIO = 0.55
 CAMERA_LOW_CONFIDENCE_FIT_INTERVAL = 6.0
 CAMERA_FIT_BREAKAWAY_MIN_SECONDS = 11.0
 CAMERA_FIT_BREAKAWAY_LEAD_SECONDS = 4.0
-CAMERA_FIT_BREAKAWAY_HOLD_SECONDS = 3.2
+CAMERA_FIT_BREAKAWAY_PRIMARY_HOLD_SECONDS = 3.8
+CAMERA_FIT_BREAKAWAY_SECONDARY_HOLD_SECONDS = 3.2
 CAMERA_FIT_BREAKAWAY_INTERVAL_SECONDS = 7.0
 CAMERA_FIT_BREAKAWAY_MAX_PER_BLOCK = 3
 AI_DIRECTOR_MAX_FRAME_SAMPLES = 10
@@ -1854,18 +1855,18 @@ def fit_breakaways_for_interval(
     frames: list[dict[str, object]] = []
     cursor = start + CAMERA_FIT_BREAKAWAY_LEAD_SECONDS
     face_slot = 0
-    while cursor + CAMERA_FIT_BREAKAWAY_HOLD_SECONDS < end and len(frames) < CAMERA_FIT_BREAKAWAY_MAX_PER_BLOCK * 2:
+    max_frames = CAMERA_FIT_BREAKAWAY_MAX_PER_BLOCK * 3
+    while cursor + CAMERA_FIT_BREAKAWAY_PRIMARY_HOLD_SECONDS < end and len(frames) < max_frames:
         row = next_breakaway_row(rows, cursor)
         if row is None:
             break
         time_value = max(cursor, float(row.get("time") or cursor))
-        target = fit_breakaway_target(row, time_value, face_slot)
-        if target is None:
+        sequence = fit_breakaway_sequence_for_row(row, time_value, face_slot, end)
+        if not sequence:
             cursor += CAMERA_FIT_BREAKAWAY_INTERVAL_SECONDS
             continue
-        frames.append(target)
-        frames.append(fit_breakaway_return_frame(time_value + CAMERA_FIT_BREAKAWAY_HOLD_SECONDS))
-        cursor = time_value + CAMERA_FIT_BREAKAWAY_INTERVAL_SECONDS
+        frames.extend(sequence)
+        cursor = float(sequence[-1].get("time") or time_value) + CAMERA_FIT_BREAKAWAY_INTERVAL_SECONDS
         face_slot += 1
     return frames
 
@@ -1884,13 +1885,54 @@ def next_breakaway_row(rows: list[dict[str, object]], time_value: float) -> dict
     return min(rows, key=lambda row: abs(float(row.get("time") or 0.0) - time_value))
 
 
-def fit_breakaway_target(row: dict[str, object], time_value: float, face_slot: int) -> dict[str, object] | None:
+def fit_breakaway_sequence_for_row(
+    row: dict[str, object], time_value: float, face_slot: int, interval_end: float
+) -> list[dict[str, object]]:
     faces = sorted(reliable_faces(row), key=face_x)
     if not faces:
+        return []
+    primary = primary_breakaway_face(row, faces, face_slot)
+    secondary = secondary_breakaway_face(row, primary, faces)
+    secondary_time = time_value + CAMERA_FIT_BREAKAWAY_PRIMARY_HOLD_SECONDS
+    if secondary and secondary_time + CAMERA_FIT_BREAKAWAY_SECONDARY_HOLD_SECONDS < interval_end:
+        return [
+            fit_breakaway_face_frame(primary, time_value, "ai-director-cuts-fit-primary"),
+            fit_breakaway_face_frame(secondary, secondary_time, "ai-director-cuts-fit-secondary"),
+            fit_breakaway_return_frame(secondary_time + CAMERA_FIT_BREAKAWAY_SECONDARY_HOLD_SECONDS),
+        ]
+    return_time = time_value + CAMERA_FIT_BREAKAWAY_PRIMARY_HOLD_SECONDS
+    if return_time >= interval_end:
+        return []
+    return [
+        fit_breakaway_face_frame(primary, time_value, "ai-director-cuts-fit-primary"),
+        fit_breakaway_return_frame(return_time),
+    ]
+
+
+def primary_breakaway_face(
+    row: dict[str, object], faces: list[dict[str, float]], face_slot: int
+) -> dict[str, float]:
+    primary = primary_reliable_face(row)
+    if primary is not None and face_slot % max(len(faces), 1) == 0:
+        return primary
+    return faces[face_slot % len(faces)]
+
+
+def secondary_breakaway_face(
+    row: dict[str, object], primary: dict[str, float], faces: list[dict[str, float]]
+) -> dict[str, float] | None:
+    secondary = secondary_face_for_row(row)
+    if secondary is not None:
+        return secondary
+    candidates = [face for face in faces if abs(face_x(face) - face_x(primary)) >= 8.0]
+    if not candidates:
         return None
-    face = faces[face_slot % len(faces)]
+    return max(candidates, key=lambda face: abs(face_x(face) - face_x(primary)))
+
+
+def fit_breakaway_face_frame(face: dict[str, float], time_value: float, source: str) -> dict[str, object]:
     frame = {**face, "time": time_value, "zoom": min(float(face.get("zoom") or 1.0) + 0.1, 1.34)}
-    return hard_cut_ai_director_frame(frame, time_value, "ai-director-cuts-fit-close")
+    return hard_cut_ai_director_frame(frame, time_value, source)
 
 
 def fit_breakaway_return_frame(time_value: float) -> dict[str, object]:
@@ -2195,7 +2237,7 @@ def merge_camera_path_frames(
 
 def camera_frame_priority(frame: dict[str, object]) -> int:
     source = str(frame.get("source") or "")
-    if "fit-close" in source:
+    if "fit-close" in source or "fit-primary" in source or "fit-secondary" in source:
         return 5
     if camera_path_frame_uses_group_fit(frame):
         return 4
