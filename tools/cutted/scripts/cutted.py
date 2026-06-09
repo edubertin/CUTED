@@ -44,7 +44,7 @@ FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
 MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
 MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
-CAMERA_ANALYSIS_VERSION = "auto-face-v25"
+CAMERA_ANALYSIS_VERSION = "auto-face-v26"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
 CAMERA_ANALYSIS_MAX_FRAMES = 140
 CAMERA_UNCERTAIN_MIN_SECONDS = 0.85
@@ -63,6 +63,11 @@ CAMERA_DISTANT_FACE_PAN_X_DELTA = 12.0
 CAMERA_LOW_CONFIDENCE_DETECTION_RATE = 0.18
 CAMERA_LOW_CONFIDENCE_EDGE_RATIO = 0.55
 CAMERA_LOW_CONFIDENCE_FIT_INTERVAL = 6.0
+CAMERA_FIT_BREAKAWAY_MIN_SECONDS = 11.0
+CAMERA_FIT_BREAKAWAY_LEAD_SECONDS = 4.0
+CAMERA_FIT_BREAKAWAY_HOLD_SECONDS = 2.7
+CAMERA_FIT_BREAKAWAY_INTERVAL_SECONDS = 7.0
+CAMERA_FIT_BREAKAWAY_MAX_PER_BLOCK = 3
 AI_DIRECTOR_MAX_FRAME_SAMPLES = 10
 AI_DIRECTOR_MAX_CONTEXT_ROWS = 36
 AI_DIRECTOR_MAX_FALLBACK_FRAMES = 28
@@ -1662,6 +1667,9 @@ def dense_protected_camera_path(
     if uncertain:
         merged = merge_camera_path_frames(merged, uncertain, duration)
     stabilized = stabilize_ai_director_path(merged, duration, hard_cut)
+    breakaways = fit_breakaway_camera_frames(stabilized, detections, duration)
+    if breakaways:
+        stabilized = merge_camera_path_frames(stabilized, breakaways, duration)
     return enforce_editorial_motion_rules(stabilized, detections, duration, platform, hard_cut)[:56]
 
 
@@ -1780,6 +1788,102 @@ def row_has_separated_faces(row: dict[str, object], platform: str) -> bool:
         return False
     intent = str(camera_scene_intent_for_faces(faces, platform)["intent"])
     return intent in {"two_far_cut", "group_fit"}
+
+
+def fit_breakaway_camera_frames(
+    frames: list[dict[str, object]],
+    detections: list[dict[str, object]],
+    duration: float,
+) -> list[dict[str, object]]:
+    if not frames or not detections:
+        return []
+    result: list[dict[str, object]] = []
+    for start, end, frame in camera_path_bounds_from_frames(frames, duration):
+        if not camera_path_frame_uses_group_fit(frame) or end - start < CAMERA_FIT_BREAKAWAY_MIN_SECONDS:
+            continue
+        result.extend(fit_breakaways_for_interval(start, end, detections))
+    return result
+
+
+def camera_path_bounds_from_frames(
+    frames: list[dict[str, object]], duration: float
+) -> list[tuple[float, float, dict[str, object]]]:
+    safe_duration = max(duration, 0.3)
+    ordered = sorted(frames, key=lambda item: float(item.get("time") or 0.0))
+    if not ordered:
+        return []
+    if float(ordered[0].get("time") or 0.0) > 0.001:
+        ordered.insert(0, {**ordered[0], "time": 0.0})
+    bounds: list[tuple[float, float, dict[str, object]]] = []
+    for index, frame in enumerate(ordered):
+        start = clamp(float(frame.get("time") or 0.0), 0.0, safe_duration)
+        end = safe_duration
+        if index + 1 < len(ordered):
+            end = clamp(float(ordered[index + 1].get("time") or safe_duration), start + 0.001, safe_duration)
+        if end > start:
+            bounds.append((start, end, frame))
+    return bounds
+
+
+def fit_breakaways_for_interval(
+    start: float,
+    end: float,
+    detections: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    rows = reliable_detection_rows_between(detections, start, end)
+    if not rows:
+        return []
+    frames: list[dict[str, object]] = []
+    cursor = start + CAMERA_FIT_BREAKAWAY_LEAD_SECONDS
+    face_slot = 0
+    while cursor + CAMERA_FIT_BREAKAWAY_HOLD_SECONDS < end and len(frames) < CAMERA_FIT_BREAKAWAY_MAX_PER_BLOCK * 2:
+        row = next_breakaway_row(rows, cursor)
+        if row is None:
+            break
+        time_value = max(cursor, float(row.get("time") or cursor))
+        target = fit_breakaway_target(row, time_value, face_slot)
+        if target is None:
+            cursor += CAMERA_FIT_BREAKAWAY_INTERVAL_SECONDS
+            continue
+        frames.append(target)
+        frames.append(fit_breakaway_return_frame(time_value + CAMERA_FIT_BREAKAWAY_HOLD_SECONDS))
+        cursor = time_value + CAMERA_FIT_BREAKAWAY_INTERVAL_SECONDS
+        face_slot += 1
+    return frames
+
+
+def reliable_detection_rows_between(
+    detections: list[dict[str, object]], start: float, end: float
+) -> list[dict[str, object]]:
+    return [
+        row
+        for row in sorted(detections, key=lambda item: float(item.get("time") or 0.0))
+        if start <= float(row.get("time") or 0.0) <= end and reliable_faces(row)
+    ]
+
+
+def next_breakaway_row(rows: list[dict[str, object]], time_value: float) -> dict[str, object] | None:
+    for row in rows:
+        if float(row.get("time") or 0.0) >= time_value - 0.4:
+            return row
+    return None
+
+
+def fit_breakaway_target(row: dict[str, object], time_value: float, face_slot: int) -> dict[str, object] | None:
+    faces = sorted(reliable_faces(row), key=face_x)
+    if not faces:
+        return None
+    face = faces[face_slot % len(faces)]
+    frame = {**face, "time": time_value, "zoom": min(float(face.get("zoom") or 1.0) + 0.1, 1.34)}
+    return hard_cut_ai_director_frame(frame, time_value, "ai-director-cuts-fit-close")
+
+
+def fit_breakaway_return_frame(time_value: float) -> dict[str, object]:
+    return hard_cut_ai_director_frame(
+        open_center_camera_frame(time_value),
+        time_value,
+        "ai-director-cuts-fit-return",
+    )
 
 
 def stabilize_ai_director_path(frames: list[dict[str, object]], duration: float, hard_cut: bool) -> list[dict[str, object]]:

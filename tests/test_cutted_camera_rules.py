@@ -103,6 +103,49 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIn(12.0, times)
         self.assertTrue(all(frame["fit"] == "contain" for frame in result))
 
+    def test_long_fit_block_gets_short_face_breakaways(self) -> None:
+        frames = [
+            {
+                "time": 0.0,
+                "x": 50.0,
+                "y": 50.0,
+                "zoom": 1.0,
+                "fit": "contain",
+                "source": "ai-director-uncertain-fit",
+            },
+            {"time": 20.0, "x": 52.0, "y": 48.0, "zoom": 1.08, "source": "ai-director"},
+        ]
+        detections = [
+            detection(5.0, [face(28.0), face(72.0)]),
+            detection(12.5, [face(30.0), face(70.0)]),
+        ]
+
+        result = CUTTED.fit_breakaway_camera_frames(frames, detections, 24.0)
+        sources = [frame["source"] for frame in result]
+
+        self.assertEqual(sources.count("ai-director-cuts-fit-close"), 2)
+        self.assertEqual(sources.count("ai-director-cuts-fit-return"), 2)
+        self.assertTrue(all(result[index]["fit"] == "contain" for index in [1, 3]))
+
+    def test_short_or_empty_fit_block_does_not_invent_breakaways(self) -> None:
+        frames = [
+            {
+                "time": 0.0,
+                "x": 50.0,
+                "y": 50.0,
+                "zoom": 1.0,
+                "fit": "contain",
+                "source": "ai-director-uncertain-fit",
+            },
+            {"time": 8.0, "x": 55.0, "y": 50.0, "zoom": 1.1, "source": "ai-director"},
+        ]
+
+        short_result = CUTTED.fit_breakaway_camera_frames(frames, [detection(4.0, [face(55.0)])], 12.0)
+        empty_result = CUTTED.fit_breakaway_camera_frames(frames, [missing_detection(4.0)], 24.0)
+
+        self.assertEqual(short_result, [])
+        self.assertEqual(empty_result, [])
+
     def test_close_two_face_transition_stays_smooth(self) -> None:
         detections = [
             detection(0.0, [face(47.0), face(54.0)]),
