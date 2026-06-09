@@ -1,0 +1,316 @@
+from __future__ import annotations
+
+import importlib.util
+import sys
+import unittest
+from pathlib import Path
+
+
+MODULE_PATH = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "scripts" / "cutted.py"
+SPEC = importlib.util.spec_from_file_location("cutted_camera_test_module", MODULE_PATH)
+if SPEC is None or SPEC.loader is None:
+    raise RuntimeError("Unable to load cutted.py for camera tests.")
+CUTTED = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = CUTTED
+SPEC.loader.exec_module(CUTTED)
+
+
+def face(x: float, width: float = 8.0) -> dict[str, float]:
+    return {
+        "x": x,
+        "y": 48.0,
+        "width": width,
+        "height": 18.0,
+        "area": width * 18.0,
+        "confidence": 0.88,
+        "zoom": 1.14,
+    }
+
+
+def person(x: float, width: float = 18.0) -> dict[str, object]:
+    return {
+        "x": x,
+        "y": 43.0,
+        "width": width,
+        "height": 62.0,
+        "area": width * 62.0 * 0.08,
+        "body_area": width * 62.0,
+        "confidence": 0.82,
+        "zoom": 1.12,
+        "kind": "person",
+        "source": "yolo-person",
+    }
+
+
+def detection(time_value: float, faces: list[dict[str, float]]) -> dict[str, object]:
+    primary = max(faces, key=lambda item: float(item["area"])) if faces else None
+    return {"time": time_value, "faces": faces, "primary": primary}
+
+
+def missing_detection(time_value: float) -> dict[str, object]:
+    return {"time": time_value, "faces": [], "primary": None, "missing": True}
+
+
+class CuttedCameraRuleTests(unittest.TestCase):
+    def test_yolo_person_box_converts_to_camera_subject(self) -> None:
+        row = CUTTED.yolo_person_row_from_box([100.0, 100.0, 300.0, 800.0], 1000, 1000, 0.78)
+
+        self.assertIsNotNone(row)
+        self.assertEqual(row["kind"], "person")
+        self.assertAlmostEqual(float(row["x"]), 20.0)
+        self.assertGreaterEqual(float(row["y"]), 35.0)
+        self.assertAlmostEqual(float(row["width"]), 20.0)
+        self.assertAlmostEqual(float(row["confidence"]), 0.78)
+
+    def test_yolo_persons_merge_without_duplicating_opencv_faces(self) -> None:
+        merged = CUTTED.merge_vision_subjects([face(42.0)], [person(43.0), person(75.0)])
+
+        self.assertEqual(len(merged), 2)
+        self.assertTrue(any(item.get("kind") == "person" and item["x"] == 75.0 for item in merged))
+        self.assertTrue(any(item.get("kind") != "person" and item["x"] == 42.0 for item in merged))
+
+    def test_vision_diagnostics_reports_person_coverage(self) -> None:
+        detections = [
+            {"time": 0.0, "faces": [person(30.0), person(70.0)], "persons": [person(30.0), person(70.0)]},
+            {"time": 1.0, "faces": [person(50.0)], "persons": [person(50.0)]},
+        ]
+
+        result = CUTTED.vision_engine_diagnostics(detections)
+
+        self.assertEqual(result["person_detection_frames"], 2)
+        self.assertEqual(result["multi_person_frames"], 1)
+        self.assertEqual(result["detected_persons_max"], 2)
+
+    def test_ai_director_payload_includes_vision_context(self) -> None:
+        detections = [
+            {
+                "time": 0.0,
+                "faces": [face(48.0), person(74.0)],
+                "opencv_faces": [face(48.0)],
+                "persons": [person(74.0)],
+                "primary": face(48.0),
+            }
+        ]
+
+        payload = CUTTED.ai_director_user_payload("tiktok", "Teste", "", {}, detections, [], 8.0, "ai-director")
+        data = CUTTED.json.loads(payload)
+
+        self.assertIn("vision_detection_summary", data)
+        self.assertIn("vision_detections", data)
+        self.assertEqual(data["vision_detections"][0]["person_count"], 1)
+
+    def test_solo_dominant_scene_removes_hard_cut_jitter(self) -> None:
+        detections = [
+            detection(0.0, [face(48.0)]),
+            detection(2.0, [face(50.0)]),
+            detection(4.0, [face(52.0)]),
+            detection(6.0, [face(54.0)]),
+            detection(8.0, [face(53.0)]),
+        ]
+        frames = [
+            {"time": 0.0, "x": 46.0, "y": 50.0, "zoom": 1.18, "source": "ai-director-cuts"},
+            {"time": 2.0, "x": 58.0, "y": 50.0, "zoom": 1.2, "source": "ai-director-cuts"},
+            {"time": 4.0, "x": 45.0, "y": 50.0, "zoom": 1.16, "source": "ai-director-cuts"},
+        ]
+
+        result = CUTTED.enforce_editorial_motion_rules(frames, detections, 10.0, "tiktok", False)
+
+        self.assertGreaterEqual(len(result), 1)
+        self.assertLessEqual(len(result), 3)
+        self.assertTrue(all(frame["source"] == "ai-director-solo" for frame in result))
+
+    def test_edge_heavy_solo_scene_keeps_ai_director_path(self) -> None:
+        detections = [
+            detection(0.0, [face(78.0)]),
+            detection(2.0, [face(80.0)]),
+            detection(4.0, [face(82.0)]),
+            detection(6.0, [face(79.0)]),
+            detection(8.0, [face(81.0)]),
+        ]
+        frames = [
+            {"time": 0.0, "x": 50.0, "y": 50.0, "zoom": 1.0, "source": "ai-director"},
+            {"time": 2.0, "x": 78.0, "y": 50.0, "zoom": 1.16, "source": "ai-director-dense-primary"},
+            {"time": 5.0, "x": 80.0, "y": 50.0, "zoom": 1.16, "source": "ai-director-dense-primary"},
+        ]
+
+        result = CUTTED.enforce_editorial_motion_rules(frames, detections, 10.0, "tiktok", False)
+
+        self.assertEqual(result, frames)
+        self.assertTrue(all(frame["source"] != "ai-director-solo" for frame in result))
+
+    def test_low_confidence_scene_forces_fit_even_when_center_is_open(self) -> None:
+        detections = [
+            missing_detection(0.0),
+            missing_detection(3.0),
+            missing_detection(6.0),
+            missing_detection(9.0),
+            missing_detection(12.0),
+            missing_detection(15.0),
+            missing_detection(18.0),
+            missing_detection(21.0),
+            detection(24.0, [face(81.0)]),
+            missing_detection(27.0),
+            missing_detection(30.0),
+        ]
+        frames = [
+            {"time": 0.0, "x": 50.0, "y": 50.0, "zoom": 1.0, "source": "ai-director"},
+            {"time": 12.0, "x": 50.0, "y": 48.0, "zoom": 1.02, "source": "ai-director"},
+        ]
+
+        result = CUTTED.uncertain_center_camera_frames(frames, detections, 30.0, False)
+        times = [frame["time"] for frame in result]
+
+        self.assertIn(0.0, times)
+        self.assertIn(6.0, times)
+        self.assertIn(12.0, times)
+        self.assertTrue(all(frame["fit"] == "contain" for frame in result))
+
+    def test_long_fit_block_gets_short_face_breakaways(self) -> None:
+        frames = [
+            {
+                "time": 0.0,
+                "x": 50.0,
+                "y": 50.0,
+                "zoom": 1.0,
+                "fit": "contain",
+                "source": "ai-director-uncertain-fit",
+            },
+            {
+                "time": 6.0,
+                "x": 50.0,
+                "y": 50.0,
+                "zoom": 1.0,
+                "fit": "contain",
+                "source": "ai-director-uncertain-fit",
+            },
+            {
+                "time": 12.0,
+                "x": 50.0,
+                "y": 50.0,
+                "zoom": 1.0,
+                "fit": "contain",
+                "source": "ai-director-uncertain-fit",
+            },
+            {"time": 34.0, "x": 52.0, "y": 48.0, "zoom": 1.08, "source": "ai-director"},
+        ]
+        detections = [
+            detection(5.0, [face(28.0), face(72.0)]),
+            detection(18.5, [face(30.0), face(70.0)]),
+        ]
+
+        result = CUTTED.fit_breakaway_camera_frames(frames, detections, 38.0)
+        sources = [frame["source"] for frame in result]
+
+        self.assertEqual(sources.count("ai-director-cuts-fit-primary"), 2)
+        self.assertEqual(sources.count("ai-director-cuts-fit-secondary"), 2)
+        self.assertEqual(sources.count("ai-director-cuts-fit-return"), 2)
+        self.assertTrue(all(result[index]["fit"] == "contain" for index in [2, 5]))
+
+    def test_single_face_fit_breakaway_holds_primary_then_returns(self) -> None:
+        frames = [
+            {
+                "time": 0.0,
+                "x": 50.0,
+                "y": 50.0,
+                "zoom": 1.0,
+                "fit": "contain",
+                "source": "ai-director-uncertain-fit",
+            },
+            {"time": 16.0, "x": 52.0, "y": 48.0, "zoom": 1.08, "source": "ai-director"},
+        ]
+        result = CUTTED.fit_breakaway_camera_frames(frames, [detection(5.0, [face(42.0)])], 20.0)
+        sources = [frame["source"] for frame in result]
+
+        self.assertEqual(sources, ["ai-director-cuts-fit-primary", "ai-director-cuts-fit-return"])
+        self.assertAlmostEqual(float(result[1]["time"]) - float(result[0]["time"]), 3.8, places=1)
+
+    def test_fit_close_survives_merge_with_uncertain_fit(self) -> None:
+        fit = {
+            "time": 5.0,
+            "x": 50.0,
+            "y": 50.0,
+            "zoom": 1.0,
+            "fit": "contain",
+            "source": "ai-director-uncertain-fit",
+        }
+        close = {
+            "time": 5.2,
+            "x": 32.0,
+            "y": 48.0,
+            "zoom": 1.24,
+            "source": "ai-director-cuts-fit-primary",
+        }
+
+        result = CUTTED.merge_camera_path_frames([fit], [close], 12.0)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["source"], "ai-director-cuts-fit-primary")
+
+    def test_short_or_empty_fit_block_does_not_invent_breakaways(self) -> None:
+        frames = [
+            {
+                "time": 0.0,
+                "x": 50.0,
+                "y": 50.0,
+                "zoom": 1.0,
+                "fit": "contain",
+                "source": "ai-director-uncertain-fit",
+            },
+            {"time": 8.0, "x": 55.0, "y": 50.0, "zoom": 1.1, "source": "ai-director"},
+        ]
+
+        short_result = CUTTED.fit_breakaway_camera_frames(frames, [detection(4.0, [face(55.0)])], 12.0)
+        empty_result = CUTTED.fit_breakaway_camera_frames(frames, [missing_detection(4.0)], 24.0)
+
+        self.assertEqual(short_result, [])
+        self.assertEqual(empty_result, [])
+
+    def test_close_two_face_transition_stays_smooth(self) -> None:
+        detections = [
+            detection(0.0, [face(47.0), face(54.0)]),
+            detection(2.5, [face(48.0), face(55.0)]),
+            detection(5.0, [face(49.0), face(56.0)]),
+        ]
+        frames = [
+            {"time": 0.0, "x": 48.0, "y": 50.0, "zoom": 1.14, "source": "ai-director"},
+            {"time": 5.0, "x": 56.0, "y": 50.0, "zoom": 1.14, "source": "ai-director"},
+        ]
+
+        result = CUTTED.enforce_editorial_motion_rules(frames, detections, 6.0, "tiktok", False)
+
+        self.assertEqual(len(result), 2)
+        self.assertTrue(all("ai-director-cuts" not in str(frame["source"]) for frame in result))
+
+    def test_far_two_face_transition_becomes_hard_cut(self) -> None:
+        detections = [
+            detection(0.0, [face(24.0), face(76.0)]),
+            detection(2.5, [face(23.0), face(77.0)]),
+            detection(5.0, [face(24.0), face(76.0)]),
+        ]
+        frames = [
+            {"time": 0.0, "x": 25.0, "y": 50.0, "zoom": 1.18, "source": "ai-director"},
+            {"time": 5.0, "x": 75.0, "y": 50.0, "zoom": 1.18, "source": "ai-director"},
+        ]
+
+        result = CUTTED.enforce_editorial_motion_rules(frames, detections, 6.0, "tiktok", False)
+
+        self.assertEqual(result[0]["source"], "ai-director-cuts-hold")
+        self.assertEqual(result[1]["source"], "ai-director-cuts-distant")
+
+    def test_camera_cache_bypass_is_limited_to_ai_modes(self) -> None:
+        payload = {"force_refresh": True}
+
+        self.assertTrue(CUTTED.camera_analysis_bypasses_cache(payload, "ai-director"))
+        self.assertTrue(CUTTED.camera_analysis_bypasses_cache(payload, "ai-director-cuts"))
+        self.assertFalse(CUTTED.camera_analysis_bypasses_cache(payload, "auto-director"))
+        self.assertFalse(CUTTED.camera_analysis_bypasses_cache({}, "ai-director"))
+
+    def test_preview_holds_before_upcoming_hard_cut_or_fit(self) -> None:
+        source = MODULE_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("cameraFrameUsesHardCut(next)", source)
+        self.assertIn("cameraFrameUsesGroupFit(next)", source)
+
+
+if __name__ == "__main__":
+    unittest.main()

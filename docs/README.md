@@ -17,8 +17,10 @@ class application workflow.
 8. [AI Ingestion and Selection Guardrails ADR](architecture/ADR-0002-ai-ingestion-and-selection-guardrails.md)
 9. [CUTED Now TikTok Channel Spec](product/SPEC-006-cuted-now-tiktok-channel.md)
 10. [OpenAI Settings and Local Cost Ledger Spec](product/SPEC-007-openai-settings-and-cost-ledger.md)
-11. [QA Regression Matrix](qa/REGRESSION_MATRIX.md)
-12. [Local Development Runbook](operations/LOCAL_DEV.md)
+11. [Smart Camera Roadmap Spec](product/SPEC-008-smart-camera-roadmap.md)
+12. [Vision Engine Smart Camera Spec](product/SPEC-009-vision-engine-smart-camera.md)
+13. [QA Regression Matrix](qa/REGRESSION_MATRIX.md)
+14. [Local Development Runbook](operations/LOCAL_DEV.md)
 
 ## Current Source of Truth
 
