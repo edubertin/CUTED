@@ -123,6 +123,10 @@ manual keyframe editing should remain available as an advanced fallback, but
 the default camera workflow should ask for the user's framing intent and
 generate a `camera_path` with computer vision.
 
+The preview toolbar also displays the active `camera_path` as a compact camera
+timeline. This toolbar is only another editor for the same per-platform
+`camera_path` data; it does not introduce a separate render contract.
+
 ## Auto Camera Analysis
 
 The local gallery server exposes `/api/camera/analyze` for optional OpenCV

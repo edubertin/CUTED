@@ -21,6 +21,10 @@ review workspace, data contracts, or render pipeline.
 | Playback | Click canvas | Video does not start |
 | Playback | Click play button | Video starts |
 | Playback | Local MP4 range request | Server responds with `206 Partial Content` |
+| Preview camera timeline | Inspect preview controls | Play, blue camera timeline, and one volume button fit on one row |
+| Preview camera timeline | Click timeline rail | Preview seeks to the clicked time and camera framing updates |
+| Preview camera timeline | Click keyframe marker | Compact picker opens with camera preset and strength controls |
+| Preview camera timeline | Change keyframe preset | Active platform `camera_path` updates without changing other platforms |
 | Timeline | Scrub the cut timeline, then play | Preview seeks to the scrubbed time and plays from there |
 | Timeline | Drag start/end trim handles | Preview pauses and seeks to the active trim handle |
 | Timeline | Play adjusted trim range | Preview starts inside the cut and pauses at the adjusted end |
@@ -55,7 +59,7 @@ review workspace, data contracts, or render pipeline.
 | Smart camera | Run without OpenCV | User-safe install message appears and manual camera controls still work |
 | Smart camera | Repeat the same mode/clip analysis | Cached `camera-analysis` result is reused |
 | Camera manual | Change Inicio/Meio/Fim controls | Explicit smart path is cleared and manual framing becomes source of truth |
-| Volume | Open any video | Volume starts at 20 percent |
+| Volume | Open any video | Volume starts at 20 percent and toolbar shows only mute/unmute |
 | Platform | Switch TikTok to Facebook | Preset state changes without losing TikTok edits |
 | Text layer | Add text layer | Layer appears, moves, resizes, edits, deletes |
 | Image layer | Add PNG/WebP logo | Transparency preserved in preview and render |

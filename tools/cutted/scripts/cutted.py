@@ -6091,11 +6091,9 @@ def card_html(moment: Moment) -> str:
               </div>
               <div class="preview-controls" aria-label="Controles do preview">
                 <button class="preview-icon preview-play" data-preview-play type="button" aria-label="Reproduzir" title="Reproduzir"></button>
+                <div class="preview-camera-timeline" data-preview-camera-timeline aria-label="Timeline de camera"></div>
                 <div class="preview-volume-group" aria-label="Volume do preview">
                   <button class="preview-icon preview-volume" data-preview-volume type="button" aria-label="Alternar mudo" title="Alternar mudo"></button>
-                  <button class="preview-step" data-preview-volume-down type="button" aria-label="Diminuir volume" title="Diminuir volume">-</button>
-                  <output data-preview-volume-value>20%</output>
-                  <button class="preview-step" data-preview-volume-up type="button" aria-label="Aumentar volume" title="Aumentar volume">+</button>
                 </div>
               </div>
             </div>
@@ -6421,6 +6419,7 @@ header{background:linear-gradient(180deg,rgba(5,5,5,.92),rgba(5,5,5,.68));backdr
 .preview-icon,.preview-step{border-color:var(--glass-border);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.035)),rgba(231,231,232,.08);color:var(--color-text);box-shadow:inset 0 1px 0 rgba(255,255,255,.36),inset 0 -8px 14px rgba(0,0,0,.14)}
 .preview-play{width:38px;height:38px;min-width:38px;background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
 .preview-volume-group{border-left:1px solid rgba(231,231,232,.12)}.preview-volume-group output{color:rgba(231,231,232,.72);font-variant-numeric:tabular-nums}
+.preview-controls{display:grid;grid-template-columns:32px minmax(140px,1fr) 32px;width:100%;max-width:100%;border-radius:18px}.preview-volume-group{padding-left:0;border-left:0}.preview-camera-timeline{position:relative;align-self:stretch;min-width:120px;display:grid;align-items:center;padding:0 4px}.preview-camera-rail{position:relative;width:100%;height:28px;cursor:pointer;touch-action:none}.preview-camera-track{position:absolute;left:0;right:0;top:12px;height:4px;border-radius:999px;background:linear-gradient(90deg,rgba(17,162,207,.34),rgba(231,231,232,.12));box-shadow:inset 0 0 0 1px rgba(255,255,255,.04)}.preview-camera-playhead{position:absolute;top:5px;width:2px;height:18px;border-radius:999px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7);transform:translateX(-50%);pointer-events:none}.preview-camera-marker{position:absolute;top:5px;width:18px;height:18px;min-width:18px;padding:0;border:1px solid rgba(17,162,207,.8);border-radius:999px;background:rgba(17,162,207,.24);box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 0 0 3px rgba(17,162,207,.08);transform:translateX(-50%);cursor:pointer}.preview-camera-marker.active{background:var(--color-brand-blue);box-shadow:0 0 0 4px rgba(17,162,207,.18),0 0 18px rgba(17,162,207,.32)}.preview-camera-popover{position:absolute;z-index:8;top:34px;left:50%;display:grid;gap:8px;width:min(260px,92vw);padding:10px;border:1px solid var(--glass-border);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel);transform:translateX(-50%)}.preview-camera-popover[hidden]{display:none}.preview-camera-popover label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.preview-camera-popover select{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.preview-camera-popover input{width:100%;accent-color:var(--color-brand-blue)}.preview-camera-popover button{min-height:32px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}
 .media{border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-panel);background:#000;box-shadow:0 14px 44px rgba(0,0,0,.32)}
 .tool-section,.export-dock,.overlay-menu,.settings-panel{border-color:var(--glass-border);border-radius:var(--radius-panel);background:linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.025) 36%,rgba(0,0,0,.08) 100%),var(--glass-bg-strong);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-edge),inset 0 -18px 28px rgba(0,0,0,.14);backdrop-filter:blur(24px) saturate(1.45)}
 .tool-section>summary{color:rgba(231,231,232,.9)}.export-dock{padding:14px}.export-dock span{color:rgba(231,231,232,.6)}
@@ -6811,6 +6810,7 @@ function setCameraPathForRank(rank, path, platform = activePlatformForRank(rank)
     if (rerender) updateCameraUi(card);
     updateCardCameraSummary(card, edit.camera, edit);
     updateCameraSurfaceForCard(card);
+    renderPreviewCameraTimeline(card);
   }
   renderFinalStage();
 }
@@ -7346,6 +7346,7 @@ function updateCameraUi(card){
   const surface = card.querySelector(".camera-surface");
   if (surface) updateCameraSurfaceForCard(card);
   updateCardCameraSummary(card, camera, edit);
+  renderPreviewCameraTimeline(card);
   const container = card.querySelector("[data-card-camera]");
   if (!container) return;
   container.innerHTML = `<div class="camera-card-controls">${cameraPathEditorHtml(card, edit, context.duration, camera)}</div>`;
@@ -7413,6 +7414,7 @@ function updateEffectUi(card){
           ${bumperUploadHtml("outro", card.dataset.rank)}
         </div>
         <div class="bumper-strip" data-bumper-strip>${bumperChipsHtml(bumpers)}</div>
+        <small data-bumper-status style="min-height:16px;color:var(--color-danger);font-size:12px">${escapeHtml(card.dataset.bumperStatus || "")}</small>
         <small data-bumper-current>${escapeHtml(bumperSummary(bumpers))}</small>
       </section>
     </div>
@@ -7433,8 +7435,11 @@ function renderBumperSequence(card, bumpers){
 }
 function bumperUploadHtml(slot, rank){
   const label = bumperSlotLabel(slot);
+  const platform = activePlatformForRank(rank);
+  const preset = platformMeta[platform] || platformMeta.tiktok;
   return `<label class="bumper-upload">
     <span>${escapeHtml(label)}</span>
+    <small style="color:var(--color-text-muted);font-size:11px">${escapeHtml(preset.label)}: ${preset.width}x${preset.height}</small>
     <input data-bumper-video="${escapeAttr(slot)}" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-m4v">
   </label>`;
 }
@@ -7468,6 +7473,11 @@ function bindCardEffectControls(card){
     button.addEventListener("click", () => removeBumperForRank(rank, button.dataset.bumperRemove));
   });
 }
+function setBumperStatus(card, message = ""){
+  card.dataset.bumperStatus = message;
+  const status = card.querySelector("[data-bumper-status]");
+  if (status) status.textContent = message;
+}
 async function addBumperFromInput(card, input){
   const file = input.files && input.files[0];
   if (!file) return;
@@ -7494,9 +7504,12 @@ async function addBumperFromInput(card, input){
       gallery_path: currentGalleryPath()
     });
     setBumperForRank(rank, slot, bumper, platform);
+    setBumperStatus(card, "");
     clearAppNotice();
   } catch (error) {
-    showAppNotice(error.message || "Nao foi possivel usar esta vinheta.");
+    const message = error.message || "Nao foi possivel usar esta vinheta.";
+    showAppNotice(message);
+    setBumperStatus(card, message);
     console.warn("CUTED bumper was rejected", error);
   } finally {
     input.value = "";
@@ -8033,6 +8046,123 @@ function updateTimelinePlayhead(card, time = null){
   const output = card.querySelector("[data-output=current]");
   if (output) output.textContent = fixed(values.start + current);
   updateCameraSurfaceForCard(card, current);
+  updatePreviewCameraTimelinePlayhead(card, current);
+}
+function previewCameraTimelineContext(card){
+  const values = trimValues(card);
+  const context = cameraContextForCard(card);
+  const duration = Math.max(context.duration, .3);
+  const platform = activePlatformForRank(card.dataset.rank);
+  const edit = platformEditForRank(card.dataset.rank, platform);
+  const path = cameraPathForEdit(edit, duration);
+  return { values, context, duration, platform, edit, path };
+}
+function renderPreviewCameraTimeline(card){
+  const container = card.querySelector("[data-preview-camera-timeline]");
+  if (!container) return;
+  const state = previewCameraTimelineContext(card);
+  const selectedIndex = selectedCameraPathIndex(card, state.path);
+  const markers = state.path.map((frame, index) => {
+    const left = clampNumber((Number(frame.time || 0) / state.duration) * 100, 0, 100);
+    const active = index === selectedIndex ? " active" : "";
+    const label = frame.key ? cameraMeta[frame.key]?.label || "Camera" : "Camera";
+    return `<button class="preview-camera-marker${active}" data-preview-camera-marker="${index}" type="button" style="left:${left.toFixed(2)}%" title="${escapeAttr(`${fixed(frame.time)} - ${label}`)}" aria-label="${escapeAttr(`Editar camera ${label} em ${fixed(frame.time)}`)}"></button>`;
+  }).join("");
+  container.innerHTML = `<div class="preview-camera-rail" data-preview-camera-rail>
+    <div class="preview-camera-track"></div>
+    ${markers}
+    <span class="preview-camera-playhead" data-preview-camera-playhead style="left:0%"></span>
+  </div>
+  <div class="preview-camera-popover" data-preview-camera-popover hidden></div>`;
+  bindPreviewCameraTimeline(card);
+  updatePreviewCameraTimelinePlayhead(card);
+}
+function updatePreviewCameraTimelinePlayhead(card, time = null){
+  const playhead = card.querySelector("[data-preview-camera-playhead]");
+  if (!playhead) return;
+  const context = cameraContextForCard(card, time);
+  const left = clampNumber((context.position / Math.max(context.duration, .3)) * 100, 0, 100);
+  playhead.style.left = `${left.toFixed(2)}%`;
+}
+function bindPreviewCameraTimeline(card){
+  const container = card.querySelector("[data-preview-camera-timeline]");
+  if (!container || container.dataset.previewCameraTimelineBound) return;
+  container.dataset.previewCameraTimelineBound = "1";
+  container.addEventListener("click", event => {
+    const popoverTarget = event.target.closest("[data-preview-camera-popover]");
+    if (popoverTarget) return;
+    const marker = event.target.closest("[data-preview-camera-marker]");
+    if (marker) {
+      event.preventDefault();
+      event.stopPropagation();
+      setSelectedCameraPathIndex(card, marker.dataset.previewCameraMarker);
+      renderPreviewCameraTimeline(card);
+      openPreviewCameraPopover(card);
+      return;
+    }
+    const rail = event.target.closest("[data-preview-camera-rail]");
+    if (!rail) return;
+    event.preventDefault();
+    event.stopPropagation();
+    seekPreviewCameraTimeline(card, event, rail);
+    closePreviewCameraPopover(card);
+  });
+  container.addEventListener("change", event => {
+    if (event.target.matches("[data-preview-camera-popover-key]")) {
+      event.preventDefault();
+      const index = selectedCameraPathIndex(card, previewCameraTimelineContext(card).path);
+      updateCameraPathFrameForCard(card, { key: event.target.value });
+      setSelectedCameraPathIndex(card, index);
+      renderPreviewCameraTimeline(card);
+      openPreviewCameraPopover(card);
+    }
+  });
+  container.addEventListener("input", event => {
+    if (event.target.matches("[data-preview-camera-popover-strength]")) {
+      const index = selectedCameraPathIndex(card, previewCameraTimelineContext(card).path);
+      updateCameraPathFrameForCard(card, { strength: Number(event.target.value) }, false);
+      setSelectedCameraPathIndex(card, index);
+      renderPreviewCameraTimeline(card);
+      openPreviewCameraPopover(card);
+    }
+  });
+  container.addEventListener("click", event => {
+    const remove = event.target.closest("[data-preview-camera-popover-delete]");
+    if (!remove) return;
+    event.preventDefault();
+    event.stopPropagation();
+    deleteCameraPathFrameForCard(card);
+    closePreviewCameraPopover(card);
+  });
+}
+function seekPreviewCameraTimeline(card, event, rail){
+  const rect = rail.getBoundingClientRect();
+  const ratio = rect.width ? clampNumber((event.clientX - rect.left) / rect.width, 0, 1) : 0;
+  const values = trimValues(card);
+  const duration = Math.max(values.endPos - values.trimStart, .3);
+  seekTimeline(card, values.trimStart + (ratio * duration), { userInitiated: true, mode: "free" });
+}
+function openPreviewCameraPopover(card){
+  const popover = card.querySelector("[data-preview-camera-popover]");
+  if (!popover) return;
+  const state = previewCameraTimelineContext(card);
+  const index = selectedCameraPathIndex(card, state.path);
+  const frame = state.path[index] || state.path[0] || normalizeCameraPathFrame({ time: 0, key: "center", strength: 60 });
+  const left = clampNumber((Number(frame.time || 0) / state.duration) * 100, 6, 94);
+  const explicit = explicitCameraPathForEdit(state.edit);
+  popover.style.left = `${left.toFixed(2)}%`;
+  popover.innerHTML = `<label>Camera
+    <select data-preview-camera-popover-key>${cameraOptionsHtml(frame.key || "center")}</select>
+  </label>
+  <label>Forca
+    <input data-preview-camera-popover-strength type="range" min="0" max="100" step="5" value="${frame.strength ?? 60}">
+  </label>
+  <button data-preview-camera-popover-delete type="button"${state.path.length > 1 && explicit.length ? "" : " disabled"}>Excluir ponto</button>`;
+  popover.hidden = false;
+}
+function closePreviewCameraPopover(card){
+  const popover = card.querySelector("[data-preview-camera-popover]");
+  if (popover) popover.hidden = true;
 }
 function applyTimelineSeek(card, video, current){
   if (!video) return false;
@@ -8167,22 +8297,17 @@ function stepPreviewVolume(card, direction){
 }
 function syncPreviewVolumeButton(card){
   const button = card.querySelector("[data-preview-volume]");
-  const value = card.querySelector("[data-preview-volume-value]");
   const video = primaryCameraVideo(card);
   if (!button) return;
   if (!video) {
     button.hidden = true;
-    if (value) value.hidden = true;
     return;
   }
   applyPreviewVolume(video);
   button.hidden = false;
-  if (value) value.hidden = false;
-  const percent = Math.round((video.muted ? 0 : video.volume) * 100);
   button.innerHTML = previewIcon(video.muted || video.volume <= 0 ? "volume-off" : "volume");
   button.setAttribute("aria-label", video.muted ? "Ativar volume" : "Silenciar");
   button.title = video.muted ? "Ativar volume" : "Silenciar";
-  if (value) value.textContent = `${percent}%`;
 }
 function previewIcon(name){
   const icons = {
@@ -9273,22 +9398,6 @@ document.querySelectorAll(".card").forEach(card => {
       event.preventDefault();
       event.stopPropagation();
       togglePreviewVolume(card);
-    });
-  }
-  const volumeDown = card.querySelector("[data-preview-volume-down]");
-  if (volumeDown) {
-    volumeDown.addEventListener("click", event => {
-      event.preventDefault();
-      event.stopPropagation();
-      stepPreviewVolume(card, -1);
-    });
-  }
-  const volumeUp = card.querySelector("[data-preview-volume-up]");
-  if (volumeUp) {
-    volumeUp.addEventListener("click", event => {
-      event.preventDefault();
-      event.stopPropagation();
-      stepPreviewVolume(card, 1);
     });
   }
   const video = primaryCameraVideo(card);
