@@ -70,8 +70,12 @@ class CuttedCameraRuleTests(unittest.TestCase):
 
         html = CUTTED.card_html(moment)
 
+        self.assertIn("preview-transport-group", html)
         self.assertIn("data-preview-camera-timeline", html)
         self.assertIn("data-preview-volume", html)
+        self.assertIn("data-preview-volume-popover", html)
+        self.assertIn("data-preview-volume-slider", html)
+        self.assertIn("data-preview-volume-zero", html)
         self.assertNotIn("data-preview-volume-down", html)
         self.assertNotIn("data-preview-volume-up", html)
         self.assertNotIn("data-preview-volume-value", html)
