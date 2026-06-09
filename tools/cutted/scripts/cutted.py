@@ -44,7 +44,7 @@ FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
 MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
 MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
-CAMERA_ANALYSIS_VERSION = "auto-face-v26"
+CAMERA_ANALYSIS_VERSION = "auto-face-v27"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
 CAMERA_ANALYSIS_MAX_FRAMES = 140
 CAMERA_UNCERTAIN_MIN_SECONDS = 0.85
@@ -65,7 +65,7 @@ CAMERA_LOW_CONFIDENCE_EDGE_RATIO = 0.55
 CAMERA_LOW_CONFIDENCE_FIT_INTERVAL = 6.0
 CAMERA_FIT_BREAKAWAY_MIN_SECONDS = 11.0
 CAMERA_FIT_BREAKAWAY_LEAD_SECONDS = 4.0
-CAMERA_FIT_BREAKAWAY_HOLD_SECONDS = 2.7
+CAMERA_FIT_BREAKAWAY_HOLD_SECONDS = 3.2
 CAMERA_FIT_BREAKAWAY_INTERVAL_SECONDS = 7.0
 CAMERA_FIT_BREAKAWAY_MAX_PER_BLOCK = 3
 AI_DIRECTOR_MAX_FRAME_SAMPLES = 10
@@ -1798,11 +1798,29 @@ def fit_breakaway_camera_frames(
     if not frames or not detections:
         return []
     result: list[dict[str, object]] = []
-    for start, end, frame in camera_path_bounds_from_frames(frames, duration):
-        if not camera_path_frame_uses_group_fit(frame) or end - start < CAMERA_FIT_BREAKAWAY_MIN_SECONDS:
+    for start, end in coalesced_fit_intervals(frames, duration):
+        if end - start < CAMERA_FIT_BREAKAWAY_MIN_SECONDS:
             continue
         result.extend(fit_breakaways_for_interval(start, end, detections))
     return result
+
+
+def coalesced_fit_intervals(frames: list[dict[str, object]], duration: float) -> list[tuple[float, float]]:
+    intervals: list[tuple[float, float]] = []
+    current_start: float | None = None
+    current_end = 0.0
+    for start, end, frame in camera_path_bounds_from_frames(frames, duration):
+        if camera_path_frame_uses_group_fit(frame):
+            if current_start is None:
+                current_start = start
+            current_end = end
+            continue
+        if current_start is not None:
+            intervals.append((current_start, current_end))
+            current_start = None
+    if current_start is not None:
+        intervals.append((current_start, current_end))
+    return intervals
 
 
 def camera_path_bounds_from_frames(
@@ -1863,10 +1881,7 @@ def reliable_detection_rows_between(
 
 
 def next_breakaway_row(rows: list[dict[str, object]], time_value: float) -> dict[str, object] | None:
-    for row in rows:
-        if float(row.get("time") or 0.0) >= time_value - 0.4:
-            return row
-    return None
+    return min(rows, key=lambda row: abs(float(row.get("time") or 0.0) - time_value))
 
 
 def fit_breakaway_target(row: dict[str, object], time_value: float, face_slot: int) -> dict[str, object] | None:
@@ -2180,6 +2195,8 @@ def merge_camera_path_frames(
 
 def camera_frame_priority(frame: dict[str, object]) -> int:
     source = str(frame.get("source") or "")
+    if "fit-close" in source:
+        return 5
     if camera_path_frame_uses_group_fit(frame):
         return 4
     if "group-fit" in source:

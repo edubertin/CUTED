@@ -113,6 +113,22 @@ class CuttedCameraRuleTests(unittest.TestCase):
                 "fit": "contain",
                 "source": "ai-director-uncertain-fit",
             },
+            {
+                "time": 6.0,
+                "x": 50.0,
+                "y": 50.0,
+                "zoom": 1.0,
+                "fit": "contain",
+                "source": "ai-director-uncertain-fit",
+            },
+            {
+                "time": 12.0,
+                "x": 50.0,
+                "y": 50.0,
+                "zoom": 1.0,
+                "fit": "contain",
+                "source": "ai-director-uncertain-fit",
+            },
             {"time": 20.0, "x": 52.0, "y": 48.0, "zoom": 1.08, "source": "ai-director"},
         ]
         detections = [
@@ -126,6 +142,28 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertEqual(sources.count("ai-director-cuts-fit-close"), 2)
         self.assertEqual(sources.count("ai-director-cuts-fit-return"), 2)
         self.assertTrue(all(result[index]["fit"] == "contain" for index in [1, 3]))
+
+    def test_fit_close_survives_merge_with_uncertain_fit(self) -> None:
+        fit = {
+            "time": 5.0,
+            "x": 50.0,
+            "y": 50.0,
+            "zoom": 1.0,
+            "fit": "contain",
+            "source": "ai-director-uncertain-fit",
+        }
+        close = {
+            "time": 5.2,
+            "x": 32.0,
+            "y": 48.0,
+            "zoom": 1.24,
+            "source": "ai-director-cuts-fit-close",
+        }
+
+        result = CUTTED.merge_camera_path_frames([fit], [close], 12.0)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["source"], "ai-director-cuts-fit-close")
 
     def test_short_or_empty_fit_block_does_not_invent_breakaways(self) -> None:
         frames = [
