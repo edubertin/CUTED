@@ -44,7 +44,7 @@ FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
 MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
 MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
-CAMERA_ANALYSIS_VERSION = "auto-face-v23"
+CAMERA_ANALYSIS_VERSION = "auto-face-v24"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
 CAMERA_ANALYSIS_MAX_FRAMES = 140
 CAMERA_UNCERTAIN_MIN_SECONDS = 0.85
@@ -56,6 +56,9 @@ CAMERA_GROUP_ALTERNATE_MIN_HOLD_SECONDS = 4.0
 CAMERA_MIN_TARGET_SHIFT = 10.0
 CAMERA_GROUP_FIT_SPREAD = 38.0
 CAMERA_GROUP_FIT_SPAN = 52.0
+CAMERA_SOLO_MAX_MULTI_FACE_RATIO = 0.08
+CAMERA_SOLO_MIN_HOLD_SECONDS = 5.5
+CAMERA_DISTANT_FACE_PAN_X_DELTA = 12.0
 AI_DIRECTOR_MAX_FRAME_SAMPLES = 10
 AI_DIRECTOR_MAX_CONTEXT_ROWS = 36
 AI_DIRECTOR_MAX_FALLBACK_FRAMES = 28
@@ -1310,6 +1313,8 @@ def ai_director_rules(mode: str) -> list[str]:
         "Use close em uma pessoa apenas quando os outros rostos nao estiverem visiveis ou nao importarem para a cena.",
         "Quando scene_direction.uncertain_windows indicar baixa deteccao, nao persiga rosto antigo; prefira plano aberto com blur.",
         "Siga scene_direction.scene_intent_windows: solo=center, two_close=movimento suave somente com rostos quase colados, two_far=corte seco com holds longos, group_close=cortes fixos entre focos, group_fit=plano aberto com blur.",
+        "Com um rosto so, nao use cortes secos frequentes; prefira camera estavel com no maximo pequenos ajustes ou push-in.",
+        "Com dois rostos distantes, nunca faca pan atravessando o vazio entre eles; use corte seco ou plano aberto.",
     ]
     if ai_director_uses_hard_cuts(mode):
         rules.extend([
@@ -1646,7 +1651,102 @@ def dense_protected_camera_path(
     uncertain = uncertain_center_camera_frames(merged, detections, duration, hard_cut)
     if uncertain:
         merged = merge_camera_path_frames(merged, uncertain, duration)
-    return stabilize_ai_director_path(merged, duration, hard_cut)[:56]
+    stabilized = stabilize_ai_director_path(merged, duration, hard_cut)
+    return enforce_editorial_motion_rules(stabilized, detections, duration, platform, hard_cut)[:56]
+
+
+def enforce_editorial_motion_rules(
+    frames: list[dict[str, object]],
+    detections: list[dict[str, object]],
+    duration: float,
+    platform: str,
+    hard_cut: bool,
+) -> list[dict[str, object]]:
+    if not frames:
+        return []
+    if not hard_cut and solo_dominant_camera_scene(detections):
+        return solo_stable_ai_director_path(detections, duration)
+    return enforce_distant_face_hard_cuts(frames, detections, platform, hard_cut)
+
+
+def solo_dominant_camera_scene(detections: list[dict[str, object]]) -> bool:
+    rows = [row for row in detections if reliable_faces(row)]
+    if len(rows) < 2:
+        return False
+    multi = [row for row in rows if len(reliable_faces(row)) >= 2]
+    ratio = len(multi) / max(len(rows), 1)
+    return len(multi) <= 1 and ratio <= CAMERA_SOLO_MAX_MULTI_FACE_RATIO
+
+
+def solo_stable_ai_director_path(detections: list[dict[str, object]], duration: float) -> list[dict[str, object]]:
+    primary = primary_detections(detections)
+    if not primary:
+        return []
+    frames = primary_face_camera_path(primary, "ai-director-solo", duration)
+    held = enforce_minimum_camera_holds(frames, duration, CAMERA_SOLO_MIN_HOLD_SECONDS)
+    return [{**frame, "source": "ai-director-solo"} for frame in held[:8]]
+
+
+def enforce_distant_face_hard_cuts(
+    frames: list[dict[str, object]],
+    detections: list[dict[str, object]],
+    platform: str,
+    hard_cut: bool,
+) -> list[dict[str, object]]:
+    if hard_cut or len(frames) < 2:
+        return frames
+    result = [{**frames[0]}]
+    for frame in sorted(frames[1:], key=lambda item: float(item.get("time") or 0.0)):
+        candidate = {**frame}
+        if distant_face_transition_needs_cut(result[-1], candidate, detections, platform):
+            result[-1] = hard_cut_ai_director_frame(
+                result[-1],
+                float(result[-1].get("time") or 0.0),
+                "ai-director-cuts-hold",
+            )
+            candidate = hard_cut_ai_director_frame(
+                candidate,
+                float(candidate.get("time") or 0.0),
+                "ai-director-cuts-distant",
+            )
+        result.append(candidate)
+    return result
+
+
+def distant_face_transition_needs_cut(
+    previous: dict[str, object],
+    current: dict[str, object],
+    detections: list[dict[str, object]],
+    platform: str,
+) -> bool:
+    x_delta = abs(float(current.get("x") or 50.0) - float(previous.get("x") or 50.0))
+    if x_delta < CAMERA_DISTANT_FACE_PAN_X_DELTA:
+        return False
+    start = float(previous.get("time") or 0.0)
+    end = float(current.get("time") or 0.0)
+    return any(row_has_separated_faces(row, platform) for row in detection_rows_between(detections, start, end))
+
+
+def detection_rows_between(detections: list[dict[str, object]], start: float, end: float) -> list[dict[str, object]]:
+    low, high = sorted((start, end))
+    rows = [
+        row
+        for row in detections
+        if low <= float(row.get("time") or 0.0) <= high and reliable_faces(row)
+    ]
+    if rows:
+        return rows
+    midpoint = (low + high) / 2.0
+    nearest = nearest_detection(midpoint, detections)
+    return [nearest] if nearest is not None else []
+
+
+def row_has_separated_faces(row: dict[str, object], platform: str) -> bool:
+    faces = sorted(reliable_faces(row), key=face_x)
+    if len(faces) < 2:
+        return False
+    intent = str(camera_scene_intent_for_faces(faces, platform)["intent"])
+    return intent in {"two_far_cut", "group_fit"}
 
 
 def stabilize_ai_director_path(frames: list[dict[str, object]], duration: float, hard_cut: bool) -> list[dict[str, object]]:
