@@ -6147,14 +6147,7 @@ def card_html(moment: Moment) -> str:
         <div class="editor-preview">
           <div class="preview-frame">
             <div class="preview-bar">
-              <div class="preview-strip" role="group" aria-label="Visualizacao do formato">
-                <button data-card-format-preview="tiktok" class="active">TikTok</button>
-                <button data-card-format-preview="shorts">Shorts</button>
-                <button data-card-format-preview="instagram">Instagram</button>
-                <button data-card-format-preview="facebook">Facebook</button>
-                <button data-card-format-preview="youtube">YouTube</button>
-              </div>
-              <div class="preview-controls" aria-label="Controles do preview">
+              <div class="preview-topbar">
                 <div class="preview-transport-group" aria-label="Player e volume">
                   <button class="preview-icon preview-play" data-preview-play type="button" aria-label="Reproduzir" title="Reproduzir"></button>
                   <div class="preview-volume-group" aria-label="Volume do preview">
@@ -6164,6 +6157,20 @@ def card_html(moment: Moment) -> str:
                     </div>
                   </div>
                 </div>
+                <div class="preview-format-menu" data-preview-format-menu>
+                  <button class="preview-format-trigger" data-preview-format-trigger type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Formato do preview">
+                    <span data-preview-format-current>TikTok</span>
+                  </button>
+                  <div class="preview-format-options" data-preview-format-options role="listbox" aria-label="Formato do preview" hidden>
+                    <button data-card-format-preview="tiktok" class="active" role="option" aria-selected="true">TikTok</button>
+                    <button data-card-format-preview="shorts" role="option" aria-selected="false">Shorts</button>
+                    <button data-card-format-preview="instagram" role="option" aria-selected="false">Instagram</button>
+                    <button data-card-format-preview="facebook" role="option" aria-selected="false">Facebook</button>
+                    <button data-card-format-preview="youtube" role="option" aria-selected="false">YouTube</button>
+                  </div>
+                </div>
+              </div>
+              <div class="preview-controls" aria-label="Timeline do preview">
                 <div class="preview-camera-timeline" data-preview-camera-timeline aria-label="Timeline de camera"></div>
               </div>
             </div>
@@ -6489,7 +6496,8 @@ header{background:linear-gradient(180deg,rgba(5,5,5,.92),rgba(5,5,5,.68));backdr
 .preview-icon,.preview-step{border-color:var(--glass-border);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.035)),rgba(231,231,232,.08);color:var(--color-text);box-shadow:inset 0 1px 0 rgba(255,255,255,.36),inset 0 -8px 14px rgba(0,0,0,.14)}
 .preview-play{width:38px;height:38px;min-width:38px;background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
 .preview-volume-group{border-left:1px solid rgba(231,231,232,.12)}.preview-volume-group output{color:rgba(231,231,232,.72);font-variant-numeric:tabular-nums}
-.preview-bar,.preview-controls,.preview-camera-timeline,.preview-volume-group{overflow:visible}.preview-bar{position:relative;z-index:20}.preview-controls{display:grid;grid-template-columns:auto minmax(160px,1fr);align-items:center;gap:10px;width:100%;max-width:100%;padding:0;border:0;background:transparent;box-shadow:none;backdrop-filter:none}.preview-transport-group{display:flex;align-items:center;gap:6px;padding:5px 6px;border:1px solid var(--glass-border);border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.025)),rgba(5,5,5,.26);box-shadow:inset 0 1px 0 var(--glass-edge),0 8px 22px rgba(0,0,0,.18);backdrop-filter:blur(18px) saturate(1.45)}.preview-volume-group{position:relative;padding-left:0;border-left:0}.preview-camera-timeline{position:relative;min-width:160px;display:grid;align-items:center;min-height:42px;padding:6px 12px;border:1px solid rgba(17,162,207,.42);border-radius:4px;background:linear-gradient(180deg,rgba(17,162,207,.11),rgba(255,255,255,.025)),rgba(5,5,5,.24);box-shadow:inset 0 1px 0 var(--glass-edge),0 8px 22px rgba(0,0,0,.18);backdrop-filter:blur(18px) saturate(1.45)}.preview-camera-rail{position:relative;width:100%;height:24px;cursor:pointer;touch-action:none}.preview-audio-waveform{position:absolute;inset:1px 0;z-index:0;display:flex;align-items:center;gap:1px;opacity:.5;pointer-events:none}.preview-audio-waveform[hidden]{display:none}.preview-audio-waveform span{flex:1;min-width:1px;max-height:20px;background:rgba(17,162,207,.22);border-radius:1px}.preview-camera-track{position:absolute;left:0;right:0;top:50%;z-index:1;height:3px;border-radius:0;background:linear-gradient(90deg,rgba(17,162,207,.5),rgba(231,231,232,.12));box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);transform:translateY(-50%)}.preview-camera-playhead{position:absolute;top:50%;z-index:4;width:2px;height:20px;border-radius:999px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7);transform:translate(-50%,-50%);pointer-events:none}.preview-camera-marker{position:absolute;top:50%;z-index:3;width:9px;height:22px;min-width:9px;padding:0;border:1px solid rgba(17,162,207,.84);border-radius:3px;background:rgba(17,162,207,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 0 0 2px rgba(17,162,207,.06);transform:translate(-50%,-50%);cursor:pointer}.preview-camera-marker:active{transform:translate(-50%,-50%)}.preview-camera-marker.active{background:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.18),0 0 14px rgba(17,162,207,.32)}.preview-camera-popover,.preview-volume-popover{position:absolute;z-index:1000;display:grid;gap:8px;padding:10px;border:1px solid var(--glass-border);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel)}.preview-camera-popover{top:calc(100% + 8px);left:50%;width:min(260px,92vw);transform:translateX(-50%)}.preview-camera-popover[hidden],.preview-volume-popover[hidden]{display:none}.preview-camera-popover label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.preview-camera-popover select{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.preview-camera-popover input{width:100%;accent-color:var(--color-brand-blue)}.preview-camera-popover button{min-height:32px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.preview-volume-popover{right:50%;bottom:calc(100% + 8px);width:auto;height:128px;padding:12px 8px;place-items:center;transform:translateX(50%)}.preview-volume-slider{display:block;width:110px;accent-color:var(--color-brand-blue);writing-mode:vertical-rl;direction:rtl}
+.preview-bar,.preview-controls,.preview-camera-timeline,.preview-volume-group{overflow:visible}.preview-bar{position:relative;z-index:20}.preview-topbar{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-width:0}.preview-topbar .preview-strip{flex:1 1 auto;width:auto;min-width:0;justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;padding-bottom:0;scrollbar-width:none}.preview-topbar .preview-strip::-webkit-scrollbar{display:none}.preview-topbar .preview-strip button{flex:0 0 auto;min-height:32px;padding:7px 9px;font-size:12px}.preview-controls{display:block;width:100%;max-width:100%;padding:0;border:0;background:transparent;box-shadow:none;backdrop-filter:none}.preview-transport-group{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:5px 6px;border:1px solid var(--glass-border);border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.025)),rgba(5,5,5,.26);box-shadow:inset 0 1px 0 var(--glass-edge),0 8px 22px rgba(0,0,0,.18);backdrop-filter:blur(18px) saturate(1.45)}.preview-volume-group{position:relative;padding-left:0;border-left:0}.preview-camera-timeline{position:relative;width:100%;min-width:0;display:grid;align-items:center;min-height:42px;padding:6px 12px;border:1px solid rgba(17,162,207,.42);border-radius:4px;background:linear-gradient(180deg,rgba(17,162,207,.11),rgba(255,255,255,.025)),rgba(5,5,5,.24);box-shadow:inset 0 1px 0 var(--glass-edge),0 8px 22px rgba(0,0,0,.18);backdrop-filter:blur(18px) saturate(1.45)}.preview-camera-rail{position:relative;width:100%;height:24px;cursor:pointer;touch-action:none}.preview-audio-waveform{position:absolute;inset:1px 0;z-index:0;display:flex;align-items:center;gap:1px;opacity:.78;pointer-events:none}.preview-audio-waveform[hidden]{display:none}.preview-audio-waveform span{flex:1;min-width:1px;max-height:21px;background:rgba(175,207,42,.42);border-radius:1px}.preview-camera-track{position:absolute;left:0;right:0;top:50%;z-index:1;height:3px;border-radius:0;background:linear-gradient(90deg,rgba(17,162,207,.5),rgba(231,231,232,.12));box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);transform:translateY(-50%)}.preview-camera-playhead{position:absolute;top:50%;z-index:4;width:2px;height:20px;border-radius:999px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7);transform:translate(-50%,-50%);pointer-events:none}.preview-camera-marker{position:absolute;top:50%;z-index:3;width:9px;height:22px;min-width:9px;padding:0;border:1px solid rgba(17,162,207,.84);border-radius:3px;background:rgba(17,162,207,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 0 0 2px rgba(17,162,207,.06);transform:translate(-50%,-50%);cursor:pointer}.preview-camera-marker:active{transform:translate(-50%,-50%)}.preview-camera-marker.active{background:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.18),0 0 14px rgba(17,162,207,.32)}.preview-camera-popover,.preview-volume-popover{position:absolute;z-index:1000;display:grid;gap:8px;padding:10px;border:1px solid var(--glass-border);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel)}.preview-camera-popover{top:calc(100% + 8px);left:50%;width:min(260px,92vw);transform:translateX(-50%)}.preview-camera-popover[hidden],.preview-volume-popover[hidden]{display:none}.preview-camera-popover label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.preview-camera-popover select{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.preview-camera-popover input{width:100%;accent-color:var(--color-brand-blue)}.preview-camera-popover button{min-height:32px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.preview-volume-popover{right:50%;bottom:calc(100% + 8px);width:auto;height:128px;padding:12px 8px;place-items:center;transform:translateX(50%)}.preview-volume-slider{display:block;width:110px;accent-color:var(--color-brand-blue);writing-mode:vertical-rl;direction:rtl}
+.preview-topbar{justify-content:flex-start;position:relative;z-index:80}.preview-format-menu{position:relative;z-index:1400;min-width:134px}.preview-format-trigger{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:38px;padding:8px 12px;border:1px solid var(--glass-border);border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.025)),rgba(5,5,5,.26);color:var(--color-text-soft);font-weight:800}.preview-format-trigger:after{content:"";width:7px;height:7px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg) translateY(-2px);opacity:.72}.preview-format-trigger[aria-expanded=true]{border-color:rgba(17,162,207,.72);color:var(--color-brand-blue)}.preview-format-options{position:absolute;top:calc(100% + 7px);left:0;z-index:1500;display:grid;gap:4px;width:max(100%,160px);padding:7px;border:1px solid var(--glass-border);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel)}.preview-format-options[hidden]{display:none}.preview-format-options button{display:flex;justify-content:flex-start;min-height:32px;padding:7px 9px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--color-text-soft);font-weight:700;text-align:left}.preview-format-options button.active{border-color:rgba(17,162,207,.52);background:rgba(17,162,207,.14);color:var(--color-brand-blue)}
 .media{border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-panel);background:#000;box-shadow:0 14px 44px rgba(0,0,0,.32)}
 .tool-section,.export-dock,.overlay-menu,.settings-panel{border-color:var(--glass-border);border-radius:var(--radius-panel);background:linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.025) 36%,rgba(0,0,0,.08) 100%),var(--glass-bg-strong);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-edge),inset 0 -18px 28px rgba(0,0,0,.14);backdrop-filter:blur(24px) saturate(1.45)}
 .tool-section>summary{color:rgba(231,231,232,.9)}.export-dock{padding:14px}.export-dock span{color:rgba(231,231,232,.6)}
@@ -6894,6 +6902,24 @@ function addCameraPathFrameForCard(card){
   const next = Object.assign({}, frame, { time: Number(position.toFixed(3)), source: "manual-path" });
   const path = cameraPathWithFrame(sourcePath, next);
   const index = path.findIndex(item => Math.abs(item.time - next.time) < .01);
+  setSelectedCameraPathIndex(card, index >= 0 ? index : path.length - 1);
+  setCameraPathForRank(rank, path, platform);
+}
+function addCenterCameraFrameForCard(card){
+  const rank = card.dataset.rank;
+  const platform = activePlatformForRank(rank);
+  const context = cameraContextForCard(card);
+  const edit = platformEditForRank(rank, platform);
+  const sourcePath = cameraPathForEdit(edit, context.duration);
+  const position = clampNumber(context.position, 0, Math.max(context.duration, .3));
+  const next = normalizeCameraPathFrame({
+    time: Number(position.toFixed(3)),
+    key: "center",
+    strength: 60,
+    source: "manual-path"
+  });
+  const path = next ? cameraPathWithFrame(sourcePath, next) : sourcePath;
+  const index = next ? path.findIndex(item => Math.abs(item.time - next.time) < .01) : path.length - 1;
   setSelectedCameraPathIndex(card, index >= 0 ? index : path.length - 1);
   setCameraPathForRank(rank, path, platform);
 }
@@ -7399,9 +7425,42 @@ function setCardPreviewFormat(card, format){
   card.dataset.previewFormat = next;
   card.querySelectorAll("[data-card-format-preview]").forEach(button => {
     button.classList.toggle("active", button.dataset.cardFormatPreview === next);
+    button.setAttribute("aria-selected", button.dataset.cardFormatPreview === next ? "true" : "false");
   });
+  const trigger = card.querySelector("[data-preview-format-trigger]");
+  if (trigger) trigger.setAttribute("aria-label", `Formato do preview: ${platformLabel(next)}`);
+  const label = card.querySelector("[data-preview-format-current]");
+  if (label) label.textContent = platformLabel(next);
   const status = card.querySelector("[data-platform-preset-current]");
   if (status) status.textContent = `Preset: ${platformLabel(next)}`;
+}
+function closePreviewFormatMenus(except = null){
+  document.querySelectorAll("[data-preview-format-menu]").forEach(menu => {
+    if (menu === except) return;
+    menu.querySelector("[data-preview-format-options]")?.setAttribute("hidden", "");
+    menu.querySelector("[data-preview-format-trigger]")?.setAttribute("aria-expanded", "false");
+  });
+}
+function togglePreviewFormatMenu(card){
+  const menu = card.querySelector("[data-preview-format-menu]");
+  const options = card.querySelector("[data-preview-format-options]");
+  const trigger = card.querySelector("[data-preview-format-trigger]");
+  if (!menu || !options || !trigger) return;
+  const willOpen = options.hasAttribute("hidden");
+  closePreviewFormatMenus(menu);
+  options.toggleAttribute("hidden", !willOpen);
+  trigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
+}
+function bindPreviewFormatDismiss(){
+  if (document.body.dataset.previewFormatDismissBound) return;
+  document.body.dataset.previewFormatDismissBound = "1";
+  document.addEventListener("click", event => {
+    if (event.target instanceof Element && event.target.closest("[data-preview-format-menu]")) return;
+    closePreviewFormatMenus();
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") closePreviewFormatMenus();
+  });
 }
 function updateCardTools(card){
   updateCameraUi(card);
@@ -7702,6 +7761,7 @@ function overlayPlaceButtonsHtml(){
     <div class="overlay-menu-actions">
       <button data-overlay-place-text>Texto</button>
       <button data-overlay-place-image>Imagem transparente</button>
+      <button data-overlay-place-camera>Camera</button>
     </div>`;
 }
 function overlayInspectorHtml(layer){
@@ -7906,6 +7966,13 @@ function showOverlayAddMenu(card, left, top){
     input.dataset.overlayY = String(card.dataset.overlayMenuY || .34);
     closeOverlayMenu(card);
     input.click();
+  });
+  menu.querySelector("[data-overlay-place-camera]")?.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    closeOverlayMenu(card);
+    addCenterCameraFrameForCard(card);
+    openPreviewCameraPopover(card);
   });
   positionOverlayMenu(surface, menu, left, top);
   menu.hidden = false;
@@ -9526,10 +9593,20 @@ document.querySelectorAll(".card").forEach(card => {
     button.addEventListener("click", () => {
       card.dataset.previewTouched = "1";
       setCardPreviewFormat(card, button.dataset.cardFormatPreview);
+      closePreviewFormatMenus();
       updateCardTools(card);
       renderFinalStage();
     });
   });
+  const previewFormatTrigger = card.querySelector("[data-preview-format-trigger]");
+  if (previewFormatTrigger) {
+    previewFormatTrigger.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      togglePreviewFormatMenu(card);
+    });
+  }
+  bindPreviewFormatDismiss();
   const playButton = card.querySelector("[data-preview-play]");
   if (playButton) {
     playButton.addEventListener("click", event => {

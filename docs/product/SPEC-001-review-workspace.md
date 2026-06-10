@@ -48,12 +48,16 @@ into a dedicated app.
 - The preview exposes a single volume button. Clicking it opens a compact
   vertical slider; the main toolbar does not show volume percentages or step
   controls.
-- The preview controls include a compact camera timeline next to play and
-  volume. The line shows camera keyframes in CUTED blue, follows the playhead,
-  lets the user seek by clicking the line, and may show a low-emphasis audio
+- The first preview toolbar row starts with compact play and volume controls,
+  followed by a downward media-format dropdown above the timeline.
+- The preview controls include a compact camera timeline on its own full-width
+  row. The line shows camera keyframes in CUTED blue, follows the playhead, lets
+  the user seek by clicking the line, and may show a low-emphasis green audio
   waveform behind the camera controls.
 - Clicking a camera keyframe opens a small picker for changing the camera preset
   and strength for the active platform.
+- Clicking the video canvas opens the layer insertion menu. Choosing Camera adds
+  a center manual camera keyframe at the current timeline playhead.
 - Canvas clicks create or open the layer insertion menu only when the target is
   the canvas, not an existing layer.
 - Existing layers can be selected, moved, resized, edited, and deleted without
