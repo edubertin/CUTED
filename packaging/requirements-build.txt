@@ -1,0 +1,16 @@
+# Versoes espelhadas do ambiente de desenvolvimento validado em 2026-06-10
+# (runtime Codex, Python 3.12.13). Torch CPU-only via indice dedicado.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# +cpu garante a wheel do indice CPU; se a versao nao existir la, o build deve
+# falhar em vez de cair silenciosamente na wheel CUDA do PyPI.
+torch==2.12.0+cpu
+ultralytics==8.4.62
+opencv-python-headless==4.13.0.92
+yt-dlp==2026.3.17
+faster-whisper==1.2.1
+imageio-ffmpeg==0.6.0
+numpy==2.3.5
+pillow==12.2.0
+
+pyinstaller>=6.10,<7

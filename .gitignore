@@ -8,3 +8,5 @@ __pycache__/
 .env
 .env.local
 .env.*.local
+packaging/dist/
+packaging/build/
