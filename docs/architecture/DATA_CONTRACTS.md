@@ -76,6 +76,7 @@ trim_start_seconds
 trim_end_seconds
 adjusted_duration
 clip_path
+waveform_file
 platform
 platforms
 caption_segments
@@ -86,6 +87,7 @@ camera_path
 effect
 overlay
 overlays
+bumpers
 platform_edits
 publish_metadata
 ```
@@ -134,6 +136,11 @@ youtube
 
 Invariant: finalization must resolve the selected platform edit at render time,
 not only when the platform was first added to export.
+
+Each platform edit may also contain `bumpers`, with one `intro` and one `outro`
+video asset for that platform. Bumpers are intentionally separate from
+`overlays` because they change the final timeline duration instead of composing
+over the edited cut.
 
 ## Camera Path Contract
 
@@ -284,6 +291,31 @@ opacity
 Coordinates and dimensions should be stored as relative values so the same edit
 can be mapped to different platform dimensions.
 
+## Bumper Contract
+
+`bumpers` is a platform-specific object used for intro/outro videos.
+
+```text
+intro
+outro
+```
+
+Each slot is either absent or an object with:
+
+```text
+id
+slot          intro or outro
+label         original file label for the UI
+asset_file    relative or absolute local video path
+width
+height
+duration
+```
+
+The browser should only accept bumper videos that match the active platform's
+dimensions. The local renderer still normalizes codecs and frame rate before
+concatenation.
+
 ## Rendered Output Manifest
 
 `captioned-clips/captioned-clips.json` records final outputs.
@@ -305,6 +337,11 @@ file        temporary workspace MP4 used by the local preview
 local_file  copied final MP4 in the configured render destination
 final_file  response alias for the user-facing MP4 path
 final_dir   response alias for the user-facing output folder
+bumpers     intro/outro metadata used for the final MP4
+base_duration
+intro_duration
+outro_duration
+final_duration
 ```
 
 ## Compatibility Rules
@@ -312,5 +349,6 @@ final_dir   response alias for the user-facing output folder
 - Older `camera` and `overlay` fields remain supported.
 - New render behavior should prefer platform-specific edits when available.
 - `overlays` should support text and image layers.
+- `bumpers` should support one intro and one outro video per platform.
 - PNG/WebP image transparency must be preserved by the renderer.
 - JPEG image layers are accepted but cannot carry transparency.
