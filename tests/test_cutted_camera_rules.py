@@ -372,6 +372,15 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIn("cameraFrameUsesHardCut(next)", source)
         self.assertIn("cameraFrameUsesGroupFit(next)", source)
 
+    def test_manual_fit_blur_uses_group_fit_contract(self) -> None:
+        frame = CUTTED.default_camera_path_frame({"key": "fit-blur", "strength": 60}, 0.0)
+        html = CUTTED.page_html("Teste", "", "{}", "assets/brand/cuted-logo-transparent.png")
+
+        self.assertEqual(frame["key"], "fit-blur")
+        self.assertEqual(frame["fit"], "contain")
+        self.assertIn('"fit-blur"', html)
+        self.assertIn("Fit com blur", html)
+
     def test_platform_edit_from_row_includes_bumpers(self) -> None:
         row = {
             "platform_edits": {

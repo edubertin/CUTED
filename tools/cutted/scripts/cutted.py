@@ -294,6 +294,7 @@ CAMERA_PRESETS = {
     "face-right": CameraPreset("face-right", "Rosto a direita", "Prioriza quem esta do lado direito"),
     "alternate": CameraPreset("alternate", "Alternar focos", "Movimento suave entre lados"),
     "jump-cut": CameraPreset("jump-cut", "Corte entre focos", "Troca seca entre lados, sem pan"),
+    "fit-blur": CameraPreset("fit-blur", "Fit com blur", "Mostra o quadro inteiro sobre fundo desfocado"),
     "soft-zoom": CameraPreset("soft-zoom", "Zoom sutil", "Aproxima o enquadramento sem mudar o lado"),
     "punch-in": CameraPreset("punch-in", "Punch-in", "Corte mais fechado para dar energia"),
 }
@@ -4713,7 +4714,7 @@ def default_camera_path_frame(camera: dict[str, object], time: float) -> dict[st
     key = str(camera.get("key") or "center")
     strength = clamp(float(camera.get("strength") if camera.get("strength") is not None else 60.0), 0.0, 100.0)
     preset = CAMERA_PRESETS.get(key, CAMERA_PRESETS["center"])
-    return {
+    frame = {
         "time": round(max(time, 0.0), 3),
         "x": round(camera_x_percent({"key": preset.key, "strength": strength}, 0.0), 2),
         "y": 50.0,
@@ -4725,6 +4726,9 @@ def default_camera_path_frame(camera: dict[str, object], time: float) -> dict[st
         "strength": strength,
         "part": str(camera.get("part") or ""),
     }
+    if preset.key == "fit-blur":
+        frame["fit"] = "contain"
+    return frame
 
 
 def camera_segment_bounds(duration: float) -> list[tuple[float, float]]:
@@ -6596,6 +6600,7 @@ const cameraMeta = {
   "face-right": { label: "Direita manual", note: "Prioriza o lado direito", x: 78, scale: 1 },
   alternate: { label: "Alternar manual", note: "Pan suave entre lados", x: 50, scale: 1 },
   "jump-cut": { label: "Corte manual", note: "Troca seca entre lados", x: 50, scale: 1 },
+  "fit-blur": { label: "Fit com blur", note: "Quadro inteiro com fundo desfocado", x: 50, scale: 1 },
   "soft-zoom": { label: "Zoom sutil", note: "Aproxima sem trocar o foco", x: 50, scale: 1.12 },
   "punch-in": { label: "Punch-in", note: "Mais fechado e energetico", x: 50, scale: 1.22 }
 };
@@ -6823,7 +6828,7 @@ function cameraSegmentForTime(camera, position, duration){
 }
 function cameraFrameFromSegment(segment, time, elapsed){
   const current = normalizeCameraSegment(segment, segment.part || "start");
-  return {
+  const frame = {
     time: Number(Math.max(0, Number(time) || 0).toFixed(3)),
     x: Number(cameraCropPercent(current, elapsed).toFixed(2)),
     y: 50,
@@ -6835,6 +6840,8 @@ function cameraFrameFromSegment(segment, time, elapsed){
     label: current.label,
     strength: current.strength
   };
+  if (current.key === "fit-blur") frame.fit = "contain";
+  return frame;
 }
 function cameraPathFromCamera(camera, duration){
   const current = normalizeCamera(camera);
