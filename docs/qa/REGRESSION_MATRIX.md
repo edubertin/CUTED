@@ -10,6 +10,7 @@ review workspace, data contracts, or render pipeline.
 | Area | Check | Expected Result |
 | --- | --- | --- |
 | Server | Start `cutted.py serve` | Gallery opens on local port |
+| Server | Run `cutted.py launch` | Workspace gallery opens on a free local port; a second launch reuses the running instance |
 | Navigation | Check workflow tabs | Labels are Importar, Editar, and Renderizar |
 | Header | Check legacy export action | Exportar selecionados is absent |
 | Brand | Header logo | Transparent official PNG appears without black rectangle |
@@ -21,6 +22,13 @@ review workspace, data contracts, or render pipeline.
 | Playback | Click canvas | Video does not start |
 | Playback | Click play button | Video starts |
 | Playback | Local MP4 range request | Server responds with `206 Partial Content` |
+| Preview camera timeline | Inspect preview controls | Play/volume appear first, media format opens in a downward dropdown, and timeline fills the second row |
+| Preview camera timeline | Click timeline rail | Preview seeks to the clicked time and camera framing updates |
+| Preview camera timeline | Click keyframe marker | Compact picker opens with camera preset and strength controls |
+| Preview camera timeline | Seek timeline, click canvas, choose Camera | Center manual camera keyframe is added at the playhead and can be edited |
+| Preview camera timeline | Change keyframe preset | Active platform `camera_path` updates without changing other platforms |
+| Preview camera timeline | Open a clip with waveform sidecar | Low-emphasis green waveform appears behind the line without covering keyframes |
+| Preview camera timeline | Click waveform-backed rail | Seek still works and camera markers remain clickable |
 | Timeline | Scrub the cut timeline, then play | Preview seeks to the scrubbed time and plays from there |
 | Timeline | Drag start/end trim handles | Preview pauses and seeks to the active trim handle |
 | Timeline | Play adjusted trim range | Preview starts inside the cut and pauses at the adjusted end |
@@ -55,17 +63,24 @@ review workspace, data contracts, or render pipeline.
 | Smart camera | Run without OpenCV | User-safe install message appears and manual camera controls still work |
 | Smart camera | Repeat the same mode/clip analysis | Cached `camera-analysis` result is reused |
 | Camera manual | Change Inicio/Meio/Fim controls | Explicit smart path is cleared and manual framing becomes source of truth |
-| Volume | Open any video | Volume starts at 20 percent |
+| Volume | Open any video | Volume starts at 20 percent and toolbar shows one button |
+| Volume | Click volume button | Vertical slider opens above the button and adjusts preview volume |
 | Platform | Switch TikTok to Facebook | Preset state changes without losing TikTok edits |
 | Text layer | Add text layer | Layer appears, moves, resizes, edits, deletes |
 | Image layer | Add PNG/WebP logo | Transparency preserved in preview and render |
+| Bumpers | Add intro video on TikTok | Intro chip appears only for TikTok |
+| Bumpers | Add outro video on TikTok | Outro chip appears only for TikTok |
+| Bumpers | Remove a bumper chip | Bumper disappears from preview and final queue |
 | Export | Add multiple platforms | Queue contains each selected platform |
 | Finalize | Render final queue | MP4 files and manifest are created |
 | Finalize | Render with import output path | Final MP4 is copied to `CUTED Renders/<import>` and UI shows the final path |
 | AI import | Generate 10 suggestions from a long transcript | Suggestions are spread across distinct timeline windows |
 | AI import | YouTube has captions | Captions are used without downloading full audio for transcription |
 | AI import | Audio exceeds upload limit | Audio is compressed or chunked before hosted transcription |
-| AI import UI | Open import tab | Local path defaults to Desktop |
+| AI import UI | Open import tab | Render destination starts empty with the folder picker only; Desktop button is absent |
+| AI import UI | Import without destination | Import is blocked with a user-safe message before any request |
+| AI import UI | Open import tab without OpenAI key | Key banner appears and its button opens the settings panel |
+| AI import UI | Save an OpenAI key | Key banner disappears without reloading the page |
 | AI import UI | Suggestion count | Dropdown offers 1 through 20 |
 | AI import UI | Duration profile | Short, medium, and long map to expected duration arguments |
 | Render UI | Open Renderizar tab | Exportar fila is absent and render action remains available |
@@ -92,6 +107,8 @@ review workspace, data contracts, or render pipeline.
 | Remove platform from export | Platform is absent from final queue |
 | Discard clip with platform selected | Discarded clip is absent from final queue and shows no active platform |
 | Render TikTok and YouTube | Output dimensions differ as expected |
+| Add TikTok bumper, switch Facebook | Facebook has no inherited bumper |
+| Add Facebook bumper, return TikTok | TikTok bumper is restored |
 
 ## Render Checks
 
@@ -104,6 +121,10 @@ review workspace, data contracts, or render pipeline.
 | Image overlay plus effect | Image remains visible |
 | PNG logo overlay | Alpha is preserved |
 | JPEG overlay | Image renders opaque |
+| Intro bumper only | Final MP4 duration includes intro before the edited cut |
+| Outro bumper only | Final MP4 duration includes outro after the edited cut |
+| Intro plus outro bumpers | Final MP4 duration includes both bumpers |
+| Wrong bumper dimensions | Upload is rejected before render |
 
 ## Quality Gates
 

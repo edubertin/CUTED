@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import base64
 import sys
 import unittest
 from pathlib import Path
@@ -52,6 +53,66 @@ def missing_detection(time_value: float) -> dict[str, object]:
 
 
 class CuttedCameraRuleTests(unittest.TestCase):
+    def test_card_preview_uses_compact_camera_timeline(self) -> None:
+        moment = CUTTED.Moment(
+            rank=1,
+            start=0.0,
+            end=12.0,
+            peak=4.0,
+            score=0.8,
+            title="Teste",
+            reason="",
+            transcript="texto",
+            peak_text="texto",
+            clip_file="clips/clip-001.mp4",
+            frame_file="frames/clip-001.jpg",
+        )
+
+        html = CUTTED.card_html(moment)
+
+        self.assertIn("preview-transport-group", html)
+        self.assertIn("preview-topbar", html)
+        self.assertLess(html.index("preview-transport-group"), html.index("preview-format-menu"))
+        self.assertIn("data-preview-format-trigger", html)
+        self.assertIn("data-preview-format-options", html)
+        self.assertIn("data-preview-camera-timeline", html)
+        self.assertIn("data-preview-audio-waveform", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("data-preview-volume", html)
+        self.assertIn("data-preview-volume-popover", html)
+        self.assertIn("data-preview-volume-slider", html)
+        self.assertIn("data-overlay-place-camera", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertNotIn("data-preview-volume-down", html)
+        self.assertNotIn("data-preview-volume-up", html)
+        self.assertNotIn("data-preview-volume-zero", html)
+        self.assertNotIn("data-preview-volume-value", html)
+
+    def test_moment_contract_includes_waveform_file(self) -> None:
+        moment = CUTTED.Moment(
+            rank=1,
+            start=0.0,
+            end=12.0,
+            peak=4.0,
+            score=0.8,
+            title="Teste",
+            reason="",
+            transcript="texto",
+            peak_text="texto",
+            clip_file="clips/clip-001.mp4",
+            frame_file="frames/clip-001.jpg",
+            waveform_file="waveforms/clip-001.json",
+        )
+
+        data = CUTTED.moment_to_dict(moment)
+
+        self.assertEqual(data["waveform_file"], "waveforms/clip-001.json")
+
+    def test_audio_waveform_peaks_are_normalized(self) -> None:
+        peaks = CUTTED.normalized_audio_peaks([0.0, 0.25, -0.25, 0.5, -0.5, 1.0, -1.0, 0.0], 4)
+
+        self.assertEqual(len(peaks), 4)
+        self.assertEqual(max(peaks), 1.0)
+        self.assertGreater(peaks[-1], peaks[0])
+
     def test_yolo_person_box_converts_to_camera_subject(self) -> None:
         row = CUTTED.yolo_person_row_from_box([100.0, 100.0, 300.0, 800.0], 1000, 1000, 0.78)
 
@@ -310,6 +371,58 @@ class CuttedCameraRuleTests(unittest.TestCase):
 
         self.assertIn("cameraFrameUsesHardCut(next)", source)
         self.assertIn("cameraFrameUsesGroupFit(next)", source)
+
+    def test_manual_fit_blur_uses_group_fit_contract(self) -> None:
+        frame = CUTTED.default_camera_path_frame({"key": "fit-blur", "strength": 60}, 0.0)
+        html = CUTTED.page_html("Teste", "", "{}", "assets/brand/cuted-logo-transparent.png")
+
+        self.assertEqual(frame["key"], "fit-blur")
+        self.assertEqual(frame["fit"], "contain")
+        self.assertIn('"fit-blur"', html)
+        self.assertIn("Fit com blur", html)
+
+    def test_platform_edit_from_row_includes_bumpers(self) -> None:
+        row = {
+            "platform_edits": {
+                "tiktok": {
+                    "bumpers": {
+                        "intro": {
+                            "label": "intro.mp4",
+                            "asset_file": "bumper-assets/intro.mp4",
+                            "width": 1080,
+                            "height": 1920,
+                            "duration": 2.5,
+                        }
+                    }
+                }
+            }
+        }
+
+        edit = CUTTED.platform_edit_from_row(row, "tiktok")
+
+        self.assertIn("bumpers", edit)
+        self.assertEqual(edit["bumpers"]["intro"]["asset_file"], "bumper-assets/intro.mp4")
+
+    def test_normalize_bumpers_filters_empty_slots(self) -> None:
+        row = {
+            "bumpers": {
+                "intro": {"label": "intro.mp4", "asset_file": "bumper-assets/intro.mp4", "width": 1080, "height": 1920},
+                "outro": {"label": "missing.mp4"},
+            }
+        }
+
+        bumpers = CUTTED.normalize_bumpers_from_row(row)
+
+        self.assertEqual(list(bumpers), ["intro"])
+        self.assertEqual(bumpers["intro"]["slot"], "intro")
+
+    def test_decode_data_url_video_accepts_mp4(self) -> None:
+        payload = base64.b64encode(b"tiny-video").decode("ascii")
+
+        data, extension = CUTTED.decode_data_url_video(f"data:video/mp4;base64,{payload}")
+
+        self.assertEqual(data, b"tiny-video")
+        self.assertEqual(extension, "mp4")
 
 
 if __name__ == "__main__":

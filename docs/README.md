@@ -19,8 +19,10 @@ class application workflow.
 10. [OpenAI Settings and Local Cost Ledger Spec](product/SPEC-007-openai-settings-and-cost-ledger.md)
 11. [Smart Camera Roadmap Spec](product/SPEC-008-smart-camera-roadmap.md)
 12. [Vision Engine Smart Camera Spec](product/SPEC-009-vision-engine-smart-camera.md)
-13. [QA Regression Matrix](qa/REGRESSION_MATRIX.md)
-14. [Local Development Runbook](operations/LOCAL_DEV.md)
+13. [Video Bumpers Spec](product/SPEC-010-video-bumpers.md)
+14. [Local Beta Installer Spec](product/SPEC-011-local-beta-installer.md)
+15. [QA Regression Matrix](qa/REGRESSION_MATRIX.md)
+16. [Local Development Runbook](operations/LOCAL_DEV.md)
 
 ## Current Source of Truth
 
