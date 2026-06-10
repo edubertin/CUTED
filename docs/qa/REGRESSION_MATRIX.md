@@ -10,6 +10,7 @@ review workspace, data contracts, or render pipeline.
 | Area | Check | Expected Result |
 | --- | --- | --- |
 | Server | Start `cutted.py serve` | Gallery opens on local port |
+| Server | Run `cutted.py launch` | Workspace gallery opens on a free local port; a second launch reuses the running instance |
 | Navigation | Check workflow tabs | Labels are Importar, Editar, and Renderizar |
 | Header | Check legacy export action | Exportar selecionados is absent |
 | Brand | Header logo | Transparent official PNG appears without black rectangle |
@@ -76,7 +77,10 @@ review workspace, data contracts, or render pipeline.
 | AI import | Generate 10 suggestions from a long transcript | Suggestions are spread across distinct timeline windows |
 | AI import | YouTube has captions | Captions are used without downloading full audio for transcription |
 | AI import | Audio exceeds upload limit | Audio is compressed or chunked before hosted transcription |
-| AI import UI | Open import tab | Local path defaults to Desktop |
+| AI import UI | Open import tab | Render destination starts empty with the folder picker only; Desktop button is absent |
+| AI import UI | Import without destination | Import is blocked with a user-safe message before any request |
+| AI import UI | Open import tab without OpenAI key | Key banner appears and its button opens the settings panel |
+| AI import UI | Save an OpenAI key | Key banner disappears without reloading the page |
 | AI import UI | Suggestion count | Dropdown offers 1 through 20 |
 | AI import UI | Duration profile | Short, medium, and long map to expected duration arguments |
 | Render UI | Open Renderizar tab | Exportar fila is absent and render action remains available |

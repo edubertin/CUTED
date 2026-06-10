@@ -40,7 +40,12 @@ interface. The next product step is to move the job controls into the app.
 - Surface errors in user-safe language.
 - Keep model/provider configuration out of source code.
 - Preserve a local-first path.
-- Default the local source path to the user's Desktop.
+- Start the render destination empty; the user picks the output folder through
+  the local folder picker before importing.
+- Block import submission with a user-safe message while no render destination
+  is selected.
+- Prompt the user to add their own OpenAI key through the settings gear when AI
+  import requires it, instead of failing with a technical error.
 - Keep language and initial analysis preset as internal defaults until advanced
   settings are needed.
 

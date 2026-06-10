@@ -4,6 +4,7 @@ import argparse
 import base64
 import hashlib
 import html
+import http.client
 import http.server
 import json
 import math
@@ -11,6 +12,7 @@ import os
 import re
 import shlex
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -19,6 +21,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -350,6 +353,10 @@ def parse_args() -> argparse.Namespace:
     serve.add_argument("--dir", type=Path, required=True)
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8777)
+    launch = subparsers.add_parser("launch", help="Open the CUTED workspace for local beta use.")
+    launch.add_argument("--workspace", type=Path, default=None)
+    launch.add_argument("--host", default="127.0.0.1")
+    launch.add_argument("--no-browser", action="store_true")
     return parser.parse_args()
 
 
@@ -367,6 +374,9 @@ def main() -> int:
         return 0
     if args.command == "serve":
         serve_gallery(args)
+        return 0
+    if args.command == "launch":
+        launch_workspace(args)
         return 0
     raise RuntimeError(f"Unsupported command: {args.command}")
 
@@ -436,6 +446,127 @@ def serve_gallery(args: argparse.Namespace) -> None:
         print("\n[cutted] Server stopped")
     finally:
         server.server_close()
+
+
+LAUNCH_PORT_RANGE = range(8779, 8800)
+
+
+def launch_workspace(args: argparse.Namespace) -> None:
+    workspace = prepare_workspace_dir(args.workspace)
+    existing = running_workspace_port(args.host)
+    if existing is not None:
+        print(f"[cutted] CUTED ja esta aberto em http://{args.host}:{existing}/index.html (workspace da instancia atual mantido)")
+        if not args.no_browser:
+            open_browser_later(args.host, existing, 0.0)
+        return
+    bootstrap_workspace_gallery(workspace)
+    for _ in range(3):
+        port = find_free_port(args.host)
+        try:
+            start_workspace_server(workspace, args.host, port, args.no_browser)
+            return
+        except OSError as error:
+            append_launch_log(f"bind failed on port {port}: {error}")
+    print("[cutted] Nao consegui abrir o servidor local. Feche outras janelas do CUTED e tente novamente.")
+    raise SystemExit(1)
+
+
+def start_workspace_server(workspace: Path, host: str, port: int, no_browser: bool) -> None:
+    handler = gallery_handler(workspace)
+    server = http.server.ThreadingHTTPServer((host, port), handler)
+    lock_path = launch_lock_path()
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path.write_text(str(port), encoding="utf-8")
+    append_launch_log(f"launch workspace={workspace} port={port}")
+    print(f"[cutted] Serving {workspace}")
+    print(f"[cutted] Open: http://{host}:{port}/index.html")
+    if not no_browser:
+        open_browser_later(host, port, 0.5)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n[cutted] Server stopped")
+    finally:
+        server.server_close()
+        try:
+            lock_path.unlink()
+        except OSError as error:
+            append_launch_log(f"lock cleanup failed: {error}")
+
+
+def prepare_workspace_dir(value: Path | None) -> Path:
+    workspace = (value or default_workspace_dir()).expanduser().resolve()
+    workspace.mkdir(parents=True, exist_ok=True)
+    return workspace
+
+
+def default_workspace_dir() -> Path:
+    return Path.home() / "Documents" / "CUTED Workspace"
+
+
+def launch_data_dir() -> Path:
+    base = os.environ.get("LOCALAPPDATA") or str(Path.home() / ".cuted")
+    return Path(base) / "CUTED"
+
+
+def launch_lock_path() -> Path:
+    return launch_data_dir() / "cuted-launch.lock"
+
+
+def append_launch_log(message: str) -> None:
+    logs_dir = launch_data_dir() / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    with (logs_dir / "cuted-launch.log").open("a", encoding="utf-8") as handle:
+        handle.write(f"[{stamp}] {message}\n")
+
+
+def running_workspace_port(host: str) -> int | None:
+    lock_path = launch_lock_path()
+    if not lock_path.exists():
+        return None
+    try:
+        port = int(lock_path.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return None
+    if cuted_server_alive(host, port):
+        return port
+    try:
+        lock_path.unlink()
+    except OSError as error:
+        append_launch_log(f"stale lock cleanup failed: {error}")
+    return None
+
+
+def cuted_server_alive(host: str, port: int) -> bool:
+    try:
+        with urllib.request.urlopen(f"http://{host}:{port}/api/settings/openai", timeout=1.5) as response:
+            return response.status == 200
+    except (OSError, http.client.HTTPException):
+        return False
+
+
+def find_free_port(host: str) -> int:
+    for port in LAUNCH_PORT_RANGE:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            if probe.connect_ex((host, port)) != 0:
+                return port
+    raise RuntimeError("Nenhuma porta livre encontrada para o CUTED (8779-8799).")
+
+
+def open_browser_later(host: str, port: int, delay: float) -> None:
+    url = f"http://{host}:{port}/index.html"
+    if delay <= 0:
+        webbrowser.open(url)
+        return
+    threading.Timer(delay, webbrowser.open, args=(url,)).start()
+
+
+def bootstrap_workspace_gallery(workspace: Path) -> None:
+    index_path = workspace / "index.html"
+    if index_path.exists():
+        return
+    write_html(index_path, [], "CUTED")
 
 
 def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler]:
@@ -3133,37 +3264,39 @@ def unique_export_path(path: Path) -> Path:
     return path.with_name(f"{stem}-{uuid.uuid4().hex[:8]}{suffix}")
 
 
-def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
-    payload = read_json_body(handler)
+def import_request_metadata(payload: dict[str, object]) -> dict[str, object]:
     source_url = str(payload.get("source_url") or "").strip()
     source_path = str(payload.get("source_path") or "").strip()
     if not source_url and not source_path:
         raise ValueError("Informe um link ou caminho local para importar.")
-    clips = clamp_int(payload.get("preview_count"), 1, 20, 10)
-    language = clean_optional_text(payload.get("language"), 24) or "pt"
-    preset = clean_preset(payload.get("preset"))
-    duration_profile = clean_duration_profile(payload.get("duration_profile"))
-    context_prompt = clean_optional_text(payload.get("context_prompt"), 5000)
-    render_previews = bool(payload.get("render_previews", True))
-    output_path = clean_output_path(payload.get("output_path") or (payload.get("source_path") if source_url else None))
+    output_path = clean_output_path(payload.get("output_path"))
+    if not output_path:
+        raise ValueError("Escolha a pasta onde os videos finais serao salvos.")
     ai_provider = configured_ai_provider()
     if ai_provider == "openai" and not openai_api_key():
-        raise ValueError("Configure OPENAI_API_KEY no .env.local antes de importar com IA.")
-    out_dir = next_import_output_dir(base_dir, source_url or source_path)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    metadata = {
+        raise ValueError("Adicione sua chave OpenAI nas configuracoes (engrenagem) antes de importar com IA.")
+    return {
         "source_url": source_url,
         "source_path": source_path,
         "output_path": output_path,
-        "preview_count": clips,
-        "language": language,
-        "preset": preset,
-        "duration_profile": duration_profile,
-        "context_prompt": context_prompt,
-        "render_previews": render_previews,
+        "preview_count": clamp_int(payload.get("preview_count"), 1, 20, 10),
+        "language": clean_optional_text(payload.get("language"), 24) or "pt",
+        "preset": clean_preset(payload.get("preset")),
+        "duration_profile": clean_duration_profile(payload.get("duration_profile")),
+        "context_prompt": clean_optional_text(payload.get("context_prompt"), 5000),
+        "render_previews": bool(payload.get("render_previews", True)),
         "ai_provider": ai_provider,
         "mode": "openai_import" if ai_provider == "openai" else "local_fallback",
     }
+
+
+def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
+    payload = read_json_body(handler)
+    metadata = import_request_metadata(payload)
+    source_url = str(metadata["source_url"])
+    source_path = str(metadata["source_path"])
+    out_dir = next_import_output_dir(base_dir, source_url or source_path)
+    out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "import-request.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
     command = import_command(out_dir, source_url, source_path, metadata)
     job_id = uuid.uuid4().hex[:12]
@@ -3298,7 +3431,7 @@ def clean_duration_profile(value: object) -> str:
 def clean_output_path(value: object) -> str:
     raw = str(value or "").strip().strip('"')
     if not raw:
-        return default_desktop_path()
+        return ""
     return str(Path(raw).expanduser())
 
 
@@ -6335,14 +6468,17 @@ def page_html(source_label: str, cards: str, data: str, logo_src: str) -> str:
         </div>
         <button type="submit">Importar</button>
       </div>
+      <div class="import-key-banner" data-import-key-banner hidden>
+        <span>Adicione sua chave OpenAI aqui para importar com IA.</span>
+        <button type="button" data-import-key-open>Abrir configuracoes</button>
+      </div>
       <div class="import-grid">
         <label>Link do video
           <input name="source_url" type="url" placeholder="https://..." autocomplete="off">
         </label>
         <label>Destino dos renders
           <span class="import-path-row">
-            <input name="output_path" type="text" value="{html.escape(default_desktop_path())}" autocomplete="off">
-            <button type="button" data-use-desktop>Desktop</button>
+            <input name="output_path" type="text" value="" placeholder="Selecione a pasta dos videos finais" autocomplete="off">
             <button type="button" data-select-folder>Pasta</button>
           </span>
         </label>
@@ -6455,7 +6591,7 @@ def base_css() -> str:
 header{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:minmax(90px,1fr) auto minmax(90px,1fr);gap:16px;align-items:center;padding:10px 22px 12px;background:var(--color-brand-black);border-bottom:1px solid var(--color-border)}.header-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.icon-button{display:inline-grid;place-items:center;width:38px;min-width:38px;padding:0}.icon-button svg{display:block;width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.brand-lockup{display:grid;justify-items:center;gap:8px;min-width:0}.brand-logo{display:block;width:min(540px,54vw);height:78px;object-fit:contain;object-position:center;border:0;border-radius:0;filter:none}.brand-lockup p{margin:2px 0 0;color:var(--color-text-muted);font-size:11px;line-height:1.1;text-align:center;max-width:min(520px,56vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tabs{position:sticky;top:119px;z-index:4;display:flex;gap:8px;padding:10px 22px;background:#060606;border-bottom:1px solid #1f1f1f}.tabs button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 12px}.tabs button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
 main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px}.card{border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface);overflow:hidden}.card[open]{border-color:var(--color-metal-gray);background:var(--color-surface-raised)}.card.liked{border-color:var(--color-brand-green)}.card.discarded{opacity:.46}.clip-summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;min-height:62px;padding:12px 14px;cursor:pointer;list-style:none}.clip-summary::-webkit-details-marker{display:none}.clip-rank{color:var(--color-metal-gray);font-weight:700}.clip-title{display:grid;gap:2px;min-width:0}.clip-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}.clip-title small{color:var(--color-text-muted)}.clip-status{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.clip-status span,.format-previews span{display:inline-flex;align-items:center;min-height:26px;padding:4px 8px;border-radius:999px;background:#242424;color:var(--color-text-soft);font-size:12px}
 .app-notice{position:sticky;top:0;z-index:30;margin:0;padding:10px 14px;background:#2b1717;color:#ffd7d7;border-bottom:1px solid #6d2b2b;font-size:13px;text-align:center}.app-notice[hidden]{display:none}
-.import-stage{display:none;max-width:1080px;margin:18px auto;padding:0 18px}.import-panel{display:grid;gap:14px;padding:18px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised)}.import-panel p{margin:4px 0 0;color:var(--color-text-muted)}.import-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.import-panel label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.import-panel input,.import-panel select,.import-panel textarea{width:100%;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black);color:var(--color-text);padding:9px 10px;font:inherit}.import-panel textarea{resize:vertical;min-height:112px}.import-path-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px}.import-path-row button{min-height:38px;background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.duration-profile{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0}.duration-profile legend{grid-column:1/-1;color:var(--color-text-muted);font-size:12px}.duration-profile label{position:relative;display:grid!important}.duration-profile input{position:absolute;opacity:0;pointer-events:none}.duration-profile span{display:grid;gap:2px;min-height:54px;padding:10px 12px;border:1px solid var(--color-border-strong);border-radius:8px;background:var(--color-surface-muted);color:var(--color-text-soft)}.duration-profile input:checked+span{border-color:var(--color-brand-green);background:#182011;color:var(--color-text)}.duration-profile small{color:var(--color-text-muted)}.import-context{display:grid}.import-status{min-height:20px;color:var(--color-text-muted)}.import-result{display:flex;gap:8px;flex-wrap:wrap}.import-result a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.import-result code{display:block;width:100%;padding:10px;border:1px solid #3a2525;border-radius:6px;background:#180d0d;color:#ffcccc;white-space:pre-wrap}
+.import-stage{display:none;max-width:1080px;margin:18px auto;padding:0 18px}.import-panel{display:grid;gap:14px;padding:18px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised)}.import-panel p{margin:4px 0 0;color:var(--color-text-muted)}.import-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.import-panel label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.import-panel input,.import-panel select,.import-panel textarea{width:100%;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black);color:var(--color-text);padding:9px 10px;font:inherit}.import-panel textarea{resize:vertical;min-height:112px}.import-path-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.import-key-banner{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 12px;border:1px solid rgba(17,162,207,.4);border-radius:8px;background:rgba(17,162,207,.1);color:var(--color-text)}.import-key-banner[hidden]{display:none}.import-key-banner button{min-height:34px}.import-path-row button{min-height:38px;background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.duration-profile{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0}.duration-profile legend{grid-column:1/-1;color:var(--color-text-muted);font-size:12px}.duration-profile label{position:relative;display:grid!important}.duration-profile input{position:absolute;opacity:0;pointer-events:none}.duration-profile span{display:grid;gap:2px;min-height:54px;padding:10px 12px;border:1px solid var(--color-border-strong);border-radius:8px;background:var(--color-surface-muted);color:var(--color-text-soft)}.duration-profile input:checked+span{border-color:var(--color-brand-green);background:#182011;color:var(--color-text)}.duration-profile small{color:var(--color-text-muted)}.import-context{display:grid}.import-status{min-height:20px;color:var(--color-text-muted)}.import-result{display:flex;gap:8px;flex-wrap:wrap}.import-result a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.import-result code{display:block;width:100%;padding:10px;border:1px solid #3a2525;border-radius:6px;background:#180d0d;color:#ffcccc;white-space:pre-wrap}
 .layer-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:100%;min-height:0}.layer-strip:empty{display:none}.bumper-sequence{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;min-height:24px;color:var(--color-text-muted);font-size:12px}.bumper-sequence:empty{display:none}.bumper-sequence span{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bumper-sequence b{color:var(--color-brand-green);font-weight:800}.layer-chip{display:inline-flex;gap:6px;align-items:center;max-width:100%;min-height:30px;padding:4px 5px 4px 9px;border:1px solid #303030;border-radius:999px;background:var(--color-surface-muted);color:var(--color-text-soft);font-size:12px}.layer-chip.is-selected{border-color:var(--color-focus);background:#182011;color:var(--color-text)}.layer-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.layer-chip button{display:inline-grid;place-items:center;width:22px;height:22px;min-width:22px;padding:0;border:1px solid #3a3a3a;border-radius:999px;background:#242424;color:var(--color-text-soft);font-size:14px;line-height:1}
 .editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;justify-items:center;gap:10px}.preview-frame{display:grid;gap:10px;width:100%;max-width:520px}.media{position:relative;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000;pointer-events:none}.placeholder{display:grid;place-items:center;height:100%;color:#777}.preview-bar{display:grid;grid-template-columns:1fr;gap:8px;justify-items:center;width:100%;padding:8px;border:1px solid #252525;border-radius:8px;background:#0a0a0a}.preview-controls,.preview-volume-group{display:flex;gap:6px;align-items:center}.preview-controls{justify-content:center;padding:4px;border:1px solid #202020;border-radius:999px;background:var(--color-surface-raised)}.preview-volume-group{padding-left:4px;border-left:1px solid #2d2d2d}.preview-icon,.preview-step{display:inline-grid;place-items:center;width:32px;height:32px;min-width:32px;padding:0;border:1px solid var(--color-border-strong);border-radius:999px;background:var(--color-surface-control);color:var(--color-text-soft)}.preview-play{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}.preview-icon svg{width:16px;height:16px;display:block;stroke:currentColor}.preview-step{width:26px;height:26px;min-width:26px;font-weight:700}.preview-volume-group output{min-width:32px;color:#d8d8d8;font-size:12px;text-align:center}.card[data-preview-format=tiktok] .preview-frame,.card[data-preview-format=shorts] .preview-frame,.card[data-preview-format=instagram] .preview-frame{max-width:min(100%,calc(72vh * 9 / 16))}.card[data-preview-format=facebook] .preview-frame{max-width:min(100%,calc(72vh * 4 / 5))}.card[data-preview-format=youtube] .preview-frame{max-width:min(100%,520px)}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;overflow:visible;padding-bottom:1px}.preview-strip button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 10px;min-height:34px;border-radius:999px;white-space:nowrap}.preview-strip button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-stack{display:grid;gap:10px}.tool-section{border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:0;overflow:hidden}.tool-section>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:10px 12px;cursor:pointer;list-style:none;color:var(--color-text);font-weight:800}.tool-section>summary::-webkit-details-marker{display:none}.tool-section>summary:after{content:"";width:8px;height:8px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg);opacity:.62;transition:transform .16s ease}.tool-section[open]>summary:after{transform:rotate(225deg)}.tool-section>summary small{color:var(--color-text-muted);font-size:12px;font-weight:600;text-align:right}.tool-section[open]>summary{border-bottom:1px solid rgba(231,231,232,.08)}.tool-section>*:not(summary){margin:12px}.timeline-editor{padding:0}.timeline-head,.timeline-timebar,.timeline-values{display:flex;justify-content:space-between;gap:12px;color:var(--color-text-muted);font-size:12px}.timeline-head output,.timeline-timebar output{color:var(--color-text);text-align:right}.timeline-timebar{margin-top:10px}.timeline-timebar span:last-child{color:#777;text-align:right}.timeline-scrub{position:relative;height:42px;margin-top:8px}.timeline-scrub-track{position:absolute;left:0;right:0;top:17px;height:8px;border:1px solid #343434;border-radius:999px;background:linear-gradient(90deg,var(--color-surface-muted),#252525);overflow:hidden}.timeline-selected{position:absolute;top:0;bottom:0;background:rgba(175,207,42,.22);border-left:1px solid var(--color-brand-green);border-right:1px solid var(--color-brand-green)}.timeline-playhead{position:absolute;top:-8px;bottom:-8px;width:2px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7)}.timeline-playhead:before{content:"";position:absolute;left:50%;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--color-brand-white);transform:translateX(-50%)}.timeline-scrub input{position:absolute;inset:0;width:100%;height:42px;margin:0;background:transparent;opacity:0;cursor:pointer}.timeline{position:relative;height:38px;margin-top:6px}.timeline-track{position:absolute;left:0;right:0;top:16px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:var(--color-brand-white);border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:38px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{margin-top:6px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
@@ -9217,6 +9353,7 @@ async function saveSettingsForm(form){
     if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao salvar configuracoes.");
     applySettingsPayload(form, payload.settings || {}, payload.usage || {});
     if (status) status.textContent = `Salvo. ${status.textContent}`;
+    refreshImportKeyBanner();
   } catch (error) {
     if (status) status.textContent = error.message || "Nao consegui salvar.";
   }
@@ -9260,15 +9397,7 @@ function setupImportPathButtons(){
   const form = document.querySelector("[data-import-form]");
   if (!form) return;
   const outputPath = form.querySelector("[name=output_path]");
-  const desktopPath = outputPath?.defaultValue || "";
   const status = document.querySelector("[data-import-status]");
-  const useDesktop = form.querySelector("[data-use-desktop]");
-  if (useDesktop && outputPath) {
-    useDesktop.addEventListener("click", () => {
-      outputPath.value = desktopPath;
-      outputPath.focus();
-    });
-  }
   const selectFolder = form.querySelector("[data-select-folder]");
   if (selectFolder && outputPath) {
     selectFolder.addEventListener("click", async () => {
@@ -9278,7 +9407,7 @@ function setupImportPathButtons(){
         const response = await fetch("/api/select-folder", { method: "POST" });
         const payload = await response.json();
         if (!response.ok || !payload.ok) throw new Error(payload.error || "Nao consegui selecionar a pasta.");
-        outputPath.value = payload.path || desktopPath;
+        outputPath.value = payload.path || outputPath.value;
         if (status) status.textContent = "Pasta selecionada.";
       } catch (error) {
         if (status) status.textContent = error.message || "Seletor de pasta indisponivel.";
@@ -9288,10 +9417,49 @@ function setupImportPathButtons(){
     });
   }
 }
+let importOpenaiState = { provider: "openai", keyConfigured: true };
+function importNeedsOpenaiKey(){
+  return importOpenaiState.provider === "openai" && !importOpenaiState.keyConfigured;
+}
+async function refreshImportKeyBanner(){
+  const banner = document.querySelector("[data-import-key-banner]");
+  if (!banner) return;
+  try {
+    const response = await fetch("/api/settings/openai");
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao carregar configuracoes.");
+    const settings = payload.settings || {};
+    importOpenaiState = {
+      provider: String(settings.ai_provider || "openai"),
+      keyConfigured: Boolean(settings.key_configured)
+    };
+  } catch (error) {
+    console.warn("Nao consegui checar a chave OpenAI:", error);
+    importOpenaiState = { provider: "openai", keyConfigured: true };
+  }
+  banner.hidden = !importNeedsOpenaiKey();
+}
+function setupImportKeyBanner(){
+  const banner = document.querySelector("[data-import-key-banner]");
+  if (!banner) return;
+  banner.querySelector("[data-import-key-open]")?.addEventListener("click", () => openSettingsPanel());
+  refreshImportKeyBanner();
+}
 async function startImportJob(form){
   const status = document.querySelector("[data-import-status]");
   const result = document.querySelector("[data-import-result]");
   const button = form.querySelector("button[type=submit]");
+  const outputPath = form.querySelector("[name=output_path]");
+  if (!String(outputPath?.value || "").trim()) {
+    if (status) status.textContent = "Escolha a pasta onde os videos finais serao salvos.";
+    outputPath?.focus();
+    return;
+  }
+  if (importNeedsOpenaiKey()) {
+    if (status) status.textContent = "Adicione sua chave OpenAI nas configuracoes para importar com IA.";
+    openSettingsPanel();
+    return;
+  }
   if (result) result.innerHTML = "";
   if (status) status.textContent = "Criando job de importacao...";
   if (button) button.disabled = true;
@@ -9573,6 +9741,7 @@ document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
 });
 setupSettingsPanel();
 setupImportPathButtons();
+setupImportKeyBanner();
 document.querySelector("[data-empty-import]")?.addEventListener("click", () => applyTab("import"));
 document.querySelector("[data-import-form]")?.addEventListener("submit", event => {
   event.preventDefault();
