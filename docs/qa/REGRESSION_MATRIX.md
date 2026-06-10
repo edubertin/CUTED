@@ -21,11 +21,12 @@ review workspace, data contracts, or render pipeline.
 | Playback | Click canvas | Video does not start |
 | Playback | Click play button | Video starts |
 | Playback | Local MP4 range request | Server responds with `206 Partial Content` |
-| Preview camera timeline | Inspect preview controls | Play, blue camera timeline, and one volume button fit on one row |
+| Preview camera timeline | Inspect preview controls | Play/volume appear first, media format opens in a downward dropdown, and timeline fills the second row |
 | Preview camera timeline | Click timeline rail | Preview seeks to the clicked time and camera framing updates |
 | Preview camera timeline | Click keyframe marker | Compact picker opens with camera preset and strength controls |
+| Preview camera timeline | Seek timeline, click canvas, choose Camera | Center manual camera keyframe is added at the playhead and can be edited |
 | Preview camera timeline | Change keyframe preset | Active platform `camera_path` updates without changing other platforms |
-| Preview camera timeline | Open a clip with waveform sidecar | Low-emphasis waveform appears behind the line without covering keyframes |
+| Preview camera timeline | Open a clip with waveform sidecar | Low-emphasis green waveform appears behind the line without covering keyframes |
 | Preview camera timeline | Click waveform-backed rail | Seek still works and camera markers remain clickable |
 | Timeline | Scrub the cut timeline, then play | Preview seeks to the scrubbed time and plays from there |
 | Timeline | Drag start/end trim handles | Preview pauses and seeks to the active trim handle |
