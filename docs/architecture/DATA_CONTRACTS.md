@@ -76,6 +76,7 @@ trim_start_seconds
 trim_end_seconds
 adjusted_duration
 clip_path
+waveform_file
 platform
 platforms
 caption_segments

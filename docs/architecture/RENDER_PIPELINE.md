@@ -127,6 +127,12 @@ The preview toolbar also displays the active `camera_path` as a compact camera
 timeline. This toolbar is only another editor for the same per-platform
 `camera_path` data; it does not introduce a separate render contract.
 
+During clip rendering the pipeline may also write a small
+`waveforms/clip-XXX.json` sidecar containing normalized audio peak buckets for
+the preview timeline. This data is passive UI metadata: it helps the user see
+loud and quiet moments behind the camera keyframes, but it is not consumed by
+final MP4 rendering.
+
 ## Auto Camera Analysis
 
 The local gallery server exposes `/api/camera/analyze` for optional OpenCV

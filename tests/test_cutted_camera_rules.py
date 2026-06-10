@@ -72,13 +72,41 @@ class CuttedCameraRuleTests(unittest.TestCase):
 
         self.assertIn("preview-transport-group", html)
         self.assertIn("data-preview-camera-timeline", html)
+        self.assertIn("data-preview-audio-waveform", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("data-preview-volume", html)
         self.assertIn("data-preview-volume-popover", html)
         self.assertIn("data-preview-volume-slider", html)
-        self.assertIn("data-preview-volume-zero", html)
         self.assertNotIn("data-preview-volume-down", html)
         self.assertNotIn("data-preview-volume-up", html)
+        self.assertNotIn("data-preview-volume-zero", html)
         self.assertNotIn("data-preview-volume-value", html)
+
+    def test_moment_contract_includes_waveform_file(self) -> None:
+        moment = CUTTED.Moment(
+            rank=1,
+            start=0.0,
+            end=12.0,
+            peak=4.0,
+            score=0.8,
+            title="Teste",
+            reason="",
+            transcript="texto",
+            peak_text="texto",
+            clip_file="clips/clip-001.mp4",
+            frame_file="frames/clip-001.jpg",
+            waveform_file="waveforms/clip-001.json",
+        )
+
+        data = CUTTED.moment_to_dict(moment)
+
+        self.assertEqual(data["waveform_file"], "waveforms/clip-001.json")
+
+    def test_audio_waveform_peaks_are_normalized(self) -> None:
+        peaks = CUTTED.normalized_audio_peaks([0.0, 0.25, -0.25, 0.5, -0.5, 1.0, -1.0, 0.0], 4)
+
+        self.assertEqual(len(peaks), 4)
+        self.assertEqual(max(peaks), 1.0)
+        self.assertGreater(peaks[-1], peaks[0])
 
     def test_yolo_person_box_converts_to_camera_subject(self) -> None:
         row = CUTTED.yolo_person_row_from_box([100.0, 100.0, 300.0, 800.0], 1000, 1000, 0.78)

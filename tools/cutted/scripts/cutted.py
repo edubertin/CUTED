@@ -178,6 +178,7 @@ class Moment:
     clip_file: str | None
     frame_file: str | None
     caption_segments: tuple[Segment, ...] = ()
+    waveform_file: str | None = None
 
 
 @dataclass(frozen=True)
@@ -5929,30 +5930,93 @@ def overlap_ratio(left: Moment, right: Moment) -> float:
 
 def with_rank(moment: Moment, rank: int) -> Moment:
     return Moment(rank, moment.start, moment.end, moment.peak, moment.score, moment.title, moment.reason,
-                  moment.transcript, moment.peak_text, moment.clip_file, moment.frame_file, moment.caption_segments)
+                  moment.transcript, moment.peak_text, moment.clip_file, moment.frame_file, moment.caption_segments,
+                  moment.waveform_file)
 
 
 def render_outputs(video: Path | str, out_dir: Path, moments: list[Moment], ffmpeg: str, skip_render: bool) -> list[Moment]:
     clips_dir = out_dir / "clips"
     frames_dir = out_dir / "frames"
+    waveforms_dir = out_dir / "waveforms"
     clips_dir.mkdir(exist_ok=True)
     frames_dir.mkdir(exist_ok=True)
+    waveforms_dir.mkdir(exist_ok=True)
     rendered = []
     for moment in moments:
-        rendered.append(render_one(video, clips_dir, frames_dir, moment, ffmpeg, skip_render))
+        rendered.append(render_one(video, clips_dir, frames_dir, waveforms_dir, moment, ffmpeg, skip_render))
     return rendered
 
 
-def render_one(video: Path | str, clips_dir: Path, frames_dir: Path, moment: Moment, ffmpeg: str, skip_render: bool) -> Moment:
+def render_one(video: Path | str, clips_dir: Path, frames_dir: Path, waveforms_dir: Path, moment: Moment, ffmpeg: str, skip_render: bool) -> Moment:
     stem = f"clip-{moment.rank:03d}"
     clip_path = clips_dir / f"{stem}.mp4"
     frame_path = frames_dir / f"{stem}.jpg"
+    waveform_path = waveforms_dir / f"{stem}.json"
     if not skip_render:
         cut_clip(video, clip_path, moment.start, moment.end, ffmpeg)
         extract_frame(video, frame_path, moment.peak, ffmpeg)
+    waveform_file = write_audio_waveform_file(clip_path, waveform_path, ffmpeg)
     return Moment(moment.rank, moment.start, moment.end, moment.peak, moment.score, moment.title, moment.reason,
                   moment.transcript, moment.peak_text, rel(clip_path, clips_dir.parent), rel(frame_path, frames_dir.parent),
-                  moment.caption_segments)
+                  moment.caption_segments, rel(waveform_path, waveforms_dir.parent) if waveform_file else None)
+
+
+def write_audio_waveform_file(media: Path, output: Path, ffmpeg: str, buckets: int = 120) -> bool:
+    if not media.exists() or not media_has_audio(media, ffmpeg):
+        return False
+    samples = audio_waveform_samples(media, ffmpeg)
+    if not samples:
+        return False
+    peaks = normalized_audio_peaks(samples, buckets)
+    if not peaks:
+        return False
+    output.parent.mkdir(exist_ok=True)
+    output.write_text(json.dumps({"peaks": peaks}, separators=(",", ":")), encoding="utf-8")
+    return True
+
+
+def audio_waveform_samples(media: Path, ffmpeg: str, sample_rate: int = 8000) -> list[float]:
+    command = [ffmpeg, "-v", "error", "-i", str(media), "-vn", "-ac", "1", "-ar", str(sample_rate), "-f", "f32le", "pipe:1"]
+    try:
+        result = subprocess.run(command, check=True, capture_output=True)
+    except subprocess.CalledProcessError as error:
+        print(f"Warning: could not extract audio waveform for {media}: {error}", file=sys.stderr)
+        return []
+    if not result.stdout:
+        return []
+    values = array_from_float32le(result.stdout)
+    return [float(item) for item in values]
+
+
+def array_from_float32le(data: bytes):
+    import array
+
+    values = array.array("f")
+    values.frombytes(data[: len(data) - (len(data) % 4)])
+    if sys.byteorder != "little":
+        values.byteswap()
+    return values
+
+
+def normalized_audio_peaks(samples: list[float], buckets: int) -> list[float]:
+    count = max(1, int(buckets))
+    width = max(1, math.ceil(len(samples) / count))
+    levels = [audio_bucket_level(samples[index:index + width]) for index in range(0, len(samples), width)]
+    peak = max(levels) if levels else 0.0
+    if peak <= 0:
+        return []
+    return [round(clampNumberPy(level / peak, 0.03, 1.0), 3) for level in levels[:count]]
+
+
+def audio_bucket_level(samples: list[float]) -> float:
+    if not samples:
+        return 0.0
+    energy = sum(float(item) * float(item) for item in samples) / len(samples)
+    return math.sqrt(max(energy, 0.0))
+
+
+def clampNumberPy(value: float, minimum: float, maximum: float) -> float:
+    return max(minimum, min(maximum, value))
 
 
 def cut_clip(video: Path | str, output: Path, start: float, end: float, ffmpeg: str) -> None:
@@ -6005,6 +6069,7 @@ def moment_to_dict(moment: Moment) -> dict[str, object]:
         "rank": moment.rank, "start": moment.start, "end": moment.end, "peak": moment.peak, "score": moment.score,
         "title": moment.title, "reason": moment.reason, "transcript": moment.transcript,
         "peak_text": moment.peak_text, "clip_file": moment.clip_file, "frame_file": moment.frame_file,
+        "waveform_file": moment.waveform_file,
         "caption_segments": [segment_to_dict(item) for item in moment.caption_segments],
     }
 
@@ -6096,7 +6161,6 @@ def card_html(moment: Moment) -> str:
                     <button class="preview-icon preview-volume" data-preview-volume type="button" aria-label="Volume" title="Volume"></button>
                     <div class="preview-volume-popover" data-preview-volume-popover hidden>
                       <input class="preview-volume-slider" data-preview-volume-slider type="range" min="0" max="100" step="5" value="70" aria-label="Volume do preview">
-                      <button class="preview-volume-zero" data-preview-volume-zero type="button" aria-label="Zerar volume" title="Zerar volume"></button>
                     </div>
                   </div>
                 </div>
@@ -6425,7 +6489,7 @@ header{background:linear-gradient(180deg,rgba(5,5,5,.92),rgba(5,5,5,.68));backdr
 .preview-icon,.preview-step{border-color:var(--glass-border);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.035)),rgba(231,231,232,.08);color:var(--color-text);box-shadow:inset 0 1px 0 rgba(255,255,255,.36),inset 0 -8px 14px rgba(0,0,0,.14)}
 .preview-play{width:38px;height:38px;min-width:38px;background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
 .preview-volume-group{border-left:1px solid rgba(231,231,232,.12)}.preview-volume-group output{color:rgba(231,231,232,.72);font-variant-numeric:tabular-nums}
-.preview-bar,.preview-controls,.preview-camera-timeline,.preview-volume-group{overflow:visible}.preview-controls{display:grid;grid-template-columns:auto minmax(160px,1fr);align-items:center;gap:10px;width:100%;max-width:100%;padding:0;border:0;background:transparent;box-shadow:none;backdrop-filter:none}.preview-transport-group{display:flex;align-items:center;gap:6px;padding:5px 6px;border:1px solid var(--glass-border);border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.025)),rgba(5,5,5,.26);box-shadow:inset 0 1px 0 var(--glass-edge),0 8px 22px rgba(0,0,0,.18);backdrop-filter:blur(18px) saturate(1.45)}.preview-volume-group{position:relative;padding-left:0;border-left:0}.preview-camera-timeline{position:relative;min-width:160px;display:grid;align-items:center;min-height:42px;padding:6px 12px;border:1px solid var(--glass-border);border-radius:999px;background:linear-gradient(180deg,rgba(17,162,207,.11),rgba(255,255,255,.025)),rgba(5,5,5,.24);box-shadow:inset 0 1px 0 var(--glass-edge),0 8px 22px rgba(0,0,0,.18);backdrop-filter:blur(18px) saturate(1.45)}.preview-camera-rail{position:relative;width:100%;height:24px;cursor:pointer;touch-action:none}.preview-camera-track{position:absolute;left:0;right:0;top:50%;height:3px;border-radius:999px;background:linear-gradient(90deg,rgba(17,162,207,.5),rgba(231,231,232,.12));box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);transform:translateY(-50%)}.preview-camera-playhead{position:absolute;top:50%;width:2px;height:20px;border-radius:999px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7);transform:translate(-50%,-50%);pointer-events:none}.preview-camera-marker{position:absolute;top:50%;width:13px;height:24px;min-width:13px;padding:0;border:1px solid rgba(17,162,207,.84);border-radius:999px;background:rgba(17,162,207,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 0 0 2px rgba(17,162,207,.07);transform:translate(-50%,-50%);cursor:pointer}.preview-camera-marker.active{width:15px;background:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.16),0 0 14px rgba(17,162,207,.28)}.preview-camera-popover,.preview-volume-popover{position:absolute;z-index:30;display:grid;gap:8px;padding:10px;border:1px solid var(--glass-border);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel)}.preview-camera-popover{bottom:calc(100% + 8px);left:50%;width:min(260px,92vw);transform:translateX(-50%)}.preview-camera-popover[hidden],.preview-volume-popover[hidden]{display:none}.preview-camera-popover label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.preview-camera-popover select{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.preview-camera-popover input,.preview-volume-slider{width:100%;accent-color:var(--color-brand-blue)}.preview-camera-popover button{min-height:32px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.preview-volume-popover{right:0;bottom:calc(100% + 8px);width:164px}.preview-volume-zero{display:inline-grid;place-items:center;min-height:30px;border:1px solid var(--color-border-strong);border-radius:999px;background:#242424;color:var(--color-text-soft)}
+.preview-bar,.preview-controls,.preview-camera-timeline,.preview-volume-group{overflow:visible}.preview-bar{position:relative;z-index:20}.preview-controls{display:grid;grid-template-columns:auto minmax(160px,1fr);align-items:center;gap:10px;width:100%;max-width:100%;padding:0;border:0;background:transparent;box-shadow:none;backdrop-filter:none}.preview-transport-group{display:flex;align-items:center;gap:6px;padding:5px 6px;border:1px solid var(--glass-border);border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.025)),rgba(5,5,5,.26);box-shadow:inset 0 1px 0 var(--glass-edge),0 8px 22px rgba(0,0,0,.18);backdrop-filter:blur(18px) saturate(1.45)}.preview-volume-group{position:relative;padding-left:0;border-left:0}.preview-camera-timeline{position:relative;min-width:160px;display:grid;align-items:center;min-height:42px;padding:6px 12px;border:1px solid rgba(17,162,207,.42);border-radius:4px;background:linear-gradient(180deg,rgba(17,162,207,.11),rgba(255,255,255,.025)),rgba(5,5,5,.24);box-shadow:inset 0 1px 0 var(--glass-edge),0 8px 22px rgba(0,0,0,.18);backdrop-filter:blur(18px) saturate(1.45)}.preview-camera-rail{position:relative;width:100%;height:24px;cursor:pointer;touch-action:none}.preview-audio-waveform{position:absolute;inset:1px 0;z-index:0;display:flex;align-items:center;gap:1px;opacity:.5;pointer-events:none}.preview-audio-waveform[hidden]{display:none}.preview-audio-waveform span{flex:1;min-width:1px;max-height:20px;background:rgba(17,162,207,.22);border-radius:1px}.preview-camera-track{position:absolute;left:0;right:0;top:50%;z-index:1;height:3px;border-radius:0;background:linear-gradient(90deg,rgba(17,162,207,.5),rgba(231,231,232,.12));box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);transform:translateY(-50%)}.preview-camera-playhead{position:absolute;top:50%;z-index:4;width:2px;height:20px;border-radius:999px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7);transform:translate(-50%,-50%);pointer-events:none}.preview-camera-marker{position:absolute;top:50%;z-index:3;width:9px;height:22px;min-width:9px;padding:0;border:1px solid rgba(17,162,207,.84);border-radius:3px;background:rgba(17,162,207,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 0 0 2px rgba(17,162,207,.06);transform:translate(-50%,-50%);cursor:pointer}.preview-camera-marker:active{transform:translate(-50%,-50%)}.preview-camera-marker.active{background:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.18),0 0 14px rgba(17,162,207,.32)}.preview-camera-popover,.preview-volume-popover{position:absolute;z-index:1000;display:grid;gap:8px;padding:10px;border:1px solid var(--glass-border);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel)}.preview-camera-popover{top:calc(100% + 8px);left:50%;width:min(260px,92vw);transform:translateX(-50%)}.preview-camera-popover[hidden],.preview-volume-popover[hidden]{display:none}.preview-camera-popover label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.preview-camera-popover select{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.preview-camera-popover input{width:100%;accent-color:var(--color-brand-blue)}.preview-camera-popover button{min-height:32px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.preview-volume-popover{right:50%;bottom:calc(100% + 8px);width:auto;height:128px;padding:12px 8px;place-items:center;transform:translateX(50%)}.preview-volume-slider{display:block;width:110px;accent-color:var(--color-brand-blue);writing-mode:vertical-rl;direction:rtl}
 .media{border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-panel);background:#000;box-shadow:0 14px 44px rgba(0,0,0,.32)}
 .tool-section,.export-dock,.overlay-menu,.settings-panel{border-color:var(--glass-border);border-radius:var(--radius-panel);background:linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.025) 36%,rgba(0,0,0,.08) 100%),var(--glass-bg-strong);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-edge),inset 0 -18px 28px rgba(0,0,0,.14);backdrop-filter:blur(24px) saturate(1.45)}
 .tool-section>summary{color:rgba(231,231,232,.9)}.export-dock{padding:14px}.export-dock span{color:rgba(231,231,232,.6)}
@@ -8074,13 +8138,73 @@ function renderPreviewCameraTimeline(card){
     return `<button class="preview-camera-marker${active}" data-preview-camera-marker="${index}" type="button" style="left:${left.toFixed(2)}%" title="${escapeAttr(`${fixed(frame.time)} - ${label}`)}" aria-label="${escapeAttr(`Editar camera ${label} em ${fixed(frame.time)}`)}"></button>`;
   }).join("");
   container.innerHTML = `<div class="preview-camera-rail" data-preview-camera-rail>
+    <div class="preview-audio-waveform" data-preview-audio-waveform hidden></div>
     <div class="preview-camera-track"></div>
     ${markers}
     <span class="preview-camera-playhead" data-preview-camera-playhead style="left:0%"></span>
   </div>
   <div class="preview-camera-popover" data-preview-camera-popover hidden></div>`;
   bindPreviewCameraTimeline(card);
+  renderPreviewAudioWaveform(card);
   updatePreviewCameraTimelinePlayhead(card);
+}
+function renderPreviewAudioWaveform(card){
+  const layer = card.querySelector("[data-preview-audio-waveform]");
+  if (!layer) return;
+  const cached = parsePreviewWaveform(card.dataset.previewWaveformPeaks);
+  if (cached.length) {
+    layer.innerHTML = previewWaveformBarsHtml(cached);
+    layer.hidden = false;
+    return;
+  }
+  loadPreviewAudioWaveform(card, layer);
+}
+function loadPreviewAudioWaveform(card, layer){
+  const src = previewWaveformSource(card);
+  if (!src) {
+    layer.hidden = true;
+    return;
+  }
+  if (card.dataset.previewWaveformLoading === src) return;
+  card.dataset.previewWaveformLoading = src;
+  fetch(cacheBustedPreview(src, `waveform-${card.dataset.rank || ""}`))
+    .then(response => response.ok ? response.json() : null)
+    .then(payload => applyPreviewWaveformPayload(card, payload))
+    .catch(error => {
+      console.debug("Nao consegui carregar waveform do preview.", error);
+      layer.hidden = true;
+    });
+}
+function applyPreviewWaveformPayload(card, payload){
+  const peaks = parsePreviewWaveform(payload?.peaks);
+  const layer = card.querySelector("[data-preview-audio-waveform]");
+  delete card.dataset.previewWaveformLoading;
+  if (!layer || !peaks.length) {
+    if (layer) layer.hidden = true;
+    return;
+  }
+  card.dataset.previewWaveformPeaks = JSON.stringify(peaks);
+  layer.innerHTML = previewWaveformBarsHtml(peaks);
+  layer.hidden = false;
+}
+function previewWaveformSource(card){
+  const moment = (window.CUTTED_DATA.moments || []).find(item => String(item.rank) === String(card.dataset.rank));
+  return moment?.waveform_file || "";
+}
+function parsePreviewWaveform(value){
+  const raw = typeof value === "string" ? safeJsonParse(value) : value;
+  if (!Array.isArray(raw)) return [];
+  return raw.map(item => clampNumber(Number(item) || 0, 0, 1)).filter(item => item > 0).slice(0, 180);
+}
+function safeJsonParse(value){
+  try { return JSON.parse(value); }
+  catch (error) {
+    console.debug("Waveform cache invalido.", error);
+    return null;
+  }
+}
+function previewWaveformBarsHtml(peaks){
+  return peaks.map(item => `<span style="height:${Math.max(8, Math.round(item * 100))}%"></span>`).join("");
 }
 function updatePreviewCameraTimelinePlayhead(card, time = null){
   const playhead = card.querySelector("[data-preview-camera-playhead]");
@@ -8155,7 +8279,6 @@ function openPreviewCameraPopover(card){
   const index = selectedCameraPathIndex(card, state.path);
   const frame = state.path[index] || state.path[0] || normalizeCameraPathFrame({ time: 0, key: "center", strength: 60 });
   const left = clampNumber((Number(frame.time || 0) / state.duration) * 100, 6, 94);
-  const explicit = explicitCameraPathForEdit(state.edit);
   popover.style.left = `${left.toFixed(2)}%`;
   popover.innerHTML = `<label>Camera
     <select data-preview-camera-popover-key>${cameraOptionsHtml(frame.key || "center")}</select>
@@ -8163,7 +8286,7 @@ function openPreviewCameraPopover(card){
   <label>Forca
     <input data-preview-camera-popover-strength type="range" min="0" max="100" step="5" value="${frame.strength ?? 60}">
   </label>
-  <button data-preview-camera-popover-delete type="button"${state.path.length > 1 && explicit.length ? "" : " disabled"}>Excluir ponto</button>`;
+  <button data-preview-camera-popover-delete type="button"${state.path.length > 1 ? "" : " disabled"}>Excluir ponto</button>`;
   popover.hidden = false;
 }
 function closePreviewCameraPopover(card){
@@ -8291,7 +8414,6 @@ function syncPreviewPlayButton(card){
 function syncPreviewVolumeButton(card){
   const button = card.querySelector("[data-preview-volume]");
   const slider = card.querySelector("[data-preview-volume-slider]");
-  const zero = card.querySelector("[data-preview-volume-zero]");
   const video = primaryCameraVideo(card);
   if (!button) return;
   if (!video) {
@@ -8305,11 +8427,6 @@ function syncPreviewVolumeButton(card){
   button.setAttribute("aria-label", "Volume");
   button.title = "Volume";
   if (slider) slider.value = String(value);
-  if (zero) {
-    zero.innerHTML = previewIcon(value <= 0 ? "volume" : "volume-off");
-    zero.setAttribute("aria-label", value <= 0 ? "Restaurar volume" : "Zerar volume");
-    zero.title = value <= 0 ? "Restaurar volume" : "Zerar volume";
-  }
 }
 function openPreviewVolumePopover(card){
   const popover = card.querySelector("[data-preview-volume-popover]");
@@ -9434,17 +9551,6 @@ document.querySelectorAll(".card").forEach(card => {
     volumeSlider.addEventListener("input", event => {
       event.stopPropagation();
       setPreviewVolume(card, Number(event.target.value || 0) / 100);
-    });
-  }
-  const volumeZero = card.querySelector("[data-preview-volume-zero]");
-  if (volumeZero) {
-    volumeZero.addEventListener("click", event => {
-      event.preventDefault();
-      event.stopPropagation();
-      const video = primaryCameraVideo(card);
-      if (!video) return;
-      applyPreviewVolume(video);
-      setPreviewVolume(card, video.muted || video.volume <= 0 ? defaultPreviewVolume : 0);
     });
   }
   bindPreviewVolumeDismiss();
