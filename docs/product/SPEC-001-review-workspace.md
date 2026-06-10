@@ -45,11 +45,13 @@ into a dedicated app.
 - Clicking the video canvas must not start playback.
 - Playback starts only from the explicit play control.
 - Volume defaults to 20 percent for every opened video.
-- The preview exposes a single volume button for mute/unmute. It does not show
-  volume percentages or step controls in the main toolbar.
-- The preview controls include a compact camera timeline between play and
+- The preview exposes a single volume button. Clicking it opens a compact
+  vertical slider; the main toolbar does not show volume percentages or step
+  controls.
+- The preview controls include a compact camera timeline next to play and
   volume. The line shows camera keyframes in CUTED blue, follows the playhead,
-  and lets the user seek by clicking the line.
+  lets the user seek by clicking the line, and may show a low-emphasis audio
+  waveform behind the camera controls.
 - Clicking a camera keyframe opens a small picker for changing the camera preset
   and strength for the active platform.
 - Canvas clicks create or open the layer insertion menu only when the target is
