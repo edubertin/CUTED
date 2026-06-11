@@ -91,11 +91,12 @@ CAMERA_FIT_BREAKAWAY_INTERVAL_SECONDS = 7.0
 CAMERA_FIT_BREAKAWAY_MAX_PER_BLOCK = 3
 CAMERA_GROUP_BREAKAWAY_MIN_SECONDS = 8.0
 CAMERA_GROUP_BREAKAWAY_LEAD_SECONDS = 3.0
-CAMERA_GROUP_REACTION_HOLD_SECONDS = 3.4
+CAMERA_GROUP_SPEAKER_HOLD_SECONDS = 4.2
+CAMERA_GROUP_REACTION_HOLD_SECONDS = 3.2
 CAMERA_GROUP_BREAKAWAY_INTERVAL_SECONDS = 7.0
 CAMERA_GROUP_BREAKAWAY_MAX_PER_BLOCK = 3
-AI_DYNAMIC_SPEAKER_MAX_ZOOM = 1.1
-AI_DYNAMIC_REACTION_MAX_ZOOM = 1.16
+AI_DYNAMIC_SPEAKER_MAX_ZOOM = 1.08
+AI_DYNAMIC_REACTION_MAX_ZOOM = 1.14
 AI_DYNAMIC_FOCUS_X_MIN = 20.0
 AI_DYNAMIC_FOCUS_X_MAX = 80.0
 AI_DIRECTOR_MAX_FRAME_SAMPLES = 10
@@ -105,7 +106,7 @@ AI_DIRECTOR_OPENAI_TIMEOUT_SECONDS = 45
 CAMERA_ANALYSIS_FETCH_TIMEOUT_MS = 65000
 AI_DIRECTOR_MAX_SPEAKER_RATIO = 0.72
 AI_DIRECTOR_MIN_VARIATION_FRAMES = 2
-AI_DIRECTOR_MAX_STILL_SECONDS = 12.0
+AI_DIRECTOR_MAX_STILL_SECONDS = 10.0
 AI_DIRECTOR_SIDE_X_DELTA = 8.0
 CAMERA_SAFE_X_MIN = 30.0
 CAMERA_SAFE_X_MAX = 70.0
@@ -2384,7 +2385,7 @@ def director_reaction_frame(row: dict[str, object] | None, time_value: float) ->
     secondary = secondary_speaker_face_for_row(row)
     if secondary is None:
         return None
-    return {**secondary, "time": time_value, "zoom": reaction_focus_zoom(secondary)}
+    return {**secondary, "time": time_value, "zoom": reaction_focus_zoom(secondary), "intent": "reaction_focus"}
 
 
 def director_primary_frame(row: dict[str, object] | None, time_value: float) -> dict[str, object] | None:
@@ -2393,7 +2394,7 @@ def director_primary_frame(row: dict[str, object] | None, time_value: float) -> 
     primary = primary_speaker_face_for_row(row)
     if primary is None:
         return None
-    return {**primary, "time": time_value, "zoom": speaker_focus_zoom(primary, 0.0)}
+    return {**primary, "time": time_value, "zoom": speaker_focus_zoom(primary, 0.0), "intent": "speaker_hold"}
 
 
 def speaker_focus_zoom(face: dict[str, object], boost: float) -> float:
@@ -2543,6 +2544,8 @@ def ai_director_rules(mode: str) -> list[str]:
         "Use 6 a 20 keyframes quando houver deslocamento ou multiplos rostos; menos so se a cena for estavel.",
         "Sempre inclua um keyframe em time 0.",
         "Segure bons enquadramentos por alguns segundos; evite tremedeira.",
+        "Grupo e plano aberto sao contexto, nao repouso infinito: depois de 6 a 8 segundos, busque speaker medio ou reacao confiavel.",
+        "Quando YOLO enxergar uma pessoa mesmo sem rosto OpenCV, pode usar essa pessoa como speaker medio; close continua reservado para rosto/reacao confiavel.",
         "Se 3 pessoas aparecem no mesmo frame, use grupo para contexto, mas nao fique em grupo por mais de 8 segundos sem buscar uma reacao confiavel.",
         "Se 2 ou mais rostos ficariam fora do crop, reduza zoom e centralize entre os rostos.",
         "Use speaker_hold e speaker_close como plano medio; preserve mais corpo e contexto, nao apenas cara.",
@@ -2953,6 +2956,9 @@ def dense_protected_camera_path(
     side_coverage = side_coverage_camera_frames(stabilized, detections, duration, platform, hard_cut)
     if side_coverage:
         stabilized = merge_camera_path_frames(stabilized, side_coverage, duration)
+    speaker_side_coverage = speaker_side_coverage_camera_frames(stabilized, detections, duration, platform, hard_cut)
+    if speaker_side_coverage:
+        stabilized = merge_camera_path_frames(stabilized, speaker_side_coverage, duration)
     motion_frames = max_still_camera_frames(stabilized, detections, duration, platform, hard_cut)
     if motion_frames:
         stabilized = merge_camera_path_frames(stabilized, motion_frames, duration)
@@ -2960,6 +2966,9 @@ def dense_protected_camera_path(
     final_side_coverage = side_coverage_camera_frames(editorial, detections, duration, platform, hard_cut)
     if final_side_coverage:
         editorial = merge_camera_path_frames(editorial, final_side_coverage, duration)
+    final_speaker_side_coverage = speaker_side_coverage_camera_frames(editorial, detections, duration, platform, hard_cut)
+    if final_speaker_side_coverage:
+        editorial = merge_camera_path_frames(editorial, final_speaker_side_coverage, duration)
     final_motion_frames = max_still_camera_frames(editorial, detections, duration, platform, hard_cut)
     if final_motion_frames:
         editorial = merge_camera_path_frames(editorial, final_motion_frames, duration)
@@ -3007,6 +3016,54 @@ def side_coverage_camera_frames(
             if added >= wanted or side not in missing_camera_sides(frames + result, detections):
                 break
     return result
+
+
+def speaker_side_coverage_camera_frames(
+    frames: list[dict[str, object]], detections: list[dict[str, object]], duration: float, platform: str, hard_cut: bool
+) -> list[dict[str, object]]:
+    result: list[dict[str, object]] = []
+    for side in missing_speaker_sides(frames, detections):
+        for row in representative_side_rows(detections, side, duration):
+            time_value = float(row.get("time") or 0.0)
+            if speaker_side_recently_covered(frames + result, side, time_value, 3.2):
+                continue
+            frame = side_focus_camera_frame(row, side, time_value)
+            if frame is None:
+                continue
+            result.append(
+                hard_cut_ai_director_frame(frame, time_value, str(frame.get("source"))) if hard_cut else frame
+            )
+            break
+    return result
+
+
+def missing_speaker_sides(frames: list[dict[str, object]], detections: list[dict[str, object]]) -> list[str]:
+    detected = side_counts_from_detections(detections)
+    if detected["left"] < 2 or detected["right"] < 2:
+        return []
+    covered = speaker_side_counts_from_frames(frames)
+    return [side for side in ("left", "right") if covered[side] == 0]
+
+
+def speaker_side_counts_from_frames(frames: list[dict[str, object]]) -> dict[str, int]:
+    counts = {"left": 0, "right": 0}
+    for frame in frames:
+        if dynamic_frame_kind(frame) != "speaker":
+            continue
+        side = x_side(float(frame.get("x") or 50.0))
+        if side in counts:
+            counts[side] += 1
+    return counts
+
+
+def speaker_side_recently_covered(frames: list[dict[str, object]], side: str, time_value: float, window: float) -> bool:
+    for frame in frames:
+        if dynamic_frame_kind(frame) != "speaker":
+            continue
+        near_time = abs(float(frame.get("time") or 0.0) - time_value) <= window
+        if near_time and x_side(float(frame.get("x") or 50.0)) == side:
+            return True
+    return False
 
 
 def missing_side_frame_count(frames: list[dict[str, object]], side: str) -> int:
@@ -3069,9 +3126,9 @@ def side_focus_camera_frame(row: dict[str, object], side: str, time_value: float
     return {
         **frame,
         "time": round(time_value, 3),
-        "zoom": reaction_focus_zoom(frame),
-        "source": f"ai-director-side-reaction-{side}",
-        "intent": "reaction_focus",
+        "zoom": speaker_focus_zoom(frame, 0.0),
+        "source": f"ai-director-side-speaker-{side}",
+        "intent": "speaker_hold",
     }
 
 
@@ -3230,10 +3287,12 @@ def dynamic_open_context_frame(
 def dynamic_frame_kind(frame: dict[str, object]) -> str:
     source = str(frame.get("source") or "")
     intent = str(frame.get("intent") or "")
-    if camera_path_frame_uses_group_fit(frame) or "group" in source or intent == "group_open":
-        return "group"
     if "reaction" in source or intent == "reaction_focus":
         return "reaction"
+    if "speaker" in source or intent in {"speaker_hold", "speaker_close"}:
+        return "speaker"
+    if camera_path_frame_uses_group_fit(frame) or "group" in source or intent == "group_open":
+        return "group"
     if "return" in source or intent == "center_hold":
         return "group"
     return "speaker"
@@ -3284,8 +3343,17 @@ def primary_speaker_face_for_row(row: dict[str, object]) -> dict[str, float] | N
     if not faces:
         return None
     primary = row.get("primary")
-    if isinstance(primary, dict) and any(same_face_target(primary, face) for face in faces):
-        return normalized_focus_face(primary)
+    if isinstance(primary, dict):
+        real_matches = [
+            face
+            for face in faces
+            if same_face_target(primary, face) and str(face.get("kind") or "face") != "person"
+        ]
+        if real_matches:
+            return max(real_matches, key=speaker_face_score)
+        matches = [face for face in faces if same_face_target(primary, face)]
+        if matches:
+            return max(matches, key=speaker_face_score)
     return max(faces, key=speaker_face_score)
 
 
@@ -3303,7 +3371,17 @@ def focusable_speaker_faces(row: dict[str, object]) -> list[dict[str, float]]:
     faces = reliable_opencv_faces(row)
     if not faces:
         faces = [face for face in reliable_faces(row) if str(face.get("kind") or "face") != "person"]
-    return [normalized_focus_face(face) for face in faces if dynamic_focus_face_is_safe(face)]
+    subjects = [*faces, *speaker_person_candidates(row, faces)]
+    return [normalized_focus_face(face) for face in subjects if dynamic_focus_face_is_safe(face)]
+
+
+def speaker_person_candidates(row: dict[str, object], faces: list[dict[str, float]]) -> list[dict[str, float]]:
+    candidates: list[dict[str, float]] = []
+    for person in reliable_persons(row):
+        if any(abs(face_x(person) - face_x(face)) <= 6.0 for face in faces):
+            continue
+        candidates.append(person)
+    return candidates
 
 
 def normalized_focus_face(face: dict[str, float]) -> dict[str, float]:
@@ -3457,41 +3535,68 @@ def group_breakaways_for_interval(
         return []
     frames: list[dict[str, object]] = []
     cursor = start + CAMERA_GROUP_BREAKAWAY_LEAD_SECONDS
-    max_frames = CAMERA_GROUP_BREAKAWAY_MAX_PER_BLOCK * 2
+    max_frames = CAMERA_GROUP_BREAKAWAY_MAX_PER_BLOCK * 3
+    face_slot = 0
     while cursor + CAMERA_GROUP_REACTION_HOLD_SECONDS < end and len(frames) < max_frames:
         row = next_breakaway_row(rows, cursor)
         if row is None:
             break
         time_value = max(cursor, float(row.get("time") or cursor))
-        sequence = group_breakaway_sequence_for_row(row, time_value, end, platform, hard_cut)
+        sequence = group_breakaway_sequence_for_row(row, time_value, face_slot, end, platform, hard_cut)
         if not sequence:
             cursor += CAMERA_GROUP_BREAKAWAY_INTERVAL_SECONDS
             continue
         frames.extend(sequence)
         cursor = float(sequence[-1].get("time") or time_value) + CAMERA_GROUP_BREAKAWAY_INTERVAL_SECONDS
+        face_slot += 1
     return frames
 
 
 def group_breakaway_sequence_for_row(
-    row: dict[str, object], time_value: float, interval_end: float, platform: str, hard_cut: bool
+    row: dict[str, object], time_value: float, face_slot: int, interval_end: float, platform: str, hard_cut: bool
 ) -> list[dict[str, object]]:
     faces = sorted(reliable_faces(row), key=face_x)
     if len(faces) < 2:
         return []
-    primary = primary_reliable_face(row) or faces[0]
+    primary = primary_breakaway_face(row, faces, face_slot)
     reaction = secondary_breakaway_face(row, primary, faces)
-    return_time = time_value + CAMERA_GROUP_REACTION_HOLD_SECONDS
+    reaction_time = time_value + CAMERA_GROUP_SPEAKER_HOLD_SECONDS
+    return_time = reaction_time + CAMERA_GROUP_REACTION_HOLD_SECONDS
     if reaction is None or return_time >= interval_end:
-        return []
+        return group_speaker_only_breakaway(row, primary, time_value, interval_end, platform, hard_cut)
     return [
-        group_breakaway_reaction_frame(reaction, time_value, hard_cut),
+        group_breakaway_speaker_frame(primary, time_value, hard_cut),
+        group_breakaway_reaction_frame(reaction, reaction_time, hard_cut),
         group_breakaway_return_frame(row, return_time, platform, hard_cut),
     ]
 
 
+def group_speaker_only_breakaway(
+    row: dict[str, object],
+    primary: dict[str, float],
+    time_value: float,
+    interval_end: float,
+    platform: str,
+    hard_cut: bool,
+) -> list[dict[str, object]]:
+    return_time = time_value + CAMERA_GROUP_SPEAKER_HOLD_SECONDS
+    if return_time >= interval_end:
+        return []
+    return [
+        group_breakaway_speaker_frame(primary, time_value, hard_cut),
+        group_breakaway_return_frame(row, return_time, platform, hard_cut),
+    ]
+
+
+def group_breakaway_speaker_frame(face: dict[str, float], time_value: float, hard_cut: bool) -> dict[str, object]:
+    frame = {**normalized_focus_face(face), "time": time_value, "zoom": speaker_focus_zoom(face, 0.0), "intent": "speaker_hold"}
+    source = "ai-director-cuts-group-speaker" if hard_cut else "ai-director-dynamic-group-speaker"
+    return hard_cut_ai_director_frame(frame, time_value, source)
+
+
 def group_breakaway_reaction_frame(face: dict[str, float], time_value: float, hard_cut: bool) -> dict[str, object]:
-    frame = {**face, "time": time_value, "zoom": reaction_focus_zoom(face), "intent": "reaction_focus"}
-    source = "ai-director-cuts-group-reaction" if hard_cut else "ai-director-dynamic-reaction"
+    frame = {**normalized_focus_face(face), "time": time_value, "zoom": reaction_focus_zoom(face), "intent": "reaction_focus"}
+    source = "ai-director-cuts-group-reaction" if hard_cut else "ai-director-dynamic-group-reaction"
     return hard_cut_ai_director_frame(frame, time_value, source)
 
 
@@ -3971,6 +4076,8 @@ def merge_camera_path_frames(
 
 def camera_frame_priority(frame: dict[str, object]) -> int:
     source = str(frame.get("source") or "")
+    if "group-speaker" in source or "group-reaction" in source:
+        return 5
     if "fit-close" in source or "fit-primary" in source or "fit-secondary" in source:
         return 5
     if camera_path_frame_uses_group_fit(frame):
@@ -7998,7 +8105,7 @@ main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-stack{display:grid;gap:10px}.tool-section{border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:0;overflow:hidden}.tool-section>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:10px 12px;cursor:pointer;list-style:none;color:var(--color-text);font-weight:800}.tool-section>summary::-webkit-details-marker{display:none}.tool-section>summary:after{content:"";width:8px;height:8px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg);opacity:.62;transition:transform .16s ease}.tool-section[open]>summary:after{transform:rotate(225deg)}.tool-section>summary small{color:var(--color-text-muted);font-size:12px;font-weight:600;text-align:right}.tool-section[open]>summary{border-bottom:1px solid rgba(231,231,232,.08)}.tool-section>*:not(summary){margin:12px}.timeline-editor{padding:0}.timeline-head,.timeline-timebar,.timeline-values{display:flex;justify-content:space-between;gap:12px;color:var(--color-text-muted);font-size:12px}.timeline-head output,.timeline-timebar output{color:var(--color-text);text-align:right}.timeline-timebar{margin-top:10px}.timeline-timebar span:last-child{color:#777;text-align:right}.timeline-scrub{position:relative;height:42px;margin-top:8px}.timeline-scrub-track{position:absolute;left:0;right:0;top:17px;height:8px;border:1px solid #343434;border-radius:999px;background:linear-gradient(90deg,var(--color-surface-muted),#252525);overflow:hidden}.timeline-selected{position:absolute;top:0;bottom:0;background:rgba(175,207,42,.22);border-left:1px solid var(--color-brand-green);border-right:1px solid var(--color-brand-green)}.timeline-playhead{position:absolute;top:-8px;bottom:-8px;width:2px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7)}.timeline-playhead:before{content:"";position:absolute;left:50%;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--color-brand-white);transform:translateX(-50%)}.timeline-scrub input{position:absolute;inset:0;width:100%;height:42px;margin:0;background:transparent;opacity:0;cursor:pointer}.timeline{position:relative;height:38px;margin-top:6px}.timeline-track{position:absolute;left:0;right:0;top:16px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:var(--color-brand-white);border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:38px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{margin-top:6px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .export-dock{display:grid;gap:8px;margin-top:2px;padding:12px;border:1px solid #303030;border-radius:8px;background:#111}.export-dock strong{display:block;font-size:13px}.export-dock span{color:#a8a8a8;font-size:12px}
 .platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:var(--color-text);border-color:var(--color-brand-green)}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.effect-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.75fr);gap:10px}.effect-subpanel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.effect-subpanel strong{font-size:12px}.bumper-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.bumper-upload{display:grid;gap:6px;align-content:start;min-height:64px;padding:9px;border:1px dashed var(--color-border-strong);border-radius:8px;background:var(--color-surface-control);cursor:pointer}.bumper-upload input{font-size:11px}.bumper-strip{display:flex;gap:6px;flex-wrap:wrap;min-height:28px}.bumper-empty{color:var(--color-text-muted);font-size:12px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:var(--color-brand-blue)}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.camera-path-editor,.camera-manual-panel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-path-head,.camera-panel-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.camera-path-head strong,.camera-panel-title strong{font-size:12px}.camera-path-head span,.camera-panel-title span{color:var(--color-text-muted);font-size:12px}.camera-smart-panel{display:grid;gap:9px;padding:10px;border:1px solid rgba(17,162,207,.28);border-radius:8px;background:linear-gradient(135deg,rgba(17,162,207,.12),rgba(175,207,42,.06))}.camera-smart-row,.camera-smart-ai{display:grid;gap:8px}.camera-smart-row{grid-template-columns:repeat(3,minmax(0,1fr))}.camera-smart-ai{grid-template-columns:repeat(5,minmax(0,1fr))}.camera-smart-panel button{display:grid;gap:3px;justify-items:center;background:rgba(17,162,207,.1);color:var(--color-text);border:1px solid rgba(17,162,207,.34);text-align:center}.camera-smart-panel button:hover{border-color:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.14)}.camera-path-track{position:relative;height:34px}.camera-path-rail{position:absolute;left:0;right:0;top:15px;height:5px;border-radius:999px;background:#292929}.camera-path-marker{position:absolute;top:7px;width:20px;height:20px;min-width:20px;padding:0;border-radius:999px;transform:translateX(-50%);background:var(--color-surface-control);border:1px solid var(--color-border-strong)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:var(--color-brand-blue);box-shadow:0 0 0 4px rgba(17,162,207,.18)}.camera-path-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-keyframe-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}.camera-auto-status{min-height:18px;color:var(--color-text-muted);font-size:12px}.camera-path-delete{color:var(--color-danger)!important}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:minmax(160px,1fr) 120px 150px;gap:12px;max-width:none}.caption-toggle{align-content:center}.caption-toggle input{justify-self:start;width:auto;min-height:20px;accent-color:var(--color-brand-blue)}
-.camera-smart-panel p{margin:0;color:var(--color-text-muted);font-size:12px}.camera-smart-panel button span{color:var(--color-text-muted);font-size:11px}.camera-director-action{min-height:72px;background:linear-gradient(135deg,rgba(17,162,207,.32),rgba(231,231,232,.08))!important;border-color:rgba(17,162,207,.72)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 34px rgba(17,162,207,.1)}.camera-director-action strong{font-size:15px}.camera-smart-row button{min-height:54px}.camera-smart-ai button{min-height:50px}.camera-advanced{display:grid;gap:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.025)}.camera-advanced summary{display:flex;justify-content:space-between;gap:10px;align-items:center;cursor:pointer;color:var(--color-text-soft)}.camera-advanced summary small{color:var(--color-text-muted);font-size:12px}.camera-advanced[open] summary{padding-bottom:8px;border-bottom:1px solid rgba(231,231,232,.08)}.camera-advanced .camera-manual-panel{padding:0;border:0;background:transparent}.camera-surface video{position:relative;z-index:1;object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position .18s linear,transform .18s linear}.camera-surface[data-camera-cut=hard] video:not(.camera-fit-bg){transition:none}.camera-surface .camera-fit-bg{position:absolute!important;inset:-7%;z-index:0!important;width:114%!important;height:114%!important;display:none!important;object-fit:cover!important;object-position:center!important;transform:none!important;filter:blur(22px) saturate(.88) brightness(.62)!important;pointer-events:none}.camera-surface .camera-fit-logo{position:absolute;top:11%;left:50%;z-index:1;width:38%!important;max-width:240px;height:auto!important;display:none!important;object-fit:contain!important;object-position:center;background:transparent!important;transform:translateX(-50%);opacity:.9;pointer-events:none}.camera-surface[data-camera-fit=contain]{background:#050505}.camera-surface[data-camera-fit=contain] .camera-fit-bg{display:block!important}.camera-surface[data-camera-fit=contain] .camera-fit-logo{display:block!important}.camera-surface[data-camera-fit=contain] video:not(.camera-fit-bg){z-index:2;object-fit:contain;object-position:center;transform:none;transform-origin:center;background:transparent}.camera-reticle{position:absolute;inset:14% 22%;z-index:3;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}
+.camera-smart-panel p{margin:0;color:var(--color-text-muted);font-size:12px}.camera-smart-panel button span{color:var(--color-text-muted);font-size:11px}.camera-director-action{min-height:72px;background:linear-gradient(135deg,rgba(17,162,207,.32),rgba(231,231,232,.08))!important;border-color:rgba(17,162,207,.72)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 34px rgba(17,162,207,.1)}.camera-director-action strong{font-size:15px}.camera-smart-row button{min-height:54px}.camera-smart-ai button{min-height:50px}.camera-advanced{display:grid;gap:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.025)}.camera-advanced summary{display:flex;justify-content:space-between;gap:10px;align-items:center;cursor:pointer;color:var(--color-text-soft)}.camera-advanced summary small{color:var(--color-text-muted);font-size:12px}.camera-advanced[open] summary{padding-bottom:8px;border-bottom:1px solid rgba(231,231,232,.08)}.camera-advanced .camera-manual-panel{padding:0;border:0;background:transparent}.camera-surface video{position:relative;z-index:1;object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position .62s cubic-bezier(.22,.61,.36,1),transform .62s cubic-bezier(.22,.61,.36,1)}.camera-surface[data-camera-cut=hard] video:not(.camera-fit-bg){transition:none}.camera-surface .camera-fit-bg{position:absolute!important;inset:-7%;z-index:0!important;width:114%!important;height:114%!important;display:none!important;object-fit:cover!important;object-position:center!important;transform:none!important;filter:blur(22px) saturate(.88) brightness(.62)!important;pointer-events:none}.camera-surface .camera-fit-logo{position:absolute;top:11%;left:50%;z-index:1;width:38%!important;max-width:240px;height:auto!important;display:none!important;object-fit:contain!important;object-position:center;background:transparent!important;transform:translateX(-50%);opacity:.9;pointer-events:none}.camera-surface[data-camera-fit=contain]{background:#050505}.camera-surface[data-camera-fit=contain] .camera-fit-bg{display:block!important}.camera-surface[data-camera-fit=contain] .camera-fit-logo{display:block!important}.camera-surface[data-camera-fit=contain] video:not(.camera-fit-bg){z-index:2;object-fit:contain;object-position:center;transform:none;transform-origin:center;background:transparent}.camera-reticle{position:absolute;inset:14% 22%;z-index:3;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}
 .card[data-effect=light-grain] .media video,.card[data-effect=light-grain] .media img{filter:contrast(1.08) brightness(1.02)}.card[data-effect=old-film] .media video,.card[data-effect=old-film] .media img{filter:sepia(.48) contrast(1.2) saturate(.62) brightness(.92)}.card[data-effect=vhs] .media video,.card[data-effect=vhs] .media img{filter:saturate(.62) contrast(1.22) brightness(.9) hue-rotate(-7deg)}.card[data-effect=bw-old] .media video,.card[data-effect=bw-old] .media img{filter:grayscale(1) contrast(1.22) brightness(.9)}.card[data-effect=light-grain] .media:after,.card[data-effect=old-film] .media:after,.card[data-effect=vhs] .media:after,.card[data-effect=bw-old] .media:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--effect-opacity,.24);background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 70% 65%,rgba(0,0,0,.95) 0 1px,transparent 1.8px);background-size:4px 4px,6px 6px;mix-blend-mode:overlay}.card[data-effect=old-film] .media:before,.card[data-effect=bw-old] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at center,transparent 44%,rgba(0,0,0,.46) 100%)}.card[data-effect=vhs] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 4px);mix-blend-mode:overlay}
 .overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,var(--color-brand-green));border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none;pointer-events:auto}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-text-box{display:grid;align-items:center;min-width:96px;min-height:34px;padding:8px 12px;border-left:0;background:rgba(var(--overlay-bg-rgb,0,0,0),var(--overlay-bg-opacity,.7));box-shadow:none;color:var(--overlay-color,#fff);font-weight:700;font-size:clamp(13px,var(--overlay-font-size,20px),36px);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.overlay-text-box[data-overlay-bg=off]{background:transparent;box-shadow:none}.overlay-text-box span{opacity:var(--overlay-opacity,1);overflow:hidden;text-overflow:ellipsis}.overlay-box.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.overlay-image-box{display:grid;place-items:center;min-width:72px;min-height:72px;padding:6px;border:1px dashed rgba(255,255,255,.42);background:rgba(0,0,0,.12);box-shadow:0 8px 24px rgba(0,0,0,.22)}.overlay-image-box img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none;background:transparent}.overlay-resize{position:absolute;right:3px;bottom:3px;z-index:4;width:22px;height:22px;padding:0;border:1px solid rgba(255,255,255,.52);border-radius:5px;background:rgba(255,255,255,.2);cursor:nwse-resize;touch-action:none;pointer-events:auto}.overlay-menu{position:absolute;z-index:6;display:grid;gap:8px;width:min(360px,94%);padding:8px;border:1px solid var(--color-border-strong);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel);touch-action:none}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px;cursor:move}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-inspector{display:grid;gap:8px}.overlay-inspector label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.overlay-inspector input[type=text],.overlay-inspector input[type=number]{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.overlay-inspector input[type=color]{width:42px;height:32px;padding:2px;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black)}.overlay-inspector-row{display:flex;gap:8px;align-items:center}.overlay-inspector-row>*{flex:1}.overlay-inspector-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.overlay-inspector-check input{width:auto}.overlay-danger{color:var(--color-danger)!important;border-color:#5b2626!important;background:#251111!important}.image-upload{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-empty{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;color:var(--color-text-muted)}
 p{color:#bebebe}.peak{color:#fff;font-size:16px;line-height:1.35}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}.transcript-copy{max-height:220px;overflow:auto;margin-top:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(0,0,0,.18)}.transcript-copy p{margin:0;line-height:1.45}
