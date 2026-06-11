@@ -1050,14 +1050,17 @@ def upgrade_recovered_ai_result(
     if not isinstance(path, list):
         return
     hard_cut = ai_director_uses_hard_cuts(mode)
-    upgraded = merge_camera_path_frames(path, side_coverage_camera_frames(path, detections, duration, platform, hard_cut), duration)
-    upgraded = merge_camera_path_frames(upgraded, max_still_camera_frames(upgraded, detections, duration, platform, hard_cut), duration)
+    upgraded = dense_protected_camera_path(path, detections, duration, platform, mode)
     payload["camera_path"] = upgraded
     payload["director_plan"] = director_plan_from_camera_path(upgraded, duration, platform, "ai-director-cache-upgraded", mode)
     diagnostics = payload.get("diagnostics")
     if isinstance(diagnostics, dict):
         diagnostics.update(camera_path_quality_diagnostics(detections, upgraded, duration, platform))
-        diagnostics["cache_upgrade"] = {"side_coverage": True, "max_still_seconds": AI_DIRECTOR_MAX_STILL_SECONDS}
+        diagnostics["cache_upgrade"] = {
+            "dense_protection": True,
+            "speaker_side_coverage": True,
+            "max_still_seconds": AI_DIRECTOR_MAX_STILL_SECONDS,
+        }
 
 
 def latest_good_ai_cache(gallery_dir: Path, mode: str, platform: str, clip_file: str) -> dict[str, object] | None:
