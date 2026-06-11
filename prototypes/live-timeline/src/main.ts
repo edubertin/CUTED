@@ -117,9 +117,6 @@ interface TimelineElements {
   popoverMeter: HTMLElement;
   playheadControl: HTMLButtonElement;
   playheadGlyph: HTMLElement;
-  volumeStepper: HTMLElement;
-  volumeDown: HTMLButtonElement;
-  volumeUp: HTMLButtonElement;
   volumePopover: HTMLElement;
   volumeSlider: HTMLInputElement;
   muteButton: HTMLButtonElement;
@@ -233,9 +230,6 @@ function readElements(): TimelineElements {
     popoverMeter: requireElement("popover-meter", HTMLElement),
     playheadControl: requireElement("playhead-control", HTMLButtonElement),
     playheadGlyph: requireElement("playhead-glyph", HTMLElement),
-    volumeStepper: requireElement("volume-stepper", HTMLElement),
-    volumeDown: requireElement("volume-down", HTMLButtonElement),
-    volumeUp: requireElement("volume-up", HTMLButtonElement),
     volumePopover: requireElement("volume-popover", HTMLElement),
     volumeSlider: requireElement("volume-slider", HTMLInputElement),
     muteButton: requireElement("mute-button", HTMLButtonElement),
@@ -630,14 +624,6 @@ function bindTransportControls(elements: TimelineElements, state: TimelineState,
     playUiTone("mute", state);
     render();
   });
-  elements.volumeDown.addEventListener("click", (event) => {
-    event.stopPropagation();
-    stepVolume(-0.1, state, render);
-  });
-  elements.volumeUp.addEventListener("click", (event) => {
-    event.stopPropagation();
-    stepVolume(0.1, state, render);
-  });
 }
 
 function bindShellInteractions(elements: TimelineElements, state: TimelineState, render: () => void): void {
@@ -838,8 +824,6 @@ function placePlayheadControl(m: TimelineMetrics, s: TimelineState, elements: Ti
   const y = m.railY - 46;
   elements.playheadControl.style.left = `${x - 16}px`;
   elements.playheadControl.style.top = `${y - 16}px`;
-  elements.volumeStepper.style.left = `${x - 31}px`;
-  elements.volumeStepper.style.top = `${m.railY + m.railHeight + 26}px`;
   elements.volumePopover.style.left = `${clamp(x - 74, 12, m.width - 160)}px`;
   elements.volumePopover.style.top = `${y + 26}px`;
 }
@@ -876,8 +860,6 @@ function updateTransportControls(state: TimelineState, elements: TimelineElement
   elements.playheadControl.classList.toggle("is-muted", state.muted);
   elements.playheadControl.setAttribute("aria-label", state.playing ? "Pausar preview" : "Tocar preview");
   elements.playheadGlyph.dataset.state = state.playing ? "pause" : "play";
-  elements.volumeStepper.classList.toggle("is-muted", state.muted);
-  elements.volumeStepper.style.setProperty("--volume", String(state.muted ? 0 : state.volume));
   elements.volumePopover.hidden = !state.volumeOpen;
   elements.volumeSlider.value = String(Math.round(state.volume * 100));
   elements.muteButton.textContent = state.muted ? "MUTE" : "VOL";
@@ -895,15 +877,7 @@ function isHandleTarget(target: EventTarget | null): boolean {
 }
 
 function isTransportTarget(target: EventTarget | null): boolean {
-  return target instanceof Element && Boolean(target.closest(".playhead-control, .volume-popover, .volume-stepper"));
-}
-
-function stepVolume(delta: number, state: TimelineState, render: () => void): void {
-  state.volume = clamp(state.volume + delta, 0, 1);
-  state.muted = state.volume === 0;
-  state.volumeOpen = false;
-  playUiTone("volume", state);
-  render();
+  return target instanceof Element && Boolean(target.closest(".playhead-control, .volume-popover"));
 }
 
 function playUiTone(kind: "cut" | "loop" | "mute" | "pause" | "play" | "snap" | "volume", state: TimelineState): void {
