@@ -182,6 +182,32 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIn("resolution_edits", html)
         self.assertIn("Direcione este formato uma vez", html)
 
+    def test_director_plan_from_camera_path_labels_shots(self) -> None:
+        path = [
+            {"time": 0.0, "x": 50.0, "y": 50.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-group-fit"},
+            {"time": 4.0, "x": 48.0, "y": 50.0, "zoom": 1.22, "source": "ai-director"},
+            {"time": 8.0, "x": 72.0, "y": 50.0, "zoom": 1.16, "source": "ai-director-cuts-primary"},
+        ]
+
+        plan = CUTTED.director_plan_from_camera_path(path, 12.0, "instagram", "ai-director", "ai-director")
+
+        self.assertEqual(plan["resolution_preset"], "vertical_9_16")
+        self.assertEqual([shot["label"] for shot in plan["shots"]], ["Group", "Speaker", "Cut"])
+        self.assertEqual(plan["shots"][0]["end"], 4.0)
+
+    def test_ai_director_cache_scope_uses_resolution_preset(self) -> None:
+        self.assertEqual(CUTTED.camera_analysis_cache_scope("tiktok", "ai-director"), "vertical_9_16")
+        self.assertEqual(CUTTED.camera_analysis_cache_scope("shorts", "ai-director"), "vertical_9_16")
+        self.assertEqual(CUTTED.camera_analysis_cache_scope("instagram", "ai-director"), "vertical_9_16")
+        self.assertEqual(CUTTED.camera_analysis_cache_scope("instagram", "auto-director"), "instagram")
+
+    def test_page_includes_director_plan_timeline_helpers(self) -> None:
+        html = CUTTED.page_html("Teste", "", "{}", "assets/brand/cuted-logo-transparent.png")
+
+        self.assertIn("function directorPlanFromCameraPath", html)
+        self.assertIn("directorMarkerLabel", html)
+        self.assertIn("director_plan: normalizeDirectorPlan", html)
+
     def test_solo_dominant_scene_removes_hard_cut_jitter(self) -> None:
         detections = [
             detection(0.0, [face(48.0)]),
