@@ -98,6 +98,29 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("--camera-transition-ms", html)
         self.assertIn("setCameraMotionSpeed(card", html)
 
+    def test_page_can_inject_live_timeline_assets(self) -> None:
+        html = CUTTED.page_html(
+            "Teste",
+            "",
+            "{}",
+            "assets/brand/cuted-logo-transparent.png",
+            {"css": "assets/live-timeline/live-timeline.css", "js": "assets/live-timeline/live-timeline.js"},
+        )
+
+        self.assertIn('href="assets/live-timeline/live-timeline.css"', html)
+        self.assertIn('src="assets/live-timeline/live-timeline.js"', html)
+        self.assertLess(html.index("live-timeline.css"), html.index("<style>"))
+        self.assertLess(html.index("live-timeline.js"), html.index("window.CUTTED_DATA"))
+
+    def test_live_timeline_assets_are_copied_when_available(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            assets = CUTTED.write_live_timeline_assets(Path(tmp))
+
+            self.assertEqual(assets["css"], "assets/live-timeline/live-timeline.css")
+            self.assertEqual(assets["js"], "assets/live-timeline/live-timeline.js")
+            self.assertTrue((Path(tmp) / "assets" / "live-timeline" / "live-timeline.css").exists())
+            self.assertTrue((Path(tmp) / "assets" / "live-timeline" / "live-timeline.js").exists())
+
     def test_ai_director_openai_timeout_is_shorter_than_general_request(self) -> None:
         self.assertEqual(CUTTED.AI_DIRECTOR_OPENAI_TIMEOUT_SECONDS, 45)
 
