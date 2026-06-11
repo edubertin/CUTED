@@ -418,12 +418,12 @@ function createPeaks(count: number): readonly number[] {
 
 function getMetrics(host: HTMLElement): TimelineMetrics {
   const width = Math.max(host.clientWidth, 320);
-  const height = Math.max(host.clientHeight, 230);
-  const compact = width < 700;
-  const railX = compact ? 82 : 118;
+  const height = Math.max(host.clientHeight, 150);
+  const compact = width < 700 || height < 210;
+  const railX = compact ? 70 : 118;
   const railWidth = Math.max(width - railX * 2, compact ? 180 : 420);
-  const railY = Math.round(height * 0.22);
-  const railHeight = Math.round(height * 0.56);
+  const railY = compact ? 34 : Math.round(height * 0.22);
+  const railHeight = compact ? Math.max(height - 72, 76) : Math.round(height * 0.56);
   return {
     width,
     height,
