@@ -224,6 +224,16 @@ class PlatformPreset:
 
 
 @dataclass(frozen=True)
+class ResolutionPreset:
+    key: str
+    label: str
+    width: int
+    height: int
+    destinations: tuple[str, ...]
+    note: str
+
+
+@dataclass(frozen=True)
 class EffectPreset:
     key: str
     label: str
@@ -280,6 +290,20 @@ PLATFORM_PRESETS = {
     "instagram": PlatformPreset("instagram", "Instagram", 1080, 1920, "9:16 vertical"),
     "facebook": PlatformPreset("facebook", "Facebook", 1080, 1350, "4:5 feed"),
     "youtube": PlatformPreset("youtube", "YouTube", 1920, 1080, "16:9 landscape"),
+}
+
+RESOLUTION_PRESETS = {
+    "vertical_9_16": ResolutionPreset(
+        "vertical_9_16", "Vertical 9:16", 1080, 1920, ("tiktok", "shorts", "instagram"), "Formato vertical compartilhado"
+    ),
+    "vertical_4_5": ResolutionPreset("vertical_4_5", "Vertical 4:5", 1080, 1350, ("facebook",), "Feed vertical"),
+    "horizontal_16_9": ResolutionPreset("horizontal_16_9", "Horizontal 16:9", 1920, 1080, ("youtube",), "Video horizontal"),
+}
+
+PLATFORM_RESOLUTION_PRESETS = {
+    destination: preset.key
+    for preset in RESOLUTION_PRESETS.values()
+    for destination in preset.destinations
 }
 
 EFFECT_PRESETS = {
@@ -1702,6 +1726,7 @@ def ai_director_user_payload(
 
 def platform_viewport(platform: str) -> dict[str, object]:
     preset = PLATFORM_PRESETS.get(platform, PLATFORM_PRESETS["tiktok"])
+    resolution = resolution_preset_for_platform(platform)
     aspect = preset.width / max(preset.height, 1)
     orientation = "landscape" if preset.width > preset.height else "portrait"
     return {
@@ -1712,8 +1737,38 @@ def platform_viewport(platform: str) -> dict[str, object]:
         "aspect_ratio": round(aspect, 4),
         "orientation": orientation,
         "format_note": preset.note,
+        "resolution_preset": resolution.key,
+        "resolution_label": resolution.label,
+        "shared_destinations": list(resolution.destinations),
         "safe_crop_notes": platform_safe_crop_notes(preset),
     }
+
+
+def resolution_key_for_platform(platform: str) -> str:
+    return PLATFORM_RESOLUTION_PRESETS.get(platform, "vertical_9_16")
+
+
+def resolution_preset_for_platform(platform: str) -> ResolutionPreset:
+    return RESOLUTION_PRESETS[resolution_key_for_platform(platform)]
+
+
+def resolution_preset_to_dict(preset: ResolutionPreset) -> dict[str, object]:
+    aspect = preset.width / max(preset.height, 1)
+    orientation = "landscape" if preset.width > preset.height else "portrait"
+    return {
+        "key": preset.key,
+        "label": preset.label,
+        "width": preset.width,
+        "height": preset.height,
+        "aspect_ratio": round(aspect, 4),
+        "orientation": orientation,
+        "destinations": list(preset.destinations),
+        "note": preset.note,
+    }
+
+
+def resolution_presets_payload() -> dict[str, dict[str, object]]:
+    return {key: resolution_preset_to_dict(preset) for key, preset in RESOLUTION_PRESETS.items()}
 
 
 def platform_safe_crop_notes(preset: PlatformPreset) -> str:
@@ -3904,16 +3959,24 @@ def row_for_platform(row: dict[str, object], platform: str) -> dict[str, object]
 
 def platform_edit_from_row(row: dict[str, object], platform: str) -> dict[str, object]:
     edits = row.get("platform_edits")
-    if not isinstance(edits, dict):
-        return {}
-    raw = edits.get(platform)
+    raw = edits.get(platform) if isinstance(edits, dict) else None
+    if not isinstance(raw, dict):
+        raw = resolution_edit_from_row(row, platform)
     if not isinstance(raw, dict):
         return {}
     result: dict[str, object] = {}
-    for key in ("camera", "effect", "overlay", "overlays", "bumpers"):
+    for key in ("camera", "camera_path", "effect", "overlay", "overlays", "bumpers", "director_plan"):
         if key in raw:
             result[key] = raw[key]
     return result
+
+
+def resolution_edit_from_row(row: dict[str, object], platform: str) -> dict[str, object]:
+    edits = row.get("resolution_edits")
+    if not isinstance(edits, dict):
+        return {}
+    raw = edits.get(resolution_key_for_platform(platform))
+    return raw if isinstance(raw, dict) else {}
 
 
 def render_selected_rows(rows: list[dict[str, object]], base_dir: Path, out_dir: Path, ffmpeg: str) -> list[dict[str, object]]:
@@ -6715,11 +6778,16 @@ function cardState(rank){
 function setCardState(rank, patch){ state[rank] = Object.assign(cardState(rank), patch); save(); }
 function fixed(value){ return `${Number(value || 0).toFixed(1)}s`; }
 const platformMeta = {
-  tiktok: { label: "TikTok", width: 1080, height: 1920 },
-  shorts: { label: "Shorts", width: 1080, height: 1920 },
-  instagram: { label: "Instagram", width: 1080, height: 1920 },
-  facebook: { label: "Facebook", width: 1080, height: 1350 },
-  youtube: { label: "YouTube", width: 1920, height: 1080 }
+  tiktok: { label: "TikTok", width: 1080, height: 1920, resolution_preset: "vertical_9_16" },
+  shorts: { label: "Shorts", width: 1080, height: 1920, resolution_preset: "vertical_9_16" },
+  instagram: { label: "Instagram", width: 1080, height: 1920, resolution_preset: "vertical_9_16" },
+  facebook: { label: "Facebook", width: 1080, height: 1350, resolution_preset: "vertical_4_5" },
+  youtube: { label: "YouTube", width: 1920, height: 1080, resolution_preset: "horizontal_16_9" }
+};
+const resolutionPresets = {
+  vertical_9_16: { label: "Vertical 9:16", width: 1080, height: 1920, destinations: ["tiktok", "shorts", "instagram"] },
+  vertical_4_5: { label: "Vertical 4:5", width: 1080, height: 1350, destinations: ["facebook"] },
+  horizontal_16_9: { label: "Horizontal 16:9", width: 1920, height: 1080, destinations: ["youtube"] }
 };
 const defaultPreviewVolume = 0.2;
 const effectMeta = {
@@ -6781,6 +6849,16 @@ function platformLabel(key){
 }
 function validPlatform(format){
   return Object.prototype.hasOwnProperty.call(platformMeta, format) ? format : "tiktok";
+}
+function resolutionPresetForPlatform(platform){
+  const key = platformMeta[validPlatform(platform)]?.resolution_preset || "vertical_9_16";
+  return resolutionPresets[key] ? key : "vertical_9_16";
+}
+function resolutionPresetLabel(key){
+  return (resolutionPresets[key] || resolutionPresets.vertical_9_16).label;
+}
+function destinationResolutionMap(){
+  return Object.fromEntries(Object.keys(platformMeta).map(platform => [platform, resolutionPresetForPlatform(platform)]));
 }
 function activePlatformForRank(rank){
   const card = cardForRank(rank);
@@ -7708,9 +7786,10 @@ function bumperUploadHtml(slot, rank){
   const label = bumperSlotLabel(slot);
   const platform = activePlatformForRank(rank);
   const preset = platformMeta[platform] || platformMeta.tiktok;
+  const resolution = resolutionPresets[resolutionPresetForPlatform(platform)] || resolutionPresets.vertical_9_16;
   return `<label class="bumper-upload">
     <span>${escapeHtml(label)}</span>
-    <small style="color:var(--color-text-muted);font-size:11px">${escapeHtml(preset.label)}: ${preset.width}x${preset.height}</small>
+    <small style="color:var(--color-text-muted);font-size:11px">${escapeHtml(resolution.label)}: ${preset.width}x${preset.height}</small>
     <input data-bumper-video="${escapeAttr(slot)}" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-m4v">
   </label>`;
 }
@@ -7756,11 +7835,12 @@ async function addBumperFromInput(card, input){
   const slot = normalizeBumperSlot(input.dataset.bumperVideo);
   const platform = activePlatformForRank(rank);
   const preset = platformMeta[platform] || platformMeta.tiktok;
+  const resolution = resolutionPresets[resolutionPresetForPlatform(platform)] || resolutionPresets.vertical_9_16;
   try {
     if (file.size > maxBumperVideoBytes) throw new Error("Vinheta muito pesada. Use um video menor para o MVP local.");
     const metadata = await videoMetadataForFile(file);
     if (metadata.width !== preset.width || metadata.height !== preset.height) {
-      throw new Error(`Use um video ${preset.width}x${preset.height} para ${preset.label}.`);
+      throw new Error(`Use um video ${preset.width}x${preset.height} para ${resolution.label}.`);
     }
     showAppNotice(`Enviando vinheta de ${bumperSlotLabel(slot).toLowerCase()}...`);
     const dataUrl = await readFileAsDataUrl(file);
@@ -8743,20 +8823,58 @@ function adjustedMoment(moment){
     platform_edits: current.platformEdits
   });
 }
+function resolutionEditForPlatform(rank, platform, duration){
+  const key = resolutionPresetForPlatform(platform);
+  const edit = platformEditForRank(rank, platform);
+  return {
+    resolution_preset: key,
+    resolution_label: resolutionPresetLabel(key),
+    source: "platform_edits",
+    camera: edit.camera,
+    camera_path: cameraPathForEdit(edit, duration),
+    effect: edit.effect,
+    overlay: edit.overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
+    overlays: edit.overlays,
+    bumpers: edit.bumpers
+  };
+}
+function resolutionEditsForMoment(moment, exportFormat){
+  const result = {};
+  captionPlatforms(moment, exportFormat).forEach(platform => {
+    const key = resolutionPresetForPlatform(platform);
+    if (!result[key]) {
+      result[key] = Object.assign(resolutionEditForPlatform(moment.rank, platform, moment.adjusted_duration), {
+        destinations: [],
+        shared: true
+      });
+    }
+    result[key].destinations.push(platform);
+  });
+  return result;
+}
 function buildExportData(){
   const data = Object.assign({}, window.CUTTED_DATA);
   data.export_format = document.body.dataset.format || "tiktok";
-  const adjusted = data.moments.map(adjustedMoment);
+  data.resolution_presets = resolutionPresets;
+  data.destination_resolution_map = destinationResolutionMap();
+  const adjusted = data.moments.map(adjustedMoment).map(moment => Object.assign({}, moment, {
+    resolution_edits: resolutionEditsForMoment(moment, data.export_format)
+  }));
   data.moments = adjusted;
   data.selected = adjusted.filter(moment => captionPlatforms(moment, data.export_format).length > 0);
   data.caption_queue = data.selected.flatMap(moment => captionPlatforms(moment, data.export_format).map(platform => {
     const edit = platformEditForRank(moment.rank, platform);
     const overlays = edit.overlays;
     const cameraPath = cameraPathForEdit(edit, moment.adjusted_duration);
+    const resolutionKey = resolutionPresetForPlatform(platform);
     return {
       rank: moment.rank,
       platform,
       platform_label: platformLabel(platform),
+      resolution_preset: resolutionKey,
+      resolution_label: resolutionPresetLabel(resolutionKey),
+      shared_destinations: resolutionPresets[resolutionKey]?.destinations || [platform],
+      resolution_edit: moment.resolution_edits[resolutionKey] || null,
       width: platformMeta[platform]?.width || null,
       height: platformMeta[platform]?.height || null,
       publish_metadata: publishMetadata(platform, moment),
@@ -8921,6 +9039,10 @@ function cameraPathEditorHtml(card, edit, duration, camera){
   const selectedIndex = selectedCameraPathIndex(card, path);
   const selected = path[selectedIndex] || path[0] || normalizeCameraPathFrame({ time: 0, key: "center", strength: 60 });
   const safeDuration = Math.max(Number(duration) || 0, .3);
+  const platform = activePlatformForRank(card.dataset.rank);
+  const resolutionKey = resolutionPresetForPlatform(platform);
+  const resolution = resolutionPresets[resolutionKey] || resolutionPresets.vertical_9_16;
+  const shared = resolution.destinations.map(platformLabel).join(", ");
   const markers = path.map((frame, index) => {
     const left = clampNumber((Number(frame.time || 0) / safeDuration) * 100, 0, 100);
     const active = index === selectedIndex ? " active" : "";
@@ -8930,10 +9052,10 @@ function cameraPathEditorHtml(card, edit, duration, camera){
   return `<div class="camera-path-editor" data-camera-path-editor>
     <div class="camera-smart-panel">
       <div class="camera-panel-title">
-        <strong>Smart Camera</strong>
-        <span>OpenCV + IA</span>
+        <strong>AI Director</strong>
+        <span>${escapeHtml(resolution.label)} ${resolution.width}x${resolution.height}</span>
       </div>
-      <p>Use a direcao automatica para enquadrar pessoas com movimentos mais limpos.</p>
+      <p>Direcione este formato uma vez e reuse em ${escapeHtml(shared)}. Ajuste pontos na timeline quando quiser corrigir a intencao.</p>
       ${smartCameraButtonsHtml()}
     </div>
     <div class="camera-auto-status" data-camera-auto-status></div>
@@ -8970,11 +9092,12 @@ function cameraPathEditorHtml(card, edit, duration, camera){
 }
 function smartCameraButtonsHtml(){
   const quick = ["follow-face", "stable-face", "face-zoom"];
-  const ai = ["ai-director", "ai-director-group", "ai-director-speaker", "ai-director-reactions", "ai-director-cuts"];
-  const auto = cameraSmartButtonHtml("auto-director", smartCameraModes["auto-director"], true);
+  const ai = ["ai-director-group", "ai-director-speaker", "ai-director-reactions", "ai-director-cuts"];
+  const director = cameraSmartButtonHtml("ai-director", smartCameraModes["ai-director"], true);
+  const auto = cameraSmartButtonHtml("auto-director", smartCameraModes["auto-director"], false);
   const quickHtml = quick.map(key => cameraSmartButtonHtml(key, smartCameraModes[key], false)).join("");
   const aiHtml = ai.map(key => cameraSmartButtonHtml(key, smartCameraModes[key], false)).join("");
-  return `${auto}<div class="camera-smart-row">${quickHtml}</div><div class="camera-smart-ai">${aiHtml}</div>`;
+  return `${director}<div class="camera-smart-row">${auto}${quickHtml}</div><div class="camera-smart-ai">${aiHtml}</div>`;
 }
 function cameraSmartButtonHtml(key, meta, featured){
   const className = featured ? ' class="camera-director-action"' : "";
