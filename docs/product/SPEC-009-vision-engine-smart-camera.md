@@ -50,10 +50,17 @@ principal, reaction, group, or fit shots.
 - Person detections can support group/fit/cut safety, especially when face
   detection reports weak coverage.
 - Face detections remain preferred for tight close-ups when reliable.
+- Person detections may become medium `speaker_hold` frames when a side of the
+  scene is visible but OpenCV did not find a reliable face there.
+- Long group/fit holds should be interrupted with a speaker or reaction
+  breakaway before returning to context, so group remains a safety/context shot
+  instead of the default visual state.
 - AI Director receives compact fields such as detection engine, person frame
   count, max people, multi-person coverage, and per-time person positions.
 - Low-confidence person detections should not force close-ups. They may trigger
   wider fit or group-safe framing.
+- Preview camera movement should use slower smooth transitions for dynamic
+  frames while preserving hard cuts when a keyframe explicitly requests one.
 - The final output remains `camera_path`; render behavior does not depend on
   detector internals.
 

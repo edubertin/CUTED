@@ -51,13 +51,20 @@ YOUTUBE_HIGH_QUALITY_FORMAT = (
 )
 YOUTUBE_STREAM_FALLBACK_FORMAT = "b[height<=1080]/b[height<=720]/18/b[height<=480]/best"
 PREVIEW_VIDEO_CRF = "20"
+PREVIEW_DRAFT_VIDEO_CRF = "28"
+LOCAL_IMPORT_MAX_INITIAL_CLIPS = 4
 FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
 MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
 MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
-CAMERA_ANALYSIS_VERSION = "auto-face-v29"
+CAMERA_ANALYSIS_VERSION = "auto-face-v30"
 CAMERA_ANALYSIS_SAMPLE_SECONDS = 0.3
 CAMERA_ANALYSIS_MAX_FRAMES = 140
+CAMERA_FAST_SAMPLE_SECONDS = 1.5
+CAMERA_FAST_MAX_FRAMES = 48
+VISUAL_MAP_VERSION = "visual-map-v2"
+VISUAL_MAP_SAMPLE_SECONDS = 2.0
+VISUAL_MAP_MAX_FRAMES = 120
 YOLO_PERSON_CONFIDENCE = 0.34
 YOLO_DEFAULT_MODEL = "yolo26n.pt"
 CAMERA_UNCERTAIN_MIN_SECONDS = 0.85
@@ -76,20 +83,41 @@ CAMERA_DISTANT_FACE_PAN_X_DELTA = 12.0
 CAMERA_LOW_CONFIDENCE_DETECTION_RATE = 0.18
 CAMERA_LOW_CONFIDENCE_EDGE_RATIO = 0.55
 CAMERA_LOW_CONFIDENCE_FIT_INTERVAL = 6.0
-CAMERA_FIT_BREAKAWAY_MIN_SECONDS = 11.0
-CAMERA_FIT_BREAKAWAY_LEAD_SECONDS = 4.0
-CAMERA_FIT_BREAKAWAY_PRIMARY_HOLD_SECONDS = 3.8
-CAMERA_FIT_BREAKAWAY_SECONDARY_HOLD_SECONDS = 3.2
-CAMERA_FIT_BREAKAWAY_INTERVAL_SECONDS = 7.0
+CAMERA_FIT_BREAKAWAY_MIN_SECONDS = 14.0
+CAMERA_FIT_BREAKAWAY_LEAD_SECONDS = 4.6
+CAMERA_FIT_BREAKAWAY_PRIMARY_HOLD_SECONDS = 4.4
+CAMERA_FIT_BREAKAWAY_SECONDARY_HOLD_SECONDS = 3.8
+CAMERA_FIT_BREAKAWAY_INTERVAL_SECONDS = 8.2
 CAMERA_FIT_BREAKAWAY_MAX_PER_BLOCK = 3
+CAMERA_GROUP_BREAKAWAY_MIN_SECONDS = 10.0
+CAMERA_GROUP_BREAKAWAY_LEAD_SECONDS = 3.8
+CAMERA_GROUP_SPEAKER_HOLD_SECONDS = 4.8
+CAMERA_GROUP_REACTION_HOLD_SECONDS = 3.8
+CAMERA_GROUP_BREAKAWAY_INTERVAL_SECONDS = 8.2
+CAMERA_GROUP_BREAKAWAY_MAX_PER_BLOCK = 3
+AI_DYNAMIC_SPEAKER_MAX_ZOOM = 1.08
+AI_DYNAMIC_REACTION_MAX_ZOOM = 1.14
+AI_DYNAMIC_FOCUS_X_MIN = 20.0
+AI_DYNAMIC_FOCUS_X_MAX = 80.0
 AI_DIRECTOR_MAX_FRAME_SAMPLES = 10
 AI_DIRECTOR_MAX_CONTEXT_ROWS = 36
 AI_DIRECTOR_MAX_FALLBACK_FRAMES = 28
+AI_DIRECTOR_OPENAI_TIMEOUT_SECONDS = 45
+CAMERA_ANALYSIS_FETCH_TIMEOUT_MS = 180000
+AI_DIRECTOR_MAX_SPEAKER_RATIO = 0.72
+AI_DIRECTOR_MIN_VARIATION_FRAMES = 2
+AI_DIRECTOR_MAX_STILL_SECONDS = 10.0
+AI_DIRECTOR_SIDE_X_DELTA = 8.0
+AI_DIRECTOR_MAX_GROUP_DURATION_RATIO = 0.60
+AI_DIRECTOR_MIN_ACTIVE_DURATION_RATIO = 0.36
+AI_DIRECTOR_GROUP_BALANCE_MIN_SECONDS = 4.6
+AI_DIRECTOR_GROUP_BALANCE_MAX_FRAMES = 10
+AI_DIRECTOR_SOFT_GROUP_RETURN_SUPPRESSION_SECONDS = 4.8
 CAMERA_SAFE_X_MIN = 30.0
 CAMERA_SAFE_X_MAX = 70.0
 SMART_CAMERA_MODES = {
     "auto-director": "Auto Director",
-    "ai-director": "AI Dinamico",
+    "ai-director": "IA",
     "ai-director-group": "AI Grupo",
     "ai-director-speaker": "AI Fala",
     "ai-director-reactions": "AI Reacoes",
@@ -103,15 +131,15 @@ SMART_CAMERA_MODES = {
 AI_DIRECTOR_INTENTS = {
     "ai-director": {
         "label": "Dinamico",
-        "priority": "Misture plano aberto, foco em quem fala, punch-in leve e reacoes sem cortar pessoas visiveis.",
+        "priority": "Misture plano aberto, foco medio em quem fala, reacoes de 3 a 4 segundos e retornos seguros sem cortar pessoas visiveis.",
     },
     "ai-director-group": {
         "label": "Grupo / podcast",
-        "priority": "Priorize plano aberto quando houver 2 ou mais pessoas, com close apenas quando a cena estiver claramente individual.",
+        "priority": "Use grupo como base de seguranca, mas quebre holds longos com reacoes confiaveis e volte para grupo ou speaker.",
     },
     "ai-director-speaker": {
         "label": "Quem fala",
-        "priority": "Priorize o rosto principal e pistas do transcript, mas abra o quadro quando outras pessoas estiverem visiveis.",
+        "priority": "Priorize a pessoa principal em plano medio, preservando mais corpo e contexto; reserve close de rosto para reacao clara.",
     },
     "ai-director-reactions": {
         "label": "Reacoes",
@@ -224,6 +252,16 @@ class PlatformPreset:
 
 
 @dataclass(frozen=True)
+class ResolutionPreset:
+    key: str
+    label: str
+    width: int
+    height: int
+    destinations: tuple[str, ...]
+    note: str
+
+
+@dataclass(frozen=True)
 class EffectPreset:
     key: str
     label: str
@@ -270,6 +308,8 @@ class ImportJob:
 
 IMPORT_JOBS: dict[str, ImportJob] = {}
 IMPORT_JOBS_LOCK = threading.Lock()
+VISUAL_MAP_TASKS: set[str] = set()
+VISUAL_MAP_TASKS_LOCK = threading.Lock()
 YOLO_MODEL_CACHE: dict[str, object | None] = {}
 YOLO_MODEL_ERRORS: dict[str, str] = {}
 
@@ -280,6 +320,29 @@ PLATFORM_PRESETS = {
     "instagram": PlatformPreset("instagram", "Instagram", 1080, 1920, "9:16 vertical"),
     "facebook": PlatformPreset("facebook", "Facebook", 1080, 1350, "4:5 feed"),
     "youtube": PlatformPreset("youtube", "YouTube", 1920, 1080, "16:9 landscape"),
+}
+
+RESOLUTION_PRESETS = {
+    "vertical_9_16": ResolutionPreset(
+        "vertical_9_16", "Vertical 9:16", 1080, 1920, ("tiktok", "shorts", "instagram"), "Formato vertical compartilhado"
+    ),
+    "vertical_4_5": ResolutionPreset("vertical_4_5", "Vertical 4:5", 1080, 1350, ("facebook",), "Feed vertical"),
+    "horizontal_16_9": ResolutionPreset("horizontal_16_9", "Horizontal 16:9", 1920, 1080, ("youtube",), "Video horizontal"),
+}
+
+PLATFORM_RESOLUTION_PRESETS = {
+    destination: preset.key
+    for preset in RESOLUTION_PRESETS.values()
+    for destination in preset.destinations
+}
+
+DIRECTOR_INTENTS = {
+    "speaker_hold": {"label": "Speaker", "subject": "primary", "transition": "hold", "reason": "Segura foco medio no speaker."},
+    "group_open": {"label": "Group", "subject": "group", "transition": "hold", "reason": "Preserva o grupo, com espaco para reacoes."},
+    "reaction_focus": {"label": "Reaction", "subject": "secondary", "transition": "smooth", "reason": "Realca reacao em close controlado."},
+    "center_hold": {"label": "Center", "subject": "center", "transition": "hold", "reason": "Volta para o centro seguro."},
+    "speaker_close": {"label": "Zoom", "subject": "primary", "transition": "smooth", "reason": "Aproxima em plano medio, sem virar so rosto."},
+    "cut_focus": {"label": "Cut", "subject": "primary", "transition": "cut", "reason": "Corte seco para ritmo."},
 }
 
 EFFECT_PRESETS = {
@@ -315,7 +378,6 @@ OVERLAY_PRESETS = {
     "watermark": OverlayPreset("watermark", "Marca d'agua", "CUTED", "clip selecionado", "0xf4f4f4"),
 }
 
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate local video clip candidates and a review gallery.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -339,6 +401,9 @@ def parse_args() -> argparse.Namespace:
     analyze.add_argument("--context-prompt", default="")
     analyze.add_argument("--skip-render", action="store_true")
     analyze.add_argument("--cleanup-source", action="store_true")
+    visual_map = subparsers.add_parser("visual-map", help="Build a visual map for a local source video.")
+    visual_map.add_argument("video", type=Path)
+    visual_map.add_argument("--out", type=Path, required=True)
     render = subparsers.add_parser("render-selected", help="Render final clips from an exported selected-clips JSON.")
     render.add_argument("selection_json", type=Path)
     render.add_argument("--out", type=Path, required=True)
@@ -365,6 +430,9 @@ def main() -> int:
     args = parse_args()
     if args.command == "analyze":
         analyze(args)
+        return 0
+    if args.command == "visual-map":
+        visual_map_command(args)
         return 0
     if args.command == "render-selected":
         render_selected(args)
@@ -395,6 +463,7 @@ def analyze(args: argparse.Namespace) -> None:
     rendered = render_outputs(source.render_source, out_dir, moments, ffmpeg, args.skip_render)
     write_json(out_dir / "moments.json", rendered, source.label, duration, config)
     write_html(out_dir / "index.html", rendered, source.label)
+    start_visual_map_background(out_dir, source)
     if args.cleanup_source:
         cleanup_sources(source.cleanup_paths)
     print(f"[cutted] Generated {len(rendered)} moments in {out_dir}")
@@ -564,9 +633,17 @@ def open_browser_later(host: str, port: int, delay: float) -> None:
 
 def bootstrap_workspace_gallery(workspace: Path) -> None:
     index_path = workspace / "index.html"
-    if index_path.exists():
+    if index_path.exists() and not workspace_index_is_empty_shell(index_path):
         return
     write_html(index_path, [], "CUTED")
+
+
+def workspace_index_is_empty_shell(index_path: Path) -> bool:
+    try:
+        html = index_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    return "data-import-form" in html and '"moments": []' in html
 
 
 def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler]:
@@ -591,6 +668,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if path == "/api/select-folder":
                 self.handle_select_folder()
                 return
+            if path == "/api/select-video-file":
+                self.handle_select_video_file()
+                return
             if path == "/api/open-folder":
                 self.handle_open_folder()
                 return
@@ -609,6 +689,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
 
         def do_GET(self) -> None:
             path = urllib.parse.urlparse(self.path).path
+            if path == "/api/camera/status":
+                self.handle_camera_status(base_dir)
+                return
             if path == "/api/settings/openai":
                 self.handle_openai_settings_get()
                 return
@@ -693,6 +776,13 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             except Exception as error:
                 send_json_response(self, 500, {"ok": False, "error": str(error)})
 
+        def handle_camera_status(self, request_base_dir: Path) -> None:
+            try:
+                result = camera_status_from_request(self, request_base_dir)
+                send_json_response(self, 200, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
+
         def handle_bumper_asset(self, request_base_dir: Path) -> None:
             try:
                 result = save_bumper_asset_from_request(self, request_base_dir)
@@ -703,6 +793,13 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
         def handle_select_folder(self) -> None:
             try:
                 path = select_folder_path()
+                send_json_response(self, 200, {"ok": True, "path": path})
+            except Exception as error:
+                send_json_response(self, 500, {"ok": False, "error": str(error)})
+
+        def handle_select_video_file(self) -> None:
+            try:
+                path = select_video_file_path()
                 send_json_response(self, 200, {"ok": True, "path": path})
             except Exception as error:
                 send_json_response(self, 500, {"ok": False, "error": str(error)})
@@ -799,17 +896,31 @@ def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, bas
     force_refresh = camera_analysis_bypasses_cache(payload, mode)
     title = clean_optional_text(payload.get("title"), 240)
     transcript = clean_optional_text(payload.get("transcript"), 3500)
+    if force_refresh and camera_analysis_uses_ai(mode) and payload.get("allow_completed_cache", True):
+        previous = latest_good_ai_cache(gallery_dir, mode, platform, clip_file)
+        if previous is not None:
+            return {**previous, "ok": True, "cached": True, "completed_cache": True}
     last_analysis: dict[str, object] | None = None
     last_error = ""
+    visual_map_ready = (gallery_dir / "visual-map.json").exists()
     for media in camera_analysis_media_candidates(gallery_dir, clip_path, start, source_start):
+        if camera_analysis_uses_ai(mode) and not visual_map_ready and media.kind == "source":
+            continue
         cache_path = camera_analysis_cache_path(gallery_dir, media, duration, platform, mode)
         if not force_refresh and cache_path.exists():
             cached = json.loads(cache_path.read_text(encoding="utf-8-sig"))
             if isinstance(cached, dict) and isinstance(cached.get("camera_path"), list):
+                if not isinstance(cached.get("director_plan"), dict):
+                    cached["director_plan"] = director_plan_from_camera_path(
+                        cached["camera_path"], duration, platform, str(cached.get("source") or mode), mode
+                    )
                 return {**cached, "ok": True, "cached": True}
         try:
-            analysis = opencv_face_camera_analysis(
-                media.ref, media.start, duration, mode, media.kind, media.label, platform, title, transcript
+            visual_analysis = visual_map_camera_analysis(gallery_dir, media, duration, mode, platform, title, transcript)
+            allow_ai = not ai_director_should_wait_for_visual_map(gallery_dir, media, mode, visual_analysis)
+            fast_analysis = camera_analysis_uses_ai(mode) and not visual_map_ready and media.kind == "clip"
+            analysis = visual_analysis or opencv_face_camera_analysis(
+                media.ref, media.start, duration, mode, media.kind, media.label, platform, title, transcript, allow_ai, fast_analysis
             )
         except RuntimeError as error:
             last_error = str(error)
@@ -826,6 +937,7 @@ def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, bas
                 "mode": mode,
                 "mode_label": SMART_CAMERA_MODES[mode],
                 "platform": platform,
+                "resolution_preset": resolution_key_for_platform(platform),
                 "clip_file": clip_file,
                 "trim_start_seconds": round(start, 3),
                 "source_start_seconds": round(media.start, 3) if media.kind == "source" else None,
@@ -834,7 +946,13 @@ def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, bas
                 "detection_frames": analysis["detection_frames"],
                 "diagnostics": analysis.get("diagnostics", {}),
                 "camera_path": camera_path,
+                "director_plan": analysis.get("director_plan", {}),
             }
+            recovered = recover_previous_good_ai_result(
+                gallery_dir, result, mode, platform, clip_file, analysis.get("detections"), duration
+            )
+            if recovered is not None:
+                return recovered
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             cache_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
             return result
@@ -844,6 +962,90 @@ def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, bas
         "error": "Nenhum rosto confiavel foi detectado. Mantive a camera atual.",
         "diagnostics": diagnostics,
     }
+
+
+def camera_status_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
+    parsed = urllib.parse.urlparse(handler.path)
+    params = {key: values[-1] for key, values in urllib.parse.parse_qs(parsed.query).items() if values}
+    return camera_status_from_payload(params, base_dir)
+
+
+def camera_status_from_payload(
+    payload: dict[str, object], base_dir: Path, start_background: bool = True
+) -> dict[str, object]:
+    gallery_dir = resolve_request_gallery_dir(base_dir, payload)
+    clip_file = clean_optional_text(payload.get("clip_file"), 1000)
+    if not clip_file:
+        raise ValueError("Missing clip_file.")
+    clip_path = resolve_request_media_path(gallery_dir, clip_file)
+    mode = normalize_camera_analysis_mode(payload.get("mode"))
+    platform = str(payload.get("platform") or "tiktok")
+    cache_ready = (
+        latest_good_ai_cache(gallery_dir, mode, platform, clip_file) is not None
+        if camera_analysis_uses_ai(mode)
+        else False
+    )
+    visual_status = camera_clip_visual_map_status(gallery_dir, clip_path, start_background)
+    ready = bool(cache_ready or not camera_analysis_uses_ai(mode) or visual_status["ready"])
+    return {
+        "ok": True,
+        "mode": mode,
+        "clip_file": clip_file,
+        "cache_ready": cache_ready,
+        "ready": ready,
+        "visual_map": visual_status,
+    }
+
+
+def camera_clip_visual_map_status(gallery_dir: Path, clip_path: Path, start_background: bool) -> dict[str, object]:
+    media = CameraAnalysisMedia(clip_path, local_media_cache_key(clip_path), clip_path.name, "clip", 0.0)
+    path = visual_map_path_for_media(gallery_dir, media)
+    if visual_map_file_ready(path, clip_path):
+        return {"ready": True, "preparing": False, "path": str(path), "kind": "clip"}
+    preparing = visual_map_task_running(path)
+    if start_background and not preparing:
+        preparing = start_visual_map_task(path, clip_path)
+    return {"ready": False, "preparing": preparing, "path": str(path), "kind": "clip"}
+
+
+def visual_map_file_ready(path: Path, source_path: Path) -> bool:
+    if not path.exists():
+        return False
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return (
+        isinstance(payload, dict)
+        and bool(payload.get("ok"))
+        and payload.get("version") == VISUAL_MAP_VERSION
+        and visual_map_matches_media(payload, source_path)
+    )
+
+
+def visual_map_task_running(path: Path) -> bool:
+    key = str(path.resolve())
+    with VISUAL_MAP_TASKS_LOCK:
+        return key in VISUAL_MAP_TASKS
+
+
+def start_visual_map_task(path: Path, media_path: Path) -> bool:
+    key = str(path.resolve())
+    with VISUAL_MAP_TASKS_LOCK:
+        if VISUAL_MAP_TASKS:
+            return key in VISUAL_MAP_TASKS
+        VISUAL_MAP_TASKS.add(key)
+    thread = threading.Thread(target=run_visual_map_task, args=(key, path, media_path), daemon=True)
+    thread.start()
+    return True
+
+
+def run_visual_map_task(key: str, path: Path, media_path: Path) -> None:
+    try:
+        write_media_visual_map(path, media_path)
+    finally:
+        with VISUAL_MAP_TASKS_LOCK:
+            VISUAL_MAP_TASKS.discard(key)
 
 
 def save_bumper_asset_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
@@ -922,6 +1124,118 @@ def camera_analysis_uses_ai(mode: str) -> bool:
 
 def camera_analysis_bypasses_cache(payload: dict[str, object], mode: str) -> bool:
     return bool(payload.get("force_refresh")) and camera_analysis_uses_ai(mode)
+
+
+def recover_previous_good_ai_result(
+    gallery_dir: Path, result: dict[str, object], mode: str, platform: str, clip_file: str,
+    detections: object = None, duration: float = 0.0
+) -> dict[str, object] | None:
+    if not camera_analysis_uses_ai(mode) or ai_director_result_is_good(result):
+        return None
+    previous = latest_good_ai_cache(gallery_dir, mode, platform, clip_file)
+    if previous is None:
+        return None
+    diagnostics = previous.get("diagnostics")
+    if not isinstance(diagnostics, dict):
+        diagnostics = {}
+        previous["diagnostics"] = diagnostics
+    diagnostics["ai_cache_recovered"] = {
+        "used": True,
+        "reason": ai_director_failure_reason(result),
+    }
+    if isinstance(detections, list) and isinstance(previous.get("camera_path"), list):
+        upgrade_recovered_ai_result(previous, detections, duration, platform, mode)
+    return {**previous, "ok": True, "cached": True, "cache_recovered": True}
+
+
+def upgrade_recovered_ai_result(
+    payload: dict[str, object], detections: list[dict[str, object]], duration: float, platform: str, mode: str
+) -> None:
+    path = payload.get("camera_path")
+    if not isinstance(path, list):
+        return
+    hard_cut = ai_director_uses_hard_cuts(mode)
+    upgraded = dense_protected_camera_path(path, detections, duration, platform, mode)
+    payload["camera_path"] = upgraded
+    payload["director_plan"] = director_plan_from_camera_path(upgraded, duration, platform, "ai-director-cache-upgraded", mode)
+    diagnostics = payload.get("diagnostics")
+    if isinstance(diagnostics, dict):
+        diagnostics.update(camera_path_quality_diagnostics(detections, upgraded, duration, platform))
+        diagnostics["cache_upgrade"] = {
+            "dense_protection": True,
+            "speaker_side_coverage": True,
+            "max_still_seconds": AI_DIRECTOR_MAX_STILL_SECONDS,
+        }
+
+
+def latest_good_ai_cache(gallery_dir: Path, mode: str, platform: str, clip_file: str) -> dict[str, object] | None:
+    cache_dir = gallery_dir / "camera-analysis"
+    if not cache_dir.exists():
+        return None
+    candidates: list[dict[str, object]] = []
+    for path in sorted(cache_dir.glob(f"*-{mode}-*.json"), key=lambda item: item.stat().st_mtime, reverse=True):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if ai_cache_matches_request(payload, mode, platform, clip_file) and ai_director_result_is_good(payload):
+            payload["cache_path"] = str(path)
+            candidates.append(payload)
+    return candidates[0] if candidates else None
+
+
+def ai_cache_matches_request(payload: dict[str, object], mode: str, platform: str, clip_file: str) -> bool:
+    if payload.get("version") != CAMERA_ANALYSIS_VERSION:
+        return False
+    if payload.get("mode") != mode:
+        return False
+    if payload.get("resolution_preset") != resolution_key_for_platform(platform):
+        return False
+    return clean_optional_text(payload.get("clip_file"), 1000) == clip_file
+
+
+def ai_director_result_is_good(payload: dict[str, object]) -> bool:
+    diagnostics = payload.get("diagnostics")
+    if not isinstance(diagnostics, dict):
+        return False
+    ai = diagnostics.get("ai_director")
+    if not isinstance(ai, dict):
+        return False
+    if ai.get("status") == "applied":
+        return True
+    legacy_success = bool(ai.get("enabled")) and not ai.get("error") and int(float(ai.get("frame_samples") or 0)) > 0
+    return legacy_success and str(payload.get("source") or "").endswith("ai-director")
+
+
+def ai_director_failure_reason(payload: dict[str, object]) -> str:
+    diagnostics = payload.get("diagnostics")
+    if not isinstance(diagnostics, dict):
+        return "unknown"
+    ai = diagnostics.get("ai_director")
+    if not isinstance(ai, dict):
+        return "unknown"
+    return str(ai.get("status") or ai.get("error") or "fallback")
+
+
+def ai_director_should_wait_for_visual_map(
+    gallery_dir: Path, media: CameraAnalysisMedia, mode: str, visual_analysis: dict[str, object] | None
+) -> bool:
+    return (
+        camera_analysis_uses_ai(mode)
+        and media.kind == "source"
+        and visual_analysis is None
+        and not (gallery_dir / "visual-map.json").exists()
+    )
+
+
+def pending_visual_map_ai_diagnostics(mode: str) -> dict[str, object]:
+    return {
+        "enabled": bool(openai_api_key()),
+        "fallback": "auto-director",
+        "intent": ai_director_intent(mode)["label"],
+        "status": "visual_map_pending",
+        "error": "Mapa visual ainda preparando; apliquei Auto Director local.",
+    }
 
 
 def ai_director_intent(mode: str) -> dict[str, str]:
@@ -1010,6 +1324,7 @@ def local_media_cache_key(path: Path) -> str:
 
 
 def camera_analysis_cache_path(gallery_dir: Path, media: CameraAnalysisMedia, duration: float, platform: str, mode: str) -> Path:
+    cache_scope = camera_analysis_cache_scope(platform, mode)
     fingerprint = json.dumps(
         {
             "version": CAMERA_ANALYSIS_VERSION,
@@ -1017,14 +1332,20 @@ def camera_analysis_cache_path(gallery_dir: Path, media: CameraAnalysisMedia, du
             "kind": media.kind,
             "start": round(media.start, 3),
             "duration": round(duration, 3),
-            "platform": platform,
+            "scope": cache_scope,
             "mode": mode,
         },
         sort_keys=True,
     )
     digest = hashlib.sha1(fingerprint.encode("utf-8")).hexdigest()[:16]
     stem = safe_cache_stem(media.label)
-    return gallery_dir / "camera-analysis" / f"{stem}-{media.kind}-{platform}-{mode}-{digest}.json"
+    return gallery_dir / "camera-analysis" / f"{stem}-{media.kind}-{cache_scope}-{mode}-{digest}.json"
+
+
+def camera_analysis_cache_scope(platform: str, mode: str) -> str:
+    if camera_analysis_uses_ai(mode):
+        return resolution_key_for_platform(platform)
+    return platform if platform in PLATFORM_PRESETS else "tiktok"
 
 
 def safe_cache_stem(value: str) -> str:
@@ -1039,9 +1360,239 @@ def opencv_face_camera_path(input_path: Path, start: float, duration: float) -> 
     )["camera_path"]
 
 
+def visual_map_command(args: argparse.Namespace) -> None:
+    source_path = args.video.expanduser().resolve()
+    require_file(source_path)
+    out_dir = args.out.expanduser().resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    payload = build_visual_map(source_path)
+    (out_dir / "visual-map.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def start_visual_map_background(out_dir: Path, source: SourceMedia) -> None:
+    source_path = visual_map_source_path(source)
+    if source_path is None:
+        return
+    command = [sys.executable, str(Path(__file__).resolve()), "visual-map", str(source_path), "--out", str(out_dir)]
+    try:
+        subprocess.Popen(
+            command,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        )
+    except (OSError, ValueError):
+        return
+
+
+def write_visual_map(out_dir: Path, source: SourceMedia) -> None:
+    source_path = visual_map_source_path(source)
+    if source_path is None:
+        return
+    try:
+        payload = build_visual_map(source_path)
+    except (RuntimeError, OSError, subprocess.SubprocessError) as error:
+        payload = failed_visual_map(source_path, error)
+    (out_dir / "visual-map.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def visual_map_source_path(source: SourceMedia) -> Path | None:
+    if not source.metadata or source.metadata.get("kind") != "local":
+        return None
+    path = Path(str(source.render_source)).expanduser()
+    if not path.exists() or not path.is_file() or path.suffix.lower() not in RANGE_MEDIA_EXTENSIONS:
+        return None
+    return path.resolve()
+
+
+def build_visual_map(source_path: Path) -> dict[str, object]:
+    cv2 = import_cv2()
+    capture = cv2.VideoCapture(str(source_path))
+    if not capture.isOpened():
+        raise RuntimeError("OpenCV could not open source video for visual map.")
+    try:
+        metadata = opencv_video_metadata(capture)
+        duration = float(metadata.get("duration") or 0.0)
+        sample_times = visual_map_sample_times(duration)
+        yolo_model = load_yolo_person_model()
+        cascades = [] if yolo_model is not None else opencv_face_cascades(cv2)
+        detections = opencv_face_detections(cv2, capture, cascades, 0.0, sample_times, yolo_model)
+    finally:
+        capture.release()
+    return visual_map_payload(source_path, metadata, sample_times, detections)
+
+
+def visual_map_payload(
+    source_path: Path, metadata: dict[str, object], sample_times: list[float], detections: list[dict[str, object]]
+) -> dict[str, object]:
+    diagnostics = vision_engine_diagnostics(detections)
+    return {
+        "ok": True,
+        "version": VISUAL_MAP_VERSION,
+        "source": str(source_path),
+        "fingerprint": json.loads(local_media_cache_key(source_path)),
+        "metadata": metadata,
+        "sample_seconds": VISUAL_MAP_SAMPLE_SECONDS,
+        "sample_count": len(sample_times),
+        "summary": visual_map_summary(detections, sample_times),
+        "vision_engine": diagnostics["vision_engine"],
+        "vision_model": diagnostics["vision_model"],
+        "vision_error": diagnostics["vision_error"],
+        "detections": detections,
+    }
+
+
+def failed_visual_map(source_path: Path, error: Exception) -> dict[str, object]:
+    return {"ok": False, "version": VISUAL_MAP_VERSION, "source": str(source_path), "error": str(error)}
+
+
+def visual_map_sample_times(duration: float) -> list[float]:
+    safe_duration = max(duration, 0.3)
+    step = max(VISUAL_MAP_SAMPLE_SECONDS, safe_duration / VISUAL_MAP_MAX_FRAMES)
+    times = [round(min(index * step, safe_duration), 3) for index in range(int(math.ceil(safe_duration / step)) + 1)]
+    return sorted(set(times))
+
+
+def visual_map_summary(detections: list[dict[str, object]], sample_times: list[float]) -> dict[str, object]:
+    sample_count = len(sample_times)
+    face_frames = sum(1 for row in detections if reliable_opencv_faces(row))
+    person_frames = sum(1 for row in detections if reliable_persons(row))
+    group_frames = sum(1 for row in detections if len(reliable_faces(row)) >= 2)
+    return {
+        "detection_rows": len(detections),
+        "face_detection_rate": round(face_frames / sample_count, 3) if sample_count else 0.0,
+        "person_detection_rate": round(person_frames / sample_count, 3) if sample_count else 0.0,
+        "group_rate": round(group_frames / sample_count, 3) if sample_count else 0.0,
+        "max_faces": max((len(reliable_faces(row)) for row in detections), default=0),
+        "max_persons": max((len(reliable_persons(row)) for row in detections), default=0),
+    }
+
+
+def visual_map_camera_analysis(
+    gallery_dir: Path, media: CameraAnalysisMedia, duration: float, mode: str, platform: str, title: str, transcript: str
+) -> dict[str, object] | None:
+    payload = visual_map_for_media(gallery_dir, media)
+    if payload is None:
+        return None
+    detections = visual_map_segment_detections(payload, media.start, duration)
+    if not detections:
+        return None
+    safe_mode = normalize_camera_analysis_mode(mode)
+    local_mode = "auto-director" if camera_analysis_uses_ai(safe_mode) else safe_mode
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    camera_path = smart_camera_path(detections, duration, local_mode)
+    diagnostics = visual_map_camera_diagnostics(media, metadata, detections, camera_path, duration, platform, payload)
+    source = f"visual-map-{local_mode}"
+    if camera_analysis_uses_ai(safe_mode):
+        ai_result = ai_director_camera_result(media.ref, media.start, duration, platform, title, transcript, metadata, detections, camera_path, safe_mode)
+        diagnostics["ai_director"] = ai_result["diagnostics"]
+        if ai_result["camera_path"]:
+            camera_path = ai_result["camera_path"]
+            diagnostics["director_plan"] = ai_result.get("director_plan", {})
+            diagnostics["camera_keyframes"] = len(camera_path)
+            source = f"visual-map-{safe_mode}"
+        else:
+            camera_path = ai_director_local_fallback_path(camera_path, detections, duration, platform, safe_mode)
+            diagnostics["director_plan"] = director_plan_from_camera_path(
+                camera_path, duration, platform, "visual-map-ai-director-fallback", safe_mode
+            )
+            diagnostics["camera_keyframes"] = len(camera_path)
+            diagnostics["fallback_quality"] = ai_director_quality_report(
+                camera_path, diagnostics["director_plan"], detections, duration
+            )
+            source = f"visual-map-{safe_mode}-fallback"
+    diagnostics.update(camera_path_quality_diagnostics(detections, camera_path, duration, platform))
+    director_plan = diagnostics.get("director_plan")
+    if not isinstance(director_plan, dict):
+        director_plan = director_plan_from_camera_path(camera_path, duration, platform, source, mode)
+    return {
+        "source": source,
+        "detected_faces": max((len(reliable_faces(row)) for row in detections), default=0),
+        "detection_frames": detection_frame_count(detections),
+        "diagnostics": diagnostics,
+        "camera_path": camera_path,
+        "director_plan": director_plan,
+        "detections": detections,
+    }
+
+
+def visual_map_for_media(gallery_dir: Path, media: CameraAnalysisMedia) -> dict[str, object] | None:
+    if not isinstance(media.ref, Path):
+        return None
+    path = visual_map_path_for_media(gallery_dir, media)
+    if not path.exists() and media.kind == "clip":
+        write_media_visual_map(path, media.ref)
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict) or not payload.get("ok"):
+        return None
+    if payload.get("version") != VISUAL_MAP_VERSION:
+        return None
+    return payload if visual_map_matches_media(payload, media.ref) else None
+
+
+def visual_map_path_for_media(gallery_dir: Path, media: CameraAnalysisMedia) -> Path:
+    if media.kind == "clip":
+        return gallery_dir / "camera-analysis" / f"{safe_cache_stem(media.label)}-visual-map.json"
+    return gallery_dir / "visual-map.json"
+
+
+def write_media_visual_map(path: Path, media_path: Path) -> None:
+    try:
+        payload = build_visual_map(media_path)
+    except (RuntimeError, OSError, subprocess.SubprocessError) as error:
+        payload = failed_visual_map(media_path, error)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def visual_map_matches_media(payload: dict[str, object], source_path: Path) -> bool:
+    fingerprint = payload.get("fingerprint")
+    if isinstance(fingerprint, dict) and fingerprint.get("path") == str(source_path.resolve()):
+        return True
+    return str(payload.get("source") or "") == str(source_path.resolve())
+
+
+def visual_map_segment_detections(payload: dict[str, object], start: float, duration: float) -> list[dict[str, object]]:
+    raw_rows = payload.get("detections")
+    if not isinstance(raw_rows, list):
+        return []
+    end = start + max(duration, 0.3)
+    rows: list[dict[str, object]] = []
+    for item in raw_rows:
+        if not isinstance(item, dict):
+            continue
+        absolute_time = float(item.get("time") or 0.0)
+        if absolute_time < start - 0.2 or absolute_time > end + 0.2:
+            continue
+        rows.append({**item, "time": round(clamp(absolute_time - start, 0.0, duration), 3)})
+    return rows
+
+
+def visual_map_camera_diagnostics(
+    media: CameraAnalysisMedia, metadata: dict[str, object], detections: list[dict[str, object]],
+    camera_path: list[dict[str, object]], duration: float, platform: str, payload: dict[str, object]
+) -> dict[str, object]:
+    sample_times = [float(row.get("time") or 0.0) for row in detections]
+    diagnostics = camera_analysis_diagnostics("visual-map", media.label, metadata, media.start, duration, sample_times, detections, camera_path)
+    diagnostics.update(vision_engine_diagnostics(detections))
+    if payload.get("vision_engine"):
+        diagnostics["vision_engine"] = payload.get("vision_engine")
+        diagnostics["vision_model"] = payload.get("vision_model") or ""
+        diagnostics["vision_error"] = payload.get("vision_error") or ""
+    diagnostics.update(camera_path_quality_diagnostics(detections, camera_path, duration, platform))
+    diagnostics["visual_map"] = {"used": True, "version": payload.get("version"), "source_samples": payload.get("sample_count"), "segment_samples": len(detections)}
+    return diagnostics
+
+
 def opencv_face_camera_analysis(
     input_ref: Path | str, start: float, duration: float, mode: str, input_kind: str,
-    label: str, platform: str, title: str, transcript: str
+    label: str, platform: str, title: str, transcript: str, allow_ai: bool = True, fast_analysis: bool = False
 ) -> dict[str, object]:
     cv2 = import_cv2()
     capture = cv2.VideoCapture(str(input_ref))
@@ -1055,8 +1606,8 @@ def opencv_face_camera_analysis(
         if video_duration:
             safe_duration = min(duration, max(video_duration - safe_start, 0.3))
         cascades = opencv_face_cascades(cv2)
-        yolo_model = load_yolo_person_model()
-        sample_times = camera_sample_times(safe_duration)
+        yolo_model = None if fast_analysis else load_yolo_person_model()
+        sample_times = camera_fast_sample_times(safe_duration) if fast_analysis else camera_sample_times(safe_duration)
         detections = opencv_face_detections(cv2, capture, cascades, safe_start, sample_times, yolo_model)
     finally:
         capture.release()
@@ -1065,23 +1616,39 @@ def opencv_face_camera_analysis(
     camera_path = smart_camera_path(detections, safe_duration, local_mode)
     diagnostics = camera_analysis_diagnostics(input_kind, label, metadata, safe_start, safe_duration, sample_times, detections, camera_path)
     diagnostics.update(vision_engine_diagnostics(detections))
+    if fast_analysis:
+        diagnostics["fast_analysis"] = True
     source = f"auto-face-{local_mode}"
-    if camera_analysis_uses_ai(safe_mode):
+    if camera_analysis_uses_ai(safe_mode) and not allow_ai:
+        diagnostics["ai_director"] = pending_visual_map_ai_diagnostics(safe_mode)
+    elif camera_analysis_uses_ai(safe_mode):
         ai_result = ai_director_camera_result(
             input_ref, safe_start, safe_duration, platform, title, transcript, metadata, detections, camera_path, safe_mode
         )
         diagnostics["ai_director"] = ai_result["diagnostics"]
         if ai_result["camera_path"]:
             camera_path = ai_result["camera_path"]
+            diagnostics["director_plan"] = ai_result.get("director_plan", {})
             diagnostics["camera_keyframes"] = len(camera_path)
             source = safe_mode
+        else:
+            camera_path = ai_director_local_fallback_path(camera_path, detections, safe_duration, platform, safe_mode)
+            diagnostics["director_plan"] = director_plan_from_camera_path(camera_path, safe_duration, platform, "ai-director-fallback", safe_mode)
+            diagnostics["camera_keyframes"] = len(camera_path)
+            diagnostics["fallback_quality"] = ai_director_quality_report(camera_path, diagnostics["director_plan"], detections, safe_duration)
+            source = f"auto-face-{safe_mode}-fallback"
     diagnostics.update(camera_path_quality_diagnostics(detections, camera_path, safe_duration, platform))
+    director_plan = diagnostics.get("director_plan")
+    if not isinstance(director_plan, dict):
+        director_plan = director_plan_from_camera_path(camera_path, safe_duration, platform, source, mode)
     return {
         "source": source,
         "detected_faces": max((len(reliable_faces(row)) for row in detections), default=0),
         "detection_frames": detection_frame_count(detections),
         "diagnostics": diagnostics,
         "camera_path": camera_path,
+        "director_plan": director_plan,
+        "detections": detections,
     }
 
 
@@ -1261,7 +1828,7 @@ def vision_engine_diagnostics(detections: list[dict[str, object]]) -> dict[str, 
     multi_person_frames = sum(1 for row in detections if len(reliable_persons(row)) >= 2)
     detected_persons = max((len(reliable_persons(row)) for row in detections), default=0)
     return {
-        "vision_engine": "hybrid-yolo" if yolo_loaded else "opencv",
+        "vision_engine": "yolo-visual-map" if yolo_loaded else "opencv-fallback",
         "vision_model": model_name if yolo_loaded else "",
         "vision_error": YOLO_MODEL_ERRORS.get(model_name, ""),
         "person_detection_frames": person_frames,
@@ -1355,6 +1922,15 @@ def row_has_edge_face(row: dict[str, object]) -> bool:
 def camera_sample_times(duration: float) -> list[float]:
     safe_duration = max(duration, 0.3)
     step = max(CAMERA_ANALYSIS_SAMPLE_SECONDS, safe_duration / CAMERA_ANALYSIS_MAX_FRAMES)
+    times = [round(min(index * step, safe_duration), 3) for index in range(int(math.ceil(safe_duration / step)) + 1)]
+    if times[-1] < safe_duration - 0.05:
+        times.append(round(safe_duration, 3))
+    return sorted(set(times))
+
+
+def camera_fast_sample_times(duration: float) -> list[float]:
+    safe_duration = max(duration, 0.3)
+    step = max(CAMERA_FAST_SAMPLE_SECONDS, safe_duration / CAMERA_FAST_MAX_FRAMES)
     times = [round(min(index * step, safe_duration), 3) for index in range(int(math.ceil(safe_duration / step)) + 1)]
     if times[-1] < safe_duration - 0.05:
         times.append(round(safe_duration, 3))
@@ -1600,28 +2176,364 @@ def ai_director_camera_result(
     input_ref: Path | str, start: float, duration: float, platform: str, title: str, transcript: str,
     metadata: dict[str, object], detections: list[dict[str, object]], fallback_path: list[dict[str, object]], mode: str
 ) -> dict[str, object]:
-    diagnostics: dict[str, object] = {"enabled": bool(openai_api_key()), "fallback": "auto-director"}
+    diagnostics: dict[str, object] = {"enabled": bool(openai_api_key()), "fallback": "auto-director", "status": "pending"}
     diagnostics["intent"] = ai_director_intent(mode)["label"]
     if not openai_api_key():
+        diagnostics["status"] = "no_key"
         diagnostics["error"] = "OPENAI_API_KEY nao configurada."
         return {"camera_path": [], "diagnostics": diagnostics}
     try:
-        frames = ai_director_frame_samples(input_ref, start, duration)
+        frames = ai_director_frame_samples(input_ref, start, duration) if ai_director_needs_frame_samples(detections) else []
         payload = request_ai_director_path(platform, title, transcript, metadata, detections, fallback_path, frames, duration, mode)
-        path = protected_ai_director_path(validated_ai_director_path(payload, duration), detections, duration, platform)
+        director_plan = validated_ai_director_plan(payload, duration, platform, mode)
+        path = camera_path_from_director_plan(director_plan, detections, duration, platform, mode)
+        if not path:
+            path = validated_ai_director_path(payload, duration)
+            director_plan = director_plan_from_camera_path(path, duration, platform, "ai-director", mode)
+        path = protected_ai_director_path(path, detections, duration, platform)
         if ai_director_uses_hard_cuts(mode):
             path = hard_cut_ai_director_path(path, detections, duration, platform)
         path = dense_protected_camera_path(path, detections, duration, platform, mode)
     except Exception as error:
+        diagnostics["status"] = "timeout" if "demorou demais" in str(error).lower() else "fallback"
         diagnostics["error"] = str(error)
         return {"camera_path": [], "diagnostics": diagnostics}
+    quality = ai_director_quality_report(path, director_plan, detections, duration)
+    if quality["rejected"]:
+        diagnostics["status"] = "quality_rejected"
+        diagnostics["error"] = str(quality["reason"])
+        diagnostics["quality"] = quality
+        return {"camera_path": [], "director_plan": director_plan, "diagnostics": diagnostics}
     diagnostics.update({
+        "status": "applied",
         "frame_samples": len(frames),
+        "frame_sample_policy": "uncertain_only" if frames else "structured_map_only",
         "summary": str(payload.get("summary") or "")[:220],
         "multi_face_coverage": ai_director_multi_face_coverage(detections),
         "dense_camera": dense_camera_diagnostics(path, detections, duration, platform),
+        "quality": quality,
     })
-    return {"camera_path": path, "diagnostics": diagnostics}
+    diagnostics["director_plan_shots"] = len(director_plan.get("shots", []))
+    return {"camera_path": path, "director_plan": director_plan, "diagnostics": diagnostics}
+
+
+def ai_director_needs_frame_samples(detections: list[dict[str, object]]) -> bool:
+    if len(detections) < 8:
+        return True
+    detection_rows = [row for row in detections if reliable_faces(row) or reliable_persons(row)]
+    if len(detection_rows) / max(len(detections), 1) < 0.24:
+        return True
+    multi_person_rows = [row for row in detections if len(reliable_persons(row)) >= 2]
+    multi_face_rows = [row for row in detections if len(reliable_opencv_faces(row)) >= 2]
+    return not multi_person_rows and not multi_face_rows and len(detection_rows) < 12
+
+
+def ai_director_quality_report(
+    path: list[dict[str, object]], director_plan: dict[str, object], detections: list[dict[str, object]], duration: float
+) -> dict[str, object]:
+    frames = path or []
+    kinds = [dynamic_frame_kind(frame) for frame in frames]
+    speaker_frames = sum(1 for kind in kinds if kind == "speaker")
+    variation_frames = len(frames) - speaker_frames
+    fit_frames = sum(1 for frame in frames if camera_path_frame_uses_group_fit(frame))
+    raw_shots = director_plan.get("shots")
+    shots = raw_shots if isinstance(raw_shots, list) else []
+    shot_intents = [normalize_director_intent(shot.get("intent")) for shot in shots if isinstance(shot, dict)]
+    speaker_shots = sum(1 for intent in shot_intents if intent in {"speaker_hold", "speaker_close"})
+    shot_variations = len(shot_intents) - speaker_shots
+    speaker_ratio = speaker_frames / max(len(frames), 1)
+    duration_ratios = camera_kind_duration_ratios(frames, duration) if frames else {"group": 0.0, "speaker": 0.0, "reaction": 0.0}
+    active_duration_ratio = duration_ratios["speaker"] + duration_ratios["reaction"]
+    needs_variation = ai_director_scene_needs_variation(detections, duration)
+    speaker_only = bool(
+        needs_variation
+        and len(frames) >= 5
+        and speaker_ratio > AI_DIRECTOR_MAX_SPEAKER_RATIO
+        and variation_frames + fit_frames < AI_DIRECTOR_MIN_VARIATION_FRAMES
+        and shot_variations < AI_DIRECTOR_MIN_VARIATION_FRAMES
+    )
+    group_dominant = bool(
+        needs_variation
+        and len(frames) >= 5
+        and duration_ratios["group"] > AI_DIRECTOR_MAX_GROUP_DURATION_RATIO
+        and active_duration_ratio < AI_DIRECTOR_MIN_ACTIVE_DURATION_RATIO
+    )
+    rejected = speaker_only or group_dominant
+    reason = "speaker_only" if speaker_only else ("group_dominant" if group_dominant else "")
+    return {
+        "rejected": rejected,
+        "reason": reason,
+        "speaker_ratio": round(speaker_ratio, 3),
+        "group_duration_ratio": round(duration_ratios["group"], 3),
+        "active_duration_ratio": round(active_duration_ratio, 3),
+        "speaker_frames": speaker_frames,
+        "variation_frames": variation_frames,
+        "fit_frames": fit_frames,
+        "shot_variations": shot_variations,
+        "needs_variation": needs_variation,
+    }
+
+
+def ai_director_scene_needs_variation(detections: list[dict[str, object]], duration: float) -> bool:
+    rows = [row for row in detections if reliable_faces(row)]
+    if len(rows) < 4:
+        return False
+    multi_rows = [row for row in rows if len(reliable_faces(row)) >= 2]
+    edge_rows = [row for row in rows if row_has_edge_face(row)]
+    return duration >= 18.0 and (len(multi_rows) >= 2 or len(edge_rows) >= 3 or len(rows) >= 12)
+
+
+def ai_director_local_fallback_path(
+    camera_path: list[dict[str, object]], detections: list[dict[str, object]], duration: float, platform: str, mode: str
+) -> list[dict[str, object]]:
+    if not camera_path:
+        return []
+    safe_mode = "ai-director-cuts" if ai_director_uses_hard_cuts(mode) else "ai-director"
+    enhanced = dense_protected_camera_path(camera_path, detections, duration, platform, safe_mode)
+    plan = director_plan_from_camera_path(enhanced, duration, platform, "ai-director-fallback", mode)
+    if not ai_director_quality_report(enhanced, plan, detections, duration)["rejected"]:
+        return enhanced
+    context = ai_director_fallback_context_frames(detections, duration, platform, ai_director_uses_hard_cuts(mode))
+    if not context:
+        context = [open_center_camera_frame(0.0), open_center_camera_frame(max(duration * 0.5, 0.1))]
+    merged = merge_camera_path_frames(enhanced, context, duration)
+    return dense_protected_camera_path(merged, detections, duration, platform, safe_mode)
+
+
+def ai_director_fallback_context_frames(
+    detections: list[dict[str, object]], duration: float, platform: str, hard_cut: bool
+) -> list[dict[str, object]]:
+    frames: list[dict[str, object]] = []
+    last_time = -999.0
+    for row in sorted(detections, key=lambda item: float(item.get("time") or 0.0)):
+        time_value = clamp(float(row.get("time") or 0.0), 0.0, max(duration, 0.3))
+        if time_value - last_time < 6.0:
+            continue
+        frame = ai_director_fallback_context_frame(row, time_value, platform)
+        if frame is None:
+            continue
+        if hard_cut:
+            frame = hard_cut_ai_director_frame(frame, time_value, str(frame.get("source") or "ai-director-fallback-context"))
+        frames.append(frame)
+        last_time = time_value
+    return frames[:8]
+
+
+def ai_director_fallback_context_frame(
+    row: dict[str, object], time_value: float, platform: str
+) -> dict[str, object] | None:
+    faces = sorted(reliable_faces(row), key=face_x)
+    if len(faces) >= 2:
+        frame = group_face_frame(faces, time_value, platform)
+        return {**frame, "source": "ai-director-fallback-group", "intent": "group_open"}
+    if row_has_edge_face(row):
+        frame = open_center_camera_frame(time_value)
+        return {**frame, "source": "ai-director-fallback-open", "intent": "center_hold"}
+    return None
+
+
+def director_plan_from_camera_path(
+    camera_path: list[dict[str, object]], duration: float, platform: str, source: str, mode: str
+) -> dict[str, object]:
+    frames = sorted(camera_path, key=lambda frame: float(frame.get("time") or 0.0))
+    shots = director_plan_shots(frames, duration)
+    return {
+        "version": 1,
+        "source": source,
+        "mode": mode,
+        "resolution_preset": resolution_key_for_platform(platform),
+        "style": "normal",
+        "energy": "normal",
+        "shots": shots,
+    }
+
+
+def director_plan_shots(camera_path: list[dict[str, object]], duration: float) -> list[dict[str, object]]:
+    safe_duration = max(duration, 0.3)
+    frames = camera_path or [{"time": 0.0, "x": 50.0, "y": 50.0, "zoom": 1.0, "source": "director-plan-empty"}]
+    shots: list[dict[str, object]] = []
+    for index, frame in enumerate(frames[:56]):
+        start = clamp(float(frame.get("time") or 0.0), 0.0, safe_duration)
+        end = safe_duration if index + 1 >= len(frames) else clamp(float(frames[index + 1].get("time") or safe_duration), start, safe_duration)
+        shots.append(director_plan_shot(frame, index, start, max(end, start + 0.1)))
+    return shots
+
+
+def director_plan_shot(frame: dict[str, object], index: int, start: float, end: float) -> dict[str, object]:
+    intent, label, subject, transition = director_plan_intent(frame)
+    return {
+        "id": f"shot-{index + 1:03d}",
+        "start": round(start, 3),
+        "end": round(end, 3),
+        "intent": intent,
+        "label": label,
+        "subject": subject,
+        "transition": transition,
+        "reason": director_plan_reason(frame, label),
+    }
+
+
+def director_plan_intent(frame: dict[str, object]) -> tuple[str, str, str, str]:
+    source = str(frame.get("source") or "")
+    zoom = float(frame.get("zoom") or 1.0)
+    if camera_path_frame_uses_group_fit(frame) or "group" in source:
+        return "group_open", "Group", "group", "hold"
+    if "reaction" in source:
+        return "reaction_focus", "Reaction", "secondary", "smooth"
+    if "cuts" in source:
+        return "cut_focus", "Cut", "primary", "cut"
+    if zoom >= 1.18:
+        return "speaker_close", "Speaker", "primary", "smooth"
+    return "speaker_hold", "Speaker", "primary", "hold"
+
+
+def director_plan_reason(frame: dict[str, object], label: str) -> str:
+    if label == "Group":
+        return "Preserva pessoas visiveis e reduz risco de crop apertado."
+    if label == "Cut":
+        return "Mantem troca seca para dar ritmo sem pan atravessando o quadro."
+    if label == "Reaction":
+        return "Alterna foco para capturar resposta ou mudanca de atencao."
+    zoom = float(frame.get("zoom") or 1.0)
+    return "Aproxima o foco principal." if zoom >= 1.18 else "Segura enquadramento estavel no foco principal."
+
+
+def validated_ai_director_plan(payload: dict[str, object], duration: float, platform: str, mode: str) -> dict[str, object]:
+    raw = payload.get("director_plan")
+    if not isinstance(raw, dict):
+        return {}
+    shots = raw.get("shots")
+    if not isinstance(shots, list):
+        return {}
+    valid_shots = [validated_ai_director_shot(row, duration, index) for index, row in enumerate(shots) if isinstance(row, dict)]
+    valid_shots = [shot for shot in valid_shots if shot is not None]
+    if not valid_shots:
+        return {}
+    return {
+        "version": 1,
+        "source": "ai-director",
+        "mode": mode,
+        "resolution_preset": resolution_key_for_platform(platform),
+        "style": str(raw.get("style") or "normal")[:32],
+        "energy": str(raw.get("energy") or "normal")[:32],
+        "shots": valid_shots[:24],
+    }
+
+
+def validated_ai_director_shot(row: dict[str, object], duration: float, index: int) -> dict[str, object] | None:
+    start = clamp(float(row.get("start") or 0.0), 0.0, max(duration, 0.3))
+    end = clamp(float(row.get("end") or max(duration, 0.3)), start, max(duration, 0.3))
+    if end - start < 0.1:
+        end = min(start + 0.1, max(duration, 0.3))
+    intent = normalize_director_intent(row.get("intent"))
+    return {
+        "id": clean_optional_text(row.get("id"), 48) or f"shot-{index + 1:03d}",
+        "start": round(start, 3),
+        "end": round(end, 3),
+        "intent": intent,
+        "label": clean_optional_text(row.get("label"), 40) or director_intent_label(intent),
+        "subject": clean_optional_text(row.get("subject"), 40) or director_intent_subject(intent),
+        "transition": clean_optional_text(row.get("transition"), 40) or director_intent_transition(intent),
+        "reason": clean_optional_text(row.get("reason"), 220) or director_intent_reason(intent),
+    }
+
+
+def normalize_director_intent(value: object) -> str:
+    intent = str(value or "speaker_hold").strip().lower().replace("-", "_")
+    return intent if intent in DIRECTOR_INTENTS else "speaker_hold"
+
+
+def director_intent_label(intent: str) -> str:
+    return str(DIRECTOR_INTENTS.get(intent, DIRECTOR_INTENTS["speaker_hold"])["label"])
+
+
+def director_intent_subject(intent: str) -> str:
+    return str(DIRECTOR_INTENTS.get(intent, DIRECTOR_INTENTS["speaker_hold"])["subject"])
+
+
+def director_intent_transition(intent: str) -> str:
+    return str(DIRECTOR_INTENTS.get(intent, DIRECTOR_INTENTS["speaker_hold"])["transition"])
+
+
+def director_intent_reason(intent: str) -> str:
+    return str(DIRECTOR_INTENTS.get(intent, DIRECTOR_INTENTS["speaker_hold"])["reason"])
+
+
+def camera_path_from_director_plan(
+    plan: dict[str, object], detections: list[dict[str, object]], duration: float, platform: str, mode: str
+) -> list[dict[str, object]]:
+    shots = plan.get("shots")
+    if not isinstance(shots, list):
+        return []
+    frames = [camera_frame_from_director_shot(shot, detections, platform, mode) for shot in shots if isinstance(shot, dict)]
+    frames = [frame for frame in frames if frame is not None]
+    if not frames:
+        return []
+    frames = sorted(frames, key=lambda item: float(item.get("time") or 0.0))
+    if float(frames[0].get("time") or 0.0) > 0.001:
+        frames.insert(0, {**frames[0], "time": 0.0})
+    return stable_camera_targets(frames)
+
+
+def camera_frame_from_director_shot(
+    shot: dict[str, object], detections: list[dict[str, object]], platform: str, mode: str
+) -> dict[str, object] | None:
+    time_value = float(shot.get("start") or 0.0)
+    intent = normalize_director_intent(shot.get("intent"))
+    row = nearest_detection(time_value, detections)
+    frame = director_shot_target_frame(intent, row, time_value, platform)
+    if frame is None:
+        frame = open_center_camera_frame(time_value)
+    frame = {**frame, "intent": intent, "label": director_intent_label(intent), "reason": str(shot.get("reason") or director_intent_reason(intent))}
+    if intent == "cut_focus" or ai_director_uses_hard_cuts(mode):
+        return hard_cut_ai_director_frame(frame, time_value, f"ai-director-plan-{intent}")
+    return {**frame, "time": round(time_value, 3), "source": f"ai-director-plan-{intent}"}
+
+
+def director_shot_target_frame(
+    intent: str, row: dict[str, object] | None, time_value: float, platform: str
+) -> dict[str, object] | None:
+    if intent in {"group_open", "center_hold"}:
+        return director_group_or_center_frame(intent, row, time_value, platform)
+    if intent == "reaction_focus":
+        return director_reaction_frame(row, time_value)
+    primary = director_primary_frame(row, time_value)
+    if primary is not None and intent == "speaker_close":
+        return {**primary, "zoom": speaker_focus_zoom(primary, 0.04)}
+    return primary
+
+
+def director_group_or_center_frame(intent: str, row: dict[str, object] | None, time_value: float, platform: str) -> dict[str, object]:
+    faces = sorted(reliable_faces(row or {}), key=face_x)
+    if intent == "group_open" and faces:
+        return group_face_frame(faces, time_value, platform)
+    return open_center_camera_frame(time_value)
+
+
+def director_reaction_frame(row: dict[str, object] | None, time_value: float) -> dict[str, object] | None:
+    if row is None:
+        return None
+    secondary = secondary_speaker_face_for_row(row)
+    if secondary is None:
+        return None
+    return {**secondary, "time": time_value, "zoom": reaction_focus_zoom(secondary), "intent": "reaction_focus"}
+
+
+def director_primary_frame(row: dict[str, object] | None, time_value: float) -> dict[str, object] | None:
+    if row is None:
+        return None
+    primary = primary_speaker_face_for_row(row)
+    if primary is None:
+        return None
+    return {**primary, "time": time_value, "zoom": speaker_focus_zoom(primary, 0.0), "intent": "speaker_hold"}
+
+
+def speaker_focus_zoom(face: dict[str, object], boost: float) -> float:
+    return round(min(float(face.get("zoom") or 1.0) + boost, AI_DYNAMIC_SPEAKER_MAX_ZOOM), 3)
+
+
+def reaction_focus_zoom(face: dict[str, object]) -> float:
+    return round(min(float(face.get("zoom") or 1.0) + 0.06, AI_DYNAMIC_REACTION_MAX_ZOOM), 3)
 
 
 def ai_director_frame_samples(input_ref: Path | str, start: float, duration: float) -> list[dict[str, object]]:
@@ -1666,10 +2578,10 @@ def request_ai_director_path(
 ) -> dict[str, object]:
     intent = ai_director_intent(mode)
     system = (
-        "Voce e o AI Director do CUTED. Crie uma camera_path curta para video social vertical. "
+        "Voce e o AI Director do CUTED. Crie primeiro um director_plan editorial para video social. "
         "Use os frames apenas para enquadramento e composicao; nao identifique pessoas. "
         f"Intencao editorial: {intent['label']}. {intent['priority']} "
-        "Prefira movimentos poucos, seguros e profissionais. Responda somente no schema JSON."
+        "Prefira poucos shots seguros e profissionais. Inclua keyframes apenas como compatibilidade. Responda somente no schema JSON."
     )
     user = ai_director_user_payload(platform, title, transcript, metadata, detections, fallback_path, duration, mode)
     return openai_vision_structured_response(system, user, frames, "cuted_ai_director", ai_director_schema(), "ai_director")
@@ -1682,7 +2594,8 @@ def ai_director_user_payload(
     intent = ai_director_intent(mode)
     rules = ai_director_rules(mode)
     return json.dumps({
-        "task": "Decida quando focar uma pessoa, quando abrir para grupo, quando segurar, alternar ou fazer punch-in.",
+        "task": "Crie um director_plan: quando focar uma pessoa, abrir para grupo, segurar, alternar, aplicar zoom ou fazer cut.",
+        "allowed_intents": list(DIRECTOR_INTENTS),
         "editorial_intent": intent,
         "platform": platform if platform in PLATFORM_PRESETS else "tiktok",
         "platform_viewport": platform_viewport(platform),
@@ -1690,8 +2603,8 @@ def ai_director_user_payload(
         "title": title,
         "transcript_excerpt": transcript[:2200],
         "video": metadata,
-        "opencv_detection_summary": ai_director_detection_summary(detections, platform),
-        "opencv_detections": ai_director_detection_context(detections, platform),
+        "visual_map_detection_summary": ai_director_detection_summary(detections, platform),
+        "visual_map_detections": ai_director_detection_context(detections, platform),
         "vision_detection_summary": ai_director_vision_summary(detections),
         "vision_detections": ai_director_vision_context(detections, platform),
         "scene_direction": ai_director_scene_context(detections, duration, platform),
@@ -1702,6 +2615,7 @@ def ai_director_user_payload(
 
 def platform_viewport(platform: str) -> dict[str, object]:
     preset = PLATFORM_PRESETS.get(platform, PLATFORM_PRESETS["tiktok"])
+    resolution = resolution_preset_for_platform(platform)
     aspect = preset.width / max(preset.height, 1)
     orientation = "landscape" if preset.width > preset.height else "portrait"
     return {
@@ -1712,8 +2626,38 @@ def platform_viewport(platform: str) -> dict[str, object]:
         "aspect_ratio": round(aspect, 4),
         "orientation": orientation,
         "format_note": preset.note,
+        "resolution_preset": resolution.key,
+        "resolution_label": resolution.label,
+        "shared_destinations": list(resolution.destinations),
         "safe_crop_notes": platform_safe_crop_notes(preset),
     }
+
+
+def resolution_key_for_platform(platform: str) -> str:
+    return PLATFORM_RESOLUTION_PRESETS.get(platform, "vertical_9_16")
+
+
+def resolution_preset_for_platform(platform: str) -> ResolutionPreset:
+    return RESOLUTION_PRESETS[resolution_key_for_platform(platform)]
+
+
+def resolution_preset_to_dict(preset: ResolutionPreset) -> dict[str, object]:
+    aspect = preset.width / max(preset.height, 1)
+    orientation = "landscape" if preset.width > preset.height else "portrait"
+    return {
+        "key": preset.key,
+        "label": preset.label,
+        "width": preset.width,
+        "height": preset.height,
+        "aspect_ratio": round(aspect, 4),
+        "orientation": orientation,
+        "destinations": list(preset.destinations),
+        "note": preset.note,
+    }
+
+
+def resolution_presets_payload() -> dict[str, dict[str, object]]:
+    return {key: resolution_preset_to_dict(preset) for key, preset in RESOLUTION_PRESETS.items()}
 
 
 def platform_safe_crop_notes(preset: PlatformPreset) -> str:
@@ -1731,9 +2675,12 @@ def ai_director_rules(mode: str) -> list[str]:
         "Use 6 a 20 keyframes quando houver deslocamento ou multiplos rostos; menos so se a cena for estavel.",
         "Sempre inclua um keyframe em time 0.",
         "Segure bons enquadramentos por alguns segundos; evite tremedeira.",
-        "Se 3 pessoas aparecem no mesmo frame, priorize plano aberto de grupo, nao close em uma so pessoa.",
+        "Grupo e plano aberto sao contexto, nao repouso infinito: depois de 6 a 8 segundos, busque speaker medio ou reacao confiavel.",
+        "Quando YOLO enxergar uma pessoa mesmo sem rosto OpenCV, pode usar essa pessoa como speaker medio; close continua reservado para rosto/reacao confiavel.",
+        "Se 3 pessoas aparecem no mesmo frame, use grupo para contexto, mas nao fique em grupo por mais de 8 segundos sem buscar uma reacao confiavel.",
         "Se 2 ou mais rostos ficariam fora do crop, reduza zoom e centralize entre os rostos.",
-        "Use close em uma pessoa apenas quando os outros rostos nao estiverem visiveis ou nao importarem para a cena.",
+        "Use speaker_hold e speaker_close como plano medio; preserve mais corpo e contexto, nao apenas cara.",
+        "Reserve close de rosto para reaction_focus ou cut_focus quando a reacao estiver clara e puder segurar 3 a 4 segundos.",
         "Quando scene_direction.uncertain_windows indicar baixa deteccao, nao persiga rosto antigo; prefira plano aberto com blur.",
         "Siga scene_direction.scene_intent_windows: solo=center, two_close=movimento suave somente com rostos quase colados, two_far=corte seco com holds longos, group_close=cortes fixos entre focos, group_fit=plano aberto com blur.",
         "Com um rosto so, nao use cortes secos frequentes; prefira camera estavel com no maximo pequenos ajustes ou push-in.",
@@ -1744,7 +2691,7 @@ def ai_director_rules(mode: str) -> list[str]:
             "Este modo deve parecer corte seco: nao crie keyframes para pans graduais.",
             "Prefira 4.0 a 5.0 segundos entre cortes, salvo mudanca clara de fala ou reacao.",
             "Nao crie pans longos; quando houver duvida, use corte seco ou mantenha o plano atual.",
-            "Alterne entre close, grupo e reacao quando houver rostos confiaveis.",
+            "Alterne entre grupo, speaker medio e reacao quando houver rostos confiaveis.",
             "Quando cortar para uma pessoa secundaria, volte para a pessoa principal depois de 2 a 3 segundos.",
             "Use as janelas em scene_direction.reaction_windows como candidatos preferenciais de corte.",
         ])
@@ -2023,11 +2970,40 @@ def ai_director_schema() -> dict[str, object]:
         },
         "required": ["time", "x", "y", "zoom", "reason"],
     }
+    shot_schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "id": {"type": "string"},
+            "start": {"type": "number"},
+            "end": {"type": "number"},
+            "intent": {"type": "string", "enum": list(DIRECTOR_INTENTS)},
+            "label": {"type": "string"},
+            "subject": {"type": "string"},
+            "transition": {"type": "string"},
+            "reason": {"type": "string"},
+        },
+        "required": ["id", "start", "end", "intent", "label", "subject", "transition", "reason"],
+    }
+    plan_schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "style": {"type": "string"},
+            "energy": {"type": "string"},
+            "shots": {"type": "array", "items": shot_schema},
+        },
+        "required": ["style", "energy", "shots"],
+    }
     return {
         "type": "object",
         "additionalProperties": False,
-        "properties": {"summary": {"type": "string"}, "keyframes": {"type": "array", "items": frame_schema}},
-        "required": ["summary", "keyframes"],
+        "properties": {
+            "summary": {"type": "string"},
+            "director_plan": plan_schema,
+            "keyframes": {"type": "array", "items": frame_schema},
+        },
+        "required": ["summary", "director_plan", "keyframes"],
     }
 
 
@@ -2100,10 +3076,38 @@ def dense_protected_camera_path(
     if uncertain:
         merged = merge_camera_path_frames(merged, uncertain, duration)
     stabilized = stabilize_ai_director_path(merged, duration, hard_cut)
-    breakaways = fit_breakaway_camera_frames(stabilized, detections, duration)
+    breakaways = fit_breakaway_camera_frames(stabilized, detections, duration, hard_cut)
     if breakaways:
         stabilized = merge_camera_path_frames(stabilized, breakaways, duration)
-    return enforce_editorial_motion_rules(stabilized, detections, duration, platform, hard_cut)[:56]
+    group_breakaways = group_breakaway_camera_frames(
+        stabilized, detections, duration, platform, hard_cut, include_fit=mode == "ai-director"
+    )
+    if group_breakaways:
+        stabilized = merge_camera_path_frames(stabilized, group_breakaways, duration)
+    side_coverage = side_coverage_camera_frames(stabilized, detections, duration, platform, hard_cut)
+    if side_coverage:
+        stabilized = merge_camera_path_frames(stabilized, side_coverage, duration)
+    speaker_side_coverage = speaker_side_coverage_camera_frames(stabilized, detections, duration, platform, hard_cut)
+    if speaker_side_coverage:
+        stabilized = merge_camera_path_frames(stabilized, speaker_side_coverage, duration)
+    motion_frames = max_still_camera_frames(stabilized, detections, duration, platform, hard_cut)
+    if motion_frames:
+        stabilized = merge_camera_path_frames(stabilized, motion_frames, duration)
+    editorial = enforce_editorial_motion_rules(stabilized, detections, duration, platform, hard_cut, mode)
+    final_side_coverage = side_coverage_camera_frames(editorial, detections, duration, platform, hard_cut)
+    if final_side_coverage:
+        editorial = merge_camera_path_frames(editorial, final_side_coverage, duration)
+    final_speaker_side_coverage = speaker_side_coverage_camera_frames(editorial, detections, duration, platform, hard_cut)
+    if final_speaker_side_coverage:
+        editorial = merge_camera_path_frames(editorial, final_speaker_side_coverage, duration)
+    group_balance = dominant_group_balance_camera_frames(editorial, detections, duration, platform, hard_cut)
+    if group_balance:
+        editorial = merge_camera_path_frames(editorial, group_balance, duration)
+    editorial = suppress_soft_group_returns(editorial)
+    final_motion_frames = max_still_camera_frames(editorial, detections, duration, platform, hard_cut)
+    if final_motion_frames:
+        editorial = merge_camera_path_frames(editorial, final_motion_frames, duration)
+    return editorial[:56]
 
 
 def enforce_editorial_motion_rules(
@@ -2112,12 +3116,438 @@ def enforce_editorial_motion_rules(
     duration: float,
     platform: str,
     hard_cut: bool,
+    mode: str = "",
 ) -> list[dict[str, object]]:
     if not frames:
         return []
+    if mode == "ai-director":
+        return dynamic_editorial_camera_path(frames, detections, duration, platform)
     if not hard_cut and solo_dominant_camera_scene(detections):
         return solo_stable_ai_director_path(detections, duration)
     return enforce_distant_face_hard_cuts(frames, detections, platform, hard_cut)
+
+
+def side_coverage_camera_frames(
+    frames: list[dict[str, object]], detections: list[dict[str, object]], duration: float, platform: str, hard_cut: bool
+) -> list[dict[str, object]]:
+    needed = missing_camera_sides(frames, detections)
+    if not needed:
+        return []
+    result: list[dict[str, object]] = []
+    for side in needed:
+        wanted = missing_side_frame_count(frames + result, side)
+        added = 0
+        for row in representative_side_rows(detections, side, duration):
+            time_value = float(row.get("time") or 0.0)
+            if side_recently_covered(frames + result, side, time_value, 3.2):
+                continue
+            frame = side_focus_camera_frame(row, side, time_value)
+            if frame is None:
+                continue
+            if hard_cut:
+                frame = hard_cut_ai_director_frame(frame, time_value, str(frame.get("source")))
+            result.append(frame)
+            added += 1
+            if added >= wanted or side not in missing_camera_sides(frames + result, detections):
+                break
+    return result
+
+
+def speaker_side_coverage_camera_frames(
+    frames: list[dict[str, object]], detections: list[dict[str, object]], duration: float, platform: str, hard_cut: bool
+) -> list[dict[str, object]]:
+    result: list[dict[str, object]] = []
+    for side in missing_speaker_sides(frames, detections):
+        for row in representative_side_rows(detections, side, duration):
+            time_value = float(row.get("time") or 0.0)
+            if speaker_side_recently_covered(frames + result, side, time_value, 3.2):
+                continue
+            frame = side_focus_camera_frame(row, side, time_value)
+            if frame is None:
+                continue
+            result.append(
+                hard_cut_ai_director_frame(frame, time_value, str(frame.get("source"))) if hard_cut else frame
+            )
+            break
+    return result
+
+
+def missing_speaker_sides(frames: list[dict[str, object]], detections: list[dict[str, object]]) -> list[str]:
+    detected = side_counts_from_detections(detections)
+    if detected["left"] < 2 or detected["right"] < 2:
+        return []
+    covered = speaker_side_counts_from_frames(frames)
+    return [side for side in ("left", "right") if covered[side] == 0]
+
+
+def speaker_side_counts_from_frames(frames: list[dict[str, object]]) -> dict[str, int]:
+    counts = {"left": 0, "right": 0}
+    for frame in frames:
+        if dynamic_frame_kind(frame) != "speaker":
+            continue
+        side = x_side(float(frame.get("x") or 50.0))
+        if side in counts:
+            counts[side] += 1
+    return counts
+
+
+def speaker_side_recently_covered(frames: list[dict[str, object]], side: str, time_value: float, window: float) -> bool:
+    for frame in frames:
+        if dynamic_frame_kind(frame) != "speaker":
+            continue
+        near_time = abs(float(frame.get("time") or 0.0) - time_value) <= window
+        if near_time and x_side(float(frame.get("x") or 50.0)) == side:
+            return True
+    return False
+
+
+def dominant_group_balance_camera_frames(
+    frames: list[dict[str, object]], detections: list[dict[str, object]], duration: float, platform: str, hard_cut: bool
+) -> list[dict[str, object]]:
+    if not frames or not ai_director_scene_needs_variation(detections, duration):
+        return []
+    ratios = camera_kind_duration_ratios(frames, duration)
+    active_ratio = ratios["speaker"] + ratios["reaction"]
+    if ratios["group"] <= AI_DIRECTOR_MAX_GROUP_DURATION_RATIO and active_ratio >= AI_DIRECTOR_MIN_ACTIVE_DURATION_RATIO:
+        return []
+    needed = dominant_group_balance_frame_budget(active_ratio)
+    result: list[dict[str, object]] = []
+    intervals = dominant_group_candidate_intervals(frames, duration)
+    for slot, (start, end, _frame) in enumerate(intervals):
+        if len(result) >= needed:
+            break
+        time_value = round(start + min(max((end - start) * 0.45, 1.6), 2.6), 3)
+        if active_frame_near(frames + result, time_value, 2.4):
+            continue
+        row = nearest_detection(time_value, detections)
+        if row is None:
+            continue
+        focus = dominant_group_balance_frame(row, time_value, slot, hard_cut)
+        if focus is not None:
+            result.append(focus)
+    return result
+
+
+def camera_kind_duration_ratios(frames: list[dict[str, object]], duration: float) -> dict[str, float]:
+    seconds = {"group": 0.0, "speaker": 0.0, "reaction": 0.0}
+    safe_duration = max(duration, 0.3)
+    for start, end, frame in camera_path_bounds_from_frames(frames, safe_duration):
+        kind = dynamic_frame_kind(frame)
+        if kind in seconds:
+            seconds[kind] += max(end - start, 0.0)
+    return {key: seconds[key] / safe_duration for key in seconds}
+
+
+def dominant_group_balance_frame_budget(active_ratio: float) -> int:
+    deficit = max(AI_DIRECTOR_MIN_ACTIVE_DURATION_RATIO - active_ratio, 0.04)
+    estimated_seconds_per_frame = 2.6
+    budget = math.ceil(deficit / estimated_seconds_per_frame * 100.0)
+    return max(1, min(budget, AI_DIRECTOR_GROUP_BALANCE_MAX_FRAMES))
+
+
+def dominant_group_candidate_intervals(
+    frames: list[dict[str, object]], duration: float
+) -> list[tuple[float, float, dict[str, object]]]:
+    intervals = [
+        (start, end, frame)
+        for start, end, frame in camera_path_bounds_from_frames(frames, duration)
+        if dynamic_frame_kind(frame) == "group" and end - start >= AI_DIRECTOR_GROUP_BALANCE_MIN_SECONDS
+    ]
+    return sorted(intervals, key=lambda item: item[1] - item[0], reverse=True)
+
+
+def active_frame_near(frames: list[dict[str, object]], time_value: float, window: float) -> bool:
+    for frame in frames:
+        if dynamic_frame_kind(frame) == "group":
+            continue
+        if abs(float(frame.get("time") or 0.0) - time_value) <= window:
+            return True
+    return False
+
+
+def suppress_soft_group_returns(frames: list[dict[str, object]]) -> list[dict[str, object]]:
+    ordered = sorted(frames, key=lambda item: float(item.get("time") or 0.0))
+    if len(ordered) <= 1:
+        return ordered
+    result: list[dict[str, object]] = []
+    for frame in ordered:
+        if should_drop_soft_group_return(result, frame):
+            continue
+        result.append(frame)
+    return result or ordered[:1]
+
+
+def should_drop_soft_group_return(previous: list[dict[str, object]], frame: dict[str, object]) -> bool:
+    if not previous or not soft_group_return_frame(frame):
+        return False
+    anchor = previous[-1]
+    if dynamic_frame_kind(anchor) == "group":
+        return False
+    gap = float(frame.get("time") or 0.0) - float(anchor.get("time") or 0.0)
+    return 0.0 < gap < AI_DIRECTOR_SOFT_GROUP_RETURN_SUPPRESSION_SECONDS
+
+
+def soft_group_return_frame(frame: dict[str, object]) -> bool:
+    source = str(frame.get("source") or "")
+    if dynamic_frame_kind(frame) != "group":
+        return False
+    if any(token in source for token in ("group-safe", "group-fit", "uncertain", "motion-group")):
+        return False
+    return any(token in source for token in ("dynamic-group", "dynamic-open", "group-return", "fit-return"))
+
+
+def dominant_group_balance_frame(
+    row: dict[str, object], time_value: float, slot: int, hard_cut: bool
+) -> dict[str, object] | None:
+    faces = sorted(reliable_faces(row), key=face_x)
+    if len(faces) < 2:
+        return None
+    primary = primary_breakaway_face(row, faces, slot)
+    if slot % 2 == 1:
+        reaction = secondary_breakaway_face(row, primary, faces)
+        if reaction is not None:
+            return group_breakaway_reaction_frame(reaction, time_value, hard_cut)
+    return group_breakaway_speaker_frame(primary, time_value, hard_cut)
+
+
+def missing_side_frame_count(frames: list[dict[str, object]], side: str) -> int:
+    covered = side_counts_from_frames(frames)
+    other = "right" if side == "left" else "left"
+    target = max(1, math.ceil(max(covered[other], 1) / 2))
+    return max(1, min(target - covered[side], 3))
+
+
+def missing_camera_sides(frames: list[dict[str, object]], detections: list[dict[str, object]]) -> list[str]:
+    detected = side_counts_from_detections(detections)
+    if detected["left"] < 2 or detected["right"] < 2:
+        return []
+    covered = side_counts_from_frames(frames)
+    missing: list[str] = []
+    for side in ("left", "right"):
+        other = "right" if side == "left" else "left"
+        if covered[side] == 0 or covered[side] * 2 < max(covered[other], 1):
+            missing.append(side)
+    return missing
+
+
+def side_counts_from_detections(detections: list[dict[str, object]]) -> dict[str, int]:
+    counts = {"left": 0, "right": 0}
+    for row in detections:
+        sides = {face_side(face) for face in reliable_faces(row)}
+        for side in sides:
+            if side in counts:
+                counts[side] += 1
+    return counts
+
+
+def side_counts_from_frames(frames: list[dict[str, object]]) -> dict[str, int]:
+    counts = {"left": 0, "right": 0}
+    for frame in frames:
+        if camera_path_frame_uses_group_fit(frame):
+            continue
+        side = x_side(float(frame.get("x") or 50.0))
+        if side in counts:
+            counts[side] += 1
+    return counts
+
+
+def representative_side_rows(detections: list[dict[str, object]], side: str, duration: float) -> list[dict[str, object]]:
+    rows = [row for row in detections if side_faces(row, side)]
+    midpoint = max(duration, 0.3) / 2.0
+    return sorted(rows, key=lambda row: (abs(float(row.get("time") or 0.0) - midpoint), float(row.get("time") or 0.0)))
+
+
+def side_faces(row: dict[str, object], side: str) -> list[dict[str, float]]:
+    return [face for face in reliable_faces(row) if face_side(face) == side]
+
+
+def side_focus_camera_frame(row: dict[str, object], side: str, time_value: float) -> dict[str, object] | None:
+    faces = side_faces(row, side)
+    if not faces:
+        return None
+    face = max(faces, key=speaker_face_score)
+    frame = normalized_focus_face(face)
+    return {
+        **frame,
+        "time": round(time_value, 3),
+        "zoom": speaker_focus_zoom(frame, 0.0),
+        "source": f"ai-director-side-speaker-{side}",
+        "intent": "speaker_hold",
+    }
+
+
+def side_recently_covered(frames: list[dict[str, object]], side: str, time_value: float, window: float) -> bool:
+    for frame in frames:
+        if abs(float(frame.get("time") or 0.0) - time_value) > window:
+            continue
+        if x_side(float(frame.get("x") or 50.0)) == side and not camera_path_frame_uses_group_fit(frame):
+            return True
+    return False
+
+
+def face_side(face: dict[str, object]) -> str:
+    return x_side(face_x(face))
+
+
+def x_side(x_value: float) -> str:
+    if x_value <= 50.0 - AI_DIRECTOR_SIDE_X_DELTA:
+        return "left"
+    if x_value >= 50.0 + AI_DIRECTOR_SIDE_X_DELTA:
+        return "right"
+    return "center"
+
+
+def max_still_camera_frames(
+    frames: list[dict[str, object]], detections: list[dict[str, object]], duration: float, platform: str, hard_cut: bool
+) -> list[dict[str, object]]:
+    result: list[dict[str, object]] = []
+    for start, end, frame in camera_path_bounds_from_frames(frames, duration):
+        if end - start <= AI_DIRECTOR_MAX_STILL_SECONDS:
+            continue
+        cursor = start + AI_DIRECTOR_MAX_STILL_SECONDS
+        while cursor < end - 1.0:
+            candidate = motion_break_frame(frame, cursor, detections, platform, hard_cut)
+            if candidate is not None:
+                result.append(candidate)
+            cursor += AI_DIRECTOR_MAX_STILL_SECONDS
+    return result[:10]
+
+
+def motion_break_frame(
+    active: dict[str, object], time_value: float, detections: list[dict[str, object]], platform: str, hard_cut: bool
+) -> dict[str, object] | None:
+    row = nearest_detection(time_value, detections)
+    frame = motion_break_target(active, row, time_value, platform)
+    if frame is None:
+        frame = soft_motion_camera_frame(active, time_value)
+    if camera_frames_are_similar(active, frame):
+        frame = open_center_camera_frame(time_value) if not camera_frame_is_open_center(active) else None
+    if frame is None:
+        frame = soft_motion_camera_frame(active, time_value)
+    if frame is None:
+        return None
+    if hard_cut:
+        return hard_cut_ai_director_frame(frame, time_value, str(frame.get("source") or "ai-director-motion-break"))
+    return frame
+
+
+def motion_break_target(
+    active: dict[str, object], row: dict[str, object] | None, time_value: float, platform: str
+) -> dict[str, object] | None:
+    if row is None:
+        return open_center_camera_frame(time_value)
+    faces = sorted(reliable_faces(row), key=face_x)
+    active_side = x_side(float(active.get("x") or 50.0))
+    opposite = "left" if active_side == "right" else "right"
+    if len(faces) >= 2 and side_faces(row, opposite):
+        return side_focus_camera_frame(row, opposite, time_value)
+    if len(faces) >= 2:
+        frame = group_face_frame(faces, time_value, platform)
+        return {**frame, "source": "ai-director-motion-group", "intent": "group_open"}
+    primary = primary_reliable_face(row)
+    return {**normalized_focus_face(primary), "time": time_value, "zoom": speaker_focus_zoom(primary, 0.0), "source": "ai-director-motion-speaker"} if primary else None
+
+
+def soft_motion_camera_frame(active: dict[str, object], time_value: float) -> dict[str, object]:
+    active_zoom = float(active.get("zoom") or 1.0)
+    next_zoom = 1.04 if active_zoom <= 1.02 else 1.0
+    next_x = 53.0 if float(active.get("x") or 50.0) <= 50.0 else 47.0
+    return {
+        "time": round(time_value, 3),
+        "x": next_x,
+        "y": 50.0,
+        "zoom": next_zoom,
+        "confidence": 0.5,
+        "source": "ai-director-motion-soft",
+        "intent": "center_hold",
+    }
+
+
+def dynamic_editorial_camera_path(
+    frames: list[dict[str, object]],
+    detections: list[dict[str, object]],
+    duration: float,
+    platform: str,
+) -> list[dict[str, object]]:
+    if solo_dominant_camera_scene(detections):
+        return [dynamic_safe_camera_frame(frame, detections, platform) for frame in solo_stable_ai_director_path(detections, duration)]
+    safe_duration = max(duration, 0.3)
+    result: list[dict[str, object]] = []
+    for frame in sorted(frames, key=lambda item: float(item.get("time") or 0.0)):
+        time_value = clamp(float(frame.get("time") or 0.0), 0.0, safe_duration)
+        candidate = dynamic_safe_camera_frame({**frame, "time": time_value}, detections, platform)
+        if result and dynamic_frame_should_merge(result[-1], candidate):
+            continue
+        result.append(candidate)
+    return result
+
+
+def dynamic_frame_should_merge(previous: dict[str, object], current: dict[str, object]) -> bool:
+    time_gap = float(current.get("time") or 0.0) - float(previous.get("time") or 0.0)
+    if time_gap >= 1.8:
+        return False
+    return camera_frames_are_similar(previous, current) or dynamic_frame_kind(previous) == dynamic_frame_kind(current)
+
+
+def dynamic_safe_camera_frame(
+    frame: dict[str, object], detections: list[dict[str, object]], platform: str
+) -> dict[str, object]:
+    if dynamic_focus_frame_is_unsafe(frame):
+        return dynamic_open_context_frame(frame, detections, platform)
+    kind = dynamic_frame_kind(frame)
+    zoom_limit = AI_DYNAMIC_REACTION_MAX_ZOOM if kind == "reaction" else AI_DYNAMIC_SPEAKER_MAX_ZOOM
+    if kind == "group":
+        zoom_limit = 1.02
+    return {
+        **frame,
+        "x": round(clamp(float(frame.get("x") or 50.0), AI_DYNAMIC_FOCUS_X_MIN, AI_DYNAMIC_FOCUS_X_MAX), 2),
+        "zoom": round(min(float(frame.get("zoom") or 1.0), zoom_limit), 3),
+        "source": dynamic_frame_source(kind),
+    }
+
+
+def dynamic_focus_frame_is_unsafe(frame: dict[str, object]) -> bool:
+    if dynamic_frame_kind(frame) == "group":
+        return False
+    source = str(frame.get("source") or "")
+    if "fit-return" in source or "uncertain" in source:
+        return False
+    x_value = float(frame.get("x") or 50.0)
+    return x_value < AI_DYNAMIC_FOCUS_X_MIN or x_value > AI_DYNAMIC_FOCUS_X_MAX
+
+
+def dynamic_open_context_frame(
+    frame: dict[str, object], detections: list[dict[str, object]], platform: str
+) -> dict[str, object]:
+    time_value = float(frame.get("time") or 0.0)
+    row = nearest_detection(time_value, detections)
+    faces = sorted(reliable_faces(row or {}), key=face_x)
+    if len(faces) >= 2:
+        group = group_face_frame(faces, time_value, platform)
+        return {**group, "source": "ai-director-dynamic-group", "intent": "group_open"}
+    return {**open_center_camera_frame(time_value), "source": "ai-director-dynamic-open", "intent": "center_hold"}
+
+
+def dynamic_frame_kind(frame: dict[str, object]) -> str:
+    source = str(frame.get("source") or "")
+    intent = str(frame.get("intent") or "")
+    if "reaction" in source or intent == "reaction_focus":
+        return "reaction"
+    if "speaker" in source or intent in {"speaker_hold", "speaker_close"}:
+        return "speaker"
+    if camera_path_frame_uses_group_fit(frame) or "group" in source or intent == "group_open":
+        return "group"
+    if "return" in source or intent == "center_hold":
+        return "group"
+    return "speaker"
+
+
+def dynamic_frame_source(kind: str) -> str:
+    if kind == "reaction":
+        return "ai-director-dynamic-reaction"
+    if kind == "group":
+        return "ai-director-dynamic-group"
+    return "ai-director-dynamic-speaker"
 
 
 def solo_dominant_camera_scene(detections: list[dict[str, object]]) -> bool:
@@ -2150,6 +3580,77 @@ def primary_reliable_face(row: dict[str, object]) -> dict[str, float] | None:
     if not faces:
         return None
     return max(faces, key=lambda face: float(face.get("area") or 0.0))
+
+
+def primary_speaker_face_for_row(row: dict[str, object]) -> dict[str, float] | None:
+    faces = focusable_speaker_faces(row)
+    if not faces:
+        return None
+    primary = row.get("primary")
+    if isinstance(primary, dict):
+        real_matches = [
+            face
+            for face in faces
+            if same_face_target(primary, face) and str(face.get("kind") or "face") != "person"
+        ]
+        if real_matches:
+            return max(real_matches, key=speaker_face_score)
+        matches = [face for face in faces if same_face_target(primary, face)]
+        if matches:
+            return max(matches, key=speaker_face_score)
+    return max(faces, key=speaker_face_score)
+
+
+def secondary_speaker_face_for_row(row: dict[str, object]) -> dict[str, float] | None:
+    primary = primary_speaker_face_for_row(row)
+    if primary is None:
+        return None
+    candidates = [face for face in focusable_speaker_faces(row) if abs(face_x(face) - face_x(primary)) >= 8.0]
+    if not candidates:
+        return None
+    return max(candidates, key=speaker_face_score)
+
+
+def focusable_speaker_faces(row: dict[str, object]) -> list[dict[str, float]]:
+    faces = reliable_opencv_faces(row)
+    if not faces:
+        faces = [face for face in reliable_faces(row) if str(face.get("kind") or "face") != "person"]
+    subjects = [*faces, *speaker_person_candidates(row, faces)]
+    return [normalized_focus_face(face) for face in subjects if dynamic_focus_face_is_safe(face)]
+
+
+def speaker_person_candidates(row: dict[str, object], faces: list[dict[str, float]]) -> list[dict[str, float]]:
+    candidates: list[dict[str, float]] = []
+    for person in reliable_persons(row):
+        if any(abs(face_x(person) - face_x(face)) <= 6.0 for face in faces):
+            continue
+        candidates.append(person)
+    return candidates
+
+
+def normalized_focus_face(face: dict[str, float]) -> dict[str, float]:
+    return {
+        **face,
+        "x": round(clamp(face_x(face), AI_DYNAMIC_FOCUS_X_MIN, AI_DYNAMIC_FOCUS_X_MAX), 2),
+    }
+
+
+def dynamic_focus_face_is_safe(face: dict[str, object]) -> bool:
+    confidence = float(face.get("confidence") or 0.0)
+    x_value = face_x(face)
+    return confidence >= 0.35 and AI_DYNAMIC_FOCUS_X_MIN <= x_value <= AI_DYNAMIC_FOCUS_X_MAX
+
+
+def speaker_face_score(face: dict[str, object]) -> float:
+    x_value = face_x(face)
+    center_bonus = max(0.0, 18.0 - abs(x_value - 50.0)) * 0.12
+    area = float(face.get("area") or 0.0)
+    confidence = float(face.get("confidence") or 0.0)
+    return confidence * max(area, 1.0) + center_bonus
+
+
+def same_face_target(first: dict[str, object], second: dict[str, object]) -> bool:
+    return abs(face_x(first) - face_x(second)) <= 4.0
 
 
 def solo_stable_ai_director_path(detections: list[dict[str, object]], duration: float) -> list[dict[str, object]]:
@@ -2223,10 +3724,139 @@ def row_has_separated_faces(row: dict[str, object], platform: str) -> bool:
     return intent in {"two_far_cut", "group_fit"}
 
 
+def group_breakaway_camera_frames(
+    frames: list[dict[str, object]],
+    detections: list[dict[str, object]],
+    duration: float,
+    platform: str,
+    hard_cut: bool = True,
+    include_fit: bool = False,
+) -> list[dict[str, object]]:
+    if not frames or not detections:
+        return []
+    result: list[dict[str, object]] = []
+    for start, end in coalesced_group_intervals(frames, duration, include_fit):
+        if end - start < CAMERA_GROUP_BREAKAWAY_MIN_SECONDS:
+            continue
+        result.extend(group_breakaways_for_interval(start, end, detections, platform, hard_cut))
+    return result
+
+
+def coalesced_group_intervals(
+    frames: list[dict[str, object]], duration: float, include_fit: bool = False
+) -> list[tuple[float, float]]:
+    intervals: list[tuple[float, float]] = []
+    current_start: float | None = None
+    current_end = 0.0
+    for start, end, frame in camera_path_bounds_from_frames(frames, duration):
+        if camera_frame_is_group_view(frame) and (include_fit or not camera_path_frame_uses_group_fit(frame)):
+            if current_start is None:
+                current_start = start
+            current_end = end
+            continue
+        if current_start is not None:
+            intervals.append((current_start, current_end))
+            current_start = None
+    if current_start is not None:
+        intervals.append((current_start, current_end))
+    return intervals
+
+
+def camera_frame_is_group_view(frame: dict[str, object]) -> bool:
+    source = str(frame.get("source") or "")
+    return str(frame.get("intent") or "") == "group_open" or "group" in source or camera_frame_is_group_safe(frame)
+
+
+def group_breakaways_for_interval(
+    start: float,
+    end: float,
+    detections: list[dict[str, object]],
+    platform: str,
+    hard_cut: bool,
+) -> list[dict[str, object]]:
+    rows = reliable_detection_rows_between(detections, start, end)
+    if not rows:
+        return []
+    frames: list[dict[str, object]] = []
+    cursor = start + CAMERA_GROUP_BREAKAWAY_LEAD_SECONDS
+    max_frames = CAMERA_GROUP_BREAKAWAY_MAX_PER_BLOCK * 3
+    face_slot = 0
+    while cursor + CAMERA_GROUP_REACTION_HOLD_SECONDS < end and len(frames) < max_frames:
+        row = next_breakaway_row(rows, cursor)
+        if row is None:
+            break
+        time_value = max(cursor, float(row.get("time") or cursor))
+        sequence = group_breakaway_sequence_for_row(row, time_value, face_slot, end, platform, hard_cut)
+        if not sequence:
+            cursor += CAMERA_GROUP_BREAKAWAY_INTERVAL_SECONDS
+            continue
+        frames.extend(sequence)
+        cursor = float(sequence[-1].get("time") or time_value) + CAMERA_GROUP_BREAKAWAY_INTERVAL_SECONDS
+        face_slot += 1
+    return frames
+
+
+def group_breakaway_sequence_for_row(
+    row: dict[str, object], time_value: float, face_slot: int, interval_end: float, platform: str, hard_cut: bool
+) -> list[dict[str, object]]:
+    faces = sorted(reliable_faces(row), key=face_x)
+    if len(faces) < 2:
+        return []
+    primary = primary_breakaway_face(row, faces, face_slot)
+    reaction = secondary_breakaway_face(row, primary, faces)
+    reaction_time = time_value + CAMERA_GROUP_SPEAKER_HOLD_SECONDS
+    return_time = reaction_time + CAMERA_GROUP_REACTION_HOLD_SECONDS
+    if reaction is None or return_time >= interval_end:
+        return group_speaker_only_breakaway(row, primary, time_value, interval_end, platform, hard_cut)
+    return [
+        group_breakaway_speaker_frame(primary, time_value, hard_cut),
+        group_breakaway_reaction_frame(reaction, reaction_time, hard_cut),
+        group_breakaway_return_frame(row, return_time, platform, hard_cut),
+    ]
+
+
+def group_speaker_only_breakaway(
+    row: dict[str, object],
+    primary: dict[str, float],
+    time_value: float,
+    interval_end: float,
+    platform: str,
+    hard_cut: bool,
+) -> list[dict[str, object]]:
+    return_time = time_value + CAMERA_GROUP_SPEAKER_HOLD_SECONDS
+    if return_time >= interval_end:
+        return []
+    return [
+        group_breakaway_speaker_frame(primary, time_value, hard_cut),
+        group_breakaway_return_frame(row, return_time, platform, hard_cut),
+    ]
+
+
+def group_breakaway_speaker_frame(face: dict[str, float], time_value: float, hard_cut: bool) -> dict[str, object]:
+    frame = {**normalized_focus_face(face), "time": time_value, "zoom": speaker_focus_zoom(face, 0.0), "intent": "speaker_hold"}
+    source = "ai-director-cuts-group-speaker" if hard_cut else "ai-director-dynamic-group-speaker"
+    return hard_cut_ai_director_frame(frame, time_value, source)
+
+
+def group_breakaway_reaction_frame(face: dict[str, float], time_value: float, hard_cut: bool) -> dict[str, object]:
+    frame = {**normalized_focus_face(face), "time": time_value, "zoom": reaction_focus_zoom(face), "intent": "reaction_focus"}
+    source = "ai-director-cuts-group-reaction" if hard_cut else "ai-director-dynamic-group-reaction"
+    return hard_cut_ai_director_frame(frame, time_value, source)
+
+
+def group_breakaway_return_frame(row: dict[str, object], time_value: float, platform: str, hard_cut: bool) -> dict[str, object]:
+    faces = sorted(reliable_faces(row), key=face_x)
+    frame = group_face_frame(faces, time_value, platform)
+    frame["intent"] = "group_open"
+    source = "ai-director-cuts-group-return" if hard_cut else "ai-director-dynamic-group"
+    return hard_cut_ai_director_frame(frame, time_value, source)
+
+
 def fit_breakaway_camera_frames(
     frames: list[dict[str, object]],
     detections: list[dict[str, object]],
     duration: float,
+    hard_cut: bool = True,
 ) -> list[dict[str, object]]:
     if not frames or not detections:
         return []
@@ -2234,7 +3864,7 @@ def fit_breakaway_camera_frames(
     for start, end in coalesced_fit_intervals(frames, duration):
         if end - start < CAMERA_FIT_BREAKAWAY_MIN_SECONDS:
             continue
-        result.extend(fit_breakaways_for_interval(start, end, detections))
+        result.extend(fit_breakaways_for_interval(start, end, detections, hard_cut))
     return result
 
 
@@ -2280,6 +3910,7 @@ def fit_breakaways_for_interval(
     start: float,
     end: float,
     detections: list[dict[str, object]],
+    hard_cut: bool,
 ) -> list[dict[str, object]]:
     rows = reliable_detection_rows_between(detections, start, end)
     if not rows:
@@ -2293,7 +3924,7 @@ def fit_breakaways_for_interval(
         if row is None:
             break
         time_value = max(cursor, float(row.get("time") or cursor))
-        sequence = fit_breakaway_sequence_for_row(row, time_value, face_slot, end)
+        sequence = fit_breakaway_sequence_for_row(row, time_value, face_slot, end, hard_cut)
         if not sequence:
             cursor += CAMERA_FIT_BREAKAWAY_INTERVAL_SECONDS
             continue
@@ -2318,7 +3949,7 @@ def next_breakaway_row(rows: list[dict[str, object]], time_value: float) -> dict
 
 
 def fit_breakaway_sequence_for_row(
-    row: dict[str, object], time_value: float, face_slot: int, interval_end: float
+    row: dict[str, object], time_value: float, face_slot: int, interval_end: float, hard_cut: bool
 ) -> list[dict[str, object]]:
     faces = sorted(reliable_faces(row), key=face_x)
     if not faces:
@@ -2328,17 +3959,23 @@ def fit_breakaway_sequence_for_row(
     secondary_time = time_value + CAMERA_FIT_BREAKAWAY_PRIMARY_HOLD_SECONDS
     if secondary and secondary_time + CAMERA_FIT_BREAKAWAY_SECONDARY_HOLD_SECONDS < interval_end:
         return [
-            fit_breakaway_face_frame(primary, time_value, "ai-director-cuts-fit-primary"),
-            fit_breakaway_face_frame(secondary, secondary_time, "ai-director-cuts-fit-secondary"),
-            fit_breakaway_return_frame(secondary_time + CAMERA_FIT_BREAKAWAY_SECONDARY_HOLD_SECONDS),
+            fit_breakaway_face_frame(primary, time_value, fit_breakaway_source("primary", hard_cut)),
+            fit_breakaway_face_frame(secondary, secondary_time, fit_breakaway_source("secondary", hard_cut)),
+            fit_breakaway_return_frame(secondary_time + CAMERA_FIT_BREAKAWAY_SECONDARY_HOLD_SECONDS, hard_cut),
         ]
     return_time = time_value + CAMERA_FIT_BREAKAWAY_PRIMARY_HOLD_SECONDS
     if return_time >= interval_end:
         return []
     return [
-        fit_breakaway_face_frame(primary, time_value, "ai-director-cuts-fit-primary"),
-        fit_breakaway_return_frame(return_time),
+        fit_breakaway_face_frame(primary, time_value, fit_breakaway_source("primary", hard_cut)),
+        fit_breakaway_return_frame(return_time, hard_cut),
     ]
+
+
+def fit_breakaway_source(slot: str, hard_cut: bool) -> str:
+    if hard_cut:
+        return f"ai-director-cuts-fit-{slot}"
+    return "ai-director-dynamic-reaction" if slot == "secondary" else "ai-director-dynamic-speaker"
 
 
 def primary_breakaway_face(
@@ -2353,25 +3990,27 @@ def primary_breakaway_face(
 def secondary_breakaway_face(
     row: dict[str, object], primary: dict[str, float], faces: list[dict[str, float]]
 ) -> dict[str, float] | None:
-    secondary = secondary_face_for_row(row)
+    secondary = secondary_speaker_face_for_row(row)
     if secondary is not None:
         return secondary
-    candidates = [face for face in faces if abs(face_x(face) - face_x(primary)) >= 8.0]
+    candidates = [face for face in focusable_speaker_faces(row) if abs(face_x(face) - face_x(primary)) >= 8.0]
     if not candidates:
         return None
     return max(candidates, key=lambda face: abs(face_x(face) - face_x(primary)))
 
 
 def fit_breakaway_face_frame(face: dict[str, float], time_value: float, source: str) -> dict[str, object]:
-    frame = {**face, "time": time_value, "zoom": min(float(face.get("zoom") or 1.0) + 0.1, 1.34)}
+    zoom = reaction_focus_zoom(face) if "secondary" in source else speaker_focus_zoom(face, 0.02)
+    frame = {**face, "time": time_value, "zoom": zoom}
     return hard_cut_ai_director_frame(frame, time_value, source)
 
 
-def fit_breakaway_return_frame(time_value: float) -> dict[str, object]:
+def fit_breakaway_return_frame(time_value: float, hard_cut: bool = True) -> dict[str, object]:
+    source = "ai-director-cuts-fit-return" if hard_cut else "ai-director-dynamic-group"
     return hard_cut_ai_director_frame(
         open_center_camera_frame(time_value),
         time_value,
-        "ai-director-cuts-fit-return",
+        source,
     )
 
 
@@ -2450,11 +4089,23 @@ def dense_camera_target_for_row(
     if active_cuts or (group_required and not camera_frame_is_group_safe(active)):
         group = group_face_frame(faces, time_value, platform)
         return hard_cut_ai_director_frame(group, time_value, group_frame_source(group, hard_cut))
-    primary = row.get("primary") if isinstance(row.get("primary"), dict) else None
-    if isinstance(primary, dict) and not group_required and face_outside_safe_zone(primary):
+    primary = primary_speaker_face_for_row(row)
+    if isinstance(primary, dict) and not group_required and dense_primary_focus_is_needed(active, primary):
         primary_source = "ai-director-cuts-primary" if hard_cut else "ai-director-dense-primary"
-        return hard_cut_ai_director_frame({**primary, "time": time_value}, time_value, primary_source)
+        return hard_cut_ai_director_frame(
+            {**primary, "time": time_value, "zoom": speaker_focus_zoom(primary, 0.02)},
+            time_value,
+            primary_source,
+        )
     return None
+
+
+def dense_primary_focus_is_needed(active: dict[str, object], primary: dict[str, object]) -> bool:
+    if dynamic_focus_frame_is_unsafe(active):
+        return True
+    if camera_frame_is_open_center(active):
+        return True
+    return abs(float(active.get("x") or 50.0) - face_x(primary)) >= CAMERA_MIN_TARGET_SHIFT
 
 
 def scene_grammar_camera_frames(
@@ -2496,7 +4147,7 @@ def scene_grammar_target_for_row(
         return forced_group_fit_frame(faces, time_value, platform, hard_cut)
     if intent not in {"two_far_cut", "group_close_alternate"}:
         return None
-    source = "ai-director-cuts-reaction" if intent in {"two_far_cut", "group_close_alternate"} or hard_cut else "ai-director-dense-reaction"
+    source = "ai-director-cuts-reaction" if hard_cut else "ai-director-dense-reaction"
     return hard_cut_ai_director_frame(director_alternate_target(row, time_value, intent), time_value, source)
 
 
@@ -2669,6 +4320,8 @@ def merge_camera_path_frames(
 
 def camera_frame_priority(frame: dict[str, object]) -> int:
     source = str(frame.get("source") or "")
+    if "group-speaker" in source or "group-reaction" in source:
+        return 5
     if "fit-close" in source or "fit-primary" in source or "fit-secondary" in source:
         return 5
     if camera_path_frame_uses_group_fit(frame):
@@ -2719,7 +4372,7 @@ def cinematic_reaction_frame(row: dict[str, object], time_value: float, platform
     if scene_intent == "group_fit":
         group = group_face_frame(faces, time_value, platform)
         return hard_cut_ai_director_frame(group, time_value, group_frame_source(group, True))
-    secondary = secondary_face_for_row(row)
+    secondary = secondary_speaker_face_for_row(row)
     if secondary is None:
         if should_use_platform_group_frame(faces, platform):
             group = group_face_frame(faces, time_value, platform)
@@ -2728,7 +4381,7 @@ def cinematic_reaction_frame(row: dict[str, object], time_value: float, platform
     return hard_cut_ai_director_frame({
         **secondary,
         "time": time_value,
-        "zoom": min(float(secondary.get("zoom") or 1.0) + 0.08, 1.34),
+        "zoom": reaction_focus_zoom(secondary),
     }, time_value, "ai-director-cuts-reaction")
 
 
@@ -2737,17 +4390,20 @@ def cinematic_primary_frame(row: dict[str, object], time_value: float, platform:
     if str(camera_scene_intent_for_faces(faces, platform)["intent"]) == "group_fit":
         group = group_face_frame(faces, time_value, platform)
         return hard_cut_ai_director_frame(group, time_value, group_frame_source(group, True))
-    primary = row.get("primary") if isinstance(row.get("primary"), dict) else None
-    source = primary if isinstance(primary, dict) else (faces[0] if faces else {})
-    return hard_cut_ai_director_frame({**source, "time": time_value}, time_value, "ai-director-cuts-primary")
+    source = primary_speaker_face_for_row(row) or (faces[0] if faces else {})
+    return hard_cut_ai_director_frame(
+        {**source, "time": time_value, "zoom": speaker_focus_zoom(source, 0.02)},
+        time_value,
+        "ai-director-cuts-primary",
+    )
 
 
 def secondary_face_for_row(row: dict[str, object]) -> dict[str, float] | None:
-    primary = row.get("primary") if isinstance(row.get("primary"), dict) else None
+    primary = primary_speaker_face_for_row(row)
     if primary is None:
         return None
     primary_x = face_x(primary)
-    candidates = [face for face in reliable_faces(row) if abs(face_x(face) - primary_x) >= 9.0]
+    candidates = [face for face in focusable_speaker_faces(row) if abs(face_x(face) - primary_x) >= 9.0]
     if not candidates:
         return None
     return max(candidates, key=lambda face: float(face.get("confidence") or 0.0) * max(float(face.get("area") or 1.0), 1.0))
@@ -2937,8 +4593,7 @@ def director_alternate_target(row: dict[str, object], time_value: float, intent:
     faces = sorted(reliable_faces(row), key=face_x)
     secondary = secondary_face_for_row(row)
     target = secondary if secondary is not None else (faces[-1] if faces else {})
-    boost = 0.1 if intent == "two_far_cut" else 0.04
-    return {**target, "time": time_value, "zoom": min(float(target.get("zoom") or 1.0) + boost, 1.34)}
+    return {**target, "time": time_value, "zoom": reaction_focus_zoom(target)}
 
 
 def should_use_group_frame(faces: list[dict[str, float]]) -> bool:
@@ -3320,7 +4975,8 @@ def import_command(
         local_source = Path(source_path).expanduser().resolve()
         require_file(local_source)
         command.append(str(local_source))
-    command.extend(["--out", str(out_dir), "--clips", str(metadata["preview_count"]), "--preset", str(metadata["preset"])])
+    preview_count = import_preview_count(source_url, metadata)
+    command.extend(["--out", str(out_dir), "--clips", str(preview_count), "--preset", str(metadata["preset"])])
     command.extend(duration_profile_args(str(metadata["duration_profile"])))
     command.extend(["--ai-provider", str(metadata["ai_provider"]), "--context-prompt", str(metadata["context_prompt"])])
     language = str(metadata["language"])
@@ -3329,6 +4985,13 @@ def import_command(
     if not metadata["render_previews"]:
         command.append("--skip-render")
     return command
+
+
+def import_preview_count(source_url: str, metadata: dict[str, object]) -> int:
+    requested = int(metadata.get("preview_count") or 10)
+    if source_url:
+        return requested
+    return min(requested, LOCAL_IMPORT_MAX_INITIAL_CLIPS)
 
 
 def wait_for_import_job(job_id: str) -> None:
@@ -3354,7 +5017,7 @@ def wait_for_import_job(job_id: str) -> None:
         current.updated_at = time.time()
         current.return_code = job.process.returncode
         current.stdout = stdout[-6000:]
-        current.stderr = stderr[-6000:]
+        current.stderr = import_job_error_message(stderr) if status == "failed" else stderr[-6000:]
         current.message = message
         current.process = None
 
@@ -3390,6 +5053,14 @@ def import_job_to_dict(job: ImportJob) -> dict[str, object]:
         "return_code": job.return_code,
         "stderr": job.stderr,
     }
+
+
+def import_job_error_message(stderr: str) -> str:
+    clean = stderr.strip()
+    if not clean:
+        return ""
+    friendly = friendly_ytdlp_error(clean)
+    return friendly if friendly != clean else clean[-6000:]
 
 
 def next_import_output_dir(base_dir: Path, source: str) -> Path:
@@ -3477,6 +5148,26 @@ def select_folder_path() -> str:
     root.destroy()
     if not selected:
         raise RuntimeError("Nenhuma pasta selecionada.")
+    return selected
+
+
+def select_video_file_path() -> str:
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except Exception as error:
+        raise RuntimeError("Seletor de arquivo indisponivel neste ambiente.") from error
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    selected = filedialog.askopenfilename(
+        initialdir=default_desktop_path(),
+        title="Selecionar video local",
+        filetypes=(("Videos", "*.mp4 *.mov *.m4v *.webm"), ("Todos os arquivos", "*.*")),
+    )
+    root.destroy()
+    if not selected:
+        raise RuntimeError("Nenhum arquivo selecionado.")
     return selected
 
 
@@ -3904,16 +5595,24 @@ def row_for_platform(row: dict[str, object], platform: str) -> dict[str, object]
 
 def platform_edit_from_row(row: dict[str, object], platform: str) -> dict[str, object]:
     edits = row.get("platform_edits")
-    if not isinstance(edits, dict):
-        return {}
-    raw = edits.get(platform)
+    raw = edits.get(platform) if isinstance(edits, dict) else None
+    if not isinstance(raw, dict):
+        raw = resolution_edit_from_row(row, platform)
     if not isinstance(raw, dict):
         return {}
     result: dict[str, object] = {}
-    for key in ("camera", "effect", "overlay", "overlays", "bumpers"):
+    for key in ("camera", "camera_path", "effect", "overlay", "overlays", "bumpers", "director_plan"):
         if key in raw:
             result[key] = raw[key]
     return result
+
+
+def resolution_edit_from_row(row: dict[str, object], platform: str) -> dict[str, object]:
+    edits = row.get("resolution_edits")
+    if not isinstance(edits, dict):
+        return {}
+    raw = edits.get(resolution_key_for_platform(platform))
+    return raw if isinstance(raw, dict) else {}
 
 
 def render_selected_rows(rows: list[dict[str, object]], base_dir: Path, out_dir: Path, ffmpeg: str) -> list[dict[str, object]]:
@@ -4384,7 +6083,24 @@ def normalize_bumpers_from_row(row: dict[str, object]) -> dict[str, dict[str, ob
 def normalize_platforms(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
-    return [str(item) for item in value if str(item) in PLATFORM_PRESETS]
+    result: list[str] = []
+    seen_resolutions: set[str] = set()
+    for item in value:
+        platform = str(item)
+        if platform not in PLATFORM_PRESETS:
+            continue
+        representative = representative_platform(platform)
+        resolution = resolution_key_for_platform(representative)
+        if resolution in seen_resolutions:
+            continue
+        seen_resolutions.add(resolution)
+        result.append(representative)
+    return result
+
+
+def representative_platform(platform: str) -> str:
+    destinations = resolution_preset_for_platform(platform).destinations
+    return destinations[0] if destinations else "tiktok"
 
 
 def resolve_media_path(base_dir: Path, clip_file: str) -> Path:
@@ -5317,15 +7033,35 @@ def youtube_high_quality_format() -> str:
     return os.environ.get("CUTED_YOUTUBE_RENDER_FORMAT", "").strip() or YOUTUBE_HIGH_QUALITY_FORMAT
 
 
+def run_ytdlp(command: list[str]) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(friendly_ytdlp_error(result.stderr or result.stdout or "yt-dlp failed"))
+    return result
+
+
+def friendly_ytdlp_error(message: str) -> str:
+    clean = "\n".join(line for line in message.strip().splitlines() if line.strip())
+    lower = clean.lower()
+    if "sign in to confirm" in lower or "not a bot" in lower or "cookies-from-browser" in lower:
+        return (
+            "O YouTube pediu login/confirmacao anti-bot. "
+            "Baixe o video com a ferramenta de sua preferencia e importe o arquivo local no CUTED."
+        )
+    if "private video" in lower or "login required" in lower:
+        return "O YouTube pediu login para este video. Importe o arquivo local no CUTED."
+    return clean
+
+
 def youtube_title(url: str) -> str:
     command = yt_dlp_command() + ["--no-playlist", "--print", "%(title)s", url]
-    result = subprocess.run(command, capture_output=True, text=True, check=True)
+    result = run_ytdlp(command)
     return result.stdout.strip() or "YouTube video"
 
 
 def youtube_render_url(url: str) -> str:
     command = yt_dlp_command() + ["-f", YOUTUBE_STREAM_FALLBACK_FORMAT, "-g", "--no-playlist", url]
-    result = subprocess.run(command, capture_output=True, text=True, check=True)
+    result = run_ytdlp(command)
     urls = [line.strip() for line in result.stdout.splitlines() if line.strip().startswith(("http://", "https://"))]
     if not urls:
         raise RuntimeError("Could not resolve a renderable YouTube media URL.")
@@ -5345,7 +7081,7 @@ def download_youtube_render_source(url: str, temp_dir: Path, ffmpeg: str, format
     ]
     result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode != 0:
-        message = (result.stderr or result.stdout or "yt-dlp high quality download failed").strip()
+        message = friendly_ytdlp_error(result.stderr or result.stdout or "yt-dlp high quality download failed")
         raise RuntimeError(message)
     return resolved_youtube_render_file(temp_dir)
 
@@ -5414,7 +7150,7 @@ def download_youtube_audio(url: str, output: Path, ffmpeg: str) -> Path:
         "-o", str(output),
         url,
     ]
-    subprocess.run(command, check=True)
+    run_ytdlp(command)
     return output
 
 
@@ -5590,7 +7326,12 @@ def openai_vision_structured_response(
             }
         },
     }
-    data = openai_json_request("https://api.openai.com/v1/responses", openai_api_key(), body)
+    data = openai_json_request(
+        "https://api.openai.com/v1/responses",
+        openai_api_key(),
+        body,
+        timeout=AI_DIRECTOR_OPENAI_TIMEOUT_SECONDS,
+    )
     record_openai_text_usage(operation, model, data.get("usage"))
     return parsed_openai_structured_response(data)
 
@@ -5621,7 +7362,9 @@ def openai_output_text(data: dict[str, object]) -> str:
     raise RuntimeError("OpenAI response did not include output text.")
 
 
-def openai_json_request(url: str, api_key: str, payload: dict[str, object]) -> dict[str, object]:
+def openai_json_request(
+    url: str, api_key: str, payload: dict[str, object], timeout: float = 180.0
+) -> dict[str, object]:
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(
         url,
@@ -5629,7 +7372,7 @@ def openai_json_request(url: str, api_key: str, payload: dict[str, object]) -> d
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         method="POST",
     )
-    return read_openai_json(request)
+    return read_openai_json(request, timeout)
 
 
 def openai_multipart_request(url: str, api_key: str, fields: dict[str, str], file_field: str, file_path: Path) -> dict[str, object]:
@@ -5651,16 +7394,20 @@ def openai_multipart_request(url: str, api_key: str, fields: dict[str, str], fil
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": f"multipart/form-data; boundary={boundary}"},
         method="POST",
     )
-    return read_openai_json(request)
+    return read_openai_json(request, 180.0)
 
 
-def read_openai_json(request: urllib.request.Request) -> dict[str, object]:
+def read_openai_json(request: urllib.request.Request, timeout: float) -> dict[str, object]:
     try:
-        with urllib.request.urlopen(request, timeout=180) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             data = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
         message = error.read().decode("utf-8", errors="replace")[:1200]
         raise RuntimeError(f"OpenAI request failed with HTTP {error.code}: {message}") from error
+    except (TimeoutError, socket.timeout) as error:
+        raise RuntimeError("OpenAI demorou demais para responder; usei o diretor local como fallback.") from error
+    except urllib.error.URLError as error:
+        raise RuntimeError("Nao consegui conectar na OpenAI agora; usei o diretor local como fallback.") from error
     if not isinstance(data, dict):
         raise RuntimeError("OpenAI response must be a JSON object.")
     return data
@@ -6092,6 +7839,9 @@ def render_one(video: Path | str, clips_dir: Path, frames_dir: Path, waveforms_d
     if not skip_render:
         cut_clip(video, clip_path, moment.start, moment.end, ffmpeg)
         extract_frame(video, frame_path, moment.peak, ffmpeg)
+    else:
+        return Moment(moment.rank, moment.start, moment.end, moment.peak, moment.score, moment.title, moment.reason,
+                      moment.transcript, moment.peak_text, None, None, moment.caption_segments, None)
     waveform_file = write_audio_waveform_file(clip_path, waveform_path, ffmpeg)
     return Moment(moment.rank, moment.start, moment.end, moment.peak, moment.score, moment.title, moment.reason,
                   moment.transcript, moment.peak_text, rel(clip_path, clips_dir.parent), rel(frame_path, frames_dir.parent),
@@ -6158,8 +7908,8 @@ def clampNumberPy(value: float, minimum: float, maximum: float) -> float:
 
 def cut_clip(video: Path | str, output: Path, start: float, end: float, ffmpeg: str) -> None:
     command = [ffmpeg, "-y", "-ss", fmt_time(start), "-i", str(video), "-t", fmt_time(end - start),
-               "-c:v", "libx264", "-preset", "medium", "-profile:v", "main", "-level", "4.1",
-               "-pix_fmt", "yuv420p", "-r", "30", "-crf", PREVIEW_VIDEO_CRF, "-c:a", "aac", "-b:a", "192k",
+               "-c:v", "libx264", "-preset", "ultrafast", "-profile:v", "main", "-level", "4.1",
+               "-pix_fmt", "yuv420p", "-r", "30", "-crf", PREVIEW_DRAFT_VIDEO_CRF, "-c:a", "aac", "-b:a", "128k",
                "-ar", "44100", "-movflags", "+faststart", str(output)]
     subprocess.run(command, check=True, capture_output=True, text=True)
 
@@ -6293,23 +8043,27 @@ def card_html(moment: Moment) -> str:
                       <input class="preview-volume-slider" data-preview-volume-slider type="range" min="0" max="100" step="5" value="70" aria-label="Volume do preview">
                     </div>
                   </div>
+                  <button class="preview-ai-button" data-camera-ai type="button" aria-label="Rodar IA" title="Rodar direcao com IA">IA</button>
                 </div>
                 <div class="preview-format-menu" data-preview-format-menu>
                   <button class="preview-format-trigger" data-preview-format-trigger type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Formato do preview">
-                    <span data-preview-format-current>TikTok</span>
+                    <span data-preview-format-current>Vertical 9:16</span>
                   </button>
                   <div class="preview-format-options" data-preview-format-options role="listbox" aria-label="Formato do preview" hidden>
-                    <button data-card-format-preview="tiktok" class="active" role="option" aria-selected="true">TikTok</button>
-                    <button data-card-format-preview="shorts" role="option" aria-selected="false">Shorts</button>
-                    <button data-card-format-preview="instagram" role="option" aria-selected="false">Instagram</button>
-                    <button data-card-format-preview="facebook" role="option" aria-selected="false">Facebook</button>
-                    <button data-card-format-preview="youtube" role="option" aria-selected="false">YouTube</button>
+                    <button data-card-format-preview="tiktok" class="active" role="option" aria-selected="true">Vertical 9:16</button>
+                    <button data-card-format-preview="facebook" role="option" aria-selected="false">Vertical 4:5</button>
+                    <button data-card-format-preview="youtube" role="option" aria-selected="false">Horizontal 16:9</button>
                   </div>
                 </div>
+                <label class="preview-motion-control" title="Velocidade da transicao da camera no preview">
+                  <span>Movimento</span>
+                  <input data-camera-motion-speed type="range" min="350" max="1400" step="50" value="700" aria-label="Velocidade da transicao da camera">
+                </label>
               </div>
               <div class="preview-controls" aria-label="Timeline do preview">
                 <div class="preview-camera-timeline" data-preview-camera-timeline aria-label="Timeline de camera"></div>
               </div>
+              <div class="preview-ai-status" data-camera-auto-status aria-live="polite"></div>
             </div>
             <div class="media camera-surface" data-overlay-surface>
               {video_tag}
@@ -6360,10 +8114,6 @@ def card_html(moment: Moment) -> str:
               <button data-action="discard">Descartar</button>
             </div>
           </details>
-          <details class="tool-section" data-panel="camera">
-            <summary><span>Smart Camera</span><small data-camera-current>Centro seguro</small></summary>
-            <div data-card-camera></div>
-          </details>
           <details class="tool-section" data-panel="effects">
             <summary><span>Efeitos</span><small data-effect-current>Sem efeito</small></summary>
             <div data-card-effect></div>
@@ -6399,11 +8149,9 @@ def card_html(moment: Moment) -> str:
               <span data-platform-summary>Sem destino</span>
             </div>
             <div class="platform-tags" role="group" aria-label="Adicionar destino na fila final">
-              <button data-platform="tiktok">TikTok</button>
-              <button data-platform="shorts">Shorts</button>
-              <button data-platform="instagram">Instagram</button>
-              <button data-platform="facebook">Facebook</button>
-              <button data-platform="youtube">YouTube</button>
+              <button data-platform="tiktok">Vertical 9:16</button>
+              <button data-platform="facebook">Vertical 4:5</button>
+              <button data-platform="youtube">Horizontal 16:9</button>
             </div>
           </footer>
           </div>
@@ -6473,8 +8221,16 @@ def page_html(source_label: str, cards: str, data: str, logo_src: str) -> str:
         <button type="button" data-import-key-open>Abrir configuracoes</button>
       </div>
       <div class="import-grid">
-        <label>Link do video
-          <input name="source_url" type="url" placeholder="https://..." autocomplete="off">
+        <label>Video local
+          <span class="import-path-row">
+            <input name="source_path" type="text" value="" placeholder="Selecione um MP4, MOV, M4V ou WebM" autocomplete="off">
+            <button type="button" data-select-video-file>Video</button>
+          </span>
+          <small>Fluxo principal: use o arquivo inteiro para mapa visual, camera e render local.</small>
+        </label>
+        <label>Link do YouTube (experimental)
+          <input name="source_url" type="url" placeholder="Cole um link apenas para teste rapido" autocomplete="off">
+          <small>Se o YouTube bloquear, baixe com sua ferramenta preferida e importe o video local.</small>
         </label>
         <label>Destino dos renders
           <span class="import-path-row">
@@ -6591,13 +8347,13 @@ def base_css() -> str:
 header{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:minmax(90px,1fr) auto minmax(90px,1fr);gap:16px;align-items:center;padding:10px 22px 12px;background:var(--color-brand-black);border-bottom:1px solid var(--color-border)}.header-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.icon-button{display:inline-grid;place-items:center;width:38px;min-width:38px;padding:0}.icon-button svg{display:block;width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.brand-lockup{display:grid;justify-items:center;gap:8px;min-width:0}.brand-logo{display:block;width:min(540px,54vw);height:78px;object-fit:contain;object-position:center;border:0;border-radius:0;filter:none}.brand-lockup p{margin:2px 0 0;color:var(--color-text-muted);font-size:11px;line-height:1.1;text-align:center;max-width:min(520px,56vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tabs{position:sticky;top:119px;z-index:4;display:flex;gap:8px;padding:10px 22px;background:#060606;border-bottom:1px solid #1f1f1f}.tabs button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 12px}.tabs button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
 main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px}.card{border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface);overflow:hidden}.card[open]{border-color:var(--color-metal-gray);background:var(--color-surface-raised)}.card.liked{border-color:var(--color-brand-green)}.card.discarded{opacity:.46}.clip-summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;min-height:62px;padding:12px 14px;cursor:pointer;list-style:none}.clip-summary::-webkit-details-marker{display:none}.clip-rank{color:var(--color-metal-gray);font-weight:700}.clip-title{display:grid;gap:2px;min-width:0}.clip-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}.clip-title small{color:var(--color-text-muted)}.clip-status{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.clip-status span,.format-previews span{display:inline-flex;align-items:center;min-height:26px;padding:4px 8px;border-radius:999px;background:#242424;color:var(--color-text-soft);font-size:12px}
 .app-notice{position:sticky;top:0;z-index:30;margin:0;padding:10px 14px;background:#2b1717;color:#ffd7d7;border-bottom:1px solid #6d2b2b;font-size:13px;text-align:center}.app-notice[hidden]{display:none}
-.import-stage{display:none;max-width:1080px;margin:18px auto;padding:0 18px}.import-panel{display:grid;gap:14px;padding:18px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised)}.import-panel p{margin:4px 0 0;color:var(--color-text-muted)}.import-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.import-panel label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.import-panel input,.import-panel select,.import-panel textarea{width:100%;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black);color:var(--color-text);padding:9px 10px;font:inherit}.import-panel textarea{resize:vertical;min-height:112px}.import-path-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.import-key-banner{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 12px;border:1px solid rgba(17,162,207,.4);border-radius:8px;background:rgba(17,162,207,.1);color:var(--color-text)}.import-key-banner[hidden]{display:none}.import-key-banner button{min-height:34px}.import-path-row button{min-height:38px;background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.duration-profile{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0}.duration-profile legend{grid-column:1/-1;color:var(--color-text-muted);font-size:12px}.duration-profile label{position:relative;display:grid!important}.duration-profile input{position:absolute;opacity:0;pointer-events:none}.duration-profile span{display:grid;gap:2px;min-height:54px;padding:10px 12px;border:1px solid var(--color-border-strong);border-radius:8px;background:var(--color-surface-muted);color:var(--color-text-soft)}.duration-profile input:checked+span{border-color:var(--color-brand-green);background:#182011;color:var(--color-text)}.duration-profile small{color:var(--color-text-muted)}.import-context{display:grid}.import-status{min-height:20px;color:var(--color-text-muted)}.import-result{display:flex;gap:8px;flex-wrap:wrap}.import-result a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.import-result code{display:block;width:100%;padding:10px;border:1px solid #3a2525;border-radius:6px;background:#180d0d;color:#ffcccc;white-space:pre-wrap}
+.import-stage{display:none;max-width:1080px;margin:18px auto;padding:0 18px}.import-panel{display:grid;gap:14px;padding:18px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised)}.import-panel p{margin:4px 0 0;color:var(--color-text-muted)}.import-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.import-panel label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.import-panel input,.import-panel select,.import-panel textarea{width:100%;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black);color:var(--color-text);padding:9px 10px;font:inherit}.import-panel textarea{resize:vertical;min-height:112px}.import-panel small{color:var(--color-text-muted);line-height:1.35}.import-path-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.import-key-banner{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 12px;border:1px solid rgba(17,162,207,.4);border-radius:8px;background:rgba(17,162,207,.1);color:var(--color-text)}.import-key-banner[hidden]{display:none}.import-key-banner button{min-height:34px}.import-path-row button{min-height:38px;background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.duration-profile{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0}.duration-profile legend{grid-column:1/-1;color:var(--color-text-muted);font-size:12px}.duration-profile label{position:relative;display:grid!important}.duration-profile input{position:absolute;opacity:0;pointer-events:none}.duration-profile span{display:grid;gap:2px;min-height:54px;padding:10px 12px;border:1px solid var(--color-border-strong);border-radius:8px;background:var(--color-surface-muted);color:var(--color-text-soft)}.duration-profile input:checked+span{border-color:var(--color-brand-green);background:#182011;color:var(--color-text)}.duration-profile small{color:var(--color-text-muted)}.import-context{display:grid}.import-status{min-height:20px;color:var(--color-text-muted)}.import-result{display:flex;gap:8px;flex-wrap:wrap}.import-result a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.import-result code{display:block;width:100%;padding:10px;border:1px solid #3a2525;border-radius:6px;background:#180d0d;color:#ffcccc;white-space:pre-wrap}
 .layer-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:100%;min-height:0}.layer-strip:empty{display:none}.bumper-sequence{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;min-height:24px;color:var(--color-text-muted);font-size:12px}.bumper-sequence:empty{display:none}.bumper-sequence span{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bumper-sequence b{color:var(--color-brand-green);font-weight:800}.layer-chip{display:inline-flex;gap:6px;align-items:center;max-width:100%;min-height:30px;padding:4px 5px 4px 9px;border:1px solid #303030;border-radius:999px;background:var(--color-surface-muted);color:var(--color-text-soft);font-size:12px}.layer-chip.is-selected{border-color:var(--color-focus);background:#182011;color:var(--color-text)}.layer-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.layer-chip button{display:inline-grid;place-items:center;width:22px;height:22px;min-width:22px;padding:0;border:1px solid #3a3a3a;border-radius:999px;background:#242424;color:var(--color-text-soft);font-size:14px;line-height:1}
 .editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;justify-items:center;gap:10px}.preview-frame{display:grid;gap:10px;width:100%;max-width:520px}.media{position:relative;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000;pointer-events:none}.placeholder{display:grid;place-items:center;height:100%;color:#777}.preview-bar{display:grid;grid-template-columns:1fr;gap:8px;justify-items:center;width:100%;padding:8px;border:1px solid #252525;border-radius:8px;background:#0a0a0a}.preview-controls,.preview-volume-group{display:flex;gap:6px;align-items:center}.preview-controls{justify-content:center;padding:4px;border:1px solid #202020;border-radius:999px;background:var(--color-surface-raised)}.preview-volume-group{padding-left:4px;border-left:1px solid #2d2d2d}.preview-icon,.preview-step{display:inline-grid;place-items:center;width:32px;height:32px;min-width:32px;padding:0;border:1px solid var(--color-border-strong);border-radius:999px;background:var(--color-surface-control);color:var(--color-text-soft)}.preview-play{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}.preview-icon svg{width:16px;height:16px;display:block;stroke:currentColor}.preview-step{width:26px;height:26px;min-width:26px;font-weight:700}.preview-volume-group output{min-width:32px;color:#d8d8d8;font-size:12px;text-align:center}.card[data-preview-format=tiktok] .preview-frame,.card[data-preview-format=shorts] .preview-frame,.card[data-preview-format=instagram] .preview-frame{max-width:min(100%,calc(72vh * 9 / 16))}.card[data-preview-format=facebook] .preview-frame{max-width:min(100%,calc(72vh * 4 / 5))}.card[data-preview-format=youtube] .preview-frame{max-width:min(100%,520px)}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;overflow:visible;padding-bottom:1px}.preview-strip button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 10px;min-height:34px;border-radius:999px;white-space:nowrap}.preview-strip button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-stack{display:grid;gap:10px}.tool-section{border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:0;overflow:hidden}.tool-section>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:10px 12px;cursor:pointer;list-style:none;color:var(--color-text);font-weight:800}.tool-section>summary::-webkit-details-marker{display:none}.tool-section>summary:after{content:"";width:8px;height:8px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg);opacity:.62;transition:transform .16s ease}.tool-section[open]>summary:after{transform:rotate(225deg)}.tool-section>summary small{color:var(--color-text-muted);font-size:12px;font-weight:600;text-align:right}.tool-section[open]>summary{border-bottom:1px solid rgba(231,231,232,.08)}.tool-section>*:not(summary){margin:12px}.timeline-editor{padding:0}.timeline-head,.timeline-timebar,.timeline-values{display:flex;justify-content:space-between;gap:12px;color:var(--color-text-muted);font-size:12px}.timeline-head output,.timeline-timebar output{color:var(--color-text);text-align:right}.timeline-timebar{margin-top:10px}.timeline-timebar span:last-child{color:#777;text-align:right}.timeline-scrub{position:relative;height:42px;margin-top:8px}.timeline-scrub-track{position:absolute;left:0;right:0;top:17px;height:8px;border:1px solid #343434;border-radius:999px;background:linear-gradient(90deg,var(--color-surface-muted),#252525);overflow:hidden}.timeline-selected{position:absolute;top:0;bottom:0;background:rgba(175,207,42,.22);border-left:1px solid var(--color-brand-green);border-right:1px solid var(--color-brand-green)}.timeline-playhead{position:absolute;top:-8px;bottom:-8px;width:2px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7)}.timeline-playhead:before{content:"";position:absolute;left:50%;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--color-brand-white);transform:translateX(-50%)}.timeline-scrub input{position:absolute;inset:0;width:100%;height:42px;margin:0;background:transparent;opacity:0;cursor:pointer}.timeline{position:relative;height:38px;margin-top:6px}.timeline-track{position:absolute;left:0;right:0;top:16px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:var(--color-brand-white);border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:38px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{margin-top:6px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .export-dock{display:grid;gap:8px;margin-top:2px;padding:12px;border:1px solid #303030;border-radius:8px;background:#111}.export-dock strong{display:block;font-size:13px}.export-dock span{color:#a8a8a8;font-size:12px}
 .platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:var(--color-text);border-color:var(--color-brand-green)}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.effect-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.75fr);gap:10px}.effect-subpanel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.effect-subpanel strong{font-size:12px}.bumper-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.bumper-upload{display:grid;gap:6px;align-content:start;min-height:64px;padding:9px;border:1px dashed var(--color-border-strong);border-radius:8px;background:var(--color-surface-control);cursor:pointer}.bumper-upload input{font-size:11px}.bumper-strip{display:flex;gap:6px;flex-wrap:wrap;min-height:28px}.bumper-empty{color:var(--color-text-muted);font-size:12px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:var(--color-brand-blue)}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.camera-path-editor,.camera-manual-panel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-path-head,.camera-panel-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.camera-path-head strong,.camera-panel-title strong{font-size:12px}.camera-path-head span,.camera-panel-title span{color:var(--color-text-muted);font-size:12px}.camera-smart-panel{display:grid;gap:9px;padding:10px;border:1px solid rgba(17,162,207,.28);border-radius:8px;background:linear-gradient(135deg,rgba(17,162,207,.12),rgba(175,207,42,.06))}.camera-smart-row,.camera-smart-ai{display:grid;gap:8px}.camera-smart-row{grid-template-columns:repeat(3,minmax(0,1fr))}.camera-smart-ai{grid-template-columns:repeat(5,minmax(0,1fr))}.camera-smart-panel button{display:grid;gap:3px;justify-items:center;background:rgba(17,162,207,.1);color:var(--color-text);border:1px solid rgba(17,162,207,.34);text-align:center}.camera-smart-panel button:hover{border-color:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.14)}.camera-path-track{position:relative;height:34px}.camera-path-rail{position:absolute;left:0;right:0;top:15px;height:5px;border-radius:999px;background:#292929}.camera-path-marker{position:absolute;top:7px;width:20px;height:20px;min-width:20px;padding:0;border-radius:999px;transform:translateX(-50%);background:var(--color-surface-control);border:1px solid var(--color-border-strong)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:var(--color-brand-blue);box-shadow:0 0 0 4px rgba(17,162,207,.18)}.camera-path-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-keyframe-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}.camera-auto-status{min-height:18px;color:var(--color-text-muted);font-size:12px}.camera-path-delete{color:var(--color-danger)!important}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:minmax(160px,1fr) 120px 150px;gap:12px;max-width:none}.caption-toggle{align-content:center}.caption-toggle input{justify-self:start;width:auto;min-height:20px;accent-color:var(--color-brand-blue)}
-.camera-smart-panel p{margin:0;color:var(--color-text-muted);font-size:12px}.camera-smart-panel button span{color:var(--color-text-muted);font-size:11px}.camera-director-action{min-height:72px;background:linear-gradient(135deg,rgba(17,162,207,.32),rgba(231,231,232,.08))!important;border-color:rgba(17,162,207,.72)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 34px rgba(17,162,207,.1)}.camera-director-action strong{font-size:15px}.camera-smart-row button{min-height:54px}.camera-smart-ai button{min-height:50px}.camera-advanced{display:grid;gap:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.025)}.camera-advanced summary{display:flex;justify-content:space-between;gap:10px;align-items:center;cursor:pointer;color:var(--color-text-soft)}.camera-advanced summary small{color:var(--color-text-muted);font-size:12px}.camera-advanced[open] summary{padding-bottom:8px;border-bottom:1px solid rgba(231,231,232,.08)}.camera-advanced .camera-manual-panel{padding:0;border:0;background:transparent}.camera-surface video{position:relative;z-index:1;object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position .18s linear,transform .18s linear}.camera-surface[data-camera-cut=hard] video:not(.camera-fit-bg){transition:none}.camera-surface .camera-fit-bg{position:absolute!important;inset:-7%;z-index:0!important;width:114%!important;height:114%!important;display:none!important;object-fit:cover!important;object-position:center!important;transform:none!important;filter:blur(22px) saturate(.88) brightness(.62)!important;pointer-events:none}.camera-surface .camera-fit-logo{position:absolute;top:11%;left:50%;z-index:1;width:38%!important;max-width:240px;height:auto!important;display:none!important;object-fit:contain!important;object-position:center;background:transparent!important;transform:translateX(-50%);opacity:.9;pointer-events:none}.camera-surface[data-camera-fit=contain]{background:#050505}.camera-surface[data-camera-fit=contain] .camera-fit-bg{display:block!important}.camera-surface[data-camera-fit=contain] .camera-fit-logo{display:block!important}.camera-surface[data-camera-fit=contain] video:not(.camera-fit-bg){z-index:2;object-fit:contain;object-position:center;transform:none;transform-origin:center;background:transparent}.camera-reticle{position:absolute;inset:14% 22%;z-index:3;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}
+.camera-smart-panel p{margin:0;color:var(--color-text-muted);font-size:12px}.camera-smart-panel button span{color:var(--color-text-muted);font-size:11px}.camera-director-action{min-height:72px;background:linear-gradient(135deg,rgba(17,162,207,.32),rgba(231,231,232,.08))!important;border-color:rgba(17,162,207,.72)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 34px rgba(17,162,207,.1)}.camera-director-action strong{font-size:15px}.camera-smart-row button{min-height:54px}.camera-smart-ai button{min-height:50px}.camera-advanced{display:grid;gap:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.025)}.camera-advanced summary{display:flex;justify-content:space-between;gap:10px;align-items:center;cursor:pointer;color:var(--color-text-soft)}.camera-advanced summary small{color:var(--color-text-muted);font-size:12px}.camera-advanced[open] summary{padding-bottom:8px;border-bottom:1px solid rgba(231,231,232,.08)}.camera-advanced .camera-manual-panel{padding:0;border:0;background:transparent}.camera-surface video{position:relative;z-index:1;object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1),transform var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1)}.camera-surface[data-camera-cut=hard] video:not(.camera-fit-bg){transition:none}.camera-surface .camera-fit-bg{position:absolute!important;inset:-7%;z-index:0!important;width:114%!important;height:114%!important;display:none!important;object-fit:cover!important;object-position:center!important;transform:none!important;filter:blur(22px) saturate(.88) brightness(.62)!important;pointer-events:none}.camera-surface .camera-fit-logo{position:absolute;top:11%;left:50%;z-index:1;width:38%!important;max-width:240px;height:auto!important;display:none!important;object-fit:contain!important;object-position:center;background:transparent!important;transform:translateX(-50%);opacity:.9;pointer-events:none}.camera-surface[data-camera-fit=contain]{background:#050505}.camera-surface[data-camera-fit=contain] .camera-fit-bg{display:block!important}.camera-surface[data-camera-fit=contain] .camera-fit-logo{display:block!important}.camera-surface[data-camera-fit=contain] video:not(.camera-fit-bg){z-index:2;object-fit:contain;object-position:center;transform:none;transform-origin:center;background:transparent}.camera-reticle{position:absolute;inset:14% 22%;z-index:3;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}
 .card[data-effect=light-grain] .media video,.card[data-effect=light-grain] .media img{filter:contrast(1.08) brightness(1.02)}.card[data-effect=old-film] .media video,.card[data-effect=old-film] .media img{filter:sepia(.48) contrast(1.2) saturate(.62) brightness(.92)}.card[data-effect=vhs] .media video,.card[data-effect=vhs] .media img{filter:saturate(.62) contrast(1.22) brightness(.9) hue-rotate(-7deg)}.card[data-effect=bw-old] .media video,.card[data-effect=bw-old] .media img{filter:grayscale(1) contrast(1.22) brightness(.9)}.card[data-effect=light-grain] .media:after,.card[data-effect=old-film] .media:after,.card[data-effect=vhs] .media:after,.card[data-effect=bw-old] .media:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--effect-opacity,.24);background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 70% 65%,rgba(0,0,0,.95) 0 1px,transparent 1.8px);background-size:4px 4px,6px 6px;mix-blend-mode:overlay}.card[data-effect=old-film] .media:before,.card[data-effect=bw-old] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at center,transparent 44%,rgba(0,0,0,.46) 100%)}.card[data-effect=vhs] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 4px);mix-blend-mode:overlay}
 .overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,var(--color-brand-green));border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none;pointer-events:auto}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-text-box{display:grid;align-items:center;min-width:96px;min-height:34px;padding:8px 12px;border-left:0;background:rgba(var(--overlay-bg-rgb,0,0,0),var(--overlay-bg-opacity,.7));box-shadow:none;color:var(--overlay-color,#fff);font-weight:700;font-size:clamp(13px,var(--overlay-font-size,20px),36px);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.overlay-text-box[data-overlay-bg=off]{background:transparent;box-shadow:none}.overlay-text-box span{opacity:var(--overlay-opacity,1);overflow:hidden;text-overflow:ellipsis}.overlay-box.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.overlay-image-box{display:grid;place-items:center;min-width:72px;min-height:72px;padding:6px;border:1px dashed rgba(255,255,255,.42);background:rgba(0,0,0,.12);box-shadow:0 8px 24px rgba(0,0,0,.22)}.overlay-image-box img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none;background:transparent}.overlay-resize{position:absolute;right:3px;bottom:3px;z-index:4;width:22px;height:22px;padding:0;border:1px solid rgba(255,255,255,.52);border-radius:5px;background:rgba(255,255,255,.2);cursor:nwse-resize;touch-action:none;pointer-events:auto}.overlay-menu{position:absolute;z-index:6;display:grid;gap:8px;width:min(360px,94%);padding:8px;border:1px solid var(--color-border-strong);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel);touch-action:none}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px;cursor:move}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-inspector{display:grid;gap:8px}.overlay-inspector label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.overlay-inspector input[type=text],.overlay-inspector input[type=number]{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.overlay-inspector input[type=color]{width:42px;height:32px;padding:2px;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black)}.overlay-inspector-row{display:flex;gap:8px;align-items:center}.overlay-inspector-row>*{flex:1}.overlay-inspector-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.overlay-inspector-check input{width:auto}.overlay-danger{color:var(--color-danger)!important;border-color:#5b2626!important;background:#251111!important}.image-upload{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-empty{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;color:var(--color-text-muted)}
 p{color:#bebebe}.peak{color:#fff;font-size:16px;line-height:1.35}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}.transcript-copy{max-height:220px;overflow:auto;margin-top:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(0,0,0,.18)}.transcript-copy p{margin:0;line-height:1.45}
@@ -6638,6 +8394,7 @@ header{background:linear-gradient(180deg,rgba(5,5,5,.92),rgba(5,5,5,.68));backdr
 .preview-volume-group{border-left:1px solid rgba(231,231,232,.12)}.preview-volume-group output{color:rgba(231,231,232,.72);font-variant-numeric:tabular-nums}
 .preview-bar,.preview-controls,.preview-camera-timeline,.preview-volume-group{overflow:visible}.preview-bar{position:relative;z-index:20}.preview-topbar{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-width:0}.preview-topbar .preview-strip{flex:1 1 auto;width:auto;min-width:0;justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;padding-bottom:0;scrollbar-width:none}.preview-topbar .preview-strip::-webkit-scrollbar{display:none}.preview-topbar .preview-strip button{flex:0 0 auto;min-height:32px;padding:7px 9px;font-size:12px}.preview-controls{display:block;width:100%;max-width:100%;padding:0;border:0;background:transparent;box-shadow:none;backdrop-filter:none}.preview-transport-group{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:5px 6px;border:1px solid var(--glass-border);border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.025)),rgba(5,5,5,.26);box-shadow:inset 0 1px 0 var(--glass-edge),0 8px 22px rgba(0,0,0,.18);backdrop-filter:blur(18px) saturate(1.45)}.preview-volume-group{position:relative;padding-left:0;border-left:0}.preview-camera-timeline{position:relative;width:100%;min-width:0;display:grid;align-items:center;min-height:42px;padding:6px 12px;border:1px solid rgba(17,162,207,.42);border-radius:4px;background:linear-gradient(180deg,rgba(17,162,207,.11),rgba(255,255,255,.025)),rgba(5,5,5,.24);box-shadow:inset 0 1px 0 var(--glass-edge),0 8px 22px rgba(0,0,0,.18);backdrop-filter:blur(18px) saturate(1.45)}.preview-camera-rail{position:relative;width:100%;height:24px;cursor:pointer;touch-action:none}.preview-audio-waveform{position:absolute;inset:1px 0;z-index:0;display:flex;align-items:center;gap:1px;opacity:.78;pointer-events:none}.preview-audio-waveform[hidden]{display:none}.preview-audio-waveform span{flex:1;min-width:1px;max-height:21px;background:rgba(175,207,42,.42);border-radius:1px}.preview-camera-track{position:absolute;left:0;right:0;top:50%;z-index:1;height:3px;border-radius:0;background:linear-gradient(90deg,rgba(17,162,207,.5),rgba(231,231,232,.12));box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);transform:translateY(-50%)}.preview-camera-playhead{position:absolute;top:50%;z-index:4;width:2px;height:20px;border-radius:999px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7);transform:translate(-50%,-50%);pointer-events:none}.preview-camera-marker{position:absolute;top:50%;z-index:3;width:9px;height:22px;min-width:9px;padding:0;border:1px solid rgba(17,162,207,.84);border-radius:3px;background:rgba(17,162,207,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 0 0 2px rgba(17,162,207,.06);transform:translate(-50%,-50%);cursor:pointer}.preview-camera-marker:active{transform:translate(-50%,-50%)}.preview-camera-marker.active{background:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.18),0 0 14px rgba(17,162,207,.32)}.preview-camera-popover,.preview-volume-popover{position:absolute;z-index:1000;display:grid;gap:8px;padding:10px;border:1px solid var(--glass-border);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel)}.preview-camera-popover{top:calc(100% + 8px);left:50%;width:min(260px,92vw);transform:translateX(-50%)}.preview-camera-popover[hidden],.preview-volume-popover[hidden]{display:none}.preview-camera-popover label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.preview-camera-popover select{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.preview-camera-popover input{width:100%;accent-color:var(--color-brand-blue)}.preview-camera-popover button{min-height:32px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.preview-volume-popover{right:50%;bottom:calc(100% + 8px);width:auto;height:128px;padding:12px 8px;place-items:center;transform:translateX(50%)}.preview-volume-slider{display:block;width:110px;accent-color:var(--color-brand-blue);writing-mode:vertical-rl;direction:rtl}
 .preview-topbar{justify-content:flex-start;position:relative;z-index:80}.preview-format-menu{position:relative;z-index:1400;min-width:134px}.preview-format-trigger{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:38px;padding:8px 12px;border:1px solid var(--glass-border);border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.025)),rgba(5,5,5,.26);color:var(--color-text-soft);font-weight:800}.preview-format-trigger:after{content:"";width:7px;height:7px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg) translateY(-2px);opacity:.72}.preview-format-trigger[aria-expanded=true]{border-color:rgba(17,162,207,.72);color:var(--color-brand-blue)}.preview-format-options{position:absolute;top:calc(100% + 7px);left:0;z-index:1500;display:grid;gap:4px;width:max(100%,160px);padding:7px;border:1px solid var(--glass-border);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel)}.preview-format-options[hidden]{display:none}.preview-format-options button{display:flex;justify-content:flex-start;min-height:32px;padding:7px 9px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--color-text-soft);font-weight:700;text-align:left}.preview-format-options button.active{border-color:rgba(17,162,207,.52);background:rgba(17,162,207,.14);color:var(--color-brand-blue)}
+.preview-motion-control{display:flex;align-items:center;gap:7px;min-height:38px;padding:7px 10px;border:1px solid var(--glass-border);border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.02)),rgba(5,5,5,.22);color:var(--color-text-muted);font-size:11px;font-weight:800;white-space:nowrap}.preview-motion-control input{width:82px;accent-color:var(--color-brand-blue)}
 .media{border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-panel);background:#000;box-shadow:0 14px 44px rgba(0,0,0,.32)}
 .tool-section,.export-dock,.overlay-menu,.settings-panel{border-color:var(--glass-border);border-radius:var(--radius-panel);background:linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.025) 36%,rgba(0,0,0,.08) 100%),var(--glass-bg-strong);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-edge),inset 0 -18px 28px rgba(0,0,0,.14);backdrop-filter:blur(24px) saturate(1.45)}
 .tool-section>summary{color:rgba(231,231,232,.9)}.export-dock{padding:14px}.export-dock span{color:rgba(231,231,232,.6)}
@@ -6649,6 +8406,9 @@ button[data-action=discard],.result-actions a.secondary,.result-actions button.s
 .duration-profile span,.camera-path-editor,.camera-segment,.layer-chip,.overlay-layer-row,.image-upload{border-color:var(--glass-border);background:rgba(231,231,232,.05)}
 .duration-profile input:checked+span,.layer-chip.is-selected{border-color:rgba(17,162,207,.72);background:var(--control-active);color:var(--color-text)}
 .camera-path-rail{background:linear-gradient(90deg,rgba(17,162,207,.28),rgba(231,231,232,.1),rgba(175,207,42,.18))}.camera-path-marker{border-color:var(--glass-border);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.035)),rgba(231,231,232,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.32),0 6px 14px rgba(0,0,0,.26)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:rgba(17,162,207,.88);box-shadow:0 0 0 4px rgba(17,162,207,.16),0 0 24px rgba(17,162,207,.26)}
+.preview-camera-marker span,.camera-path-marker span{position:absolute;left:50%;bottom:calc(100% + 4px);max-width:72px;padding:2px 5px;border:1px solid rgba(231,231,232,.2);border-radius:999px;background:rgba(5,5,5,.82);color:var(--color-text-soft);font-size:10px;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform:translateX(-50%);pointer-events:none}.camera-path-marker{overflow:visible}.preview-camera-marker{overflow:visible}.camera-path-marker span{bottom:calc(100% + 5px)}.preview-camera-marker.active span,.camera-path-marker.active span{border-color:rgba(17,162,207,.7);color:#fff}
+.preview-camera-popover-head{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center}.preview-camera-popover-head strong{font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.preview-camera-popover-head span,.preview-camera-popover small{color:var(--color-text-muted);font-size:11px}.preview-camera-popover-close{display:inline-grid!important;place-items:center;width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;padding:0!important;border-radius:999px!important}.preview-camera-popover-actions{display:grid;grid-template-columns:1fr auto;gap:8px}.preview-camera-popover [data-preview-camera-popover-delete]{color:var(--color-danger)!important}
+.preview-volume-group{z-index:2300}.preview-volume-popover{z-index:2600!important;width:44px!important;min-width:44px!important;height:120px!important;padding:10px 6px!important;overflow:visible}.preview-volume-slider{width:92px!important;max-width:92px}.preview-ai-button{display:inline-grid;place-items:center;min-width:42px;height:32px;padding:0 12px;border:1px solid rgba(17,162,207,.72);border-radius:999px;background:linear-gradient(180deg,rgba(17,162,207,.28),rgba(17,162,207,.1));color:var(--color-text);font-weight:900;letter-spacing:0}.preview-ai-button:disabled{opacity:.62;cursor:progress}.preview-ai-status{min-height:16px;width:100%;color:rgba(231,231,232,.62);font-size:12px;line-height:1.25;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .overlay-menu button,.overlay-layer-row button{background:rgba(231,231,232,.08);color:rgba(231,231,232,.8);border-color:var(--glass-border)}
 .overlay-danger{background:rgba(80,20,20,.72)!important;border-color:rgba(255,120,120,.46)!important;color:#ffd2d2!important}
 .settings-status,.settings-usage{border-color:var(--glass-border);background:rgba(231,231,232,.05)}.settings-backdrop{backdrop-filter:blur(14px)}
@@ -6673,6 +8433,8 @@ const maxOverlayImageBytes = 1800000;
 const maxOverlayImageSourceBytes = 6000000;
 const maxOverlayImagePixels = 1600;
 const maxBumperVideoBytes = 48000000;
+const cameraAnalysisFetchTimeoutMs = 180000;
+const cameraReadinessPollMs = 3500;
 function save(){
   try {
     localStorage.setItem("cutted-state", JSON.stringify(state));
@@ -6701,27 +8463,39 @@ function clearAppNotice(){
 }
 function cardState(rank){
   const raw = state[rank];
-  if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], bumpers: defaultBumpers(), platformEdits: {} };
-  const next = Object.assign({ status: null, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], bumpers: defaultBumpers(), platformEdits: {} }, raw || {});
+  if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), camera_path: [], director_plan: null, cameraMotionMs: defaultCameraMotionMs, effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], bumpers: defaultBumpers(), platformEdits: {} };
+  const next = Object.assign({ status: null, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), camera_path: [], director_plan: null, cameraMotionMs: defaultCameraMotionMs, effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], bumpers: defaultBumpers(), platformEdits: {} }, raw || {});
   next.platforms = next.status === "discarded" ? [] : uniquePlatforms(next.platforms);
   next.camera = normalizeCamera(next.camera);
+  next.director_plan = normalizeDirectorPlan(next.director_plan);
   next.effect = normalizeEffect(next.effect);
   next.overlay = normalizeOverlay(next.overlay);
   next.overlays = normalizeOverlayLayers(next.overlays, next.overlay);
   next.bumpers = normalizeBumpers(next.bumpers);
+  next.cameraMotionMs = normalizeCameraMotionMs(next.cameraMotionMs);
   next.platformEdits = normalizePlatformEdits(next.platformEdits, next);
   return next;
 }
 function setCardState(rank, patch){ state[rank] = Object.assign(cardState(rank), patch); save(); }
+function normalizeCameraMotionMs(value){
+  const raw = Number(value || defaultCameraMotionMs);
+  return Math.round(Math.max(350, Math.min(raw, 1400)) / 50) * 50;
+}
 function fixed(value){ return `${Number(value || 0).toFixed(1)}s`; }
 const platformMeta = {
-  tiktok: { label: "TikTok", width: 1080, height: 1920 },
-  shorts: { label: "Shorts", width: 1080, height: 1920 },
-  instagram: { label: "Instagram", width: 1080, height: 1920 },
-  facebook: { label: "Facebook", width: 1080, height: 1350 },
-  youtube: { label: "YouTube", width: 1920, height: 1080 }
+  tiktok: { label: "TikTok", width: 1080, height: 1920, resolution_preset: "vertical_9_16" },
+  shorts: { label: "Shorts", width: 1080, height: 1920, resolution_preset: "vertical_9_16" },
+  instagram: { label: "Instagram", width: 1080, height: 1920, resolution_preset: "vertical_9_16" },
+  facebook: { label: "Facebook", width: 1080, height: 1350, resolution_preset: "vertical_4_5" },
+  youtube: { label: "YouTube", width: 1920, height: 1080, resolution_preset: "horizontal_16_9" }
+};
+const resolutionPresets = {
+  vertical_9_16: { label: "Vertical 9:16", width: 1080, height: 1920, platform: "tiktok", destinations: ["tiktok", "shorts", "instagram"] },
+  vertical_4_5: { label: "Vertical 4:5", width: 1080, height: 1350, platform: "facebook", destinations: ["facebook"] },
+  horizontal_16_9: { label: "Horizontal 16:9", width: 1920, height: 1080, platform: "youtube", destinations: ["youtube"] }
 };
 const defaultPreviewVolume = 0.2;
+const defaultCameraMotionMs = 700;
 const effectMeta = {
   none: { label: "Sem efeito", note: "Preview limpo" },
   "light-grain": { label: "Chuvisco Leve", note: "Granulado sutil" },
@@ -6744,7 +8518,7 @@ const manualAlternateHoldSeconds = 3.5;
 const manualAlternateMoveSeconds = 1.2;
 const smartCameraModes = {
   "auto-director": { label: "Auto Director", note: "Escolhe o enquadramento usando rosto principal e contexto multi-rosto", featured: true },
-  "ai-director": { label: "AI Dinamico", note: "Mistura grupo, foco, punch-in e reacoes com OpenCV + IA", featured: true },
+  "ai-director": { label: "IA", note: "Direcao automatica por IA com mapa visual local", featured: true },
   "ai-director-group": { label: "AI Grupo", note: "Preserva duas ou mais pessoas antes de fechar em close" },
   "ai-director-speaker": { label: "AI Fala", note: "Prioriza quem parece conduzir o trecho sem cortar contexto" },
   "ai-director-reactions": { label: "AI Reacoes", note: "Alterna foco entre pessoas visiveis com pausas editoriais" },
@@ -6777,10 +8551,26 @@ function applyTab(tab){
   renderFinalStage();
 }
 function platformLabel(key){
-  return (platformMeta[key] || { label: key }).label;
+  return resolutionPresetLabel(resolutionPresetForPlatform(key));
 }
 function validPlatform(format){
   return Object.prototype.hasOwnProperty.call(platformMeta, format) ? format : "tiktok";
+}
+function resolutionPresetForPlatform(platform){
+  const key = platformMeta[validPlatform(platform)]?.resolution_preset || "vertical_9_16";
+  return resolutionPresets[key] ? key : "vertical_9_16";
+}
+function resolutionPresetLabel(key){
+  return (resolutionPresets[key] || resolutionPresets.vertical_9_16).label;
+}
+function platformForResolutionPreset(key){
+  return validPlatform((resolutionPresets[key] || resolutionPresets.vertical_9_16).platform);
+}
+function representativePlatform(platform){
+  return platformForResolutionPreset(resolutionPresetForPlatform(platform));
+}
+function destinationResolutionMap(){
+  return Object.fromEntries(Object.keys(platformMeta).map(platform => [platform, resolutionPresetForPlatform(platform)]));
 }
 function activePlatformForRank(rank){
   const card = cardForRank(rank);
@@ -6795,6 +8585,7 @@ function normalizePlatformEdit(edit, fallback){
   return {
     camera: normalizeCamera(source.camera || base.camera || defaultCamera()),
     camera_path: normalizeCameraPath(pathSource),
+    director_plan: normalizeDirectorPlan(source.director_plan || base.director_plan),
     effect: normalizeEffect(source.effect || base.effect || defaultEffect()),
     overlay: overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
     overlays,
@@ -6839,6 +8630,8 @@ function cameraLabel(camera){
 }
 function cameraEditLabel(edit, duration){
   const path = normalizeCameraPath(edit?.camera_path);
+  const shots = normalizeDirectorPlan(edit?.director_plan).shots;
+  if (path.length && shots.length) return `Director plan: ${shots.length} cenas`;
   if (path.length) return `Camera path: ${path.length} pontos`;
   return cameraLabel(edit?.camera || defaultCamera());
 }
@@ -6857,7 +8650,7 @@ function setCameraSegmentForRank(rank, part, patch, platform = activePlatformFor
     if (segment.part !== part) return segment;
     return normalizeCameraSegment(Object.assign({}, segment, patch), part);
   });
-  setPlatformEditForRank(rank, targetPlatform, { camera: cameraSequence(segments), camera_path: [] });
+  setPlatformEditForRank(rank, targetPlatform, { camera: cameraSequence(segments), camera_path: [], director_plan: null });
   const card = cardForRank(rank);
   if (card) {
     const nextCamera = cameraForRank(rank, activePlatformForRank(rank));
@@ -6903,11 +8696,141 @@ function normalizeCameraPathFrame(frame){
     fit: String(frame.fit || "").toLowerCase() === "contain" || String(frame.source || "").includes("group-fit") ? "contain" : undefined,
     source: String(frame.source || (key ? "manual-segment" : "manual-path")),
     confidence: Math.max(0, Math.min(Number(frame.confidence ?? 1), 1)),
+    intent: frame.intent ? String(frame.intent) : undefined,
+    reason: frame.reason ? String(frame.reason) : undefined,
+    transition: frame.transition ? String(frame.transition) : undefined,
     part: frame.part ? String(frame.part) : undefined,
     key: key || undefined,
-    label: key ? cameraMeta[key].label : undefined,
+    label: frame.label ? String(frame.label) : key ? cameraMeta[key].label : undefined,
     strength: key ? strength : undefined
   };
+}
+function normalizeDirectorPlan(plan){
+  if (!plan || typeof plan !== "object") return { version: 1, source: "none", resolution_preset: "vertical_9_16", shots: [] };
+  const shots = Array.isArray(plan.shots) ? plan.shots.map(normalizeDirectorShot).filter(Boolean) : [];
+  return {
+    version: Number(plan.version || 1),
+    source: String(plan.source || "director-plan"),
+    mode: String(plan.mode || ""),
+    resolution_preset: resolutionPresets[plan.resolution_preset] ? plan.resolution_preset : "vertical_9_16",
+    style: String(plan.style || "normal"),
+    energy: String(plan.energy || "normal"),
+    shots
+  };
+}
+function normalizeDirectorShot(shot){
+  if (!shot || typeof shot !== "object") return null;
+  const start = Math.max(0, Number(shot.start || 0));
+  const end = Math.max(start, Number(shot.end || start));
+  const label = String(shot.label || directorIntentLabel(shot.intent || "speaker_hold"));
+  return {
+    id: String(shot.id || `shot-${Math.round(start * 1000)}`),
+    start: Number(start.toFixed(3)),
+    end: Number(end.toFixed(3)),
+    intent: String(shot.intent || "speaker_hold"),
+    label,
+    subject: String(shot.subject || "primary"),
+    transition: String(shot.transition || "hold"),
+    reason: String(shot.reason || "")
+  };
+}
+function directorPlanFromCameraPath(path, duration, platform, source = "manual"){
+  const frames = normalizeCameraPath(path);
+  const safeDuration = Math.max(Number(duration) || 0, .3);
+  const shots = (frames.length ? frames : [normalizeCameraPathFrame({ time: 0, x: 50, y: 50, zoom: 1 })])
+    .map((frame, index, sourceFrames) => directorShotFromFrame(frame, index, sourceFrames, safeDuration));
+  return { version: 1, source, mode: "", resolution_preset: resolutionPresetForPlatform(platform), style: "normal", energy: "normal", shots };
+}
+function directorShotFromFrame(frame, index, frames, duration){
+  const start = clampNumber(Number(frame.time || 0), 0, duration);
+  const next = frames[index + 1];
+  const end = next ? clampNumber(Number(next.time || duration), start, duration) : duration;
+  const intent = frame.intent || directorIntentFromFrame(frame);
+  return { id: `shot-${String(index + 1).padStart(3, "0")}`, start, end, intent, label: directorIntentLabel(intent), subject: directorSubject(intent), transition: directorTransition(frame, intent), reason: frame.reason || directorReason(intent) };
+}
+function directorIntentFromFrame(frame){
+  const source = String(frame?.source || "");
+  if (cameraFrameUsesGroupFit(frame) || source.includes("group")) return "group_open";
+  if (source.includes("reaction")) return "reaction_focus";
+  if (source.includes("cuts")) return "cut_focus";
+  return Number(frame?.zoom || 1) >= 1.18 ? "speaker_close" : "speaker_hold";
+}
+function directorIntentLabel(intent){
+  return {
+    group_open: "Group",
+    reaction_focus: "Reaction",
+    cut_focus: "Cut",
+    center_hold: "Center",
+    speaker_close: "Zoom",
+    speaker_hold: "Speaker"
+  }[intent] || "Camera";
+}
+function directorSubject(intent){
+  if (intent === "group_open") return "group";
+  if (intent === "reaction_focus") return "secondary";
+  if (intent === "center_hold") return "center";
+  return "primary";
+}
+function directorTransition(frame, intent){
+  if (intent === "cut_focus" || cameraFrameUsesHardCut(frame)) return "cut";
+  return ["group_open", "speaker_hold", "center_hold"].includes(intent) ? "hold" : "smooth";
+}
+function directorReason(intent){
+  return {
+    group_open: "Preserva o grupo.",
+    reaction_focus: "Realca reacao.",
+    cut_focus: "Corte seco para ritmo.",
+    center_hold: "Volta para o centro seguro.",
+    speaker_close: "Aproxima o foco.",
+    speaker_hold: "Segura foco estavel."
+  }[intent] || "";
+}
+function directorIntentOptions(){
+  return [
+    { intent: "speaker_hold", label: "Speaker" },
+    { intent: "group_open", label: "Group" },
+    { intent: "reaction_focus", label: "Reaction" },
+    { intent: "center_hold", label: "Center" },
+    { intent: "speaker_close", label: "Zoom" },
+    { intent: "cut_focus", label: "Hard cut" }
+  ];
+}
+function directorIntentOptionsHtml(selectedIntent){
+  return directorIntentOptions().map(item => {
+    const selected = item.intent === selectedIntent ? " selected" : "";
+    return `<option value="${escapeAttr(item.intent)}"${selected}>${escapeHtml(item.label)}</option>`;
+  }).join("");
+}
+function cameraFramePatchForIntent(intent, frame){
+  const current = normalizeCameraPathFrame(frame) || normalizeCameraPathFrame({ time: 0, x: 50, y: 50, zoom: 1 });
+  const base = { intent, label: directorIntentLabel(intent), reason: directorReason(intent), transition: directorTransition(current, intent), key: undefined, strength: undefined };
+  if (intent === "group_open") return Object.assign({}, current, base, { x: 50, y: 50, zoom: 1, fit: "contain", source: "manual-director-group" });
+  if (intent === "reaction_focus") {
+    const x = Number(current.x || 50) <= 50 ? 72 : 28;
+    return Object.assign({}, current, base, { x, y: 50, zoom: 1.14, fit: undefined, source: "manual-director-reaction" });
+  }
+  if (intent === "cut_focus") return Object.assign({}, current, base, { zoom: Math.max(Number(current.zoom || 1.12), 1.12), fit: undefined, source: "ai-director-cuts-manual" });
+  if (intent === "center_hold") return Object.assign({}, current, base, { x: 50, y: 50, zoom: 1, fit: undefined, source: "manual-director-center" });
+  if (intent === "speaker_close") return Object.assign({}, current, base, { zoom: Math.max(Number(current.zoom || 1), 1.22), fit: undefined, source: "manual-director-zoom" });
+  return Object.assign({}, current, base, { zoom: Math.max(Number(current.zoom || 1), 1.08), fit: undefined, source: "manual-director-speaker" });
+}
+function directorShotForFrame(plan, frame){
+  const shots = normalizeDirectorPlan(plan).shots;
+  const time = Number(frame?.time || 0);
+  return shots.find(shot => Math.abs(Number(shot.start || 0) - time) < .16) || null;
+}
+function directorMarkerLabel(plan, frame){
+  const shot = directorShotForFrame(plan, frame);
+  if (shot?.label) return shot.label;
+  if (frame?.label) return frame.label;
+  if (frame?.key) return cameraMeta[frame.key]?.label || "Camera";
+  return directorIntentLabel(directorIntentFromFrame(frame));
+}
+function directorMarkerTitle(plan, frame){
+  const shot = directorShotForFrame(plan, frame);
+  const label = directorMarkerLabel(plan, frame);
+  const detail = shot?.reason ? ` - ${shot.reason}` : "";
+  return `${fixed(frame?.time || 0)} - ${label}${detail}`;
 }
 function cameraCropPercent(camera, elapsed = 0){
   const current = normalizeSingleCamera(camera);
@@ -7023,7 +8946,9 @@ function cameraPathFrameWithPreset(frame, key, strength){
   return next;
 }
 function setCameraPathForRank(rank, path, platform = activePlatformForRank(rank), rerender = true){
-  setPlatformEditForRank(rank, platform, { camera_path: normalizeCameraPath(path) });
+  const normalized = normalizeCameraPath(path);
+  const duration = cardForRank(rank) ? cameraContextForCard(cardForRank(rank)).duration : 0;
+  setPlatformEditForRank(rank, platform, { camera_path: normalized, director_plan: directorPlanFromCameraPath(normalized, duration, platform) });
   const card = cardForRank(rank);
   if (card) {
     const edit = platformEditForRank(rank, platform);
@@ -7082,9 +9007,36 @@ function updateCameraPathFrameForCard(card, patch, rerender = true){
   setSelectedCameraPathIndex(card, Math.min(index, nextPath.length - 1));
   setCameraPathForRank(rank, nextPath, platform, rerender);
 }
+function updateCameraPathFrameIntentForCard(card, intent){
+  const rank = card.dataset.rank;
+  const platform = activePlatformForRank(rank);
+  const edit = platformEditForRank(rank, platform);
+  const context = cameraContextForCard(card);
+  const path = cameraPathForEdit(edit, context.duration);
+  const index = selectedCameraPathIndex(card, path);
+  const current = path[index] || cameraFrameForTime(edit.camera, path, context.position, context.duration);
+  const frame = cameraFramePatchForIntent(intent, current);
+  const nextPath = cameraPathWithFrame(path, frame, index);
+  setSelectedCameraPathIndex(card, Math.min(index, nextPath.length - 1));
+  setCameraPathForRank(rank, nextPath, platform);
+}
+function addCameraIntentFrameForCard(card, intent){
+  const rank = card.dataset.rank;
+  const platform = activePlatformForRank(rank);
+  const context = cameraContextForCard(card);
+  const edit = platformEditForRank(rank, platform);
+  const sourcePath = cameraPathForEdit(edit, context.duration);
+  const position = clampNumber(context.position, 0, Math.max(context.duration, .3));
+  const base = cameraFrameForTime(edit.camera, sourcePath, position, context.duration);
+  const frame = cameraFramePatchForIntent(intent, Object.assign({}, base, { time: Number(position.toFixed(3)) }));
+  const path = cameraPathWithFrame(sourcePath, frame);
+  const index = path.findIndex(item => Math.abs(item.time - frame.time) < .01);
+  setSelectedCameraPathIndex(card, index >= 0 ? index : path.length - 1);
+  setCameraPathForRank(rank, path, platform);
+}
 function moveCameraPathFrameToPlayhead(card){
   const context = cameraContextForCard(card);
-  updateCameraPathFrameForCard(card, { time: Number(context.position.toFixed(3)), source: "manual-path" });
+  updateCameraPathFrameForCard(card, { time: Number(context.position.toFixed(3)) });
 }
 function deleteCameraPathFrameForCard(card){
   const rank = card.dataset.rank;
@@ -7104,34 +9056,102 @@ function resetCameraPathForCard(card){
   setSelectedCameraPathIndex(card, 0);
   setCameraPathForRank(rank, [], platform);
 }
+function cameraAnalysisRequestPayload(card, smartMode, forceRefresh){
+  const rank = card.dataset.rank;
+  const platform = activePlatformForRank(rank);
+  const moment = (window.CUTTED_DATA.moments || []).find(item => String(item.rank) === String(rank));
+  const values = trimValues(card);
+  return {
+    gallery_path: currentGalleryPath(),
+    rank,
+    platform,
+    mode: smartMode,
+    force_refresh: forceRefresh,
+    allow_completed_cache: true,
+    clip_file: moment?.clip_file || "",
+    title: moment?.title || "",
+    transcript: moment?.transcript || moment?.text || "",
+    trim_start_seconds: values.trimStart,
+    source_start_seconds: Number(moment?.start || 0) + values.trimStart,
+    adjusted_duration: Math.max(values.endPos - values.startPos, .3)
+  };
+}
+function cameraStatusUrl(card, smartMode){
+  const payload = cameraAnalysisRequestPayload(card, smartMode, false);
+  const params = new URLSearchParams();
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) params.set(key, String(value));
+  });
+  return `/api/camera/status?${params.toString()}`;
+}
+function scheduleAiReadinessRefresh(card){
+  if (card.dataset.aiPollScheduled === "1") return;
+  card.dataset.aiPollScheduled = "1";
+  window.setTimeout(() => {
+    delete card.dataset.aiPollScheduled;
+    refreshAiReadinessForCard(card);
+  }, cameraReadinessPollMs);
+}
+async function refreshAiReadinessForCard(card){
+  const button = card.querySelector("[data-camera-ai]");
+  if (!button || card.dataset.aiApplying === "1") return;
+  if (card.dataset.aiStatusLoading === "1") return;
+  card.dataset.aiStatusLoading = "1";
+  try {
+    const response = await fetch(cameraStatusUrl(card, "ai-director"));
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "status indisponivel");
+    card.dataset.aiReady = payload.ready ? "1" : "0";
+    card.dataset.aiCacheReady = payload.cache_ready ? "1" : "0";
+    button.disabled = !payload.ready;
+    button.textContent = payload.ready ? "IA" : "...";
+    if (payload.cache_ready) setCameraAutoStatus(card, "IA pronta do cache");
+    else if (payload.ready) setCameraAutoStatus(card, "IA pronta");
+    else {
+      setCameraAutoStatus(card, "Mapeando video...");
+      scheduleAiReadinessRefresh(card);
+    }
+  } catch (_error) {
+    card.dataset.aiReady = "0";
+    button.disabled = true;
+    button.textContent = "...";
+    setCameraAutoStatus(card, "Mapeando video...");
+    scheduleAiReadinessRefresh(card);
+  } finally {
+    delete card.dataset.aiStatusLoading;
+  }
+}
 async function analyzeCameraForCard(card, mode = "auto-director"){
   const rank = card.dataset.rank;
   const platform = activePlatformForRank(rank);
   const smartMode = smartCameraModes[mode] ? mode : "auto-director";
   const forceRefresh = smartMode === "ai-director";
-  const button = card.querySelector(`[data-camera-smart-mode="${smartMode}"]`) || card.querySelector("[data-camera-auto]");
-  setCameraAutoStatus(card, `Analisando ${smartCameraModes[smartMode].label}...`);
-  if (button) button.disabled = true;
+  const button = card.querySelector(`[data-camera-smart-mode="${smartMode}"]`) || card.querySelector("[data-camera-ai]") || card.querySelector("[data-camera-auto]");
+  if (smartMode === "ai-director" && card.dataset.aiReady !== "1") {
+    setCameraAutoStatus(card, "Mapeando video...");
+    refreshAiReadinessForCard(card);
+    return;
+  }
+  card.dataset.aiApplying = "1";
+  setCameraAutoStatus(card, `Aplicando ${smartCameraModes[smartMode].label}...`);
+  if (button) {
+    button.disabled = true;
+    if (smartMode === "ai-director") button.textContent = "...";
+  }
   try {
-    const moment = (window.CUTTED_DATA.moments || []).find(item => String(item.rank) === String(rank));
-    const values = trimValues(card);
-    const response = await fetch("/api/camera/analyze", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        gallery_path: currentGalleryPath(),
-        rank,
-        platform,
-        mode: smartMode,
-        force_refresh: forceRefresh,
-        clip_file: moment?.clip_file || "",
-        title: moment?.title || "",
-        transcript: moment?.transcript || moment?.text || "",
-        trim_start_seconds: values.trimStart,
-        source_start_seconds: Number(moment?.start || 0) + values.trimStart,
-        adjusted_duration: Math.max(values.endPos - values.startPos, .3)
-      })
-    });
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), cameraAnalysisFetchTimeoutMs);
+    let response;
+    try {
+      response = await fetch("/api/camera/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify(cameraAnalysisRequestPayload(card, smartMode, forceRefresh))
+      });
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
     const payload = await response.json();
     const diagnosticText = cameraDiagnosticsText(payload.diagnostics);
     if (!response.ok || !payload.ok) {
@@ -7141,16 +9161,29 @@ async function analyzeCameraForCard(card, mode = "auto-director"){
     const path = normalizeCameraPath(payload.camera_path);
     if (!path.length) throw new Error("A analise nao retornou keyframes.");
     setSelectedCameraPathIndex(card, 0);
-    setCameraPathForRank(rank, path, platform);
+    const directorPlan = normalizeDirectorPlan(payload.director_plan);
+    setPlatformEditForRank(rank, platform, { camera_path: path, director_plan: directorPlan });
+    updateCameraUi(card);
+    updateCameraSurfaceForCard(card);
+    renderPreviewCameraTimeline(card);
+    renderFinalStage();
     const label = payload.mode_label || smartCameraModes[smartMode].label;
     const suffix = diagnosticText ? ` (${diagnosticText})` : "";
-    const applied = payload.cached ? `${label} aplicado do cache` : payload.cache_bypassed ? `${label} recalculado` : `${label} aplicado`;
+    const applied = payload.cache_recovered ? `${label}: mantive ultimo resultado bom` : payload.completed_cache ? `${label} pronto do cache` : payload.cached ? `${label} aplicado do cache` : payload.cache_bypassed ? `${label} recalculado` : `${label} aplicado`;
     setCameraAutoStatus(card, `${applied}.${suffix}`);
   } catch (error) {
-    setCameraAutoStatus(card, error.message || "Falha na auto camera.");
+    const message = error && error.name === "AbortError"
+      ? "IA ainda esta aplicando; tente novamente em alguns segundos para buscar o resultado pronto."
+      : (error.message || "Falha na auto camera.");
+    setCameraAutoStatus(card, message);
   } finally {
-    const nextButton = card.querySelector(`[data-camera-smart-mode="${smartMode}"]`) || card.querySelector("[data-camera-auto]");
-    if (nextButton) nextButton.disabled = false;
+    delete card.dataset.aiApplying;
+    const nextButton = card.querySelector(`[data-camera-smart-mode="${smartMode}"]`) || card.querySelector("[data-camera-ai]") || card.querySelector("[data-camera-auto]");
+    if (nextButton) {
+      nextButton.disabled = false;
+      if (smartMode === "ai-director") nextButton.textContent = "IA";
+    }
+    if (smartMode === "ai-director") refreshAiReadinessForCard(card);
   }
 }
 function setCameraAutoStatus(card, message){
@@ -7164,7 +9197,9 @@ function cameraDiagnosticsText(diagnostics){
   const width = Number(diagnostics.video_width || 0);
   const height = Number(diagnostics.video_height || 0);
   const keyframes = Number(diagnostics.camera_keyframes || 0);
-  const input = diagnostics.analysis_input === "source" ? "source" : "clip";
+  const visualMap = diagnostics.visual_map || {};
+  let input = diagnostics.analysis_input === "source" ? "source" : "clip";
+  if (visualMap && visualMap.used) input = "mapa visual";
   const multi = Number(diagnostics.multi_face_frames || 0);
   const edge = Number(diagnostics.edge_face_frames || 0);
   const maxGap = Number(diagnostics.camera_max_gap_seconds || 0);
@@ -7172,10 +9207,17 @@ function cameraDiagnosticsText(diagnostics){
   const protectedFrames = Number(diagnostics.camera_protected_keyframes || 0);
   const size = width && height ? `${width}x${height}` : "video";
   const parts = [input, `${detected}/${samples} frames`, size, `${keyframes} keyframes`];
+  if (visualMap && visualMap.segment_samples) parts.splice(1, 0, `${Number(visualMap.segment_samples)} do mapa`);
   const ai = diagnostics.ai_director || {};
   const intent = ai && ai.intent ? `IA ${ai.intent}` : "IA";
-  if (ai && ai.enabled) parts.push(ai.error ? `${intent} fallback local` : `${intent} aplicada`);
-  if (ai && !ai.enabled && ai.error) parts.push("IA sem chave");
+  if (diagnostics.ai_cache_recovered && diagnostics.ai_cache_recovered.used) parts.push("cache bom preservado");
+  if (ai && ai.status === "visual_map_pending") parts.push("mapa visual preparando");
+  else if (ai && ai.status === "timeout") parts.push(`${intent} timeout`);
+  else if (ai && ai.status === "quality_rejected") parts.push(`${intent} rejeitada por monotonia`);
+  else if (ai && ai.status === "no_key") parts.push("IA sem chave");
+  else if (ai && ai.enabled) parts.push(ai.error ? `${intent} fallback local` : `${intent} aplicada`);
+  if (ai && !ai.enabled && ai.error && ai.status !== "no_key") parts.push("IA sem chave");
+  if (Number(ai.director_plan_shots || 0)) parts.push(`${Number(ai.director_plan_shots)} cenas`);
   if (multi) parts.splice(1, 0, `${multi} multi-face`);
   if (edge) parts.splice(2, 0, `${edge} borda`);
   if (maxGap) parts.push(`gap max ${maxGap.toFixed(1)}s`);
@@ -7242,6 +9284,17 @@ function applyCameraSurface(surface, camera, position = 0, duration = 0, cameraP
   surface.dataset.cameraFit = cameraFrameUsesGroupFit(frame) ? "contain" : "cover";
   surface.setAttribute("style", cameraPreviewStyleFromFrame(frame));
   syncCameraFitBackground(surface);
+}
+function applyCameraMotionSpeed(card){
+  const speed = normalizeCameraMotionMs(cardState(card.dataset.rank).cameraMotionMs);
+  card.style.setProperty("--camera-transition-ms", `${speed}ms`);
+  const input = card.querySelector("[data-camera-motion-speed]");
+  if (input) input.value = String(speed);
+}
+function setCameraMotionSpeed(card, value){
+  const speed = normalizeCameraMotionMs(value);
+  setCardState(card.dataset.rank, { cameraMotionMs: speed });
+  applyCameraMotionSpeed(card);
 }
 function primaryCameraVideo(scope){
   return scope?.querySelector("video:not(.camera-fit-bg)") || null;
@@ -7637,6 +9690,7 @@ function bindCardCameraControls(card){
   card.querySelectorAll("[data-camera-smart-mode]").forEach(button => {
     button.addEventListener("click", () => analyzeCameraForCard(card, button.dataset.cameraSmartMode));
   });
+  refreshAiReadinessForCard(card);
   card.querySelector("[data-camera-path-reset]")?.addEventListener("click", () => resetCameraPathForCard(card));
   card.querySelector("[data-camera-path-set-time]")?.addEventListener("click", () => moveCameraPathFrameToPlayhead(card));
   card.querySelector("[data-camera-path-delete]")?.addEventListener("click", () => deleteCameraPathFrameForCard(card));
@@ -7708,9 +9762,10 @@ function bumperUploadHtml(slot, rank){
   const label = bumperSlotLabel(slot);
   const platform = activePlatformForRank(rank);
   const preset = platformMeta[platform] || platformMeta.tiktok;
+  const resolution = resolutionPresets[resolutionPresetForPlatform(platform)] || resolutionPresets.vertical_9_16;
   return `<label class="bumper-upload">
     <span>${escapeHtml(label)}</span>
-    <small style="color:var(--color-text-muted);font-size:11px">${escapeHtml(preset.label)}: ${preset.width}x${preset.height}</small>
+    <small style="color:var(--color-text-muted);font-size:11px">${escapeHtml(resolution.label)}: ${preset.width}x${preset.height}</small>
     <input data-bumper-video="${escapeAttr(slot)}" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-m4v">
   </label>`;
 }
@@ -7756,11 +9811,12 @@ async function addBumperFromInput(card, input){
   const slot = normalizeBumperSlot(input.dataset.bumperVideo);
   const platform = activePlatformForRank(rank);
   const preset = platformMeta[platform] || platformMeta.tiktok;
+  const resolution = resolutionPresets[resolutionPresetForPlatform(platform)] || resolutionPresets.vertical_9_16;
   try {
     if (file.size > maxBumperVideoBytes) throw new Error("Vinheta muito pesada. Use um video menor para o MVP local.");
     const metadata = await videoMetadataForFile(file);
     if (metadata.width !== preset.width || metadata.height !== preset.height) {
-      throw new Error(`Use um video ${preset.width}x${preset.height} para ${preset.label}.`);
+      throw new Error(`Use um video ${preset.width}x${preset.height} para ${resolution.label}.`);
     }
     showAppNotice(`Enviando vinheta de ${bumperSlotLabel(slot).toLowerCase()}...`);
     const dataUrl = await readFileAsDataUrl(file);
@@ -8344,8 +10400,9 @@ function renderPreviewCameraTimeline(card){
   const markers = state.path.map((frame, index) => {
     const left = clampNumber((Number(frame.time || 0) / state.duration) * 100, 0, 100);
     const active = index === selectedIndex ? " active" : "";
-    const label = frame.key ? cameraMeta[frame.key]?.label || "Camera" : "Camera";
-    return `<button class="preview-camera-marker${active}" data-preview-camera-marker="${index}" type="button" style="left:${left.toFixed(2)}%" title="${escapeAttr(`${fixed(frame.time)} - ${label}`)}" aria-label="${escapeAttr(`Editar camera ${label} em ${fixed(frame.time)}`)}"></button>`;
+    const label = directorMarkerLabel(state.edit.director_plan, frame);
+    const title = directorMarkerTitle(state.edit.director_plan, frame);
+    return `<button class="preview-camera-marker${active}" data-preview-camera-marker="${index}" type="button" style="left:${left.toFixed(2)}%" title="${escapeAttr(title)}" aria-label="${escapeAttr(`Editar camera ${label} em ${fixed(frame.time)}`)}"><span>${escapeHtml(label)}</span></button>`;
   }).join("");
   container.innerHTML = `<div class="preview-camera-rail" data-preview-camera-rail>
     <div class="preview-audio-waveform" data-preview-audio-waveform hidden></div>
@@ -8443,10 +10500,22 @@ function bindPreviewCameraTimeline(card){
     if (!rail) return;
     event.preventDefault();
     event.stopPropagation();
-    seekPreviewCameraTimeline(card, event, rail);
-    closePreviewCameraPopover(card);
+    const position = seekPreviewCameraTimeline(card, event, rail);
+    openPreviewCameraPopover(card, "insert", position);
   });
   container.addEventListener("change", event => {
+    if (event.target.matches("[data-preview-camera-popover-intent]")) {
+      event.preventDefault();
+      const mode = event.target.closest("[data-preview-camera-popover]")?.dataset.previewCameraPopoverMode || "edit";
+      if (mode === "edit") {
+        const index = selectedCameraPathIndex(card, previewCameraTimelineContext(card).path);
+        updateCameraPathFrameIntentForCard(card, event.target.value);
+        setSelectedCameraPathIndex(card, index);
+        renderPreviewCameraTimeline(card);
+        openPreviewCameraPopover(card, "edit");
+      }
+      return;
+    }
     if (event.target.matches("[data-preview-camera-popover-key]")) {
       event.preventDefault();
       const index = selectedCameraPathIndex(card, previewCameraTimelineContext(card).path);
@@ -8466,6 +10535,32 @@ function bindPreviewCameraTimeline(card){
     }
   });
   container.addEventListener("click", event => {
+    const close = event.target.closest("[data-preview-camera-popover-close]");
+    if (close) {
+      event.preventDefault();
+      event.stopPropagation();
+      closePreviewCameraPopover(card);
+      return;
+    }
+    const add = event.target.closest("[data-preview-camera-popover-add]");
+    if (add) {
+      event.preventDefault();
+      event.stopPropagation();
+      const intent = card.querySelector("[data-preview-camera-popover-intent]")?.value || "speaker_hold";
+      addCameraIntentFrameForCard(card, intent);
+      renderPreviewCameraTimeline(card);
+      openPreviewCameraPopover(card, "edit");
+      return;
+    }
+    const move = event.target.closest("[data-preview-camera-popover-move]");
+    if (move) {
+      event.preventDefault();
+      event.stopPropagation();
+      moveCameraPathFrameToPlayhead(card);
+      renderPreviewCameraTimeline(card);
+      openPreviewCameraPopover(card, "edit");
+      return;
+    }
     const remove = event.target.closest("[data-preview-camera-popover-delete]");
     if (!remove) return;
     event.preventDefault();
@@ -8479,25 +10574,52 @@ function seekPreviewCameraTimeline(card, event, rail){
   const ratio = rect.width ? clampNumber((event.clientX - rect.left) / rect.width, 0, 1) : 0;
   const values = trimValues(card);
   const duration = Math.max(values.endPos - values.trimStart, .3);
-  seekTimeline(card, values.trimStart + (ratio * duration), { userInitiated: true, mode: "free" });
+  const position = ratio * duration;
+  seekTimeline(card, values.trimStart + position, { userInitiated: true, mode: "free" });
+  return position;
 }
-function openPreviewCameraPopover(card){
+function openPreviewCameraPopover(card, mode = "edit", positionOverride = null){
   const popover = card.querySelector("[data-preview-camera-popover]");
   if (!popover) return;
   closePreviewVolumePopover(card);
   const state = previewCameraTimelineContext(card);
   const index = selectedCameraPathIndex(card, state.path);
   const frame = state.path[index] || state.path[0] || normalizeCameraPathFrame({ time: 0, key: "center", strength: 60 });
-  const left = clampNumber((Number(frame.time || 0) / state.duration) * 100, 6, 94);
+  const context = cameraContextForCard(card);
+  const position = mode === "insert" ? Number(positionOverride ?? context.position) : Number(frame.time || 0);
+  const left = clampNumber((position / state.duration) * 100, 6, 94);
+  const intent = mode === "insert" ? "speaker_hold" : directorIntentFromFrame(frame);
   popover.style.left = `${left.toFixed(2)}%`;
-  popover.innerHTML = `<label>Camera
-    <select data-preview-camera-popover-key>${cameraOptionsHtml(frame.key || "center")}</select>
-  </label>
-  <label>Forca
-    <input data-preview-camera-popover-strength type="range" min="0" max="100" step="5" value="${frame.strength ?? 60}">
-  </label>
-  <button data-preview-camera-popover-delete type="button"${state.path.length > 1 ? "" : " disabled"}>Excluir ponto</button>`;
+  popover.dataset.previewCameraPopoverMode = mode;
+  popover.innerHTML = mode === "insert" ? previewCameraInsertPopoverHtml(position, intent) : previewCameraEditPopoverHtml(state, frame, intent);
   popover.hidden = false;
+}
+function previewCameraInsertPopoverHtml(position, intent){
+  return `<div class="preview-camera-popover-head">
+    <strong>Novo shot</strong>
+    <span>${escapeHtml(fixed(position))}</span>
+    <button class="preview-camera-popover-close" data-preview-camera-popover-close type="button" aria-label="Fechar">x</button>
+  </div>
+  <label>Intencao
+    <select data-preview-camera-popover-intent>${directorIntentOptionsHtml(intent)}</select>
+  </label>
+  <button data-preview-camera-popover-add type="button">Inserir na timeline</button>`;
+}
+function previewCameraEditPopoverHtml(state, frame, intent){
+  const title = directorMarkerTitle(state.edit.director_plan, frame);
+  return `<div class="preview-camera-popover-head">
+    <strong>${escapeHtml(directorMarkerLabel(state.edit.director_plan, frame))}</strong>
+    <span>${escapeHtml(fixed(frame.time))}</span>
+    <button class="preview-camera-popover-close" data-preview-camera-popover-close type="button" aria-label="Fechar">x</button>
+  </div>
+  <small>${escapeHtml(title)}</small>
+  <label>Intencao
+    <select data-preview-camera-popover-intent>${directorIntentOptionsHtml(intent)}</select>
+  </label>
+  <div class="preview-camera-popover-actions">
+    <button data-preview-camera-popover-move type="button">Mover para playhead</button>
+    <button data-preview-camera-popover-delete type="button"${state.path.length > 1 ? "" : " disabled"}>Excluir</button>
+  </div>`;
 }
 function closePreviewCameraPopover(card){
   const popover = card.querySelector("[data-preview-camera-popover]");
@@ -8736,6 +10858,8 @@ function adjustedMoment(moment){
     adjusted_duration: adjustedDuration,
     camera: edit.camera,
     camera_path: cameraPathForEdit(edit, adjustedDuration),
+    director_plan: edit.director_plan,
+    camera_motion_ms: current.cameraMotionMs,
     effect: effectForRank(moment.rank),
     overlay: primaryOverlayForRank(moment.rank),
     overlays: overlayLayersForRank(moment.rank),
@@ -8743,20 +10867,59 @@ function adjustedMoment(moment){
     platform_edits: current.platformEdits
   });
 }
+function resolutionEditForPlatform(rank, platform, duration){
+  const key = resolutionPresetForPlatform(platform);
+  const edit = platformEditForRank(rank, platform);
+  return {
+    resolution_preset: key,
+    resolution_label: resolutionPresetLabel(key),
+    source: "platform_edits",
+    camera: edit.camera,
+    camera_path: cameraPathForEdit(edit, duration),
+    director_plan: edit.director_plan,
+    camera_motion_ms: cardState(String(rank)).cameraMotionMs,
+    effect: edit.effect,
+    overlay: edit.overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
+    overlays: edit.overlays,
+    bumpers: edit.bumpers
+  };
+}
+function resolutionEditsForMoment(moment, exportFormat){
+  const result = {};
+  captionPlatforms(moment, exportFormat).forEach(platform => {
+    const key = resolutionPresetForPlatform(platform);
+    if (!result[key]) {
+      result[key] = Object.assign(resolutionEditForPlatform(moment.rank, platform, moment.adjusted_duration), {
+        destinations: resolutionPresets[key]?.destinations || [platform],
+        shared: true
+      });
+    }
+  });
+  return result;
+}
 function buildExportData(){
   const data = Object.assign({}, window.CUTTED_DATA);
   data.export_format = document.body.dataset.format || "tiktok";
-  const adjusted = data.moments.map(adjustedMoment);
+  data.resolution_presets = resolutionPresets;
+  data.destination_resolution_map = destinationResolutionMap();
+  const adjusted = data.moments.map(adjustedMoment).map(moment => Object.assign({}, moment, {
+    resolution_edits: resolutionEditsForMoment(moment, data.export_format)
+  }));
   data.moments = adjusted;
   data.selected = adjusted.filter(moment => captionPlatforms(moment, data.export_format).length > 0);
   data.caption_queue = data.selected.flatMap(moment => captionPlatforms(moment, data.export_format).map(platform => {
     const edit = platformEditForRank(moment.rank, platform);
     const overlays = edit.overlays;
     const cameraPath = cameraPathForEdit(edit, moment.adjusted_duration);
+    const resolutionKey = resolutionPresetForPlatform(platform);
     return {
       rank: moment.rank,
       platform,
       platform_label: platformLabel(platform),
+      resolution_preset: resolutionKey,
+      resolution_label: resolutionPresetLabel(resolutionKey),
+      shared_destinations: resolutionPresets[resolutionKey]?.destinations || [platform],
+      resolution_edit: moment.resolution_edits[resolutionKey] || null,
       width: platformMeta[platform]?.width || null,
       height: platformMeta[platform]?.height || null,
       publish_metadata: publishMetadata(platform, moment),
@@ -8767,6 +10930,7 @@ function buildExportData(){
       adjusted_duration: moment.adjusted_duration,
       camera: edit.camera,
       camera_path: cameraPath,
+      director_plan: edit.director_plan,
       effect: edit.effect,
       overlay: overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
       overlays,
@@ -8789,9 +10953,10 @@ function captionPlatforms(moment, exportFormat){
 }
 function uniquePlatforms(values){
   const seen = new Set();
-  return (Array.isArray(values) ? values : []).map(value => String(value || "").trim().toLowerCase()).filter(platform => {
-    if (!platformMeta[platform] || seen.has(platform)) return false;
-    seen.add(platform);
+  return (Array.isArray(values) ? values : []).map(value => representativePlatform(String(value || "").trim().toLowerCase())).filter(platform => {
+    const resolution = resolutionPresetForPlatform(platform);
+    if (!platformMeta[platform] || seen.has(resolution)) return false;
+    seen.add(resolution);
     return true;
   });
 }
@@ -8921,19 +11086,24 @@ function cameraPathEditorHtml(card, edit, duration, camera){
   const selectedIndex = selectedCameraPathIndex(card, path);
   const selected = path[selectedIndex] || path[0] || normalizeCameraPathFrame({ time: 0, key: "center", strength: 60 });
   const safeDuration = Math.max(Number(duration) || 0, .3);
+  const platform = activePlatformForRank(card.dataset.rank);
+  const resolutionKey = resolutionPresetForPlatform(platform);
+  const resolution = resolutionPresets[resolutionKey] || resolutionPresets.vertical_9_16;
+  const shared = resolution.destinations.map(platformLabel).join(", ");
   const markers = path.map((frame, index) => {
     const left = clampNumber((Number(frame.time || 0) / safeDuration) * 100, 0, 100);
     const active = index === selectedIndex ? " active" : "";
-    const label = frame.key ? cameraMeta[frame.key]?.label || "Path" : "Path";
-    return `<button class="camera-path-marker${active}" data-camera-path-marker="${index}" type="button" style="left:${left.toFixed(2)}%" title="${escapeAttr(`${fixed(frame.time)} - ${label}`)}"></button>`;
+    const label = directorMarkerLabel(edit.director_plan, frame);
+    const title = directorMarkerTitle(edit.director_plan, frame);
+    return `<button class="camera-path-marker${active}" data-camera-path-marker="${index}" type="button" style="left:${left.toFixed(2)}%" title="${escapeAttr(title)}"><span>${escapeHtml(label)}</span></button>`;
   }).join("");
   return `<div class="camera-path-editor" data-camera-path-editor>
     <div class="camera-smart-panel">
       <div class="camera-panel-title">
-        <strong>Smart Camera</strong>
-        <span>OpenCV + IA</span>
+        <strong>AI Director</strong>
+        <span>${escapeHtml(resolution.label)} ${resolution.width}x${resolution.height}</span>
       </div>
-      <p>Use a direcao automatica para enquadrar pessoas com movimentos mais limpos.</p>
+      <p>Direcione este formato uma vez e reuse em ${escapeHtml(shared)}. Ajuste pontos na timeline quando quiser corrigir a intencao.</p>
       ${smartCameraButtonsHtml()}
     </div>
     <div class="camera-auto-status" data-camera-auto-status></div>
@@ -8970,11 +11140,12 @@ function cameraPathEditorHtml(card, edit, duration, camera){
 }
 function smartCameraButtonsHtml(){
   const quick = ["follow-face", "stable-face", "face-zoom"];
-  const ai = ["ai-director", "ai-director-group", "ai-director-speaker", "ai-director-reactions", "ai-director-cuts"];
-  const auto = cameraSmartButtonHtml("auto-director", smartCameraModes["auto-director"], true);
+  const ai = ["ai-director-group", "ai-director-speaker", "ai-director-reactions", "ai-director-cuts"];
+  const director = cameraSmartButtonHtml("ai-director", smartCameraModes["ai-director"], true);
+  const auto = cameraSmartButtonHtml("auto-director", smartCameraModes["auto-director"], false);
   const quickHtml = quick.map(key => cameraSmartButtonHtml(key, smartCameraModes[key], false)).join("");
   const aiHtml = ai.map(key => cameraSmartButtonHtml(key, smartCameraModes[key], false)).join("");
-  return `${auto}<div class="camera-smart-row">${quickHtml}</div><div class="camera-smart-ai">${aiHtml}</div>`;
+  return `${director}<div class="camera-smart-row">${auto}${quickHtml}</div><div class="camera-smart-ai">${aiHtml}</div>`;
 }
 function cameraSmartButtonHtml(key, meta, featured){
   const className = featured ? ' class="camera-director-action"' : "";
@@ -9397,8 +11568,10 @@ function setupImportPathButtons(){
   const form = document.querySelector("[data-import-form]");
   if (!form) return;
   const outputPath = form.querySelector("[name=output_path]");
+  const sourcePath = form.querySelector("[name=source_path]");
   const status = document.querySelector("[data-import-status]");
   const selectFolder = form.querySelector("[data-select-folder]");
+  const selectVideoFile = form.querySelector("[data-select-video-file]");
   if (selectFolder && outputPath) {
     selectFolder.addEventListener("click", async () => {
       selectFolder.disabled = true;
@@ -9413,6 +11586,23 @@ function setupImportPathButtons(){
         if (status) status.textContent = error.message || "Seletor de pasta indisponivel.";
       } finally {
         selectFolder.disabled = false;
+      }
+    });
+  }
+  if (selectVideoFile && sourcePath) {
+    selectVideoFile.addEventListener("click", async () => {
+      selectVideoFile.disabled = true;
+      if (status) status.textContent = "Abrindo seletor de video...";
+      try {
+        const response = await fetch("/api/select-video-file", { method: "POST" });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) throw new Error(payload.error || "Nao consegui selecionar o arquivo.");
+        sourcePath.value = payload.path || sourcePath.value;
+        if (status) status.textContent = "Video local selecionado.";
+      } catch (error) {
+        if (status) status.textContent = error.message || "Seletor de arquivo indisponivel.";
+      } finally {
+        selectVideoFile.disabled = false;
       }
     });
   }
@@ -9491,6 +11681,7 @@ async function pollImportJob(jobId, button){
     if (job.status === "ready") {
       if (button) button.disabled = false;
       if (result) result.innerHTML = `<a href="${escapeAttr(job.output_url)}">Abrir projeto importado</a>`;
+      if (job.output_url) window.location.assign(job.output_url);
       return;
     }
     if (job.status === "failed" || job.status === "cancelled") {
@@ -9680,6 +11871,8 @@ function resetCardsForNewProject(){
   document.querySelectorAll(".card").forEach(card => {
     delete card.dataset.selectedOverlayLayer;
     card.dataset.previewFormat = "tiktok";
+    setCardState(card.dataset.rank, { cameraMotionMs: defaultCameraMotionMs });
+    applyCameraMotionSpeed(card);
     setCardPreviewFormat(card, "tiktok");
     resetCardPanels(card);
     paint(card);
@@ -9752,6 +11945,7 @@ document.querySelectorAll(".card").forEach(card => {
   updateTrimUi(card);
   updatePlatformUi(card);
   updateCardTools(card);
+  applyCameraMotionSpeed(card);
   const summary = card.querySelector(".clip-summary");
   if (summary) {
     const toggleCard = event => {
@@ -9805,6 +11999,22 @@ document.querySelectorAll(".card").forEach(card => {
       event.stopPropagation();
       setPreviewVolume(card, Number(event.target.value || 0) / 100);
     });
+  }
+  const motionSlider = card.querySelector("[data-camera-motion-speed]");
+  if (motionSlider) {
+    motionSlider.addEventListener("input", event => {
+      event.stopPropagation();
+      setCameraMotionSpeed(card, event.target.value);
+    });
+  }
+  const aiButton = card.querySelector("[data-camera-ai]");
+  if (aiButton) {
+    aiButton.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      analyzeCameraForCard(card, "ai-director");
+    });
+    refreshAiReadinessForCard(card);
   }
   bindPreviewVolumeDismiss();
   const video = primaryCameraVideo(card);
@@ -9875,10 +12085,12 @@ document.querySelectorAll(".card").forEach(card => {
   card.querySelectorAll("[data-platform]").forEach(btn => btn.addEventListener("click", () => {
     const current = cardState(card.dataset.rank);
     const platforms = Array.isArray(current.platforms) ? current.platforms.slice() : [];
-    const existing = platforms.indexOf(btn.dataset.platform);
-    if (existing >= 0) platforms.splice(existing, 1);
-    else platforms.push(btn.dataset.platform);
-    setCardState(card.dataset.rank, { platforms, status: current.status === "discarded" ? null : current.status });
+    const target = representativePlatform(btn.dataset.platform);
+    const normalized = uniquePlatforms(platforms);
+    const existing = normalized.indexOf(target);
+    if (existing >= 0) normalized.splice(existing, 1);
+    else normalized.push(target);
+    setCardState(card.dataset.rank, { platforms: normalized, status: current.status === "discarded" ? null : current.status });
     paint(card);
     updatePlatformUi(card);
     renderCaptionQueue();

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 import tempfile
 import unittest
@@ -50,10 +51,285 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("importNeedsOpenaiKey", html)
         self.assertIn("Escolha a pasta onde os videos finais serao salvos.", html)
 
+    def test_import_form_prioritizes_local_video(self) -> None:
+        html = gallery_html()
+
+        self.assertIn('name="source_path" type="text"', html)
+        self.assertIn("data-select-video-file", html)
+        self.assertIn("Fluxo principal", html)
+        self.assertIn("Link do YouTube (experimental)", html)
+        self.assertNotIn("youtube_cookies_from_browser", html)
+        self.assertNotIn("youtube_cookies_file", html)
+
+    def test_import_payload_excludes_youtube_cookie_fields(self) -> None:
+        html = gallery_html()
+
+        self.assertIn('source_path: String(data.get("source_path")', html)
+        self.assertNotIn("youtube_cookies_from_browser", html)
+        self.assertNotIn("youtube_cookies_file", html)
+
+    def test_import_ready_auto_opens_project(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("window.location.assign(job.output_url)", html)
+
+    def test_camera_analysis_fetch_has_timeout(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("const cameraAnalysisFetchTimeoutMs = 180000", html)
+        self.assertIn("const cameraReadinessPollMs = 3500", html)
+        self.assertIn("new AbortController()", html)
+        self.assertIn("IA ainda esta aplicando", html)
+
+    def test_ai_button_waits_for_map_and_uses_applying_copy(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("/api/camera/status", html)
+        self.assertIn("refreshAiReadinessForCard(card)", html)
+        self.assertIn("Mapeando video...", html)
+        self.assertIn("Aplicando ${smartCameraModes[smartMode].label}...", html)
+        self.assertNotIn("Dirigindo", html)
+
+    def test_preview_has_camera_motion_speed_slider(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("data-camera-motion-speed", html)
+        self.assertIn("defaultCameraMotionMs = 700", html)
+        self.assertIn("--camera-transition-ms", html)
+        self.assertIn("setCameraMotionSpeed(card", html)
+
+    def test_ai_director_openai_timeout_is_shorter_than_general_request(self) -> None:
+        self.assertEqual(CUTTED.AI_DIRECTOR_OPENAI_TIMEOUT_SECONDS, 45)
+
+    def test_ai_director_waits_for_visual_map_before_openai(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery = Path(tmp)
+            media = CUTTED.CameraAnalysisMedia(Path(tmp) / "source.mp4", "source-key", "video", "source", 10.0)
+
+            self.assertTrue(CUTTED.ai_director_should_wait_for_visual_map(gallery, media, "ai-director", None))
+            self.assertFalse(CUTTED.ai_director_should_wait_for_visual_map(gallery, media, "auto-director", None))
+
+    def test_pending_visual_map_ai_diagnostics_explains_fallback(self) -> None:
+        diagnostics = CUTTED.pending_visual_map_ai_diagnostics("ai-director")
+
+        self.assertEqual(diagnostics["status"], "visual_map_pending")
+        self.assertIn("Mapa visual", str(diagnostics["error"]))
+
+    def test_fast_camera_sample_times_are_bounded(self) -> None:
+        sample_times = CUTTED.camera_fast_sample_times(120.0)
+
+        self.assertLessEqual(len(sample_times), CUTTED.CAMERA_FAST_MAX_FRAMES + 1)
+        self.assertLess(len(sample_times), len(CUTTED.camera_sample_times(120.0)))
+
+    def test_ai_director_quality_rejects_speaker_only_path(self) -> None:
+        path = [{"time": float(index * 3), "x": 50.0, "zoom": 1.1, "source": "ai-director-dynamic-speaker"} for index in range(6)]
+        detections = [
+            {"time": float(index * 2), "faces": [{"x": 50.0, "y": 45.0, "w": 12.0, "h": 14.0, "confidence": 0.6}]}
+            for index in range(12)
+        ]
+
+        report = CUTTED.ai_director_quality_report(path, {}, detections, 30.0)
+
+        self.assertTrue(report["rejected"])
+        self.assertEqual(report["reason"], "speaker_only")
+
+    def test_ai_director_quality_accepts_context_variation(self) -> None:
+        path = [
+            {"time": 0.0, "x": 50.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+            {"time": 5.0, "x": 42.0, "zoom": 1.08, "source": "ai-director-dynamic-speaker"},
+            {"time": 9.0, "x": 62.0, "zoom": 1.1, "source": "ai-director-dynamic-reaction"},
+        ]
+        detections = [
+            {"time": float(index * 2), "faces": [{"x": 50.0, "y": 45.0, "w": 12.0, "h": 14.0, "confidence": 0.6}]}
+            for index in range(12)
+        ]
+
+        report = CUTTED.ai_director_quality_report(path, {}, detections, 30.0)
+
+        self.assertFalse(report["rejected"])
+
+    def test_ai_director_quality_rejects_group_dominant_path(self) -> None:
+        path = [
+            {"time": 0.0, "x": 50.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+            {"time": 6.0, "x": 52.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+            {"time": 12.0, "x": 48.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+            {"time": 18.0, "x": 51.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+            {"time": 24.0, "x": 42.0, "zoom": 1.08, "source": "ai-director-dynamic-speaker"},
+        ]
+        detections = [
+            {
+                "time": float(index * 2),
+                "faces": [
+                    {"x": 30.0, "y": 45.0, "width": 12.0, "confidence": 0.65},
+                    {"x": 72.0, "y": 45.0, "width": 12.0, "confidence": 0.65},
+                ],
+            }
+            for index in range(15)
+        ]
+
+        report = CUTTED.ai_director_quality_report(path, {}, detections, 30.0)
+
+        self.assertTrue(report["rejected"])
+        self.assertEqual(report["reason"], "group_dominant")
+        self.assertGreater(report["group_duration_ratio"], CUTTED.AI_DIRECTOR_MAX_GROUP_DURATION_RATIO)
+
+    def test_recover_previous_good_ai_result_preserves_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery = Path(tmp)
+            cache_dir = gallery / "camera-analysis"
+            cache_dir.mkdir()
+            good = {
+                "version": CUTTED.CAMERA_ANALYSIS_VERSION,
+                "mode": "ai-director",
+                "platform": "tiktok",
+                "resolution_preset": "vertical_9_16",
+                "clip_file": "clips/clip-001.mp4",
+                "source": "ai-director",
+                "diagnostics": {"ai_director": {"status": "applied", "enabled": True, "frame_samples": 8}},
+                "camera_path": [{"time": 0.0, "x": 50.0, "zoom": 1.0}],
+            }
+            (cache_dir / "clip-001-clip-vertical_9_16-ai-director-good.json").write_text(
+                json.dumps(good), encoding="utf-8"
+            )
+            fallback = {
+                "mode": "ai-director",
+                "resolution_preset": "vertical_9_16",
+                "clip_file": "clips/clip-001.mp4",
+                "diagnostics": {"ai_director": {"status": "timeout", "enabled": True}},
+            }
+
+            recovered = CUTTED.recover_previous_good_ai_result(gallery, fallback, "ai-director", "tiktok", "clips/clip-001.mp4")
+
+        self.assertIsNotNone(recovered)
+        assert recovered is not None
+        self.assertTrue(recovered["cache_recovered"])
+
+    def test_side_coverage_adds_missing_right_focus(self) -> None:
+        frames = [
+            {"time": 0.0, "x": 50.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+            {"time": 8.0, "x": 30.0, "zoom": 1.1, "source": "ai-director-dynamic-speaker"},
+        ]
+        detections = [
+            {
+                "time": 10.0 + index * 4.0,
+                "faces": [
+                    {"x": 30.0, "y": 45.0, "w": 12.0, "h": 14.0, "confidence": 0.65},
+                    {"x": 72.0, "y": 45.0, "w": 12.0, "h": 14.0, "confidence": 0.65},
+                ],
+            }
+            for index in range(3)
+        ]
+
+        coverage = CUTTED.side_coverage_camera_frames(frames, detections, 30.0, "tiktok", False)
+
+        self.assertTrue(any(float(frame.get("x") or 0) > 58.0 for frame in coverage))
+        self.assertTrue(any(str(frame.get("intent")) == "speaker_hold" for frame in coverage))
+        self.assertTrue(all(float(frame.get("zoom") or 1.0) <= 1.08 for frame in coverage))
+
+    def test_side_coverage_balances_underrepresented_side(self) -> None:
+        frames = [{"time": float(index * 8), "x": 30.0, "zoom": 1.1} for index in range(6)]
+        detections = [
+            {
+                "time": 10.0 + index * 5.0,
+                "faces": [
+                    {"x": 30.0, "y": 45.0, "width": 12.0, "confidence": 0.65},
+                    {"x": 72.0, "y": 45.0, "width": 12.0, "confidence": 0.65},
+                ],
+            }
+            for index in range(6)
+        ]
+
+        coverage = CUTTED.side_coverage_camera_frames(frames, detections, 60.0, "tiktok", False)
+        merged = CUTTED.merge_camera_path_frames(frames, coverage, 60.0)
+
+        self.assertGreaterEqual(CUTTED.side_counts_from_frames(merged)["right"], 3)
+        self.assertNotIn("right", CUTTED.missing_camera_sides(merged, detections))
+
+    def test_max_still_camera_frames_breaks_long_hold(self) -> None:
+        frames = [{"time": 0.0, "x": 30.0, "zoom": 1.1, "source": "ai-director-dynamic-speaker"}]
+        detections = [
+            {
+                "time": 14.0,
+                "faces": [
+                    {"x": 30.0, "y": 45.0, "w": 12.0, "h": 14.0, "confidence": 0.65},
+                    {"x": 72.0, "y": 45.0, "w": 12.0, "h": 14.0, "confidence": 0.65},
+                ],
+            }
+        ]
+
+        motion = CUTTED.max_still_camera_frames(frames, detections, 30.0, "tiktok", False)
+
+        self.assertTrue(motion)
+        self.assertLessEqual(max(CUTTED.camera_path_gaps(CUTTED.merge_camera_path_frames(frames, motion, 30.0), 30.0)), CUTTED.AI_DIRECTOR_MAX_STILL_SECONDS)
+
     def test_clean_output_path_keeps_empty_value(self) -> None:
         self.assertEqual(CUTTED.clean_output_path(""), "")
         self.assertEqual(CUTTED.clean_output_path(None), "")
         self.assertEqual(CUTTED.clean_output_path('  "C:\\videos"  '), str(Path("C:\\videos")))
+
+    def test_import_command_uses_plain_experimental_youtube_url(self) -> None:
+        metadata = {
+            "preview_count": 3,
+            "preset": "tiktok",
+            "duration_profile": "medium",
+            "ai_provider": "local",
+            "context_prompt": "",
+            "language": "pt",
+            "render_previews": True,
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            command = CUTTED.import_command(Path(tmp), "https://www.youtube.com/watch?v=test", "", metadata)
+
+        self.assertIn("--youtube-url", command)
+        self.assertNotIn("--youtube-cookies-from-browser", command)
+        self.assertNotIn("--youtube-cookies-file", command)
+
+    def test_import_command_uses_local_video_path(self) -> None:
+        metadata = {
+            "preview_count": 3,
+            "preset": "tiktok",
+            "duration_profile": "medium",
+            "ai_provider": "local",
+            "context_prompt": "",
+            "language": "pt",
+            "render_previews": True,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            video_path = Path(tmp) / "video.mp4"
+            video_path.write_bytes(b"fake")
+
+            command = CUTTED.import_command(Path(tmp), "", str(video_path), metadata)
+
+        self.assertIn(str(video_path.resolve()), command)
+        self.assertNotIn("--youtube-url", command)
+
+    def test_local_import_limits_initial_preview_count(self) -> None:
+        metadata = {"preview_count": 10}
+
+        self.assertEqual(CUTTED.import_preview_count("", metadata), CUTTED.LOCAL_IMPORT_MAX_INITIAL_CLIPS)
+        self.assertEqual(CUTTED.import_preview_count("https://www.youtube.com/watch?v=test", metadata), 10)
+
+    def test_visual_map_source_path_uses_local_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            video_path = Path(tmp) / "video.mp4"
+            video_path.write_bytes(b"fake")
+            metadata = CUTTED.source_media_metadata("local", video_path.name, str(video_path), {}, None, None)
+            source = CUTTED.SourceMedia(str(video_path), video_path, video_path.name, (), metadata)
+
+            self.assertEqual(CUTTED.visual_map_source_path(source), video_path.resolve())
+
+    def test_friendly_ytdlp_error_explains_antibot(self) -> None:
+        message = CUTTED.friendly_ytdlp_error("Sign in to confirm you're not a bot")
+
+        self.assertIn("anti-bot", message)
+        self.assertIn("arquivo local", message)
+
+    def test_import_job_error_message_uses_friendly_youtube_error(self) -> None:
+        message = CUTTED.import_job_error_message("[cutted] Error: Sign in to confirm you're not a bot")
+
+        self.assertIn("anti-bot", message)
+        self.assertNotIn("[cutted] Error", message)
 
     def test_import_request_metadata_requires_source(self) -> None:
         with self.assertRaisesRegex(ValueError, "link ou caminho local"):
@@ -91,6 +367,18 @@ class CuttedLaunchTests(unittest.TestCase):
             CUTTED.bootstrap_workspace_gallery(workspace)
 
             self.assertEqual(index_path.read_text(encoding="utf-8"), "conteudo existente")
+
+    def test_bootstrap_workspace_gallery_refreshes_empty_shell(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            index_path = workspace / "index.html"
+            index_path.write_text('<form data-import-form></form><script>{"moments": []}</script>', encoding="utf-8")
+
+            CUTTED.bootstrap_workspace_gallery(workspace)
+
+            html = index_path.read_text(encoding="utf-8")
+            self.assertIn('name="source_path"', html)
+            self.assertIn('{"moments": []}', html)
 
     def test_find_free_port_returns_port_in_launch_range(self) -> None:
         port = CUTTED.find_free_port("127.0.0.1")
