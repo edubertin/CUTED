@@ -95,6 +95,8 @@ class CuttedCameraRuleTests(unittest.TestCase):
                 "fingerprint": {"path": str(source_path.resolve())},
                 "metadata": {"width": 1920, "height": 1080, "duration": 10.0},
                 "sample_count": 4,
+                "vision_engine": "yolo-visual-map",
+                "vision_model": "yolo26n.pt",
                 "detections": [
                     {"time": 2.0, "faces": [face(35.0), face(65.0)], "primary": face(35.0)},
                     {"time": 3.0, "faces": [face(38.0), face(66.0)], "primary": face(38.0)},
@@ -109,6 +111,17 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertTrue(str(result["source"]).startswith("visual-map"))
         self.assertTrue(result["diagnostics"]["visual_map"]["used"])
+        self.assertEqual(result["diagnostics"]["vision_engine"], "yolo-visual-map")
+
+    def test_clip_visual_map_uses_camera_analysis_cache_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery = Path(tmp)
+            media = CUTTED.CameraAnalysisMedia(gallery / "clips" / "clip-004.mp4", "cache", "clip-004.mp4", "clip", 0.0)
+
+            path = CUTTED.visual_map_path_for_media(gallery, media)
+
+        self.assertEqual(path.name, "clip-004-visual-map.json")
+        self.assertEqual(path.parent.name, "camera-analysis")
 
     def test_card_preview_uses_compact_camera_timeline(self) -> None:
         moment = CUTTED.Moment(
@@ -145,6 +158,10 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIn("data-preview-volume", html)
         self.assertIn("data-preview-volume-popover", html)
         self.assertIn("data-preview-volume-slider", html)
+        self.assertIn("data-camera-ai", html)
+        self.assertIn(">IA</button>", html)
+        self.assertNotIn("Smart Camera", html)
+        self.assertNotIn("data-card-camera", html)
         self.assertIn("data-overlay-place-camera", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertNotIn("data-preview-volume-down", html)
         self.assertNotIn("data-preview-volume-up", html)
@@ -254,6 +271,24 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIn("vision_detection_summary", data)
         self.assertIn("vision_detections", data)
         self.assertEqual(data["vision_detections"][0]["person_count"], 1)
+
+    def test_ai_director_uses_structured_map_without_frames_when_confident(self) -> None:
+        detections = [
+            {
+                "time": float(index),
+                "faces": [person(30.0), person(70.0)],
+                "persons": [person(30.0), person(70.0)],
+                "primary": person(30.0),
+            }
+            for index in range(12)
+        ]
+
+        self.assertFalse(CUTTED.ai_director_needs_frame_samples(detections))
+
+    def test_ai_director_requests_frames_when_visual_map_is_sparse(self) -> None:
+        detections = [missing_detection(float(index)) for index in range(10)]
+
+        self.assertTrue(CUTTED.ai_director_needs_frame_samples(detections))
 
     def test_vertical_destinations_share_resolution_preset(self) -> None:
         self.assertEqual(CUTTED.resolution_key_for_platform("tiktok"), "vertical_9_16")

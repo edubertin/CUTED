@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 import tempfile
 import unittest
@@ -67,6 +68,155 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertNotIn("youtube_cookies_from_browser", html)
         self.assertNotIn("youtube_cookies_file", html)
 
+    def test_import_ready_auto_opens_project(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("window.location.assign(job.output_url)", html)
+
+    def test_camera_analysis_fetch_has_timeout(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("const cameraAnalysisFetchTimeoutMs = 65000", html)
+        self.assertIn("new AbortController()", html)
+        self.assertIn("IA demorou demais", html)
+
+    def test_ai_director_openai_timeout_is_shorter_than_general_request(self) -> None:
+        self.assertEqual(CUTTED.AI_DIRECTOR_OPENAI_TIMEOUT_SECONDS, 45)
+
+    def test_ai_director_waits_for_visual_map_before_openai(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery = Path(tmp)
+            media = CUTTED.CameraAnalysisMedia(Path(tmp) / "source.mp4", "source-key", "video", "source", 10.0)
+
+            self.assertTrue(CUTTED.ai_director_should_wait_for_visual_map(gallery, media, "ai-director", None))
+            self.assertFalse(CUTTED.ai_director_should_wait_for_visual_map(gallery, media, "auto-director", None))
+
+    def test_pending_visual_map_ai_diagnostics_explains_fallback(self) -> None:
+        diagnostics = CUTTED.pending_visual_map_ai_diagnostics("ai-director")
+
+        self.assertEqual(diagnostics["status"], "visual_map_pending")
+        self.assertIn("Mapa visual", str(diagnostics["error"]))
+
+    def test_fast_camera_sample_times_are_bounded(self) -> None:
+        sample_times = CUTTED.camera_fast_sample_times(120.0)
+
+        self.assertLessEqual(len(sample_times), CUTTED.CAMERA_FAST_MAX_FRAMES + 1)
+        self.assertLess(len(sample_times), len(CUTTED.camera_sample_times(120.0)))
+
+    def test_ai_director_quality_rejects_speaker_only_path(self) -> None:
+        path = [{"time": float(index * 3), "x": 50.0, "zoom": 1.1, "source": "ai-director-dynamic-speaker"} for index in range(6)]
+        detections = [
+            {"time": float(index * 2), "faces": [{"x": 50.0, "y": 45.0, "w": 12.0, "h": 14.0, "confidence": 0.6}]}
+            for index in range(12)
+        ]
+
+        report = CUTTED.ai_director_quality_report(path, {}, detections, 30.0)
+
+        self.assertTrue(report["rejected"])
+        self.assertEqual(report["reason"], "speaker_only")
+
+    def test_ai_director_quality_accepts_context_variation(self) -> None:
+        path = [
+            {"time": 0.0, "x": 50.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+            {"time": 5.0, "x": 42.0, "zoom": 1.08, "source": "ai-director-dynamic-speaker"},
+            {"time": 9.0, "x": 62.0, "zoom": 1.1, "source": "ai-director-dynamic-reaction"},
+        ]
+        detections = [
+            {"time": float(index * 2), "faces": [{"x": 50.0, "y": 45.0, "w": 12.0, "h": 14.0, "confidence": 0.6}]}
+            for index in range(12)
+        ]
+
+        report = CUTTED.ai_director_quality_report(path, {}, detections, 30.0)
+
+        self.assertFalse(report["rejected"])
+
+    def test_recover_previous_good_ai_result_preserves_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery = Path(tmp)
+            cache_dir = gallery / "camera-analysis"
+            cache_dir.mkdir()
+            good = {
+                "mode": "ai-director",
+                "platform": "tiktok",
+                "resolution_preset": "vertical_9_16",
+                "clip_file": "clips/clip-001.mp4",
+                "source": "ai-director",
+                "diagnostics": {"ai_director": {"status": "applied", "enabled": True, "frame_samples": 8}},
+                "camera_path": [{"time": 0.0, "x": 50.0, "zoom": 1.0}],
+            }
+            (cache_dir / "clip-001-clip-vertical_9_16-ai-director-good.json").write_text(
+                json.dumps(good), encoding="utf-8"
+            )
+            fallback = {
+                "mode": "ai-director",
+                "resolution_preset": "vertical_9_16",
+                "clip_file": "clips/clip-001.mp4",
+                "diagnostics": {"ai_director": {"status": "timeout", "enabled": True}},
+            }
+
+            recovered = CUTTED.recover_previous_good_ai_result(gallery, fallback, "ai-director", "tiktok", "clips/clip-001.mp4")
+
+        self.assertIsNotNone(recovered)
+        assert recovered is not None
+        self.assertTrue(recovered["cache_recovered"])
+
+    def test_side_coverage_adds_missing_right_focus(self) -> None:
+        frames = [
+            {"time": 0.0, "x": 50.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+            {"time": 8.0, "x": 30.0, "zoom": 1.1, "source": "ai-director-dynamic-speaker"},
+        ]
+        detections = [
+            {
+                "time": 10.0 + index * 4.0,
+                "faces": [
+                    {"x": 30.0, "y": 45.0, "w": 12.0, "h": 14.0, "confidence": 0.65},
+                    {"x": 72.0, "y": 45.0, "w": 12.0, "h": 14.0, "confidence": 0.65},
+                ],
+            }
+            for index in range(3)
+        ]
+
+        coverage = CUTTED.side_coverage_camera_frames(frames, detections, 30.0, "tiktok", False)
+
+        self.assertTrue(any(float(frame.get("x") or 0) > 58.0 for frame in coverage))
+        self.assertTrue(any(str(frame.get("intent")) == "reaction_focus" for frame in coverage))
+
+    def test_side_coverage_balances_underrepresented_side(self) -> None:
+        frames = [{"time": float(index * 8), "x": 30.0, "zoom": 1.1} for index in range(6)]
+        detections = [
+            {
+                "time": 10.0 + index * 5.0,
+                "faces": [
+                    {"x": 30.0, "y": 45.0, "width": 12.0, "confidence": 0.65},
+                    {"x": 72.0, "y": 45.0, "width": 12.0, "confidence": 0.65},
+                ],
+            }
+            for index in range(6)
+        ]
+
+        coverage = CUTTED.side_coverage_camera_frames(frames, detections, 60.0, "tiktok", False)
+        merged = CUTTED.merge_camera_path_frames(frames, coverage, 60.0)
+
+        self.assertGreaterEqual(CUTTED.side_counts_from_frames(merged)["right"], 3)
+        self.assertNotIn("right", CUTTED.missing_camera_sides(merged, detections))
+
+    def test_max_still_camera_frames_breaks_long_hold(self) -> None:
+        frames = [{"time": 0.0, "x": 30.0, "zoom": 1.1, "source": "ai-director-dynamic-speaker"}]
+        detections = [
+            {
+                "time": 14.0,
+                "faces": [
+                    {"x": 30.0, "y": 45.0, "w": 12.0, "h": 14.0, "confidence": 0.65},
+                    {"x": 72.0, "y": 45.0, "w": 12.0, "h": 14.0, "confidence": 0.65},
+                ],
+            }
+        ]
+
+        motion = CUTTED.max_still_camera_frames(frames, detections, 30.0, "tiktok", False)
+
+        self.assertTrue(motion)
+        self.assertLessEqual(max(CUTTED.camera_path_gaps(CUTTED.merge_camera_path_frames(frames, motion, 30.0), 30.0)), CUTTED.AI_DIRECTOR_MAX_STILL_SECONDS)
+
     def test_clean_output_path_keeps_empty_value(self) -> None:
         self.assertEqual(CUTTED.clean_output_path(""), "")
         self.assertEqual(CUTTED.clean_output_path(None), "")
@@ -108,6 +258,12 @@ class CuttedImportUiTests(unittest.TestCase):
 
         self.assertIn(str(video_path.resolve()), command)
         self.assertNotIn("--youtube-url", command)
+
+    def test_local_import_limits_initial_preview_count(self) -> None:
+        metadata = {"preview_count": 10}
+
+        self.assertEqual(CUTTED.import_preview_count("", metadata), CUTTED.LOCAL_IMPORT_MAX_INITIAL_CLIPS)
+        self.assertEqual(CUTTED.import_preview_count("https://www.youtube.com/watch?v=test", metadata), 10)
 
     def test_visual_map_source_path_uses_local_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

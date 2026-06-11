@@ -32,7 +32,7 @@ Install optional local helpers:
 python -m pip install imageio-ffmpeg faster-whisper yt-dlp opencv-python-headless
 ```
 
-Install the optional local YOLO detector for Smart Camera:
+Install the local YOLO detector used by the **IA** camera direction visual map:
 
 ```powershell
 python -m pip install ultralytics
@@ -45,10 +45,11 @@ site instead:
 python -m pip install --user ultralytics
 ```
 
-YOLO is optional. When `ultralytics` or the configured model cannot load, Smart
-Camera falls back to OpenCV face detection. Use `CUTED_YOLO_MODEL` to override
-the default model and `CUTED_VISION_ENGINE=opencv` to disable YOLO during local
-debugging. Default YOLO weights are cached outside the repository at
+YOLO is the preferred local visual map source. When `ultralytics` or the
+configured model cannot load, camera analysis falls back to the legacy OpenCV
+path so local editing still works. Use `CUTED_YOLO_MODEL` to override the
+default model and `CUTED_VISION_ENGINE=opencv` to force the fallback during
+local debugging. Default YOLO weights are cached outside the repository at
 `%USERPROFILE%\.cuted\models`; set `CUTED_YOLO_MODEL_DIR` to use another local
 cache directory.
 
