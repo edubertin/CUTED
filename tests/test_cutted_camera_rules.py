@@ -160,6 +160,28 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIn("vision_detections", data)
         self.assertEqual(data["vision_detections"][0]["person_count"], 1)
 
+    def test_vertical_destinations_share_resolution_preset(self) -> None:
+        self.assertEqual(CUTTED.resolution_key_for_platform("tiktok"), "vertical_9_16")
+        self.assertEqual(CUTTED.resolution_key_for_platform("shorts"), "vertical_9_16")
+        self.assertEqual(CUTTED.resolution_key_for_platform("instagram"), "vertical_9_16")
+        self.assertEqual(CUTTED.resolution_key_for_platform("facebook"), "vertical_4_5")
+        self.assertEqual(CUTTED.resolution_key_for_platform("youtube"), "horizontal_16_9")
+
+    def test_platform_viewport_includes_resolution_context(self) -> None:
+        viewport = CUTTED.platform_viewport("shorts")
+
+        self.assertEqual(viewport["resolution_preset"], "vertical_9_16")
+        self.assertEqual(viewport["resolution_label"], "Vertical 9:16")
+        self.assertEqual(viewport["shared_destinations"], ["tiktok", "shorts", "instagram"])
+
+    def test_page_exports_resolution_workspace_contract(self) -> None:
+        html = CUTTED.page_html("Teste", "", "{}", "assets/brand/cuted-logo-transparent.png")
+
+        self.assertIn("const resolutionPresets", html)
+        self.assertIn("destination_resolution_map", html)
+        self.assertIn("resolution_edits", html)
+        self.assertIn("Direcione este formato uma vez", html)
+
     def test_solo_dominant_scene_removes_hard_cut_jitter(self) -> None:
         detections = [
             detection(0.0, [face(48.0)]),
@@ -402,6 +424,21 @@ class CuttedCameraRuleTests(unittest.TestCase):
 
         self.assertIn("bumpers", edit)
         self.assertEqual(edit["bumpers"]["intro"]["asset_file"], "bumper-assets/intro.mp4")
+
+    def test_platform_edit_from_row_falls_back_to_resolution_edit(self) -> None:
+        row = {
+            "resolution_edits": {
+                "vertical_9_16": {
+                    "camera_path": [{"time": 0.0, "x": 50.0, "y": 50.0, "zoom": 1.0}],
+                    "effect": {"key": "none"},
+                }
+            }
+        }
+
+        edit = CUTTED.platform_edit_from_row(row, "instagram")
+
+        self.assertIn("camera_path", edit)
+        self.assertEqual(edit["effect"]["key"], "none")
 
     def test_normalize_bumpers_filters_empty_slots(self) -> None:
         row = {
