@@ -222,6 +222,7 @@ class CuttedCameraRuleTests(unittest.TestCase):
             (cache_dir / "clip-001-ai-director-cache.json").write_text(
                 json.dumps(
                     {
+                        "version": CUTTED.CAMERA_ANALYSIS_VERSION,
                         "mode": "ai-director",
                         "resolution_preset": "vertical_9_16",
                         "clip_file": "clips/clip-001.mp4",
@@ -645,6 +646,20 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertTrue(any(frame["intent"] == "speaker_hold" for frame in result))
         self.assertTrue(any(frame["intent"] == "reaction_focus" for frame in result))
 
+    def test_soft_group_returns_do_not_interrupt_focus_chain(self) -> None:
+        frames = [
+            {"time": 0.0, "x": 35.0, "zoom": 1.08, "intent": "speaker_hold", "source": "ai-director-dynamic-speaker"},
+            {"time": 2.0, "x": 50.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+            {"time": 4.5, "x": 70.0, "zoom": 1.14, "intent": "reaction_focus", "source": "ai-director-dynamic-reaction"},
+            {"time": 6.0, "x": 50.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+            {"time": 9.5, "x": 50.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-cuts-group-fit"},
+        ]
+
+        result = CUTTED.suppress_soft_group_returns(frames)
+
+        self.assertEqual([frame["time"] for frame in result], [0.0, 4.5, 9.5])
+        self.assertEqual(result[-1]["source"], "ai-director-cuts-group-fit")
+
     def test_dynamic_editorial_path_caps_zoom_and_rejects_edge_focus(self) -> None:
         frames = [
             {"time": 0.0, "x": 12.0, "y": 50.0, "zoom": 1.34, "source": "ai-director-cuts-distant"},
@@ -782,7 +797,7 @@ class CuttedCameraRuleTests(unittest.TestCase):
         sources = [frame["source"] for frame in result]
 
         self.assertEqual(sources, ["ai-director-cuts-fit-primary", "ai-director-cuts-fit-return"])
-        self.assertAlmostEqual(float(result[1]["time"]) - float(result[0]["time"]), 3.8, places=1)
+        self.assertAlmostEqual(float(result[1]["time"]) - float(result[0]["time"]), 4.4, places=1)
 
     def test_fit_close_survives_merge_with_uncertain_fit(self) -> None:
         fit = {
@@ -874,8 +889,8 @@ class CuttedCameraRuleTests(unittest.TestCase):
     def test_preview_camera_motion_uses_slower_smooth_transition(self) -> None:
         html = CUTTED.page_html("Teste", "", "{}", "assets/brand/cuted-logo-transparent.png")
 
-        self.assertIn("object-position .62s cubic-bezier(.22,.61,.36,1)", html)
-        self.assertIn("transform .62s cubic-bezier(.22,.61,.36,1)", html)
+        self.assertIn("object-position var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1)", html)
+        self.assertIn("transform var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1)", html)
 
     def test_manual_fit_blur_uses_group_fit_contract(self) -> None:
         frame = CUTTED.default_camera_path_frame({"key": "fit-blur", "strength": 60}, 0.0)
