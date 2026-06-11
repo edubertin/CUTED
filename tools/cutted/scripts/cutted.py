@@ -830,6 +830,10 @@ def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, bas
         if not force_refresh and cache_path.exists():
             cached = json.loads(cache_path.read_text(encoding="utf-8-sig"))
             if isinstance(cached, dict) and isinstance(cached.get("camera_path"), list):
+                if not isinstance(cached.get("director_plan"), dict):
+                    cached["director_plan"] = director_plan_from_camera_path(
+                        cached["camera_path"], duration, platform, str(cached.get("source") or mode), mode
+                    )
                 return {**cached, "ok": True, "cached": True}
         try:
             analysis = opencv_face_camera_analysis(
@@ -850,6 +854,7 @@ def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, bas
                 "mode": mode,
                 "mode_label": SMART_CAMERA_MODES[mode],
                 "platform": platform,
+                "resolution_preset": resolution_key_for_platform(platform),
                 "clip_file": clip_file,
                 "trim_start_seconds": round(start, 3),
                 "source_start_seconds": round(media.start, 3) if media.kind == "source" else None,
@@ -858,6 +863,7 @@ def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, bas
                 "detection_frames": analysis["detection_frames"],
                 "diagnostics": analysis.get("diagnostics", {}),
                 "camera_path": camera_path,
+                "director_plan": analysis.get("director_plan", {}),
             }
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             cache_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1034,6 +1040,7 @@ def local_media_cache_key(path: Path) -> str:
 
 
 def camera_analysis_cache_path(gallery_dir: Path, media: CameraAnalysisMedia, duration: float, platform: str, mode: str) -> Path:
+    cache_scope = camera_analysis_cache_scope(platform, mode)
     fingerprint = json.dumps(
         {
             "version": CAMERA_ANALYSIS_VERSION,
@@ -1041,14 +1048,20 @@ def camera_analysis_cache_path(gallery_dir: Path, media: CameraAnalysisMedia, du
             "kind": media.kind,
             "start": round(media.start, 3),
             "duration": round(duration, 3),
-            "platform": platform,
+            "scope": cache_scope,
             "mode": mode,
         },
         sort_keys=True,
     )
     digest = hashlib.sha1(fingerprint.encode("utf-8")).hexdigest()[:16]
     stem = safe_cache_stem(media.label)
-    return gallery_dir / "camera-analysis" / f"{stem}-{media.kind}-{platform}-{mode}-{digest}.json"
+    return gallery_dir / "camera-analysis" / f"{stem}-{media.kind}-{cache_scope}-{mode}-{digest}.json"
+
+
+def camera_analysis_cache_scope(platform: str, mode: str) -> str:
+    if camera_analysis_uses_ai(mode):
+        return resolution_key_for_platform(platform)
+    return platform if platform in PLATFORM_PRESETS else "tiktok"
 
 
 def safe_cache_stem(value: str) -> str:
@@ -1097,15 +1110,20 @@ def opencv_face_camera_analysis(
         diagnostics["ai_director"] = ai_result["diagnostics"]
         if ai_result["camera_path"]:
             camera_path = ai_result["camera_path"]
+            diagnostics["director_plan"] = ai_result.get("director_plan", {})
             diagnostics["camera_keyframes"] = len(camera_path)
             source = safe_mode
     diagnostics.update(camera_path_quality_diagnostics(detections, camera_path, safe_duration, platform))
+    director_plan = diagnostics.get("director_plan")
+    if not isinstance(director_plan, dict):
+        director_plan = director_plan_from_camera_path(camera_path, safe_duration, platform, source, mode)
     return {
         "source": source,
         "detected_faces": max((len(reliable_faces(row)) for row in detections), default=0),
         "detection_frames": detection_frame_count(detections),
         "diagnostics": diagnostics,
         "camera_path": camera_path,
+        "director_plan": director_plan,
     }
 
 
@@ -1645,7 +1663,75 @@ def ai_director_camera_result(
         "multi_face_coverage": ai_director_multi_face_coverage(detections),
         "dense_camera": dense_camera_diagnostics(path, detections, duration, platform),
     })
-    return {"camera_path": path, "diagnostics": diagnostics}
+    director_plan = director_plan_from_camera_path(path, duration, platform, "ai-director", mode)
+    diagnostics["director_plan_shots"] = len(director_plan.get("shots", []))
+    return {"camera_path": path, "director_plan": director_plan, "diagnostics": diagnostics}
+
+
+def director_plan_from_camera_path(
+    camera_path: list[dict[str, object]], duration: float, platform: str, source: str, mode: str
+) -> dict[str, object]:
+    frames = sorted(camera_path, key=lambda frame: float(frame.get("time") or 0.0))
+    shots = director_plan_shots(frames, duration)
+    return {
+        "version": 1,
+        "source": source,
+        "mode": mode,
+        "resolution_preset": resolution_key_for_platform(platform),
+        "style": "normal",
+        "energy": "normal",
+        "shots": shots,
+    }
+
+
+def director_plan_shots(camera_path: list[dict[str, object]], duration: float) -> list[dict[str, object]]:
+    safe_duration = max(duration, 0.3)
+    frames = camera_path or [{"time": 0.0, "x": 50.0, "y": 50.0, "zoom": 1.0, "source": "director-plan-empty"}]
+    shots: list[dict[str, object]] = []
+    for index, frame in enumerate(frames[:56]):
+        start = clamp(float(frame.get("time") or 0.0), 0.0, safe_duration)
+        end = safe_duration if index + 1 >= len(frames) else clamp(float(frames[index + 1].get("time") or safe_duration), start, safe_duration)
+        shots.append(director_plan_shot(frame, index, start, max(end, start + 0.1)))
+    return shots
+
+
+def director_plan_shot(frame: dict[str, object], index: int, start: float, end: float) -> dict[str, object]:
+    intent, label, subject, transition = director_plan_intent(frame)
+    return {
+        "id": f"shot-{index + 1:03d}",
+        "start": round(start, 3),
+        "end": round(end, 3),
+        "intent": intent,
+        "label": label,
+        "subject": subject,
+        "transition": transition,
+        "reason": director_plan_reason(frame, label),
+    }
+
+
+def director_plan_intent(frame: dict[str, object]) -> tuple[str, str, str, str]:
+    source = str(frame.get("source") or "")
+    zoom = float(frame.get("zoom") or 1.0)
+    if camera_path_frame_uses_group_fit(frame) or "group" in source:
+        return "group_open", "Group", "group", "hold"
+    if "reaction" in source:
+        return "reaction_focus", "Reaction", "secondary", "smooth"
+    if "cuts" in source:
+        return "cut_focus", "Cut", "primary", "cut"
+    if zoom >= 1.18:
+        return "speaker_close", "Speaker", "primary", "smooth"
+    return "speaker_hold", "Speaker", "primary", "hold"
+
+
+def director_plan_reason(frame: dict[str, object], label: str) -> str:
+    if label == "Group":
+        return "Preserva pessoas visiveis e reduz risco de crop apertado."
+    if label == "Cut":
+        return "Mantem troca seca para dar ritmo sem pan atravessando o quadro."
+    if label == "Reaction":
+        return "Alterna foco para capturar resposta ou mudanca de atencao."
+    zoom = float(frame.get("zoom") or 1.0)
+    return "Aproxima o foco principal." if zoom >= 1.18 else "Segura enquadramento estavel no foco principal."
 
 
 def ai_director_frame_samples(input_ref: Path | str, start: float, duration: float) -> list[dict[str, object]]:
@@ -6712,6 +6798,7 @@ button[data-action=discard],.result-actions a.secondary,.result-actions button.s
 .duration-profile span,.camera-path-editor,.camera-segment,.layer-chip,.overlay-layer-row,.image-upload{border-color:var(--glass-border);background:rgba(231,231,232,.05)}
 .duration-profile input:checked+span,.layer-chip.is-selected{border-color:rgba(17,162,207,.72);background:var(--control-active);color:var(--color-text)}
 .camera-path-rail{background:linear-gradient(90deg,rgba(17,162,207,.28),rgba(231,231,232,.1),rgba(175,207,42,.18))}.camera-path-marker{border-color:var(--glass-border);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.035)),rgba(231,231,232,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.32),0 6px 14px rgba(0,0,0,.26)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:rgba(17,162,207,.88);box-shadow:0 0 0 4px rgba(17,162,207,.16),0 0 24px rgba(17,162,207,.26)}
+.preview-camera-marker span,.camera-path-marker span{position:absolute;left:50%;bottom:calc(100% + 4px);max-width:72px;padding:2px 5px;border:1px solid rgba(231,231,232,.2);border-radius:999px;background:rgba(5,5,5,.82);color:var(--color-text-soft);font-size:10px;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform:translateX(-50%);pointer-events:none}.camera-path-marker{overflow:visible}.preview-camera-marker{overflow:visible}.camera-path-marker span{bottom:calc(100% + 5px)}.preview-camera-marker.active span,.camera-path-marker.active span{border-color:rgba(17,162,207,.7);color:#fff}
 .overlay-menu button,.overlay-layer-row button{background:rgba(231,231,232,.08);color:rgba(231,231,232,.8);border-color:var(--glass-border)}
 .overlay-danger{background:rgba(80,20,20,.72)!important;border-color:rgba(255,120,120,.46)!important;color:#ffd2d2!important}
 .settings-status,.settings-usage{border-color:var(--glass-border);background:rgba(231,231,232,.05)}.settings-backdrop{backdrop-filter:blur(14px)}
@@ -6764,10 +6851,11 @@ function clearAppNotice(){
 }
 function cardState(rank){
   const raw = state[rank];
-  if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], bumpers: defaultBumpers(), platformEdits: {} };
-  const next = Object.assign({ status: null, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], bumpers: defaultBumpers(), platformEdits: {} }, raw || {});
+  if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), camera_path: [], director_plan: null, effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], bumpers: defaultBumpers(), platformEdits: {} };
+  const next = Object.assign({ status: null, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), camera_path: [], director_plan: null, effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], bumpers: defaultBumpers(), platformEdits: {} }, raw || {});
   next.platforms = next.status === "discarded" ? [] : uniquePlatforms(next.platforms);
   next.camera = normalizeCamera(next.camera);
+  next.director_plan = normalizeDirectorPlan(next.director_plan);
   next.effect = normalizeEffect(next.effect);
   next.overlay = normalizeOverlay(next.overlay);
   next.overlays = normalizeOverlayLayers(next.overlays, next.overlay);
@@ -6873,6 +6961,7 @@ function normalizePlatformEdit(edit, fallback){
   return {
     camera: normalizeCamera(source.camera || base.camera || defaultCamera()),
     camera_path: normalizeCameraPath(pathSource),
+    director_plan: normalizeDirectorPlan(source.director_plan || base.director_plan),
     effect: normalizeEffect(source.effect || base.effect || defaultEffect()),
     overlay: overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
     overlays,
@@ -6917,6 +7006,8 @@ function cameraLabel(camera){
 }
 function cameraEditLabel(edit, duration){
   const path = normalizeCameraPath(edit?.camera_path);
+  const shots = normalizeDirectorPlan(edit?.director_plan).shots;
+  if (path.length && shots.length) return `Director plan: ${shots.length} cenas`;
   if (path.length) return `Camera path: ${path.length} pontos`;
   return cameraLabel(edit?.camera || defaultCamera());
 }
@@ -6935,7 +7026,7 @@ function setCameraSegmentForRank(rank, part, patch, platform = activePlatformFor
     if (segment.part !== part) return segment;
     return normalizeCameraSegment(Object.assign({}, segment, patch), part);
   });
-  setPlatformEditForRank(rank, targetPlatform, { camera: cameraSequence(segments), camera_path: [] });
+  setPlatformEditForRank(rank, targetPlatform, { camera: cameraSequence(segments), camera_path: [], director_plan: null });
   const card = cardForRank(rank);
   if (card) {
     const nextCamera = cameraForRank(rank, activePlatformForRank(rank));
@@ -6981,11 +7072,95 @@ function normalizeCameraPathFrame(frame){
     fit: String(frame.fit || "").toLowerCase() === "contain" || String(frame.source || "").includes("group-fit") ? "contain" : undefined,
     source: String(frame.source || (key ? "manual-segment" : "manual-path")),
     confidence: Math.max(0, Math.min(Number(frame.confidence ?? 1), 1)),
+    intent: frame.intent ? String(frame.intent) : undefined,
+    reason: frame.reason ? String(frame.reason) : undefined,
+    transition: frame.transition ? String(frame.transition) : undefined,
     part: frame.part ? String(frame.part) : undefined,
     key: key || undefined,
-    label: key ? cameraMeta[key].label : undefined,
+    label: frame.label ? String(frame.label) : key ? cameraMeta[key].label : undefined,
     strength: key ? strength : undefined
   };
+}
+function normalizeDirectorPlan(plan){
+  if (!plan || typeof plan !== "object") return { version: 1, source: "none", resolution_preset: "vertical_9_16", shots: [] };
+  const shots = Array.isArray(plan.shots) ? plan.shots.map(normalizeDirectorShot).filter(Boolean) : [];
+  return {
+    version: Number(plan.version || 1),
+    source: String(plan.source || "director-plan"),
+    mode: String(plan.mode || ""),
+    resolution_preset: resolutionPresets[plan.resolution_preset] ? plan.resolution_preset : "vertical_9_16",
+    style: String(plan.style || "normal"),
+    energy: String(plan.energy || "normal"),
+    shots
+  };
+}
+function normalizeDirectorShot(shot){
+  if (!shot || typeof shot !== "object") return null;
+  const start = Math.max(0, Number(shot.start || 0));
+  const end = Math.max(start, Number(shot.end || start));
+  const label = String(shot.label || directorIntentLabel(shot.intent || "speaker_hold"));
+  return {
+    id: String(shot.id || `shot-${Math.round(start * 1000)}`),
+    start: Number(start.toFixed(3)),
+    end: Number(end.toFixed(3)),
+    intent: String(shot.intent || "speaker_hold"),
+    label,
+    subject: String(shot.subject || "primary"),
+    transition: String(shot.transition || "hold"),
+    reason: String(shot.reason || "")
+  };
+}
+function directorPlanFromCameraPath(path, duration, platform, source = "manual"){
+  const frames = normalizeCameraPath(path);
+  const safeDuration = Math.max(Number(duration) || 0, .3);
+  const shots = (frames.length ? frames : [normalizeCameraPathFrame({ time: 0, x: 50, y: 50, zoom: 1 })])
+    .map((frame, index, sourceFrames) => directorShotFromFrame(frame, index, sourceFrames, safeDuration));
+  return { version: 1, source, mode: "", resolution_preset: resolutionPresetForPlatform(platform), style: "normal", energy: "normal", shots };
+}
+function directorShotFromFrame(frame, index, frames, duration){
+  const start = clampNumber(Number(frame.time || 0), 0, duration);
+  const next = frames[index + 1];
+  const end = next ? clampNumber(Number(next.time || duration), start, duration) : duration;
+  const intent = frame.intent || directorIntentFromFrame(frame);
+  return { id: `shot-${String(index + 1).padStart(3, "0")}`, start, end, intent, label: directorIntentLabel(intent), subject: directorSubject(intent), transition: directorTransition(frame, intent), reason: frame.reason || directorReason(intent) };
+}
+function directorIntentFromFrame(frame){
+  const source = String(frame?.source || "");
+  if (cameraFrameUsesGroupFit(frame) || source.includes("group")) return "group_open";
+  if (source.includes("reaction")) return "reaction_focus";
+  if (source.includes("cuts")) return "cut_focus";
+  return Number(frame?.zoom || 1) >= 1.18 ? "speaker_close" : "speaker_hold";
+}
+function directorIntentLabel(intent){
+  return { group_open: "Group", reaction_focus: "Reaction", cut_focus: "Cut", speaker_close: "Speaker", speaker_hold: "Speaker" }[intent] || "Camera";
+}
+function directorSubject(intent){
+  return intent === "group_open" ? "group" : intent === "reaction_focus" ? "secondary" : "primary";
+}
+function directorTransition(frame, intent){
+  if (intent === "cut_focus" || cameraFrameUsesHardCut(frame)) return "cut";
+  return intent === "group_open" || intent === "speaker_hold" ? "hold" : "smooth";
+}
+function directorReason(intent){
+  return { group_open: "Preserva o grupo.", reaction_focus: "Realca reacao.", cut_focus: "Corte seco para ritmo.", speaker_close: "Aproxima o foco.", speaker_hold: "Segura foco estavel." }[intent] || "";
+}
+function directorShotForFrame(plan, frame){
+  const shots = normalizeDirectorPlan(plan).shots;
+  const time = Number(frame?.time || 0);
+  return shots.find(shot => Math.abs(Number(shot.start || 0) - time) < .16) || null;
+}
+function directorMarkerLabel(plan, frame){
+  const shot = directorShotForFrame(plan, frame);
+  if (shot?.label) return shot.label;
+  if (frame?.label) return frame.label;
+  if (frame?.key) return cameraMeta[frame.key]?.label || "Camera";
+  return directorIntentLabel(directorIntentFromFrame(frame));
+}
+function directorMarkerTitle(plan, frame){
+  const shot = directorShotForFrame(plan, frame);
+  const label = directorMarkerLabel(plan, frame);
+  const detail = shot?.reason ? ` - ${shot.reason}` : "";
+  return `${fixed(frame?.time || 0)} - ${label}${detail}`;
 }
 function cameraCropPercent(camera, elapsed = 0){
   const current = normalizeSingleCamera(camera);
@@ -7101,7 +7276,9 @@ function cameraPathFrameWithPreset(frame, key, strength){
   return next;
 }
 function setCameraPathForRank(rank, path, platform = activePlatformForRank(rank), rerender = true){
-  setPlatformEditForRank(rank, platform, { camera_path: normalizeCameraPath(path) });
+  const normalized = normalizeCameraPath(path);
+  const duration = cardForRank(rank) ? cameraContextForCard(cardForRank(rank)).duration : 0;
+  setPlatformEditForRank(rank, platform, { camera_path: normalized, director_plan: directorPlanFromCameraPath(normalized, duration, platform) });
   const card = cardForRank(rank);
   if (card) {
     const edit = platformEditForRank(rank, platform);
@@ -7219,7 +7396,12 @@ async function analyzeCameraForCard(card, mode = "auto-director"){
     const path = normalizeCameraPath(payload.camera_path);
     if (!path.length) throw new Error("A analise nao retornou keyframes.");
     setSelectedCameraPathIndex(card, 0);
-    setCameraPathForRank(rank, path, platform);
+    const directorPlan = normalizeDirectorPlan(payload.director_plan);
+    setPlatformEditForRank(rank, platform, { camera_path: path, director_plan: directorPlan });
+    updateCameraUi(card);
+    updateCameraSurfaceForCard(card);
+    renderPreviewCameraTimeline(card);
+    renderFinalStage();
     const label = payload.mode_label || smartCameraModes[smartMode].label;
     const suffix = diagnosticText ? ` (${diagnosticText})` : "";
     const applied = payload.cached ? `${label} aplicado do cache` : payload.cache_bypassed ? `${label} recalculado` : `${label} aplicado`;
@@ -7254,6 +7436,7 @@ function cameraDiagnosticsText(diagnostics){
   const intent = ai && ai.intent ? `IA ${ai.intent}` : "IA";
   if (ai && ai.enabled) parts.push(ai.error ? `${intent} fallback local` : `${intent} aplicada`);
   if (ai && !ai.enabled && ai.error) parts.push("IA sem chave");
+  if (Number(ai.director_plan_shots || 0)) parts.push(`${Number(ai.director_plan_shots)} cenas`);
   if (multi) parts.splice(1, 0, `${multi} multi-face`);
   if (edge) parts.splice(2, 0, `${edge} borda`);
   if (maxGap) parts.push(`gap max ${maxGap.toFixed(1)}s`);
@@ -8424,8 +8607,9 @@ function renderPreviewCameraTimeline(card){
   const markers = state.path.map((frame, index) => {
     const left = clampNumber((Number(frame.time || 0) / state.duration) * 100, 0, 100);
     const active = index === selectedIndex ? " active" : "";
-    const label = frame.key ? cameraMeta[frame.key]?.label || "Camera" : "Camera";
-    return `<button class="preview-camera-marker${active}" data-preview-camera-marker="${index}" type="button" style="left:${left.toFixed(2)}%" title="${escapeAttr(`${fixed(frame.time)} - ${label}`)}" aria-label="${escapeAttr(`Editar camera ${label} em ${fixed(frame.time)}`)}"></button>`;
+    const label = directorMarkerLabel(state.edit.director_plan, frame);
+    const title = directorMarkerTitle(state.edit.director_plan, frame);
+    return `<button class="preview-camera-marker${active}" data-preview-camera-marker="${index}" type="button" style="left:${left.toFixed(2)}%" title="${escapeAttr(title)}" aria-label="${escapeAttr(`Editar camera ${label} em ${fixed(frame.time)}`)}"><span>${escapeHtml(label)}</span></button>`;
   }).join("");
   container.innerHTML = `<div class="preview-camera-rail" data-preview-camera-rail>
     <div class="preview-audio-waveform" data-preview-audio-waveform hidden></div>
@@ -8816,6 +9000,7 @@ function adjustedMoment(moment){
     adjusted_duration: adjustedDuration,
     camera: edit.camera,
     camera_path: cameraPathForEdit(edit, adjustedDuration),
+    director_plan: edit.director_plan,
     effect: effectForRank(moment.rank),
     overlay: primaryOverlayForRank(moment.rank),
     overlays: overlayLayersForRank(moment.rank),
@@ -8832,6 +9017,7 @@ function resolutionEditForPlatform(rank, platform, duration){
     source: "platform_edits",
     camera: edit.camera,
     camera_path: cameraPathForEdit(edit, duration),
+    director_plan: edit.director_plan,
     effect: edit.effect,
     overlay: edit.overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
     overlays: edit.overlays,
@@ -8885,6 +9071,7 @@ function buildExportData(){
       adjusted_duration: moment.adjusted_duration,
       camera: edit.camera,
       camera_path: cameraPath,
+      director_plan: edit.director_plan,
       effect: edit.effect,
       overlay: overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
       overlays,
@@ -9046,8 +9233,9 @@ function cameraPathEditorHtml(card, edit, duration, camera){
   const markers = path.map((frame, index) => {
     const left = clampNumber((Number(frame.time || 0) / safeDuration) * 100, 0, 100);
     const active = index === selectedIndex ? " active" : "";
-    const label = frame.key ? cameraMeta[frame.key]?.label || "Path" : "Path";
-    return `<button class="camera-path-marker${active}" data-camera-path-marker="${index}" type="button" style="left:${left.toFixed(2)}%" title="${escapeAttr(`${fixed(frame.time)} - ${label}`)}"></button>`;
+    const label = directorMarkerLabel(edit.director_plan, frame);
+    const title = directorMarkerTitle(edit.director_plan, frame);
+    return `<button class="camera-path-marker${active}" data-camera-path-marker="${index}" type="button" style="left:${left.toFixed(2)}%" title="${escapeAttr(title)}"><span>${escapeHtml(label)}</span></button>`;
   }).join("");
   return `<div class="camera-path-editor" data-camera-path-editor>
     <div class="camera-smart-panel">
