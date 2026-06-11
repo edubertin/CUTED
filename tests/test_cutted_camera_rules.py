@@ -75,6 +75,14 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertLess(html.index("preview-transport-group"), html.index("preview-format-menu"))
         self.assertIn("data-preview-format-trigger", html)
         self.assertIn("data-preview-format-options", html)
+        self.assertIn("data-card-format-preview=\"tiktok\"", html)
+        self.assertIn("data-card-format-preview=\"facebook\"", html)
+        self.assertIn("data-card-format-preview=\"youtube\"", html)
+        self.assertIn(">Vertical 9:16</button>", html)
+        self.assertIn(">Vertical 4:5</button>", html)
+        self.assertIn(">Horizontal 16:9</button>", html)
+        self.assertNotIn("data-card-format-preview=\"shorts\"", html)
+        self.assertNotIn("data-card-format-preview=\"instagram\"", html)
         self.assertIn("data-preview-camera-timeline", html)
         self.assertIn("data-preview-audio-waveform", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("data-preview-volume", html)
@@ -85,6 +93,36 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertNotIn("data-preview-volume-up", html)
         self.assertNotIn("data-preview-volume-zero", html)
         self.assertNotIn("data-preview-volume-value", html)
+
+    def test_export_buttons_use_resolution_formats(self) -> None:
+        moment = CUTTED.Moment(
+            rank=1,
+            start=0.0,
+            end=12.0,
+            peak=4.0,
+            score=0.8,
+            title="Teste",
+            reason="",
+            transcript="texto",
+            peak_text="texto",
+            clip_file="clips/clip-001.mp4",
+            frame_file="frames/clip-001.jpg",
+        )
+
+        html = CUTTED.card_html(moment)
+
+        self.assertIn("data-platform=\"tiktok\">Vertical 9:16", html)
+        self.assertIn("data-platform=\"facebook\">Vertical 4:5", html)
+        self.assertIn("data-platform=\"youtube\">Horizontal 16:9", html)
+        self.assertNotIn("data-platform=\"shorts\"", html)
+        self.assertNotIn("data-platform=\"instagram\"", html)
+
+    def test_volume_popover_stays_compact_above_editor_layers(self) -> None:
+        html = CUTTED.page_html("Teste", "", "{}", "")
+
+        self.assertIn(".preview-volume-group{z-index:2300}", html)
+        self.assertIn(".preview-volume-popover{z-index:2600!important;width:44px!important", html)
+        self.assertIn(".preview-volume-slider{width:92px!important;max-width:92px}", html)
 
     def test_moment_contract_includes_waveform_file(self) -> None:
         moment = CUTTED.Moment(
@@ -174,6 +212,20 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertEqual(viewport["resolution_label"], "Vertical 9:16")
         self.assertEqual(viewport["shared_destinations"], ["tiktok", "shorts", "instagram"])
 
+    def test_normalize_platforms_dedupes_shared_resolution_formats(self) -> None:
+        platforms = CUTTED.normalize_platforms(["tiktok", "shorts", "instagram", "facebook", "youtube"])
+
+        self.assertEqual(platforms, ["tiktok", "facebook", "youtube"])
+
+    def test_caption_queue_takes_priority_over_legacy_selected_rows(self) -> None:
+        row = {"rank": 1, "platform": "tiktok", "resolution_preset": "vertical_9_16"}
+        data = {
+            "caption_queue": [row],
+            "selected": [{"rank": 1, "platforms": ["tiktok", "shorts", "instagram"]}],
+        }
+
+        self.assertEqual(CUTTED.caption_rows_from_data(data), [row])
+
     def test_page_exports_resolution_workspace_contract(self) -> None:
         html = CUTTED.page_html("Teste", "", "{}", "assets/brand/cuted-logo-transparent.png")
 
@@ -195,6 +247,52 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertEqual([shot["label"] for shot in plan["shots"]], ["Group", "Speaker", "Cut"])
         self.assertEqual(plan["shots"][0]["end"], 4.0)
 
+    def test_ai_director_schema_requires_director_plan(self) -> None:
+        schema = CUTTED.ai_director_schema()
+
+        self.assertIn("director_plan", schema["required"])
+        self.assertIn("director_plan", schema["properties"])
+        self.assertIn("shots", schema["properties"]["director_plan"]["required"])
+
+    def test_director_plan_converts_to_camera_path(self) -> None:
+        payload = {
+            "director_plan": {
+                "style": "normal",
+                "energy": "normal",
+                "shots": [
+                    {
+                        "id": "shot-001",
+                        "start": 0.0,
+                        "end": 4.0,
+                        "intent": "speaker_close",
+                        "label": "Speaker",
+                        "subject": "primary",
+                        "transition": "smooth",
+                        "reason": "Hook",
+                    },
+                    {
+                        "id": "shot-002",
+                        "start": 4.0,
+                        "end": 8.0,
+                        "intent": "reaction_focus",
+                        "label": "Reaction",
+                        "subject": "secondary",
+                        "transition": "smooth",
+                        "reason": "Reaction",
+                    },
+                ],
+            }
+        }
+        detections = [detection(0.0, [face(42.0), face(72.0)]), detection(4.0, [face(42.0), face(72.0)])]
+
+        plan = CUTTED.validated_ai_director_plan(payload, 8.0, "tiktok", "ai-director")
+        path = CUTTED.camera_path_from_director_plan(plan, detections, 8.0, "tiktok", "ai-director")
+
+        self.assertEqual(plan["resolution_preset"], "vertical_9_16")
+        self.assertEqual(len(path), 2)
+        self.assertEqual(path[0]["intent"], "speaker_close")
+        self.assertEqual(path[1]["intent"], "reaction_focus")
+
     def test_ai_director_cache_scope_uses_resolution_preset(self) -> None:
         self.assertEqual(CUTTED.camera_analysis_cache_scope("tiktok", "ai-director"), "vertical_9_16")
         self.assertEqual(CUTTED.camera_analysis_cache_scope("shorts", "ai-director"), "vertical_9_16")
@@ -207,6 +305,49 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIn("function directorPlanFromCameraPath", html)
         self.assertIn("directorMarkerLabel", html)
         self.assertIn("director_plan: normalizeDirectorPlan", html)
+
+    def test_preview_timeline_has_director_edit_menu_actions(self) -> None:
+        html = CUTTED.page_html("Teste", "", "{}", "assets/brand/cuted-logo-transparent.png")
+
+        self.assertIn("data-preview-camera-popover-intent", html)
+        self.assertIn("data-preview-camera-popover-add", html)
+        self.assertIn("data-preview-camera-popover-move", html)
+        self.assertIn("data-preview-camera-popover-delete", html)
+        self.assertIn("data-preview-camera-popover-close", html)
+        self.assertIn("preview-camera-popover-close", html)
+        self.assertIn("updateCameraPathFrameIntentForCard", html)
+        self.assertIn("addCameraIntentFrameForCard", html)
+
+    def test_director_speaker_focus_uses_medium_zoom(self) -> None:
+        row = detection(0.0, [face(42.0, width=4.0), face(72.0, width=4.0)])
+
+        speaker = CUTTED.director_primary_frame(row, 0.0)
+        reaction = CUTTED.director_reaction_frame(row, 3.0)
+
+        self.assertIsNotNone(speaker)
+        self.assertIsNotNone(reaction)
+        self.assertLessEqual(float(speaker["zoom"]), 1.16)
+        self.assertGreater(float(reaction["zoom"]), float(speaker["zoom"]))
+
+    def test_long_group_view_gets_reaction_breakaway(self) -> None:
+        frames = [
+            {
+                "time": 0.0,
+                "x": 50.0,
+                "y": 50.0,
+                "zoom": 1.0,
+                "intent": "group_open",
+                "source": "ai-director-plan-group_open",
+            }
+        ]
+        detections = [detection(4.0, [face(28.0), face(55.0), face(74.0)])]
+
+        result = CUTTED.group_breakaway_camera_frames(frames, detections, 14.0, "tiktok")
+        sources = [frame["source"] for frame in result]
+
+        self.assertEqual(sources, ["ai-director-cuts-group-reaction", "ai-director-cuts-group-return"])
+        self.assertEqual(result[0]["intent"], "reaction_focus")
+        self.assertGreaterEqual(float(result[1]["time"]) - float(result[0]["time"]), 3.3)
 
     def test_solo_dominant_scene_removes_hard_cut_jitter(self) -> None:
         detections = [

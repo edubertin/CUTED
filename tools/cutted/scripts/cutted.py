@@ -82,6 +82,11 @@ CAMERA_FIT_BREAKAWAY_PRIMARY_HOLD_SECONDS = 3.8
 CAMERA_FIT_BREAKAWAY_SECONDARY_HOLD_SECONDS = 3.2
 CAMERA_FIT_BREAKAWAY_INTERVAL_SECONDS = 7.0
 CAMERA_FIT_BREAKAWAY_MAX_PER_BLOCK = 3
+CAMERA_GROUP_BREAKAWAY_MIN_SECONDS = 8.0
+CAMERA_GROUP_BREAKAWAY_LEAD_SECONDS = 3.0
+CAMERA_GROUP_REACTION_HOLD_SECONDS = 3.4
+CAMERA_GROUP_BREAKAWAY_INTERVAL_SECONDS = 7.0
+CAMERA_GROUP_BREAKAWAY_MAX_PER_BLOCK = 3
 AI_DIRECTOR_MAX_FRAME_SAMPLES = 10
 AI_DIRECTOR_MAX_CONTEXT_ROWS = 36
 AI_DIRECTOR_MAX_FALLBACK_FRAMES = 28
@@ -103,15 +108,15 @@ SMART_CAMERA_MODES = {
 AI_DIRECTOR_INTENTS = {
     "ai-director": {
         "label": "Dinamico",
-        "priority": "Misture plano aberto, foco em quem fala, punch-in leve e reacoes sem cortar pessoas visiveis.",
+        "priority": "Misture plano aberto, foco medio em quem fala, reacoes de 3 a 4 segundos e retornos seguros sem cortar pessoas visiveis.",
     },
     "ai-director-group": {
         "label": "Grupo / podcast",
-        "priority": "Priorize plano aberto quando houver 2 ou mais pessoas, com close apenas quando a cena estiver claramente individual.",
+        "priority": "Use grupo como base de seguranca, mas quebre holds longos com reacoes confiaveis e volte para grupo ou speaker.",
     },
     "ai-director-speaker": {
         "label": "Quem fala",
-        "priority": "Priorize o rosto principal e pistas do transcript, mas abra o quadro quando outras pessoas estiverem visiveis.",
+        "priority": "Priorize a pessoa principal em plano medio, preservando mais corpo e contexto; reserve close de rosto para reacao clara.",
     },
     "ai-director-reactions": {
         "label": "Reacoes",
@@ -304,6 +309,15 @@ PLATFORM_RESOLUTION_PRESETS = {
     destination: preset.key
     for preset in RESOLUTION_PRESETS.values()
     for destination in preset.destinations
+}
+
+DIRECTOR_INTENTS = {
+    "speaker_hold": {"label": "Speaker", "subject": "primary", "transition": "hold", "reason": "Segura foco medio no speaker."},
+    "group_open": {"label": "Group", "subject": "group", "transition": "hold", "reason": "Preserva o grupo, com espaco para reacoes."},
+    "reaction_focus": {"label": "Reaction", "subject": "secondary", "transition": "smooth", "reason": "Realca reacao em close controlado."},
+    "center_hold": {"label": "Center", "subject": "center", "transition": "hold", "reason": "Volta para o centro seguro."},
+    "speaker_close": {"label": "Zoom", "subject": "primary", "transition": "smooth", "reason": "Aproxima em plano medio, sem virar so rosto."},
+    "cut_focus": {"label": "Cut", "subject": "primary", "transition": "cut", "reason": "Corte seco para ritmo."},
 }
 
 EFFECT_PRESETS = {
@@ -1650,7 +1664,12 @@ def ai_director_camera_result(
     try:
         frames = ai_director_frame_samples(input_ref, start, duration)
         payload = request_ai_director_path(platform, title, transcript, metadata, detections, fallback_path, frames, duration, mode)
-        path = protected_ai_director_path(validated_ai_director_path(payload, duration), detections, duration, platform)
+        director_plan = validated_ai_director_plan(payload, duration, platform, mode)
+        path = camera_path_from_director_plan(director_plan, detections, duration, platform, mode)
+        if not path:
+            path = validated_ai_director_path(payload, duration)
+            director_plan = director_plan_from_camera_path(path, duration, platform, "ai-director", mode)
+        path = protected_ai_director_path(path, detections, duration, platform)
         if ai_director_uses_hard_cuts(mode):
             path = hard_cut_ai_director_path(path, detections, duration, platform)
         path = dense_protected_camera_path(path, detections, duration, platform, mode)
@@ -1663,7 +1682,6 @@ def ai_director_camera_result(
         "multi_face_coverage": ai_director_multi_face_coverage(detections),
         "dense_camera": dense_camera_diagnostics(path, detections, duration, platform),
     })
-    director_plan = director_plan_from_camera_path(path, duration, platform, "ai-director", mode)
     diagnostics["director_plan_shots"] = len(director_plan.get("shots", []))
     return {"camera_path": path, "director_plan": director_plan, "diagnostics": diagnostics}
 
@@ -1734,6 +1752,144 @@ def director_plan_reason(frame: dict[str, object], label: str) -> str:
     return "Aproxima o foco principal." if zoom >= 1.18 else "Segura enquadramento estavel no foco principal."
 
 
+def validated_ai_director_plan(payload: dict[str, object], duration: float, platform: str, mode: str) -> dict[str, object]:
+    raw = payload.get("director_plan")
+    if not isinstance(raw, dict):
+        return {}
+    shots = raw.get("shots")
+    if not isinstance(shots, list):
+        return {}
+    valid_shots = [validated_ai_director_shot(row, duration, index) for index, row in enumerate(shots) if isinstance(row, dict)]
+    valid_shots = [shot for shot in valid_shots if shot is not None]
+    if not valid_shots:
+        return {}
+    return {
+        "version": 1,
+        "source": "ai-director",
+        "mode": mode,
+        "resolution_preset": resolution_key_for_platform(platform),
+        "style": str(raw.get("style") or "normal")[:32],
+        "energy": str(raw.get("energy") or "normal")[:32],
+        "shots": valid_shots[:24],
+    }
+
+
+def validated_ai_director_shot(row: dict[str, object], duration: float, index: int) -> dict[str, object] | None:
+    start = clamp(float(row.get("start") or 0.0), 0.0, max(duration, 0.3))
+    end = clamp(float(row.get("end") or max(duration, 0.3)), start, max(duration, 0.3))
+    if end - start < 0.1:
+        end = min(start + 0.1, max(duration, 0.3))
+    intent = normalize_director_intent(row.get("intent"))
+    return {
+        "id": clean_optional_text(row.get("id"), 48) or f"shot-{index + 1:03d}",
+        "start": round(start, 3),
+        "end": round(end, 3),
+        "intent": intent,
+        "label": clean_optional_text(row.get("label"), 40) or director_intent_label(intent),
+        "subject": clean_optional_text(row.get("subject"), 40) or director_intent_subject(intent),
+        "transition": clean_optional_text(row.get("transition"), 40) or director_intent_transition(intent),
+        "reason": clean_optional_text(row.get("reason"), 220) or director_intent_reason(intent),
+    }
+
+
+def normalize_director_intent(value: object) -> str:
+    intent = str(value or "speaker_hold").strip().lower().replace("-", "_")
+    return intent if intent in DIRECTOR_INTENTS else "speaker_hold"
+
+
+def director_intent_label(intent: str) -> str:
+    return str(DIRECTOR_INTENTS.get(intent, DIRECTOR_INTENTS["speaker_hold"])["label"])
+
+
+def director_intent_subject(intent: str) -> str:
+    return str(DIRECTOR_INTENTS.get(intent, DIRECTOR_INTENTS["speaker_hold"])["subject"])
+
+
+def director_intent_transition(intent: str) -> str:
+    return str(DIRECTOR_INTENTS.get(intent, DIRECTOR_INTENTS["speaker_hold"])["transition"])
+
+
+def director_intent_reason(intent: str) -> str:
+    return str(DIRECTOR_INTENTS.get(intent, DIRECTOR_INTENTS["speaker_hold"])["reason"])
+
+
+def camera_path_from_director_plan(
+    plan: dict[str, object], detections: list[dict[str, object]], duration: float, platform: str, mode: str
+) -> list[dict[str, object]]:
+    shots = plan.get("shots")
+    if not isinstance(shots, list):
+        return []
+    frames = [camera_frame_from_director_shot(shot, detections, platform, mode) for shot in shots if isinstance(shot, dict)]
+    frames = [frame for frame in frames if frame is not None]
+    if not frames:
+        return []
+    frames = sorted(frames, key=lambda item: float(item.get("time") or 0.0))
+    if float(frames[0].get("time") or 0.0) > 0.001:
+        frames.insert(0, {**frames[0], "time": 0.0})
+    return stable_camera_targets(frames)
+
+
+def camera_frame_from_director_shot(
+    shot: dict[str, object], detections: list[dict[str, object]], platform: str, mode: str
+) -> dict[str, object] | None:
+    time_value = float(shot.get("start") or 0.0)
+    intent = normalize_director_intent(shot.get("intent"))
+    row = nearest_detection(time_value, detections)
+    frame = director_shot_target_frame(intent, row, time_value, platform)
+    if frame is None:
+        frame = open_center_camera_frame(time_value)
+    frame = {**frame, "intent": intent, "label": director_intent_label(intent), "reason": str(shot.get("reason") or director_intent_reason(intent))}
+    if intent == "cut_focus" or ai_director_uses_hard_cuts(mode):
+        return hard_cut_ai_director_frame(frame, time_value, f"ai-director-plan-{intent}")
+    return {**frame, "time": round(time_value, 3), "source": f"ai-director-plan-{intent}"}
+
+
+def director_shot_target_frame(
+    intent: str, row: dict[str, object] | None, time_value: float, platform: str
+) -> dict[str, object] | None:
+    if intent in {"group_open", "center_hold"}:
+        return director_group_or_center_frame(intent, row, time_value, platform)
+    if intent == "reaction_focus":
+        return director_reaction_frame(row, time_value)
+    primary = director_primary_frame(row, time_value)
+    if primary is not None and intent == "speaker_close":
+        return {**primary, "zoom": speaker_focus_zoom(primary, 0.04)}
+    return primary
+
+
+def director_group_or_center_frame(intent: str, row: dict[str, object] | None, time_value: float, platform: str) -> dict[str, object]:
+    faces = sorted(reliable_faces(row or {}), key=face_x)
+    if intent == "group_open" and faces:
+        return group_face_frame(faces, time_value, platform)
+    return open_center_camera_frame(time_value)
+
+
+def director_reaction_frame(row: dict[str, object] | None, time_value: float) -> dict[str, object] | None:
+    if row is None:
+        return None
+    secondary = secondary_face_for_row(row)
+    if secondary is None:
+        return None
+    return {**secondary, "time": time_value, "zoom": reaction_focus_zoom(secondary)}
+
+
+def director_primary_frame(row: dict[str, object] | None, time_value: float) -> dict[str, object] | None:
+    if row is None:
+        return None
+    primary = primary_reliable_face(row)
+    if primary is None:
+        return None
+    return {**primary, "time": time_value, "zoom": speaker_focus_zoom(primary, 0.0)}
+
+
+def speaker_focus_zoom(face: dict[str, object], boost: float) -> float:
+    return round(min(float(face.get("zoom") or 1.0) + boost, 1.16), 3)
+
+
+def reaction_focus_zoom(face: dict[str, object]) -> float:
+    return round(min(float(face.get("zoom") or 1.0) + 0.08, 1.3), 3)
+
+
 def ai_director_frame_samples(input_ref: Path | str, start: float, duration: float) -> list[dict[str, object]]:
     cv2 = import_cv2()
     capture = cv2.VideoCapture(str(input_ref))
@@ -1776,10 +1932,10 @@ def request_ai_director_path(
 ) -> dict[str, object]:
     intent = ai_director_intent(mode)
     system = (
-        "Voce e o AI Director do CUTED. Crie uma camera_path curta para video social vertical. "
+        "Voce e o AI Director do CUTED. Crie primeiro um director_plan editorial para video social. "
         "Use os frames apenas para enquadramento e composicao; nao identifique pessoas. "
         f"Intencao editorial: {intent['label']}. {intent['priority']} "
-        "Prefira movimentos poucos, seguros e profissionais. Responda somente no schema JSON."
+        "Prefira poucos shots seguros e profissionais. Inclua keyframes apenas como compatibilidade. Responda somente no schema JSON."
     )
     user = ai_director_user_payload(platform, title, transcript, metadata, detections, fallback_path, duration, mode)
     return openai_vision_structured_response(system, user, frames, "cuted_ai_director", ai_director_schema(), "ai_director")
@@ -1792,7 +1948,8 @@ def ai_director_user_payload(
     intent = ai_director_intent(mode)
     rules = ai_director_rules(mode)
     return json.dumps({
-        "task": "Decida quando focar uma pessoa, quando abrir para grupo, quando segurar, alternar ou fazer punch-in.",
+        "task": "Crie um director_plan: quando focar uma pessoa, abrir para grupo, segurar, alternar, aplicar zoom ou fazer cut.",
+        "allowed_intents": list(DIRECTOR_INTENTS),
         "editorial_intent": intent,
         "platform": platform if platform in PLATFORM_PRESETS else "tiktok",
         "platform_viewport": platform_viewport(platform),
@@ -1872,9 +2029,10 @@ def ai_director_rules(mode: str) -> list[str]:
         "Use 6 a 20 keyframes quando houver deslocamento ou multiplos rostos; menos so se a cena for estavel.",
         "Sempre inclua um keyframe em time 0.",
         "Segure bons enquadramentos por alguns segundos; evite tremedeira.",
-        "Se 3 pessoas aparecem no mesmo frame, priorize plano aberto de grupo, nao close em uma so pessoa.",
+        "Se 3 pessoas aparecem no mesmo frame, use grupo para contexto, mas nao fique em grupo por mais de 8 segundos sem buscar uma reacao confiavel.",
         "Se 2 ou mais rostos ficariam fora do crop, reduza zoom e centralize entre os rostos.",
-        "Use close em uma pessoa apenas quando os outros rostos nao estiverem visiveis ou nao importarem para a cena.",
+        "Use speaker_hold e speaker_close como plano medio; preserve mais corpo e contexto, nao apenas cara.",
+        "Reserve close de rosto para reaction_focus ou cut_focus quando a reacao estiver clara e puder segurar 3 a 4 segundos.",
         "Quando scene_direction.uncertain_windows indicar baixa deteccao, nao persiga rosto antigo; prefira plano aberto com blur.",
         "Siga scene_direction.scene_intent_windows: solo=center, two_close=movimento suave somente com rostos quase colados, two_far=corte seco com holds longos, group_close=cortes fixos entre focos, group_fit=plano aberto com blur.",
         "Com um rosto so, nao use cortes secos frequentes; prefira camera estavel com no maximo pequenos ajustes ou push-in.",
@@ -1885,7 +2043,7 @@ def ai_director_rules(mode: str) -> list[str]:
             "Este modo deve parecer corte seco: nao crie keyframes para pans graduais.",
             "Prefira 4.0 a 5.0 segundos entre cortes, salvo mudanca clara de fala ou reacao.",
             "Nao crie pans longos; quando houver duvida, use corte seco ou mantenha o plano atual.",
-            "Alterne entre close, grupo e reacao quando houver rostos confiaveis.",
+            "Alterne entre grupo, speaker medio e reacao quando houver rostos confiaveis.",
             "Quando cortar para uma pessoa secundaria, volte para a pessoa principal depois de 2 a 3 segundos.",
             "Use as janelas em scene_direction.reaction_windows como candidatos preferenciais de corte.",
         ])
@@ -2164,11 +2322,40 @@ def ai_director_schema() -> dict[str, object]:
         },
         "required": ["time", "x", "y", "zoom", "reason"],
     }
+    shot_schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "id": {"type": "string"},
+            "start": {"type": "number"},
+            "end": {"type": "number"},
+            "intent": {"type": "string", "enum": list(DIRECTOR_INTENTS)},
+            "label": {"type": "string"},
+            "subject": {"type": "string"},
+            "transition": {"type": "string"},
+            "reason": {"type": "string"},
+        },
+        "required": ["id", "start", "end", "intent", "label", "subject", "transition", "reason"],
+    }
+    plan_schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "style": {"type": "string"},
+            "energy": {"type": "string"},
+            "shots": {"type": "array", "items": shot_schema},
+        },
+        "required": ["style", "energy", "shots"],
+    }
     return {
         "type": "object",
         "additionalProperties": False,
-        "properties": {"summary": {"type": "string"}, "keyframes": {"type": "array", "items": frame_schema}},
-        "required": ["summary", "keyframes"],
+        "properties": {
+            "summary": {"type": "string"},
+            "director_plan": plan_schema,
+            "keyframes": {"type": "array", "items": frame_schema},
+        },
+        "required": ["summary", "director_plan", "keyframes"],
     }
 
 
@@ -2244,6 +2431,9 @@ def dense_protected_camera_path(
     breakaways = fit_breakaway_camera_frames(stabilized, detections, duration)
     if breakaways:
         stabilized = merge_camera_path_frames(stabilized, breakaways, duration)
+    group_breakaways = group_breakaway_camera_frames(stabilized, detections, duration, platform)
+    if group_breakaways:
+        stabilized = merge_camera_path_frames(stabilized, group_breakaways, duration)
     return enforce_editorial_motion_rules(stabilized, detections, duration, platform, hard_cut)[:56]
 
 
@@ -2362,6 +2552,100 @@ def row_has_separated_faces(row: dict[str, object], platform: str) -> bool:
         return False
     intent = str(camera_scene_intent_for_faces(faces, platform)["intent"])
     return intent in {"two_far_cut", "group_fit"}
+
+
+def group_breakaway_camera_frames(
+    frames: list[dict[str, object]],
+    detections: list[dict[str, object]],
+    duration: float,
+    platform: str,
+) -> list[dict[str, object]]:
+    if not frames or not detections:
+        return []
+    result: list[dict[str, object]] = []
+    for start, end in coalesced_group_intervals(frames, duration):
+        if end - start < CAMERA_GROUP_BREAKAWAY_MIN_SECONDS:
+            continue
+        result.extend(group_breakaways_for_interval(start, end, detections, platform))
+    return result
+
+
+def coalesced_group_intervals(frames: list[dict[str, object]], duration: float) -> list[tuple[float, float]]:
+    intervals: list[tuple[float, float]] = []
+    current_start: float | None = None
+    current_end = 0.0
+    for start, end, frame in camera_path_bounds_from_frames(frames, duration):
+        if camera_frame_is_group_view(frame) and not camera_path_frame_uses_group_fit(frame):
+            if current_start is None:
+                current_start = start
+            current_end = end
+            continue
+        if current_start is not None:
+            intervals.append((current_start, current_end))
+            current_start = None
+    if current_start is not None:
+        intervals.append((current_start, current_end))
+    return intervals
+
+
+def camera_frame_is_group_view(frame: dict[str, object]) -> bool:
+    source = str(frame.get("source") or "")
+    return str(frame.get("intent") or "") == "group_open" or "group" in source or camera_frame_is_group_safe(frame)
+
+
+def group_breakaways_for_interval(
+    start: float,
+    end: float,
+    detections: list[dict[str, object]],
+    platform: str,
+) -> list[dict[str, object]]:
+    rows = reliable_detection_rows_between(detections, start, end)
+    if not rows:
+        return []
+    frames: list[dict[str, object]] = []
+    cursor = start + CAMERA_GROUP_BREAKAWAY_LEAD_SECONDS
+    max_frames = CAMERA_GROUP_BREAKAWAY_MAX_PER_BLOCK * 2
+    while cursor + CAMERA_GROUP_REACTION_HOLD_SECONDS < end and len(frames) < max_frames:
+        row = next_breakaway_row(rows, cursor)
+        if row is None:
+            break
+        time_value = max(cursor, float(row.get("time") or cursor))
+        sequence = group_breakaway_sequence_for_row(row, time_value, end, platform)
+        if not sequence:
+            cursor += CAMERA_GROUP_BREAKAWAY_INTERVAL_SECONDS
+            continue
+        frames.extend(sequence)
+        cursor = float(sequence[-1].get("time") or time_value) + CAMERA_GROUP_BREAKAWAY_INTERVAL_SECONDS
+    return frames
+
+
+def group_breakaway_sequence_for_row(
+    row: dict[str, object], time_value: float, interval_end: float, platform: str
+) -> list[dict[str, object]]:
+    faces = sorted(reliable_faces(row), key=face_x)
+    if len(faces) < 2:
+        return []
+    primary = primary_reliable_face(row) or faces[0]
+    reaction = secondary_breakaway_face(row, primary, faces)
+    return_time = time_value + CAMERA_GROUP_REACTION_HOLD_SECONDS
+    if reaction is None or return_time >= interval_end:
+        return []
+    return [
+        group_breakaway_reaction_frame(reaction, time_value),
+        group_breakaway_return_frame(row, return_time, platform),
+    ]
+
+
+def group_breakaway_reaction_frame(face: dict[str, float], time_value: float) -> dict[str, object]:
+    frame = {**face, "time": time_value, "zoom": reaction_focus_zoom(face), "intent": "reaction_focus"}
+    return hard_cut_ai_director_frame(frame, time_value, "ai-director-cuts-group-reaction")
+
+
+def group_breakaway_return_frame(row: dict[str, object], time_value: float, platform: str) -> dict[str, object]:
+    faces = sorted(reliable_faces(row), key=face_x)
+    frame = group_face_frame(faces, time_value, platform)
+    frame["intent"] = "group_open"
+    return hard_cut_ai_director_frame(frame, time_value, "ai-director-cuts-group-return")
 
 
 def fit_breakaway_camera_frames(
@@ -2504,7 +2788,8 @@ def secondary_breakaway_face(
 
 
 def fit_breakaway_face_frame(face: dict[str, float], time_value: float, source: str) -> dict[str, object]:
-    frame = {**face, "time": time_value, "zoom": min(float(face.get("zoom") or 1.0) + 0.1, 1.34)}
+    zoom = reaction_focus_zoom(face) if "secondary" in source else speaker_focus_zoom(face, 0.02)
+    frame = {**face, "time": time_value, "zoom": zoom}
     return hard_cut_ai_director_frame(frame, time_value, source)
 
 
@@ -2594,7 +2879,11 @@ def dense_camera_target_for_row(
     primary = row.get("primary") if isinstance(row.get("primary"), dict) else None
     if isinstance(primary, dict) and not group_required and face_outside_safe_zone(primary):
         primary_source = "ai-director-cuts-primary" if hard_cut else "ai-director-dense-primary"
-        return hard_cut_ai_director_frame({**primary, "time": time_value}, time_value, primary_source)
+        return hard_cut_ai_director_frame(
+            {**primary, "time": time_value, "zoom": speaker_focus_zoom(primary, 0.02)},
+            time_value,
+            primary_source,
+        )
     return None
 
 
@@ -2869,7 +3158,7 @@ def cinematic_reaction_frame(row: dict[str, object], time_value: float, platform
     return hard_cut_ai_director_frame({
         **secondary,
         "time": time_value,
-        "zoom": min(float(secondary.get("zoom") or 1.0) + 0.08, 1.34),
+        "zoom": reaction_focus_zoom(secondary),
     }, time_value, "ai-director-cuts-reaction")
 
 
@@ -2880,7 +3169,11 @@ def cinematic_primary_frame(row: dict[str, object], time_value: float, platform:
         return hard_cut_ai_director_frame(group, time_value, group_frame_source(group, True))
     primary = row.get("primary") if isinstance(row.get("primary"), dict) else None
     source = primary if isinstance(primary, dict) else (faces[0] if faces else {})
-    return hard_cut_ai_director_frame({**source, "time": time_value}, time_value, "ai-director-cuts-primary")
+    return hard_cut_ai_director_frame(
+        {**source, "time": time_value, "zoom": speaker_focus_zoom(source, 0.02)},
+        time_value,
+        "ai-director-cuts-primary",
+    )
 
 
 def secondary_face_for_row(row: dict[str, object]) -> dict[str, float] | None:
@@ -3078,8 +3371,7 @@ def director_alternate_target(row: dict[str, object], time_value: float, intent:
     faces = sorted(reliable_faces(row), key=face_x)
     secondary = secondary_face_for_row(row)
     target = secondary if secondary is not None else (faces[-1] if faces else {})
-    boost = 0.1 if intent == "two_far_cut" else 0.04
-    return {**target, "time": time_value, "zoom": min(float(target.get("zoom") or 1.0) + boost, 1.34)}
+    return {**target, "time": time_value, "zoom": reaction_focus_zoom(target)}
 
 
 def should_use_group_frame(faces: list[dict[str, float]]) -> bool:
@@ -4533,7 +4825,24 @@ def normalize_bumpers_from_row(row: dict[str, object]) -> dict[str, dict[str, ob
 def normalize_platforms(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
-    return [str(item) for item in value if str(item) in PLATFORM_PRESETS]
+    result: list[str] = []
+    seen_resolutions: set[str] = set()
+    for item in value:
+        platform = str(item)
+        if platform not in PLATFORM_PRESETS:
+            continue
+        representative = representative_platform(platform)
+        resolution = resolution_key_for_platform(representative)
+        if resolution in seen_resolutions:
+            continue
+        seen_resolutions.add(resolution)
+        result.append(representative)
+    return result
+
+
+def representative_platform(platform: str) -> str:
+    destinations = resolution_preset_for_platform(platform).destinations
+    return destinations[0] if destinations else "tiktok"
 
 
 def resolve_media_path(base_dir: Path, clip_file: str) -> Path:
@@ -6445,14 +6754,12 @@ def card_html(moment: Moment) -> str:
                 </div>
                 <div class="preview-format-menu" data-preview-format-menu>
                   <button class="preview-format-trigger" data-preview-format-trigger type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Formato do preview">
-                    <span data-preview-format-current>TikTok</span>
+                    <span data-preview-format-current>Vertical 9:16</span>
                   </button>
                   <div class="preview-format-options" data-preview-format-options role="listbox" aria-label="Formato do preview" hidden>
-                    <button data-card-format-preview="tiktok" class="active" role="option" aria-selected="true">TikTok</button>
-                    <button data-card-format-preview="shorts" role="option" aria-selected="false">Shorts</button>
-                    <button data-card-format-preview="instagram" role="option" aria-selected="false">Instagram</button>
-                    <button data-card-format-preview="facebook" role="option" aria-selected="false">Facebook</button>
-                    <button data-card-format-preview="youtube" role="option" aria-selected="false">YouTube</button>
+                    <button data-card-format-preview="tiktok" class="active" role="option" aria-selected="true">Vertical 9:16</button>
+                    <button data-card-format-preview="facebook" role="option" aria-selected="false">Vertical 4:5</button>
+                    <button data-card-format-preview="youtube" role="option" aria-selected="false">Horizontal 16:9</button>
                   </div>
                 </div>
               </div>
@@ -6548,11 +6855,9 @@ def card_html(moment: Moment) -> str:
               <span data-platform-summary>Sem destino</span>
             </div>
             <div class="platform-tags" role="group" aria-label="Adicionar destino na fila final">
-              <button data-platform="tiktok">TikTok</button>
-              <button data-platform="shorts">Shorts</button>
-              <button data-platform="instagram">Instagram</button>
-              <button data-platform="facebook">Facebook</button>
-              <button data-platform="youtube">YouTube</button>
+              <button data-platform="tiktok">Vertical 9:16</button>
+              <button data-platform="facebook">Vertical 4:5</button>
+              <button data-platform="youtube">Horizontal 16:9</button>
             </div>
           </footer>
           </div>
@@ -6799,6 +7104,8 @@ button[data-action=discard],.result-actions a.secondary,.result-actions button.s
 .duration-profile input:checked+span,.layer-chip.is-selected{border-color:rgba(17,162,207,.72);background:var(--control-active);color:var(--color-text)}
 .camera-path-rail{background:linear-gradient(90deg,rgba(17,162,207,.28),rgba(231,231,232,.1),rgba(175,207,42,.18))}.camera-path-marker{border-color:var(--glass-border);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.035)),rgba(231,231,232,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.32),0 6px 14px rgba(0,0,0,.26)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:rgba(17,162,207,.88);box-shadow:0 0 0 4px rgba(17,162,207,.16),0 0 24px rgba(17,162,207,.26)}
 .preview-camera-marker span,.camera-path-marker span{position:absolute;left:50%;bottom:calc(100% + 4px);max-width:72px;padding:2px 5px;border:1px solid rgba(231,231,232,.2);border-radius:999px;background:rgba(5,5,5,.82);color:var(--color-text-soft);font-size:10px;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform:translateX(-50%);pointer-events:none}.camera-path-marker{overflow:visible}.preview-camera-marker{overflow:visible}.camera-path-marker span{bottom:calc(100% + 5px)}.preview-camera-marker.active span,.camera-path-marker.active span{border-color:rgba(17,162,207,.7);color:#fff}
+.preview-camera-popover-head{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center}.preview-camera-popover-head strong{font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.preview-camera-popover-head span,.preview-camera-popover small{color:var(--color-text-muted);font-size:11px}.preview-camera-popover-close{display:inline-grid!important;place-items:center;width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;padding:0!important;border-radius:999px!important}.preview-camera-popover-actions{display:grid;grid-template-columns:1fr auto;gap:8px}.preview-camera-popover [data-preview-camera-popover-delete]{color:var(--color-danger)!important}
+.preview-volume-group{z-index:2300}.preview-volume-popover{z-index:2600!important;width:44px!important;min-width:44px!important;height:120px!important;padding:10px 6px!important;overflow:visible}.preview-volume-slider{width:92px!important;max-width:92px}
 .overlay-menu button,.overlay-layer-row button{background:rgba(231,231,232,.08);color:rgba(231,231,232,.8);border-color:var(--glass-border)}
 .overlay-danger{background:rgba(80,20,20,.72)!important;border-color:rgba(255,120,120,.46)!important;color:#ffd2d2!important}
 .settings-status,.settings-usage{border-color:var(--glass-border);background:rgba(231,231,232,.05)}.settings-backdrop{backdrop-filter:blur(14px)}
@@ -6873,9 +7180,9 @@ const platformMeta = {
   youtube: { label: "YouTube", width: 1920, height: 1080, resolution_preset: "horizontal_16_9" }
 };
 const resolutionPresets = {
-  vertical_9_16: { label: "Vertical 9:16", width: 1080, height: 1920, destinations: ["tiktok", "shorts", "instagram"] },
-  vertical_4_5: { label: "Vertical 4:5", width: 1080, height: 1350, destinations: ["facebook"] },
-  horizontal_16_9: { label: "Horizontal 16:9", width: 1920, height: 1080, destinations: ["youtube"] }
+  vertical_9_16: { label: "Vertical 9:16", width: 1080, height: 1920, platform: "tiktok", destinations: ["tiktok", "shorts", "instagram"] },
+  vertical_4_5: { label: "Vertical 4:5", width: 1080, height: 1350, platform: "facebook", destinations: ["facebook"] },
+  horizontal_16_9: { label: "Horizontal 16:9", width: 1920, height: 1080, platform: "youtube", destinations: ["youtube"] }
 };
 const defaultPreviewVolume = 0.2;
 const effectMeta = {
@@ -6933,7 +7240,7 @@ function applyTab(tab){
   renderFinalStage();
 }
 function platformLabel(key){
-  return (platformMeta[key] || { label: key }).label;
+  return resolutionPresetLabel(resolutionPresetForPlatform(key));
 }
 function validPlatform(format){
   return Object.prototype.hasOwnProperty.call(platformMeta, format) ? format : "tiktok";
@@ -6944,6 +7251,12 @@ function resolutionPresetForPlatform(platform){
 }
 function resolutionPresetLabel(key){
   return (resolutionPresets[key] || resolutionPresets.vertical_9_16).label;
+}
+function platformForResolutionPreset(key){
+  return validPlatform((resolutionPresets[key] || resolutionPresets.vertical_9_16).platform);
+}
+function representativePlatform(platform){
+  return platformForResolutionPreset(resolutionPresetForPlatform(platform));
 }
 function destinationResolutionMap(){
   return Object.fromEntries(Object.keys(platformMeta).map(platform => [platform, resolutionPresetForPlatform(platform)]));
@@ -7132,17 +7445,63 @@ function directorIntentFromFrame(frame){
   return Number(frame?.zoom || 1) >= 1.18 ? "speaker_close" : "speaker_hold";
 }
 function directorIntentLabel(intent){
-  return { group_open: "Group", reaction_focus: "Reaction", cut_focus: "Cut", speaker_close: "Speaker", speaker_hold: "Speaker" }[intent] || "Camera";
+  return {
+    group_open: "Group",
+    reaction_focus: "Reaction",
+    cut_focus: "Cut",
+    center_hold: "Center",
+    speaker_close: "Zoom",
+    speaker_hold: "Speaker"
+  }[intent] || "Camera";
 }
 function directorSubject(intent){
-  return intent === "group_open" ? "group" : intent === "reaction_focus" ? "secondary" : "primary";
+  if (intent === "group_open") return "group";
+  if (intent === "reaction_focus") return "secondary";
+  if (intent === "center_hold") return "center";
+  return "primary";
 }
 function directorTransition(frame, intent){
   if (intent === "cut_focus" || cameraFrameUsesHardCut(frame)) return "cut";
-  return intent === "group_open" || intent === "speaker_hold" ? "hold" : "smooth";
+  return ["group_open", "speaker_hold", "center_hold"].includes(intent) ? "hold" : "smooth";
 }
 function directorReason(intent){
-  return { group_open: "Preserva o grupo.", reaction_focus: "Realca reacao.", cut_focus: "Corte seco para ritmo.", speaker_close: "Aproxima o foco.", speaker_hold: "Segura foco estavel." }[intent] || "";
+  return {
+    group_open: "Preserva o grupo.",
+    reaction_focus: "Realca reacao.",
+    cut_focus: "Corte seco para ritmo.",
+    center_hold: "Volta para o centro seguro.",
+    speaker_close: "Aproxima o foco.",
+    speaker_hold: "Segura foco estavel."
+  }[intent] || "";
+}
+function directorIntentOptions(){
+  return [
+    { intent: "speaker_hold", label: "Speaker" },
+    { intent: "group_open", label: "Group" },
+    { intent: "reaction_focus", label: "Reaction" },
+    { intent: "center_hold", label: "Center" },
+    { intent: "speaker_close", label: "Zoom" },
+    { intent: "cut_focus", label: "Hard cut" }
+  ];
+}
+function directorIntentOptionsHtml(selectedIntent){
+  return directorIntentOptions().map(item => {
+    const selected = item.intent === selectedIntent ? " selected" : "";
+    return `<option value="${escapeAttr(item.intent)}"${selected}>${escapeHtml(item.label)}</option>`;
+  }).join("");
+}
+function cameraFramePatchForIntent(intent, frame){
+  const current = normalizeCameraPathFrame(frame) || normalizeCameraPathFrame({ time: 0, x: 50, y: 50, zoom: 1 });
+  const base = { intent, label: directorIntentLabel(intent), reason: directorReason(intent), transition: directorTransition(current, intent), key: undefined, strength: undefined };
+  if (intent === "group_open") return Object.assign({}, current, base, { x: 50, y: 50, zoom: 1, fit: "contain", source: "manual-director-group" });
+  if (intent === "reaction_focus") {
+    const x = Number(current.x || 50) <= 50 ? 72 : 28;
+    return Object.assign({}, current, base, { x, y: 50, zoom: 1.14, fit: undefined, source: "manual-director-reaction" });
+  }
+  if (intent === "cut_focus") return Object.assign({}, current, base, { zoom: Math.max(Number(current.zoom || 1.12), 1.12), fit: undefined, source: "ai-director-cuts-manual" });
+  if (intent === "center_hold") return Object.assign({}, current, base, { x: 50, y: 50, zoom: 1, fit: undefined, source: "manual-director-center" });
+  if (intent === "speaker_close") return Object.assign({}, current, base, { zoom: Math.max(Number(current.zoom || 1), 1.22), fit: undefined, source: "manual-director-zoom" });
+  return Object.assign({}, current, base, { zoom: Math.max(Number(current.zoom || 1), 1.08), fit: undefined, source: "manual-director-speaker" });
 }
 function directorShotForFrame(plan, frame){
   const shots = normalizeDirectorPlan(plan).shots;
@@ -7337,9 +7696,36 @@ function updateCameraPathFrameForCard(card, patch, rerender = true){
   setSelectedCameraPathIndex(card, Math.min(index, nextPath.length - 1));
   setCameraPathForRank(rank, nextPath, platform, rerender);
 }
+function updateCameraPathFrameIntentForCard(card, intent){
+  const rank = card.dataset.rank;
+  const platform = activePlatformForRank(rank);
+  const edit = platformEditForRank(rank, platform);
+  const context = cameraContextForCard(card);
+  const path = cameraPathForEdit(edit, context.duration);
+  const index = selectedCameraPathIndex(card, path);
+  const current = path[index] || cameraFrameForTime(edit.camera, path, context.position, context.duration);
+  const frame = cameraFramePatchForIntent(intent, current);
+  const nextPath = cameraPathWithFrame(path, frame, index);
+  setSelectedCameraPathIndex(card, Math.min(index, nextPath.length - 1));
+  setCameraPathForRank(rank, nextPath, platform);
+}
+function addCameraIntentFrameForCard(card, intent){
+  const rank = card.dataset.rank;
+  const platform = activePlatformForRank(rank);
+  const context = cameraContextForCard(card);
+  const edit = platformEditForRank(rank, platform);
+  const sourcePath = cameraPathForEdit(edit, context.duration);
+  const position = clampNumber(context.position, 0, Math.max(context.duration, .3));
+  const base = cameraFrameForTime(edit.camera, sourcePath, position, context.duration);
+  const frame = cameraFramePatchForIntent(intent, Object.assign({}, base, { time: Number(position.toFixed(3)) }));
+  const path = cameraPathWithFrame(sourcePath, frame);
+  const index = path.findIndex(item => Math.abs(item.time - frame.time) < .01);
+  setSelectedCameraPathIndex(card, index >= 0 ? index : path.length - 1);
+  setCameraPathForRank(rank, path, platform);
+}
 function moveCameraPathFrameToPlayhead(card){
   const context = cameraContextForCard(card);
-  updateCameraPathFrameForCard(card, { time: Number(context.position.toFixed(3)), source: "manual-path" });
+  updateCameraPathFrameForCard(card, { time: Number(context.position.toFixed(3)) });
 }
 function deleteCameraPathFrameForCard(card){
   const rank = card.dataset.rank;
@@ -8707,10 +9093,22 @@ function bindPreviewCameraTimeline(card){
     if (!rail) return;
     event.preventDefault();
     event.stopPropagation();
-    seekPreviewCameraTimeline(card, event, rail);
-    closePreviewCameraPopover(card);
+    const position = seekPreviewCameraTimeline(card, event, rail);
+    openPreviewCameraPopover(card, "insert", position);
   });
   container.addEventListener("change", event => {
+    if (event.target.matches("[data-preview-camera-popover-intent]")) {
+      event.preventDefault();
+      const mode = event.target.closest("[data-preview-camera-popover]")?.dataset.previewCameraPopoverMode || "edit";
+      if (mode === "edit") {
+        const index = selectedCameraPathIndex(card, previewCameraTimelineContext(card).path);
+        updateCameraPathFrameIntentForCard(card, event.target.value);
+        setSelectedCameraPathIndex(card, index);
+        renderPreviewCameraTimeline(card);
+        openPreviewCameraPopover(card, "edit");
+      }
+      return;
+    }
     if (event.target.matches("[data-preview-camera-popover-key]")) {
       event.preventDefault();
       const index = selectedCameraPathIndex(card, previewCameraTimelineContext(card).path);
@@ -8730,6 +9128,32 @@ function bindPreviewCameraTimeline(card){
     }
   });
   container.addEventListener("click", event => {
+    const close = event.target.closest("[data-preview-camera-popover-close]");
+    if (close) {
+      event.preventDefault();
+      event.stopPropagation();
+      closePreviewCameraPopover(card);
+      return;
+    }
+    const add = event.target.closest("[data-preview-camera-popover-add]");
+    if (add) {
+      event.preventDefault();
+      event.stopPropagation();
+      const intent = card.querySelector("[data-preview-camera-popover-intent]")?.value || "speaker_hold";
+      addCameraIntentFrameForCard(card, intent);
+      renderPreviewCameraTimeline(card);
+      openPreviewCameraPopover(card, "edit");
+      return;
+    }
+    const move = event.target.closest("[data-preview-camera-popover-move]");
+    if (move) {
+      event.preventDefault();
+      event.stopPropagation();
+      moveCameraPathFrameToPlayhead(card);
+      renderPreviewCameraTimeline(card);
+      openPreviewCameraPopover(card, "edit");
+      return;
+    }
     const remove = event.target.closest("[data-preview-camera-popover-delete]");
     if (!remove) return;
     event.preventDefault();
@@ -8743,25 +9167,52 @@ function seekPreviewCameraTimeline(card, event, rail){
   const ratio = rect.width ? clampNumber((event.clientX - rect.left) / rect.width, 0, 1) : 0;
   const values = trimValues(card);
   const duration = Math.max(values.endPos - values.trimStart, .3);
-  seekTimeline(card, values.trimStart + (ratio * duration), { userInitiated: true, mode: "free" });
+  const position = ratio * duration;
+  seekTimeline(card, values.trimStart + position, { userInitiated: true, mode: "free" });
+  return position;
 }
-function openPreviewCameraPopover(card){
+function openPreviewCameraPopover(card, mode = "edit", positionOverride = null){
   const popover = card.querySelector("[data-preview-camera-popover]");
   if (!popover) return;
   closePreviewVolumePopover(card);
   const state = previewCameraTimelineContext(card);
   const index = selectedCameraPathIndex(card, state.path);
   const frame = state.path[index] || state.path[0] || normalizeCameraPathFrame({ time: 0, key: "center", strength: 60 });
-  const left = clampNumber((Number(frame.time || 0) / state.duration) * 100, 6, 94);
+  const context = cameraContextForCard(card);
+  const position = mode === "insert" ? Number(positionOverride ?? context.position) : Number(frame.time || 0);
+  const left = clampNumber((position / state.duration) * 100, 6, 94);
+  const intent = mode === "insert" ? "speaker_hold" : directorIntentFromFrame(frame);
   popover.style.left = `${left.toFixed(2)}%`;
-  popover.innerHTML = `<label>Camera
-    <select data-preview-camera-popover-key>${cameraOptionsHtml(frame.key || "center")}</select>
-  </label>
-  <label>Forca
-    <input data-preview-camera-popover-strength type="range" min="0" max="100" step="5" value="${frame.strength ?? 60}">
-  </label>
-  <button data-preview-camera-popover-delete type="button"${state.path.length > 1 ? "" : " disabled"}>Excluir ponto</button>`;
+  popover.dataset.previewCameraPopoverMode = mode;
+  popover.innerHTML = mode === "insert" ? previewCameraInsertPopoverHtml(position, intent) : previewCameraEditPopoverHtml(state, frame, intent);
   popover.hidden = false;
+}
+function previewCameraInsertPopoverHtml(position, intent){
+  return `<div class="preview-camera-popover-head">
+    <strong>Novo shot</strong>
+    <span>${escapeHtml(fixed(position))}</span>
+    <button class="preview-camera-popover-close" data-preview-camera-popover-close type="button" aria-label="Fechar">x</button>
+  </div>
+  <label>Intencao
+    <select data-preview-camera-popover-intent>${directorIntentOptionsHtml(intent)}</select>
+  </label>
+  <button data-preview-camera-popover-add type="button">Inserir na timeline</button>`;
+}
+function previewCameraEditPopoverHtml(state, frame, intent){
+  const title = directorMarkerTitle(state.edit.director_plan, frame);
+  return `<div class="preview-camera-popover-head">
+    <strong>${escapeHtml(directorMarkerLabel(state.edit.director_plan, frame))}</strong>
+    <span>${escapeHtml(fixed(frame.time))}</span>
+    <button class="preview-camera-popover-close" data-preview-camera-popover-close type="button" aria-label="Fechar">x</button>
+  </div>
+  <small>${escapeHtml(title)}</small>
+  <label>Intencao
+    <select data-preview-camera-popover-intent>${directorIntentOptionsHtml(intent)}</select>
+  </label>
+  <div class="preview-camera-popover-actions">
+    <button data-preview-camera-popover-move type="button">Mover para playhead</button>
+    <button data-preview-camera-popover-delete type="button"${state.path.length > 1 ? "" : " disabled"}>Excluir</button>
+  </div>`;
 }
 function closePreviewCameraPopover(card){
   const popover = card.querySelector("[data-preview-camera-popover]");
@@ -9030,11 +9481,10 @@ function resolutionEditsForMoment(moment, exportFormat){
     const key = resolutionPresetForPlatform(platform);
     if (!result[key]) {
       result[key] = Object.assign(resolutionEditForPlatform(moment.rank, platform, moment.adjusted_duration), {
-        destinations: [],
+        destinations: resolutionPresets[key]?.destinations || [platform],
         shared: true
       });
     }
-    result[key].destinations.push(platform);
   });
   return result;
 }
@@ -9094,9 +9544,10 @@ function captionPlatforms(moment, exportFormat){
 }
 function uniquePlatforms(values){
   const seen = new Set();
-  return (Array.isArray(values) ? values : []).map(value => String(value || "").trim().toLowerCase()).filter(platform => {
-    if (!platformMeta[platform] || seen.has(platform)) return false;
-    seen.add(platform);
+  return (Array.isArray(values) ? values : []).map(value => representativePlatform(String(value || "").trim().toLowerCase())).filter(platform => {
+    const resolution = resolutionPresetForPlatform(platform);
+    if (!platformMeta[platform] || seen.has(resolution)) return false;
+    seen.add(resolution);
     return true;
   });
 }
@@ -10186,10 +10637,12 @@ document.querySelectorAll(".card").forEach(card => {
   card.querySelectorAll("[data-platform]").forEach(btn => btn.addEventListener("click", () => {
     const current = cardState(card.dataset.rank);
     const platforms = Array.isArray(current.platforms) ? current.platforms.slice() : [];
-    const existing = platforms.indexOf(btn.dataset.platform);
-    if (existing >= 0) platforms.splice(existing, 1);
-    else platforms.push(btn.dataset.platform);
-    setCardState(card.dataset.rank, { platforms, status: current.status === "discarded" ? null : current.status });
+    const target = representativePlatform(btn.dataset.platform);
+    const normalized = uniquePlatforms(platforms);
+    const existing = normalized.indexOf(target);
+    if (existing >= 0) normalized.splice(existing, 1);
+    else normalized.push(target);
+    setCardState(card.dataset.rank, { platforms: normalized, status: current.status === "discarded" ? null : current.status });
     paint(card);
     updatePlatformUi(card);
     renderCaptionQueue();
