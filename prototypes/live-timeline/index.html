@@ -24,17 +24,25 @@
           <button class="playhead-control" id="playhead-control" type="button" aria-label="Tocar preview">
             <span id="playhead-glyph" aria-hidden="true"></span>
           </button>
+          <div class="volume-stepper" id="volume-stepper" aria-label="Volume rapido">
+            <button id="volume-down" type="button" aria-label="Diminuir volume">-</button>
+            <button id="volume-up" type="button" aria-label="Aumentar volume">+</button>
+          </div>
           <div class="volume-popover" id="volume-popover" hidden>
             <input id="volume-slider" type="range" min="0" max="100" value="72" aria-label="Volume" />
             <button id="mute-button" type="button" aria-label="Mutar">VOL</button>
           </div>
           <button class="trim-handle trim-handle--start" id="start-handle" type="button" aria-label="Cortar inicio">
             <img id="start-logo" alt="" />
+            <span class="trim-blade trim-blade--start" aria-hidden="true"></span>
           </button>
           <button class="trim-handle trim-handle--end" id="end-handle" type="button" aria-label="Cortar fim">
             <img id="end-logo" alt="" />
+            <span class="trim-blade trim-blade--end" aria-hidden="true"></span>
           </button>
           <aside class="keyframe-popover" id="keyframe-popover" aria-label="Inspector do keyframe" hidden>
+            <div class="keyframe-popover__aura" aria-hidden="true"></div>
+            <div class="keyframe-popover__lens" aria-hidden="true"></div>
             <div class="keyframe-popover__beam"></div>
             <div class="keyframe-popover__top">
               <span id="popover-meta">Camera</span>
