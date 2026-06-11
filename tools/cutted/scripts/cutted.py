@@ -103,11 +103,15 @@ AI_DIRECTOR_MAX_FRAME_SAMPLES = 10
 AI_DIRECTOR_MAX_CONTEXT_ROWS = 36
 AI_DIRECTOR_MAX_FALLBACK_FRAMES = 28
 AI_DIRECTOR_OPENAI_TIMEOUT_SECONDS = 45
-CAMERA_ANALYSIS_FETCH_TIMEOUT_MS = 65000
+CAMERA_ANALYSIS_FETCH_TIMEOUT_MS = 180000
 AI_DIRECTOR_MAX_SPEAKER_RATIO = 0.72
 AI_DIRECTOR_MIN_VARIATION_FRAMES = 2
 AI_DIRECTOR_MAX_STILL_SECONDS = 10.0
 AI_DIRECTOR_SIDE_X_DELTA = 8.0
+AI_DIRECTOR_MAX_GROUP_DURATION_RATIO = 0.68
+AI_DIRECTOR_MIN_ACTIVE_DURATION_RATIO = 0.28
+AI_DIRECTOR_GROUP_BALANCE_MIN_SECONDS = 4.6
+AI_DIRECTOR_GROUP_BALANCE_MAX_FRAMES = 10
 CAMERA_SAFE_X_MIN = 30.0
 CAMERA_SAFE_X_MAX = 70.0
 SMART_CAMERA_MODES = {
@@ -303,6 +307,8 @@ class ImportJob:
 
 IMPORT_JOBS: dict[str, ImportJob] = {}
 IMPORT_JOBS_LOCK = threading.Lock()
+VISUAL_MAP_TASKS: set[str] = set()
+VISUAL_MAP_TASKS_LOCK = threading.Lock()
 YOLO_MODEL_CACHE: dict[str, object | None] = {}
 YOLO_MODEL_ERRORS: dict[str, str] = {}
 
@@ -682,6 +688,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
 
         def do_GET(self) -> None:
             path = urllib.parse.urlparse(self.path).path
+            if path == "/api/camera/status":
+                self.handle_camera_status(base_dir)
+                return
             if path == "/api/settings/openai":
                 self.handle_openai_settings_get()
                 return
@@ -765,6 +774,13 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
                 send_json_response(self, 200 if result.get("ok") else 422, result)
             except Exception as error:
                 send_json_response(self, 500, {"ok": False, "error": str(error)})
+
+        def handle_camera_status(self, request_base_dir: Path) -> None:
+            try:
+                result = camera_status_from_request(self, request_base_dir)
+                send_json_response(self, 200, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
 
         def handle_bumper_asset(self, request_base_dir: Path) -> None:
             try:
@@ -879,6 +895,10 @@ def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, bas
     force_refresh = camera_analysis_bypasses_cache(payload, mode)
     title = clean_optional_text(payload.get("title"), 240)
     transcript = clean_optional_text(payload.get("transcript"), 3500)
+    if force_refresh and camera_analysis_uses_ai(mode) and payload.get("allow_completed_cache", True):
+        previous = latest_good_ai_cache(gallery_dir, mode, platform, clip_file)
+        if previous is not None:
+            return {**previous, "ok": True, "cached": True, "completed_cache": True}
     last_analysis: dict[str, object] | None = None
     last_error = ""
     visual_map_ready = (gallery_dir / "visual-map.json").exists()
@@ -941,6 +961,90 @@ def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, bas
         "error": "Nenhum rosto confiavel foi detectado. Mantive a camera atual.",
         "diagnostics": diagnostics,
     }
+
+
+def camera_status_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
+    parsed = urllib.parse.urlparse(handler.path)
+    params = {key: values[-1] for key, values in urllib.parse.parse_qs(parsed.query).items() if values}
+    return camera_status_from_payload(params, base_dir)
+
+
+def camera_status_from_payload(
+    payload: dict[str, object], base_dir: Path, start_background: bool = True
+) -> dict[str, object]:
+    gallery_dir = resolve_request_gallery_dir(base_dir, payload)
+    clip_file = clean_optional_text(payload.get("clip_file"), 1000)
+    if not clip_file:
+        raise ValueError("Missing clip_file.")
+    clip_path = resolve_request_media_path(gallery_dir, clip_file)
+    mode = normalize_camera_analysis_mode(payload.get("mode"))
+    platform = str(payload.get("platform") or "tiktok")
+    cache_ready = (
+        latest_good_ai_cache(gallery_dir, mode, platform, clip_file) is not None
+        if camera_analysis_uses_ai(mode)
+        else False
+    )
+    visual_status = camera_clip_visual_map_status(gallery_dir, clip_path, start_background)
+    ready = bool(cache_ready or not camera_analysis_uses_ai(mode) or visual_status["ready"])
+    return {
+        "ok": True,
+        "mode": mode,
+        "clip_file": clip_file,
+        "cache_ready": cache_ready,
+        "ready": ready,
+        "visual_map": visual_status,
+    }
+
+
+def camera_clip_visual_map_status(gallery_dir: Path, clip_path: Path, start_background: bool) -> dict[str, object]:
+    media = CameraAnalysisMedia(clip_path, local_media_cache_key(clip_path), clip_path.name, "clip", 0.0)
+    path = visual_map_path_for_media(gallery_dir, media)
+    if visual_map_file_ready(path, clip_path):
+        return {"ready": True, "preparing": False, "path": str(path), "kind": "clip"}
+    preparing = visual_map_task_running(path)
+    if start_background and not preparing:
+        preparing = start_visual_map_task(path, clip_path)
+    return {"ready": False, "preparing": preparing, "path": str(path), "kind": "clip"}
+
+
+def visual_map_file_ready(path: Path, source_path: Path) -> bool:
+    if not path.exists():
+        return False
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return (
+        isinstance(payload, dict)
+        and bool(payload.get("ok"))
+        and payload.get("version") == VISUAL_MAP_VERSION
+        and visual_map_matches_media(payload, source_path)
+    )
+
+
+def visual_map_task_running(path: Path) -> bool:
+    key = str(path.resolve())
+    with VISUAL_MAP_TASKS_LOCK:
+        return key in VISUAL_MAP_TASKS
+
+
+def start_visual_map_task(path: Path, media_path: Path) -> bool:
+    key = str(path.resolve())
+    with VISUAL_MAP_TASKS_LOCK:
+        if VISUAL_MAP_TASKS:
+            return key in VISUAL_MAP_TASKS
+        VISUAL_MAP_TASKS.add(key)
+    thread = threading.Thread(target=run_visual_map_task, args=(key, path, media_path), daemon=True)
+    thread.start()
+    return True
+
+
+def run_visual_map_task(key: str, path: Path, media_path: Path) -> None:
+    try:
+        write_media_visual_map(path, media_path)
+    finally:
+        with VISUAL_MAP_TASKS_LOCK:
+            VISUAL_MAP_TASKS.discard(key)
 
 
 def save_bumper_asset_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
@@ -1385,6 +1489,16 @@ def visual_map_camera_analysis(
             diagnostics["director_plan"] = ai_result.get("director_plan", {})
             diagnostics["camera_keyframes"] = len(camera_path)
             source = f"visual-map-{safe_mode}"
+        else:
+            camera_path = ai_director_local_fallback_path(camera_path, detections, duration, platform, safe_mode)
+            diagnostics["director_plan"] = director_plan_from_camera_path(
+                camera_path, duration, platform, "visual-map-ai-director-fallback", safe_mode
+            )
+            diagnostics["camera_keyframes"] = len(camera_path)
+            diagnostics["fallback_quality"] = ai_director_quality_report(
+                camera_path, diagnostics["director_plan"], detections, duration
+            )
+            source = f"visual-map-{safe_mode}-fallback"
     diagnostics.update(camera_path_quality_diagnostics(detections, camera_path, duration, platform))
     director_plan = diagnostics.get("director_plan")
     if not isinstance(director_plan, dict):
@@ -2125,19 +2239,30 @@ def ai_director_quality_report(
     speaker_shots = sum(1 for intent in shot_intents if intent in {"speaker_hold", "speaker_close"})
     shot_variations = len(shot_intents) - speaker_shots
     speaker_ratio = speaker_frames / max(len(frames), 1)
+    duration_ratios = camera_kind_duration_ratios(frames, duration) if frames else {"group": 0.0, "speaker": 0.0, "reaction": 0.0}
+    active_duration_ratio = duration_ratios["speaker"] + duration_ratios["reaction"]
     needs_variation = ai_director_scene_needs_variation(detections, duration)
-    rejected = bool(
+    speaker_only = bool(
         needs_variation
         and len(frames) >= 5
         and speaker_ratio > AI_DIRECTOR_MAX_SPEAKER_RATIO
         and variation_frames + fit_frames < AI_DIRECTOR_MIN_VARIATION_FRAMES
         and shot_variations < AI_DIRECTOR_MIN_VARIATION_FRAMES
     )
-    reason = "speaker_only" if rejected else ""
+    group_dominant = bool(
+        needs_variation
+        and len(frames) >= 5
+        and duration_ratios["group"] > AI_DIRECTOR_MAX_GROUP_DURATION_RATIO
+        and active_duration_ratio < AI_DIRECTOR_MIN_ACTIVE_DURATION_RATIO
+    )
+    rejected = speaker_only or group_dominant
+    reason = "speaker_only" if speaker_only else ("group_dominant" if group_dominant else "")
     return {
         "rejected": rejected,
         "reason": reason,
         "speaker_ratio": round(speaker_ratio, 3),
+        "group_duration_ratio": round(duration_ratios["group"], 3),
+        "active_duration_ratio": round(active_duration_ratio, 3),
         "speaker_frames": speaker_frames,
         "variation_frames": variation_frames,
         "fit_frames": fit_frames,
@@ -2972,6 +3097,9 @@ def dense_protected_camera_path(
     final_speaker_side_coverage = speaker_side_coverage_camera_frames(editorial, detections, duration, platform, hard_cut)
     if final_speaker_side_coverage:
         editorial = merge_camera_path_frames(editorial, final_speaker_side_coverage, duration)
+    group_balance = dominant_group_balance_camera_frames(editorial, detections, duration, platform, hard_cut)
+    if group_balance:
+        editorial = merge_camera_path_frames(editorial, group_balance, duration)
     final_motion_frames = max_still_camera_frames(editorial, detections, duration, platform, hard_cut)
     if final_motion_frames:
         editorial = merge_camera_path_frames(editorial, final_motion_frames, duration)
@@ -3067,6 +3195,84 @@ def speaker_side_recently_covered(frames: list[dict[str, object]], side: str, ti
         if near_time and x_side(float(frame.get("x") or 50.0)) == side:
             return True
     return False
+
+
+def dominant_group_balance_camera_frames(
+    frames: list[dict[str, object]], detections: list[dict[str, object]], duration: float, platform: str, hard_cut: bool
+) -> list[dict[str, object]]:
+    if not frames or not ai_director_scene_needs_variation(detections, duration):
+        return []
+    ratios = camera_kind_duration_ratios(frames, duration)
+    active_ratio = ratios["speaker"] + ratios["reaction"]
+    if ratios["group"] <= AI_DIRECTOR_MAX_GROUP_DURATION_RATIO and active_ratio >= AI_DIRECTOR_MIN_ACTIVE_DURATION_RATIO:
+        return []
+    needed = dominant_group_balance_frame_budget(active_ratio)
+    result: list[dict[str, object]] = []
+    intervals = dominant_group_candidate_intervals(frames, duration)
+    for slot, (start, end, _frame) in enumerate(intervals):
+        if len(result) >= needed:
+            break
+        time_value = round(start + min(max((end - start) * 0.45, 1.6), 2.6), 3)
+        if active_frame_near(frames + result, time_value, 2.4):
+            continue
+        row = nearest_detection(time_value, detections)
+        if row is None:
+            continue
+        focus = dominant_group_balance_frame(row, time_value, slot, hard_cut)
+        if focus is not None:
+            result.append(focus)
+    return result
+
+
+def camera_kind_duration_ratios(frames: list[dict[str, object]], duration: float) -> dict[str, float]:
+    seconds = {"group": 0.0, "speaker": 0.0, "reaction": 0.0}
+    safe_duration = max(duration, 0.3)
+    for start, end, frame in camera_path_bounds_from_frames(frames, safe_duration):
+        kind = dynamic_frame_kind(frame)
+        if kind in seconds:
+            seconds[kind] += max(end - start, 0.0)
+    return {key: seconds[key] / safe_duration for key in seconds}
+
+
+def dominant_group_balance_frame_budget(active_ratio: float) -> int:
+    deficit = max(AI_DIRECTOR_MIN_ACTIVE_DURATION_RATIO - active_ratio, 0.04)
+    estimated_seconds_per_frame = 2.6
+    budget = math.ceil(deficit / estimated_seconds_per_frame * 100.0)
+    return max(1, min(budget, AI_DIRECTOR_GROUP_BALANCE_MAX_FRAMES))
+
+
+def dominant_group_candidate_intervals(
+    frames: list[dict[str, object]], duration: float
+) -> list[tuple[float, float, dict[str, object]]]:
+    intervals = [
+        (start, end, frame)
+        for start, end, frame in camera_path_bounds_from_frames(frames, duration)
+        if dynamic_frame_kind(frame) == "group" and end - start >= AI_DIRECTOR_GROUP_BALANCE_MIN_SECONDS
+    ]
+    return sorted(intervals, key=lambda item: item[1] - item[0], reverse=True)
+
+
+def active_frame_near(frames: list[dict[str, object]], time_value: float, window: float) -> bool:
+    for frame in frames:
+        if dynamic_frame_kind(frame) == "group":
+            continue
+        if abs(float(frame.get("time") or 0.0) - time_value) <= window:
+            return True
+    return False
+
+
+def dominant_group_balance_frame(
+    row: dict[str, object], time_value: float, slot: int, hard_cut: bool
+) -> dict[str, object] | None:
+    faces = sorted(reliable_faces(row), key=face_x)
+    if len(faces) < 2:
+        return None
+    primary = primary_breakaway_face(row, faces, slot)
+    if slot % 2 == 1:
+        reaction = secondary_breakaway_face(row, primary, faces)
+        if reaction is not None:
+            return group_breakaway_reaction_frame(reaction, time_value, hard_cut)
+    return group_breakaway_speaker_frame(primary, time_value, hard_cut)
 
 
 def missing_side_frame_count(frames: list[dict[str, object]], side: str) -> int:
@@ -8187,7 +8393,8 @@ const maxOverlayImageBytes = 1800000;
 const maxOverlayImageSourceBytes = 6000000;
 const maxOverlayImagePixels = 1600;
 const maxBumperVideoBytes = 48000000;
-const cameraAnalysisFetchTimeoutMs = 65000;
+const cameraAnalysisFetchTimeoutMs = 180000;
+const cameraReadinessPollMs = 3500;
 function save(){
   try {
     localStorage.setItem("cutted-state", JSON.stringify(state));
@@ -8803,17 +9010,89 @@ function resetCameraPathForCard(card){
   setSelectedCameraPathIndex(card, 0);
   setCameraPathForRank(rank, [], platform);
 }
+function cameraAnalysisRequestPayload(card, smartMode, forceRefresh){
+  const rank = card.dataset.rank;
+  const platform = activePlatformForRank(rank);
+  const moment = (window.CUTTED_DATA.moments || []).find(item => String(item.rank) === String(rank));
+  const values = trimValues(card);
+  return {
+    gallery_path: currentGalleryPath(),
+    rank,
+    platform,
+    mode: smartMode,
+    force_refresh: forceRefresh,
+    allow_completed_cache: true,
+    clip_file: moment?.clip_file || "",
+    title: moment?.title || "",
+    transcript: moment?.transcript || moment?.text || "",
+    trim_start_seconds: values.trimStart,
+    source_start_seconds: Number(moment?.start || 0) + values.trimStart,
+    adjusted_duration: Math.max(values.endPos - values.startPos, .3)
+  };
+}
+function cameraStatusUrl(card, smartMode){
+  const payload = cameraAnalysisRequestPayload(card, smartMode, false);
+  const params = new URLSearchParams();
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) params.set(key, String(value));
+  });
+  return `/api/camera/status?${params.toString()}`;
+}
+function scheduleAiReadinessRefresh(card){
+  if (card.dataset.aiPollScheduled === "1") return;
+  card.dataset.aiPollScheduled = "1";
+  window.setTimeout(() => {
+    delete card.dataset.aiPollScheduled;
+    refreshAiReadinessForCard(card);
+  }, cameraReadinessPollMs);
+}
+async function refreshAiReadinessForCard(card){
+  const button = card.querySelector("[data-camera-ai]");
+  if (!button || card.dataset.aiApplying === "1") return;
+  if (card.dataset.aiStatusLoading === "1") return;
+  card.dataset.aiStatusLoading = "1";
+  try {
+    const response = await fetch(cameraStatusUrl(card, "ai-director"));
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "status indisponivel");
+    card.dataset.aiReady = payload.ready ? "1" : "0";
+    card.dataset.aiCacheReady = payload.cache_ready ? "1" : "0";
+    button.disabled = !payload.ready;
+    button.textContent = payload.ready ? "IA" : "...";
+    if (payload.cache_ready) setCameraAutoStatus(card, "IA pronta do cache");
+    else if (payload.ready) setCameraAutoStatus(card, "IA pronta");
+    else {
+      setCameraAutoStatus(card, "Mapeando video...");
+      scheduleAiReadinessRefresh(card);
+    }
+  } catch (_error) {
+    card.dataset.aiReady = "0";
+    button.disabled = true;
+    button.textContent = "...";
+    setCameraAutoStatus(card, "Mapeando video...");
+    scheduleAiReadinessRefresh(card);
+  } finally {
+    delete card.dataset.aiStatusLoading;
+  }
+}
 async function analyzeCameraForCard(card, mode = "auto-director"){
   const rank = card.dataset.rank;
   const platform = activePlatformForRank(rank);
   const smartMode = smartCameraModes[mode] ? mode : "auto-director";
   const forceRefresh = smartMode === "ai-director";
   const button = card.querySelector(`[data-camera-smart-mode="${smartMode}"]`) || card.querySelector("[data-camera-ai]") || card.querySelector("[data-camera-auto]");
-  setCameraAutoStatus(card, `Analisando ${smartCameraModes[smartMode].label}...`);
-  if (button) button.disabled = true;
+  if (smartMode === "ai-director" && card.dataset.aiReady !== "1") {
+    setCameraAutoStatus(card, "Mapeando video...");
+    refreshAiReadinessForCard(card);
+    return;
+  }
+  card.dataset.aiApplying = "1";
+  setCameraAutoStatus(card, `Aplicando ${smartCameraModes[smartMode].label}...`);
+  if (button) {
+    button.disabled = true;
+    if (smartMode === "ai-director") button.textContent = "...";
+  }
   try {
-    const moment = (window.CUTTED_DATA.moments || []).find(item => String(item.rank) === String(rank));
-    const values = trimValues(card);
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), cameraAnalysisFetchTimeoutMs);
     let response;
@@ -8822,19 +9101,7 @@ async function analyzeCameraForCard(card, mode = "auto-director"){
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
-        body: JSON.stringify({
-          gallery_path: currentGalleryPath(),
-          rank,
-          platform,
-          mode: smartMode,
-          force_refresh: forceRefresh,
-          clip_file: moment?.clip_file || "",
-          title: moment?.title || "",
-          transcript: moment?.transcript || moment?.text || "",
-          trim_start_seconds: values.trimStart,
-          source_start_seconds: Number(moment?.start || 0) + values.trimStart,
-          adjusted_duration: Math.max(values.endPos - values.startPos, .3)
-        })
+        body: JSON.stringify(cameraAnalysisRequestPayload(card, smartMode, forceRefresh))
       });
     } finally {
       window.clearTimeout(timeoutId);
@@ -8856,16 +9123,21 @@ async function analyzeCameraForCard(card, mode = "auto-director"){
     renderFinalStage();
     const label = payload.mode_label || smartCameraModes[smartMode].label;
     const suffix = diagnosticText ? ` (${diagnosticText})` : "";
-    const applied = payload.cache_recovered ? `${label}: mantive ultimo resultado bom` : payload.cached ? `${label} aplicado do cache` : payload.cache_bypassed ? `${label} recalculado` : `${label} aplicado`;
+    const applied = payload.cache_recovered ? `${label}: mantive ultimo resultado bom` : payload.completed_cache ? `${label} pronto do cache` : payload.cached ? `${label} aplicado do cache` : payload.cache_bypassed ? `${label} recalculado` : `${label} aplicado`;
     setCameraAutoStatus(card, `${applied}.${suffix}`);
   } catch (error) {
     const message = error && error.name === "AbortError"
-      ? "IA demorou demais; usei seguranca para destravar. Tente de novo em alguns segundos."
+      ? "IA ainda esta aplicando; tente novamente em alguns segundos para buscar o resultado pronto."
       : (error.message || "Falha na auto camera.");
     setCameraAutoStatus(card, message);
   } finally {
+    delete card.dataset.aiApplying;
     const nextButton = card.querySelector(`[data-camera-smart-mode="${smartMode}"]`) || card.querySelector("[data-camera-ai]") || card.querySelector("[data-camera-auto]");
-    if (nextButton) nextButton.disabled = false;
+    if (nextButton) {
+      nextButton.disabled = false;
+      if (smartMode === "ai-director") nextButton.textContent = "IA";
+    }
+    if (smartMode === "ai-director") refreshAiReadinessForCard(card);
   }
 }
 function setCameraAutoStatus(card, message){
@@ -9361,6 +9633,7 @@ function bindCardCameraControls(card){
   card.querySelectorAll("[data-camera-smart-mode]").forEach(button => {
     button.addEventListener("click", () => analyzeCameraForCard(card, button.dataset.cameraSmartMode));
   });
+  refreshAiReadinessForCard(card);
   card.querySelector("[data-camera-path-reset]")?.addEventListener("click", () => resetCameraPathForCard(card));
   card.querySelector("[data-camera-path-set-time]")?.addEventListener("click", () => moveCameraPathFrameToPlayhead(card));
   card.querySelector("[data-camera-path-delete]")?.addEventListener("click", () => deleteCameraPathFrameForCard(card));
