@@ -19,7 +19,7 @@ const HANDLE_ANCHOR = {
     endX: 0,
     endY: 98,
     startX: 76,
-    startY: 104
+    startY: 98
   },
   mobile: {
     endX: 0,
@@ -88,6 +88,7 @@ export interface LiveTimelineSnapshot {
 interface TimelineState extends LiveTimelineSnapshot {
   volumeOpen: boolean;
   volumeEnabled: boolean;
+  inspectorEnabled: boolean;
   mode: TimelineMode;
   activeHandle: TrimSide | null;
   inspectorOpen: boolean;
@@ -113,6 +114,7 @@ export interface LiveTimelineOptions {
   playhead?: number;
   playing?: boolean;
   selectedKeyframeId?: string | null;
+  showInspector?: boolean;
   showVolume?: boolean;
   trimEnd?: number;
   trimStart?: number;
@@ -295,6 +297,7 @@ function createInitialState(options: LiveTimelineOptions): TimelineState {
     volume: clamp(options.volume ?? 0.72, 0, 1),
     volumeOpen: false,
     volumeEnabled: options.showVolume ?? true,
+    inspectorEnabled: options.showInspector ?? true,
     mode: "idle",
     activeHandle: null,
     inspectorOpen: false,
@@ -351,6 +354,7 @@ function applyOptionsToState(target: TimelineState, options: LiveTimelineOptions
   target.muted = options.muted ?? target.muted;
   target.volume = clamp(options.volume ?? target.volume, 0, 1);
   target.volumeEnabled = options.showVolume ?? target.volumeEnabled;
+  target.inspectorEnabled = options.showInspector ?? target.inspectorEnabled;
   target.peaks = options.peaks ?? target.peaks;
   target.keyframes = options.keyframes ?? target.keyframes;
   if (Object.prototype.hasOwnProperty.call(options, "selectedKeyframeId")) {
@@ -420,9 +424,9 @@ function getMetrics(host: HTMLElement): TimelineMetrics {
   const width = Math.max(host.clientWidth, 320);
   const height = Math.max(host.clientHeight, 150);
   const compact = width < 700 || height < 210;
-  const railX = compact ? 70 : 118;
+  const railX = compact ? 70 : 76;
   const railWidth = Math.max(width - railX * 2, compact ? 180 : 420);
-  const railY = compact ? 34 : Math.round(height * 0.22);
+  const railY = compact ? 40 : Math.round(height * 0.26);
   const railHeight = compact ? Math.max(height - 72, 76) : Math.round(height * 0.56);
   return {
     width,
@@ -439,28 +443,34 @@ function getMetrics(host: HTMLElement): TimelineMetrics {
 
 function drawFrame(g: Graphics, m: TimelineMetrics, pulse: number): void {
   const energy = 0.18 + Math.sin(pulse * 1.4) * 0.05;
-  g.roundRect(m.railX - 28, m.railY - 34, m.railWidth + 56, m.railHeight + 68, 18)
+  const { left, right } = timelineVisualBounds(m);
+  const top = m.railY - 22;
+  const bottom = m.railY + m.railHeight + 22;
+  g.roundRect(left, m.railY - 34, right - left, m.railHeight + 68, 18)
     .fill({ color: COLORS.blue, alpha: 0.025 + energy * 0.04 });
-  g.roundRect(m.railX - 16, m.railY - 22, m.railWidth + 32, m.railHeight + 44, 10)
-    .fill({ color: COLORS.black, alpha: 0.72 })
-    .stroke({ color: COLORS.blue, alpha: 0.72, width: 2 });
-  g.roundRect(m.railX - 7, m.railY - 13, m.railWidth + 14, m.railHeight + 26, 7)
-    .stroke({ color: COLORS.white, alpha: 0.1, width: 1 });
-  g.moveTo(m.railX - 4, m.railY - 12).lineTo(m.railX + m.railWidth + 4, m.railY - 12)
+  g.moveTo(left, top).lineTo(right, top)
+    .stroke({ color: COLORS.blue, alpha: 0.44 + energy, width: 2 });
+  g.moveTo(left, bottom).lineTo(right, bottom)
+    .stroke({ color: COLORS.green, alpha: 0.36 + energy * 0.7, width: 2 });
+  g.moveTo(left, top + 14).lineTo(left + 34, top + 14)
+    .stroke({ color: COLORS.white, alpha: 0.14, width: 1 });
+  g.moveTo(right - 34, bottom - 14).lineTo(right, bottom - 14)
     .stroke({ color: COLORS.white, alpha: 0.12, width: 1 });
 }
 
 function drawInactiveMasks(g: Graphics, m: TimelineMetrics, s: TimelineState, pulse: number): void {
   const startX = timeToX(s.trimStart, m, s.duration);
   const endX = timeToX(s.trimEnd, m, s.duration);
-  g.rect(m.railX - 16, m.railY - 22, startX - m.railX + 16, m.railHeight + 44).fill({ color: COLORS.black, alpha: 0.58 });
-  g.rect(endX, m.railY - 22, m.railX + m.railWidth - endX + 16, m.railHeight + 44).fill({ color: COLORS.black, alpha: 0.58 });
+  const { left, right } = timelineVisualBounds(m);
+  g.rect(left, m.railY - 22, Math.max(startX - left, 0), m.railHeight + 44).fill({ color: COLORS.black, alpha: 0.32 });
+  g.rect(endX, m.railY - 22, Math.max(right - endX, 0), m.railHeight + 44).fill({ color: COLORS.black, alpha: 0.32 });
   g.roundRect(startX, m.railY - 21, endX - startX, m.railHeight + 42, 7)
-    .fill({ color: COLORS.blue, alpha: 0.025 })
-    .stroke({ color: COLORS.green, alpha: 0.2 + Math.sin(pulse * 1.8) * 0.04, width: 1 });
+    .fill({ color: COLORS.blue, alpha: 0.025 });
   drawSelectionTexture(g, m, startX, endX, pulse);
-  g.roundRect(startX - 2, m.railY - 23, endX - startX + 4, m.railHeight + 46, 9)
-    .stroke({ color: COLORS.blue, alpha: 0.18, width: 4 });
+  g.moveTo(startX, m.railY - 22).lineTo(endX, m.railY - 22)
+    .stroke({ color: COLORS.blue, alpha: 0.12, width: 5 });
+  g.moveTo(startX, m.railY + m.railHeight + 22).lineTo(endX, m.railY + m.railHeight + 22)
+    .stroke({ color: COLORS.green, alpha: 0.16 + Math.sin(pulse * 1.8) * 0.03, width: 5 });
   if (s.mode === "trimming") {
     const handleX = s.activeHandle === "start" ? startX : endX;
     const color = s.activeHandle === "start" ? COLORS.blue : COLORS.green;
@@ -514,15 +524,26 @@ function drawWaveform(g: Graphics, m: TimelineMetrics, s: TimelineState, pulse: 
 function drawRails(g: Graphics, m: TimelineMetrics, s: TimelineState, pulse: number): void {
   drawRail(g, m, s, m.cameraY, COLORS.blue, 0.92, pulse);
   drawRail(g, m, s, m.effectY, COLORS.green, 0.86, pulse + 0.6);
-  g.moveTo(m.railX, m.waveformY).lineTo(m.railX + m.railWidth, m.waveformY).stroke({ color: COLORS.white, alpha: 0.1, width: 1 });
+  const { left, right } = timelineVisualBounds(m);
+  g.moveTo(left, m.waveformY).lineTo(right, m.waveformY).stroke({ color: COLORS.white, alpha: 0.1, width: 1 });
 }
 
 function drawRail(g: Graphics, m: TimelineMetrics, s: TimelineState, y: number, color: number, alpha: number, pulse: number): void {
   const startX = timeToX(s.trimStart, m, s.duration);
   const endX = timeToX(s.trimEnd, m, s.duration);
-  g.moveTo(m.railX, y).lineTo(m.railX + m.railWidth, y).stroke({ color: COLORS.rail, alpha: 1, width: 7 });
+  const { left, right } = timelineVisualBounds(m);
+  g.moveTo(left, y).lineTo(right, y).stroke({ color: COLORS.rail, alpha: 1, width: 7 });
+  g.moveTo(left, y).lineTo(right, y).stroke({ color, alpha: 0.24 + Math.sin(pulse * 1.4) * 0.03, width: 3 });
   g.moveTo(startX, y).lineTo(endX, y).stroke({ color, alpha: 0.16, width: 13 });
   g.moveTo(startX, y).lineTo(endX, y).stroke({ color, alpha: alpha + Math.sin(pulse * 2) * 0.06, width: 3 });
+}
+
+function timelineVisualBounds(m: TimelineMetrics): { left: number; right: number } {
+  const padding = m.width < 760 ? HANDLE_ANCHOR.mobile.startX : HANDLE_ANCHOR.desktop.startX;
+  return {
+    left: clamp(m.railX - padding, 0, m.width),
+    right: clamp(m.railX + m.railWidth + padding, 0, m.width)
+  };
 }
 
 function drawInspectorFocus(g: Graphics, m: TimelineMetrics, s: TimelineState, pulse: number): void {
@@ -783,8 +804,16 @@ function bindTransportControls(elements: TimelineElements, state: TimelineState,
 
 function bindShellInteractions(elements: TimelineElements, state: TimelineState, render: () => void): void {
   elements.shell.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
     if (isHandleTarget(event.target)) return;
     if (isTransportTarget(event.target)) return;
+    const keyframe = nearestKeyframe(event.clientX, event.clientY, elements, state);
+    if (keyframe?.editable) {
+      event.preventDefault();
+      event.stopPropagation();
+      openInspector(keyframe, state, render);
+      return;
+    }
     state.playing = false;
     state.inspectorOpen = false;
     if (state.volumeEnabled) state.volumeOpen = false;
@@ -795,6 +824,12 @@ function bindShellInteractions(elements: TimelineElements, state: TimelineState,
   });
   elements.shell.addEventListener("pointermove", (event) => {
     if (isHandleTarget(event.target)) return;
+    if (isPointerNearTrim(event.clientX, event.clientY, elements, state)) {
+      state.hoveredKeyframeId = null;
+      elements.shell.classList.remove("is-over-keyframe");
+      render();
+      return;
+    }
     const keyframe = nearestKeyframe(event.clientX, event.clientY, elements, state);
     state.hoveredKeyframeId = keyframe?.id ?? null;
     elements.shell.classList.toggle("is-over-keyframe", Boolean(keyframe));
@@ -807,6 +842,13 @@ function bindShellInteractions(elements: TimelineElements, state: TimelineState,
   });
   elements.shell.addEventListener("contextmenu", (event) => {
     event.preventDefault();
+    if (
+      isHandleTarget(event.target) ||
+      isPointerNearTrim(event.clientX, event.clientY, elements, state)
+    ) {
+      event.stopPropagation();
+      return;
+    }
     const keyframe = nearestKeyframe(event.clientX, event.clientY, elements, state);
     if (keyframe?.editable) openInspector(keyframe, state, render);
     if (!keyframe) {
@@ -847,12 +889,7 @@ function createDraggable(
     trigger: handle,
     onPress() {
       gsap.set(handle, { x: 0, y: 0 });
-      handle.classList.add("is-dragging");
-      state.playing = false;
-      state.mode = "trimming";
-      state.activeHandle = side;
-      state.inspectorOpen = false;
-      if (state.volumeEnabled) state.volumeOpen = false;
+      startTrimDrag(handle, side, state);
     },
     onDrag() {
       update(this.pointerX);
@@ -860,14 +897,29 @@ function createDraggable(
       gsap.set(handle, { x: 0, y: 0 });
     },
     onRelease() {
-      handle.classList.remove("is-dragging");
-      triggerCutPulse(side, state);
-      playUiTone(triggerSnapRitual(side, state) ? "snap" : "cut", state);
-      state.mode = "idle";
-      state.activeHandle = null;
+      finishTrimDrag(handle, side, state, this.deltaX !== 0);
       gsap.set(handle, { x: 0, y: 0 });
     }
   });
+}
+
+function startTrimDrag(handle: HTMLElement, side: TrimSide, state: TimelineState): void {
+  handle.classList.add("is-dragging");
+  state.playing = false;
+  state.mode = "trimming";
+  state.activeHandle = side;
+  state.inspectorOpen = false;
+  if (state.volumeEnabled) state.volumeOpen = false;
+}
+
+function finishTrimDrag(handle: HTMLElement, side: TrimSide, state: TimelineState, moved: boolean): void {
+  handle.classList.remove("is-dragging");
+  if (moved) {
+    triggerCutPulse(side, state);
+    playUiTone(triggerSnapRitual(side, state) ? "snap" : "cut", state);
+  }
+  state.mode = "idle";
+  state.activeHandle = null;
 }
 
 function emitCutParticles(side: TrimSide, state: TimelineState, elements: TimelineElements): void {
@@ -944,11 +996,23 @@ function nearestKeyframe(clientX: number, clientY: number, elements: TimelineEle
   }) ?? null;
 }
 
+function isPointerNearTrim(clientX: number, clientY: number, elements: TimelineElements, state: TimelineState): boolean {
+  const m = getMetrics(elements.canvasHost);
+  const rect = elements.canvasHost.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+  const startX = timeToX(state.trimStart, m, state.duration);
+  const endX = timeToX(state.trimEnd, m, state.duration);
+  const withinRail = y >= m.railY - 48 && y <= m.railY + m.railHeight + 48;
+  return withinRail && (Math.abs(x - startX) <= 42 || Math.abs(x - endX) <= 42);
+}
+
 function openInspector(keyframe: TimelineKeyframe, state: TimelineState, render: () => void): void {
+  if (state.mode === "trimming") return;
   state.playing = false;
   state.volumeOpen = false;
   state.selectedKeyframeId = keyframe.id;
-  state.inspectorOpen = true;
+  state.inspectorOpen = state.inspectorEnabled;
   state.mode = "editing";
   activeCallbacks.onKeyframeOpen?.(keyframe);
   render();
@@ -980,7 +1044,7 @@ function placeHandles(m: TimelineMetrics, s: TimelineState, elements: TimelineEl
 
 function placePlayheadControl(m: TimelineMetrics, s: TimelineState, elements: TimelineElements): void {
   const x = timeToX(s.playhead, m, s.duration);
-  const y = m.railY - 46;
+  const y = Math.max(m.railY - 26, 24);
   elements.playheadControl.style.left = `${x - 16}px`;
   elements.playheadControl.style.top = `${y - 16}px`;
   elements.volumePopover.style.left = `${clamp(x - 74, 12, m.width - 160)}px`;
@@ -994,8 +1058,8 @@ function setHandlePosition(handle: HTMLElement, x: number, y: number): void {
 
 function updatePopover(m: TimelineMetrics, s: TimelineState, elements: TimelineElements): void {
   const keyframe = selectedKeyframe(s);
-  elements.popover.hidden = !s.inspectorOpen || keyframe === null;
-  if (!s.inspectorOpen || keyframe === null) return;
+  elements.popover.hidden = !s.inspectorEnabled || !s.inspectorOpen || keyframe === null;
+  if (!s.inspectorEnabled || !s.inspectorOpen || keyframe === null) return;
   const x = timeToX(keyframe.time, m, s.duration);
   const y = keyframe.layer === "camera" ? m.cameraY : m.effectY;
   const left = clamp(x - 118, 16, m.width - 252);
