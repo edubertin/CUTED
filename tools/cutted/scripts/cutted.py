@@ -28,6 +28,7 @@ from types import SimpleNamespace
 
 
 BRAND_LOGO_FILE = "cuted-logo-transparent.png"
+LIVE_TIMELINE_ASSET_FILES = ("live-timeline.css", "live-timeline.js")
 GROUP_FIT_LOGO_TOP_RATIO = 0.11
 GROUP_FIT_LOGO_WIDTH_RATIO = 0.38
 GROUP_FIT_LOGO_OPACITY = 0.9
@@ -7969,7 +7970,8 @@ def write_html(path: Path, moments: list[Moment], source_label: str) -> None:
     cards = "\n".join(card_html(moment) for moment in moments)
     data = json.dumps({"moments": [moment_to_dict(item) for item in moments]}, ensure_ascii=False)
     logo_src = write_brand_logo_asset(path.parent)
-    path.write_text(page_html(source_label, cards, data, logo_src), encoding="utf-8")
+    live_timeline_assets = write_live_timeline_assets(path.parent)
+    path.write_text(page_html(source_label, cards, data, logo_src, live_timeline_assets), encoding="utf-8")
 
 
 def write_brand_logo_asset(output_dir: Path) -> str:
@@ -7980,6 +7982,26 @@ def write_brand_logo_asset(output_dir: Path) -> str:
         if not destination.exists() or source.read_bytes() != destination.read_bytes():
             shutil.copyfile(source, destination)
     return f"assets/brand/{BRAND_LOGO_FILE}"
+
+
+def write_live_timeline_assets(output_dir: Path) -> dict[str, str]:
+    source_dir = live_timeline_asset_source_dir()
+    destination_dir = output_dir / "assets" / "live-timeline"
+    assets: dict[str, str] = {}
+    for filename in LIVE_TIMELINE_ASSET_FILES:
+        source = source_dir / filename
+        if not source.exists():
+            continue
+        destination_dir.mkdir(parents=True, exist_ok=True)
+        destination = destination_dir / filename
+        if not destination.exists() or source.read_bytes() != destination.read_bytes():
+            shutil.copyfile(source, destination)
+        assets[filename.rsplit(".", 1)[-1]] = f"assets/live-timeline/{filename}"
+    return assets
+
+
+def live_timeline_asset_source_dir() -> Path:
+    return Path(__file__).resolve().parents[1] / "assets" / "live-timeline"
 
 
 def brand_logo_path() -> Path:
@@ -8025,6 +8047,7 @@ def card_html(moment: Moment) -> str:
           <strong>{html.escape(moment.title)}</strong>
           <small data-card-summary>{moment.start:.1f}s - {moment.end:.1f}s ({duration:.1f}s)</small>
         </span>
+        <span class="clip-row-timeline" data-card-row-timeline aria-hidden="true"></span>
         <span class="clip-status">
           <span data-platform-summary>Sem destino</span>
           <span data-status-pill>Em edicao</span>
@@ -8181,13 +8204,16 @@ def preview_cache_token(moment: Moment) -> str:
     return f"{moment.rank}-{int(moment.start * 1000)}-{int(moment.end * 1000)}"
 
 
-def page_html(source_label: str, cards: str, data: str, logo_src: str) -> str:
+def page_html(source_label: str, cards: str, data: str, logo_src: str, live_timeline_assets: dict[str, str] | None = None) -> str:
+    live_timeline_css = live_timeline_assets_html(live_timeline_assets or {}, "css")
+    live_timeline_js = live_timeline_assets_html(live_timeline_assets or {}, "js")
     return f"""<!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CUTED Review</title>
+{live_timeline_css}
   <style>{css()}</style>
 </head>
 <body data-format="tiktok" data-tab="edit">
@@ -8331,10 +8357,23 @@ def page_html(source_label: str, cards: str, data: str, logo_src: str) -> str:
     </section>
   </div>
   <main>{cards}</main>
+{live_timeline_js}
   <script>window.CUTTED_DATA = {data}; window.CUTTED_SCRIPT = {json.dumps(str(Path(__file__).resolve()))};</script>
   <script>{js()}</script>
 </body>
 </html>"""
+
+
+def live_timeline_assets_html(assets: dict[str, str], kind: str) -> str:
+    value = assets.get(kind)
+    if not value:
+        return ""
+    escaped = html.escape(value)
+    if kind == "css":
+        return f'  <link rel="stylesheet" href="{escaped}">'
+    if kind == "js":
+        return f'  <script src="{escaped}"></script>'
+    return ""
 
 
 def css() -> str:
@@ -8345,11 +8384,12 @@ def base_css() -> str:
     return """
 *{box-sizing:border-box}:root{--color-brand-blue:#11A2CF;--color-brand-green:#AFCF2A;--color-brand-white:#E7E7E8;--color-brand-black:#050505;--color-metal-gray:#68686A;--color-surface:#0D0D0D;--color-surface-raised:#111;--color-surface-muted:#151515;--color-surface-control:#191919;--color-border:#272727;--color-border-strong:#333;--color-text:#f4f4f4;--color-text-soft:#ddd;--color-text-muted:#9a9a9a;--color-focus:#11A2CF;--color-danger:#ffb3b3;--shadow-panel:0 14px 42px rgba(0,0,0,.5)}body{margin:0;background:var(--color-brand-black);color:var(--color-text);font:14px/1.45 Arial,sans-serif}
 header{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:minmax(90px,1fr) auto minmax(90px,1fr);gap:16px;align-items:center;padding:10px 22px 12px;background:var(--color-brand-black);border-bottom:1px solid var(--color-border)}.header-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.icon-button{display:inline-grid;place-items:center;width:38px;min-width:38px;padding:0}.icon-button svg{display:block;width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.brand-lockup{display:grid;justify-items:center;gap:8px;min-width:0}.brand-logo{display:block;width:min(540px,54vw);height:78px;object-fit:contain;object-position:center;border:0;border-radius:0;filter:none}.brand-lockup p{margin:2px 0 0;color:var(--color-text-muted);font-size:11px;line-height:1.1;text-align:center;max-width:min(520px,56vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tabs{position:sticky;top:119px;z-index:4;display:flex;gap:8px;padding:10px 22px;background:#060606;border-bottom:1px solid #1f1f1f}.tabs button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 12px}.tabs button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
-main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px}.card{border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface);overflow:hidden}.card[open]{border-color:var(--color-metal-gray);background:var(--color-surface-raised)}.card.liked{border-color:var(--color-brand-green)}.card.discarded{opacity:.46}.clip-summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;min-height:62px;padding:12px 14px;cursor:pointer;list-style:none}.clip-summary::-webkit-details-marker{display:none}.clip-rank{color:var(--color-metal-gray);font-weight:700}.clip-title{display:grid;gap:2px;min-width:0}.clip-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}.clip-title small{color:var(--color-text-muted)}.clip-status{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.clip-status span,.format-previews span{display:inline-flex;align-items:center;min-height:26px;padding:4px 8px;border-radius:999px;background:#242424;color:var(--color-text-soft);font-size:12px}
+main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px}.card{border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface);overflow:hidden}.card[open]{border-color:var(--color-metal-gray);background:var(--color-surface-raised)}.card.liked{border-color:var(--color-brand-green)}.card.discarded{opacity:.46}.clip-summary{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(180px,.55fr) auto;gap:12px;align-items:center;min-height:62px;padding:12px 14px;cursor:pointer;list-style:none}.clip-summary::-webkit-details-marker{display:none}.clip-rank{color:var(--color-metal-gray);font-weight:700}.clip-title{display:grid;gap:2px;min-width:0}.clip-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}.clip-title small{color:var(--color-text-muted)}.clip-row-timeline{position:relative;display:block;min-width:160px;height:30px;border:1px solid rgba(17,162,207,.22);border-radius:4px;background:linear-gradient(180deg,rgba(17,162,207,.08),rgba(255,255,255,.02)),rgba(5,5,5,.28);overflow:hidden}.clip-row-timeline-track{position:absolute;left:8px;right:8px;top:50%;height:3px;border-radius:999px;background:rgba(231,231,232,.12);transform:translateY(-50%)}.clip-row-timeline-window{position:absolute;top:7px;bottom:7px;border:1px solid rgba(175,207,42,.5);border-radius:3px;background:rgba(175,207,42,.08)}.clip-row-timeline-marker{position:absolute;top:6px;width:7px;height:18px;border:1px solid rgba(17,162,207,.8);border-radius:3px;background:rgba(17,162,207,.22);transform:translateX(-50%)}.clip-row-timeline-playhead{position:absolute;top:5px;width:2px;height:20px;border-radius:999px;background:var(--color-brand-white);transform:translateX(-50%);opacity:.72}.clip-status{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.clip-status span,.format-previews span{display:inline-flex;align-items:center;min-height:26px;padding:4px 8px;border-radius:999px;background:#242424;color:var(--color-text-soft);font-size:12px}
 .app-notice{position:sticky;top:0;z-index:30;margin:0;padding:10px 14px;background:#2b1717;color:#ffd7d7;border-bottom:1px solid #6d2b2b;font-size:13px;text-align:center}.app-notice[hidden]{display:none}
 .import-stage{display:none;max-width:1080px;margin:18px auto;padding:0 18px}.import-panel{display:grid;gap:14px;padding:18px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised)}.import-panel p{margin:4px 0 0;color:var(--color-text-muted)}.import-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.import-panel label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.import-panel input,.import-panel select,.import-panel textarea{width:100%;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black);color:var(--color-text);padding:9px 10px;font:inherit}.import-panel textarea{resize:vertical;min-height:112px}.import-panel small{color:var(--color-text-muted);line-height:1.35}.import-path-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.import-key-banner{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 12px;border:1px solid rgba(17,162,207,.4);border-radius:8px;background:rgba(17,162,207,.1);color:var(--color-text)}.import-key-banner[hidden]{display:none}.import-key-banner button{min-height:34px}.import-path-row button{min-height:38px;background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.duration-profile{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0}.duration-profile legend{grid-column:1/-1;color:var(--color-text-muted);font-size:12px}.duration-profile label{position:relative;display:grid!important}.duration-profile input{position:absolute;opacity:0;pointer-events:none}.duration-profile span{display:grid;gap:2px;min-height:54px;padding:10px 12px;border:1px solid var(--color-border-strong);border-radius:8px;background:var(--color-surface-muted);color:var(--color-text-soft)}.duration-profile input:checked+span{border-color:var(--color-brand-green);background:#182011;color:var(--color-text)}.duration-profile small{color:var(--color-text-muted)}.import-context{display:grid}.import-status{min-height:20px;color:var(--color-text-muted)}.import-result{display:flex;gap:8px;flex-wrap:wrap}.import-result a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.import-result code{display:block;width:100%;padding:10px;border:1px solid #3a2525;border-radius:6px;background:#180d0d;color:#ffcccc;white-space:pre-wrap}
 .layer-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:100%;min-height:0}.layer-strip:empty{display:none}.bumper-sequence{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;min-height:24px;color:var(--color-text-muted);font-size:12px}.bumper-sequence:empty{display:none}.bumper-sequence span{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bumper-sequence b{color:var(--color-brand-green);font-weight:800}.layer-chip{display:inline-flex;gap:6px;align-items:center;max-width:100%;min-height:30px;padding:4px 5px 4px 9px;border:1px solid #303030;border-radius:999px;background:var(--color-surface-muted);color:var(--color-text-soft);font-size:12px}.layer-chip.is-selected{border-color:var(--color-focus);background:#182011;color:var(--color-text)}.layer-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.layer-chip button{display:inline-grid;place-items:center;width:22px;height:22px;min-width:22px;padding:0;border:1px solid #3a3a3a;border-radius:999px;background:#242424;color:var(--color-text-soft);font-size:14px;line-height:1}
 .editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;justify-items:center;gap:10px}.preview-frame{display:grid;gap:10px;width:100%;max-width:520px}.media{position:relative;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000;pointer-events:none}.placeholder{display:grid;place-items:center;height:100%;color:#777}.preview-bar{display:grid;grid-template-columns:1fr;gap:8px;justify-items:center;width:100%;padding:8px;border:1px solid #252525;border-radius:8px;background:#0a0a0a}.preview-controls,.preview-volume-group{display:flex;gap:6px;align-items:center}.preview-controls{justify-content:center;padding:4px;border:1px solid #202020;border-radius:999px;background:var(--color-surface-raised)}.preview-volume-group{padding-left:4px;border-left:1px solid #2d2d2d}.preview-icon,.preview-step{display:inline-grid;place-items:center;width:32px;height:32px;min-width:32px;padding:0;border:1px solid var(--color-border-strong);border-radius:999px;background:var(--color-surface-control);color:var(--color-text-soft)}.preview-play{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}.preview-icon svg{width:16px;height:16px;display:block;stroke:currentColor}.preview-step{width:26px;height:26px;min-width:26px;font-weight:700}.preview-volume-group output{min-width:32px;color:#d8d8d8;font-size:12px;text-align:center}.card[data-preview-format=tiktok] .preview-frame,.card[data-preview-format=shorts] .preview-frame,.card[data-preview-format=instagram] .preview-frame{max-width:min(100%,calc(72vh * 9 / 16))}.card[data-preview-format=facebook] .preview-frame{max-width:min(100%,calc(72vh * 4 / 5))}.card[data-preview-format=youtube] .preview-frame{max-width:min(100%,520px)}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;overflow:visible;padding-bottom:1px}.preview-strip button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 10px;min-height:34px;border-radius:999px;white-space:nowrap}.preview-strip button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
+.preview-camera-timeline--live{display:block!important;width:100%;min-height:190px;padding:0!important;border-color:rgba(17,162,207,.34)!important;overflow:hidden}.preview-camera-timeline--live .timeline-shell{min-height:188px;border:0;border-radius:4px;background:linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px) 0 0/28px 100%,linear-gradient(180deg,rgba(17,162,207,.08),transparent 34%),#070707}.preview-camera-timeline--live .volume-popover[data-disabled=true]{display:none!important}.preview-live-timeline-loading{display:grid;place-items:center;min-height:86px;color:var(--color-text-muted);font-size:12px}
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-stack{display:grid;gap:10px}.tool-section{border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:0;overflow:hidden}.tool-section>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:10px 12px;cursor:pointer;list-style:none;color:var(--color-text);font-weight:800}.tool-section>summary::-webkit-details-marker{display:none}.tool-section>summary:after{content:"";width:8px;height:8px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg);opacity:.62;transition:transform .16s ease}.tool-section[open]>summary:after{transform:rotate(225deg)}.tool-section>summary small{color:var(--color-text-muted);font-size:12px;font-weight:600;text-align:right}.tool-section[open]>summary{border-bottom:1px solid rgba(231,231,232,.08)}.tool-section>*:not(summary){margin:12px}.timeline-editor{padding:0}.timeline-head,.timeline-timebar,.timeline-values{display:flex;justify-content:space-between;gap:12px;color:var(--color-text-muted);font-size:12px}.timeline-head output,.timeline-timebar output{color:var(--color-text);text-align:right}.timeline-timebar{margin-top:10px}.timeline-timebar span:last-child{color:#777;text-align:right}.timeline-scrub{position:relative;height:42px;margin-top:8px}.timeline-scrub-track{position:absolute;left:0;right:0;top:17px;height:8px;border:1px solid #343434;border-radius:999px;background:linear-gradient(90deg,var(--color-surface-muted),#252525);overflow:hidden}.timeline-selected{position:absolute;top:0;bottom:0;background:rgba(175,207,42,.22);border-left:1px solid var(--color-brand-green);border-right:1px solid var(--color-brand-green)}.timeline-playhead{position:absolute;top:-8px;bottom:-8px;width:2px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7)}.timeline-playhead:before{content:"";position:absolute;left:50%;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--color-brand-white);transform:translateX(-50%)}.timeline-scrub input{position:absolute;inset:0;width:100%;height:42px;margin:0;background:transparent;opacity:0;cursor:pointer}.timeline{position:relative;height:38px;margin-top:6px}.timeline-track{position:absolute;left:0;right:0;top:16px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:var(--color-brand-white);border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:38px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{margin-top:6px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .export-dock{display:grid;gap:8px;margin-top:2px;padding:12px;border:1px solid #303030;border-radius:8px;background:#111}.export-dock strong{display:block;font-size:13px}.export-dock span{color:#a8a8a8;font-size:12px}
 .platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:var(--color-text);border-color:var(--color-brand-green)}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.effect-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.75fr);gap:10px}.effect-subpanel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.effect-subpanel strong{font-size:12px}.bumper-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.bumper-upload{display:grid;gap:6px;align-content:start;min-height:64px;padding:9px;border:1px dashed var(--color-border-strong);border-radius:8px;background:var(--color-surface-control);cursor:pointer}.bumper-upload input{font-size:11px}.bumper-strip{display:flex;gap:6px;flex-wrap:wrap;min-height:28px}.bumper-empty{color:var(--color-text-muted);font-size:12px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:var(--color-brand-blue)}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.camera-path-editor,.camera-manual-panel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-path-head,.camera-panel-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.camera-path-head strong,.camera-panel-title strong{font-size:12px}.camera-path-head span,.camera-panel-title span{color:var(--color-text-muted);font-size:12px}.camera-smart-panel{display:grid;gap:9px;padding:10px;border:1px solid rgba(17,162,207,.28);border-radius:8px;background:linear-gradient(135deg,rgba(17,162,207,.12),rgba(175,207,42,.06))}.camera-smart-row,.camera-smart-ai{display:grid;gap:8px}.camera-smart-row{grid-template-columns:repeat(3,minmax(0,1fr))}.camera-smart-ai{grid-template-columns:repeat(5,minmax(0,1fr))}.camera-smart-panel button{display:grid;gap:3px;justify-items:center;background:rgba(17,162,207,.1);color:var(--color-text);border:1px solid rgba(17,162,207,.34);text-align:center}.camera-smart-panel button:hover{border-color:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.14)}.camera-path-track{position:relative;height:34px}.camera-path-rail{position:absolute;left:0;right:0;top:15px;height:5px;border-radius:999px;background:#292929}.camera-path-marker{position:absolute;top:7px;width:20px;height:20px;min-width:20px;padding:0;border-radius:999px;transform:translateX(-50%);background:var(--color-surface-control);border:1px solid var(--color-border-strong)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:var(--color-brand-blue);box-shadow:0 0 0 4px rgba(17,162,207,.18)}.camera-path-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-keyframe-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}.camera-auto-status{min-height:18px;color:var(--color-text-muted);font-size:12px}.camera-path-delete{color:var(--color-danger)!important}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:minmax(160px,1fr) 120px 150px;gap:12px;max-width:none}.caption-toggle{align-content:center}.caption-toggle input{justify-self:start;width:auto;min-height:20px;accent-color:var(--color-brand-blue)}
@@ -8361,7 +8401,7 @@ body[data-tab=import] main,body[data-tab=import] .final-stage{display:none}body[
 .empty-project-stage{display:none;max-width:720px;margin:18px auto;padding:0 18px}.empty-project-panel{display:grid;gap:10px;padding:18px;border:1px solid var(--glass-border);border-radius:var(--radius-panel);background:var(--glass-bg-strong);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(24px) saturate(1.45);text-align:center}.empty-project-panel p{margin:0;color:var(--color-text-muted)}.empty-project-panel button{justify-self:center}body[data-project-empty=true][data-tab=edit] main{display:none}body[data-project-empty=true][data-tab=edit] .empty-project-stage{display:block}
 .settings-backdrop{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:18px;background:rgba(0,0,0,.58)}.settings-backdrop[hidden]{display:none}.settings-panel{width:min(560px,100%);border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised);box-shadow:var(--shadow-panel);padding:16px}.settings-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.settings-head p{margin:3px 0 0;color:var(--color-text-muted)}.settings-form{display:grid;gap:12px;margin-top:14px}.settings-form label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.settings-form input,.settings-form select{width:100%;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black);color:var(--color-text);padding:9px 10px;font:inherit}.settings-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.settings-status,.settings-usage{padding:10px;border:1px solid var(--color-border);border-radius:8px;background:#0b0b0b;color:var(--color-text-soft)}.settings-usage{display:grid;gap:3px;color:var(--color-text-muted)}.settings-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}.settings-form small{color:var(--color-text-muted)}
 button{background:var(--color-brand-white);color:var(--color-brand-black);border:0;border-radius:6px;padding:9px 12px;cursor:pointer}#reset-ui,button[data-action=discard]{background:#242424;color:var(--color-text-soft)}
-@media(max-width:860px){header{position:relative;grid-template-columns:1fr;justify-items:center}.header-actions{justify-content:center}.brand-logo{width:min(390px,88vw);height:64px}.brand-lockup p{max-width:86vw}.tabs{top:0;overflow:auto}.preview-strip button{font-size:12px;padding:7px 9px}main{padding:12px}.clip-summary{grid-template-columns:auto minmax(0,1fr);align-items:start}.clip-status{grid-column:1/-1;justify-content:flex-start}.editor-shell,.result-body,.camera-segments,.camera-smart-row,.camera-smart-ai,.camera-path-actions,.camera-keyframe-panel,.caption-settings,.preview-bar,.import-grid,.duration-profile,.import-path-row,.settings-grid,.effect-split,.bumper-actions{grid-template-columns:1fr}.preview-frame{max-width:100%}.preview-strip{justify-content:center}.preview-controls{width:max-content;max-width:100%;flex-wrap:wrap}.media{max-height:none}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons,.overlay-menu{grid-template-columns:1fr}}
+@media(max-width:860px){header{position:relative;grid-template-columns:1fr;justify-items:center}.header-actions{justify-content:center}.brand-logo{width:min(390px,88vw);height:64px}.brand-lockup p{max-width:86vw}.tabs{top:0;overflow:auto}.preview-strip button{font-size:12px;padding:7px 9px}main{padding:12px}.clip-summary{grid-template-columns:auto minmax(0,1fr);align-items:start}.clip-row-timeline,.clip-status{grid-column:1/-1}.clip-status{justify-content:flex-start}.editor-shell,.result-body,.camera-segments,.camera-smart-row,.camera-smart-ai,.camera-path-actions,.camera-keyframe-panel,.caption-settings,.preview-bar,.import-grid,.duration-profile,.import-path-row,.settings-grid,.effect-split,.bumper-actions{grid-template-columns:1fr}.preview-frame{max-width:100%}.preview-strip{justify-content:center}.preview-controls{width:max-content;max-width:100%;flex-wrap:wrap}.media{max-height:none}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons,.overlay-menu{grid-template-columns:1fr}}
 """
 
 
@@ -10364,7 +10404,31 @@ function updateTrimUi(card){
   }
   const windowLabel = card.querySelector("[data-timeline-window]");
   if (windowLabel) windowLabel.textContent = `${fixed(values.startPos)} - ${fixed(values.endPos)} no clipe`;
+  renderCardRowTimeline(card, values);
   updateTimelinePlayhead(card);
+}
+function renderCardRowTimeline(card, values = null){
+  const container = card.querySelector("[data-card-row-timeline]");
+  if (!container) return;
+  const current = values || trimValues(card);
+  const duration = Math.max(current.duration, .1);
+  const endPos = trimEndPosition(current);
+  const platform = activePlatformForRank(card.dataset.rank);
+  const edit = platformEditForRank(card.dataset.rank, platform);
+  const path = cameraPathForEdit(edit, duration).slice(0, 24);
+  const left = clampNumber((current.trimStart / duration) * 100, 0, 100);
+  const right = clampNumber((endPos / duration) * 100, 0, 100);
+  const context = cameraContextForCard(card);
+  const playhead = clampNumber((context.position / duration) * 100, 0, 100);
+  const markers = path.map(frame => {
+    const markerLeft = clampNumber((Number(frame.time || 0) / duration) * 100, 0, 100);
+    const label = directorMarkerTitle(edit.director_plan, frame);
+    return `<span class="clip-row-timeline-marker" style="left:${markerLeft.toFixed(2)}%" title="${escapeAttr(label)}"></span>`;
+  }).join("");
+  container.innerHTML = `<span class="clip-row-timeline-track"></span>
+    <span class="clip-row-timeline-window" style="left:${left.toFixed(2)}%;right:${(100 - right).toFixed(2)}%"></span>
+    ${markers}
+    <span class="clip-row-timeline-playhead" style="left:${playhead.toFixed(2)}%"></span>`;
 }
 function updateTimelinePlayhead(card, time = null){
   const values = trimValues(card);
@@ -10393,8 +10457,152 @@ function previewCameraTimelineContext(card){
   return { values, context, duration, platform, edit, path };
 }
 function renderPreviewCameraTimeline(card){
+  renderCardRowTimeline(card);
+  if (card.open && renderLivePreviewCameraTimeline(card)) return;
+  destroyLivePreviewCameraTimeline(card);
+  renderLegacyPreviewCameraTimeline(card);
+}
+function renderLivePreviewCameraTimeline(card){
+  const container = card.querySelector("[data-preview-camera-timeline]");
+  if (!container || container.dataset.liveTimelineFailed === "1") return false;
+  const live = window.CuttedLiveTimeline;
+  if (!live || typeof live.createLiveTimeline !== "function") return false;
+  const options = liveTimelineOptionsForCard(card);
+  container.classList.add("preview-camera-timeline--live");
+  if (card.__liveTimelineController) {
+    card.__liveTimelineController.update(options);
+    loadLiveTimelineWaveform(card);
+    return true;
+  }
+  if (card.__liveTimelineLoading) return true;
+  card.__liveTimelineLoading = true;
+  container.innerHTML = '<div class="preview-live-timeline-loading">Carregando timeline...</div>';
+  live.createLiveTimeline(container, options).then(controller => {
+    card.__liveTimelineController = controller;
+    delete card.__liveTimelineLoading;
+    controller.update(liveTimelineOptionsForCard(card));
+    loadLiveTimelineWaveform(card);
+  }).catch(error => {
+    console.warn("Timeline viva indisponivel; usando timeline compacta.", error);
+    delete card.__liveTimelineLoading;
+    container.dataset.liveTimelineFailed = "1";
+    renderLegacyPreviewCameraTimeline(card);
+  });
+  return true;
+}
+function destroyLivePreviewCameraTimeline(card){
+  if (card.__liveTimelineController && typeof card.__liveTimelineController.destroy === "function") {
+    card.__liveTimelineController.destroy();
+  }
+  delete card.__liveTimelineController;
+  delete card.__liveTimelineLoading;
+  const container = card.querySelector("[data-preview-camera-timeline]");
+  if (container) container.classList.remove("preview-camera-timeline--live");
+}
+function liveTimelineOptionsForCard(card){
+  const values = trimValues(card);
+  const context = cameraContextForCard(card);
+  const platform = activePlatformForRank(card.dataset.rank);
+  const edit = platformEditForRank(card.dataset.rank, platform);
+  const path = cameraPathForEdit(edit, context.duration);
+  const video = primaryCameraVideo(card);
+  const pending = Number(card.dataset.pendingSeek);
+  const playhead = Number.isFinite(pending) ? pending : video && Number.isFinite(video.currentTime) ? video.currentTime : context.position;
+  const model = {
+    cameraPath: path,
+    duration: context.duration,
+    effectKeyframes: liveTimelineEffectKeyframesForCard(card),
+    muted: video ? video.muted : false,
+    playhead,
+    selectedCameraIndex: selectedCameraPathIndex(card, path),
+    trimEndPosition: trimEndPosition(values),
+    trimStart: values.trimStart,
+    volume: video ? video.volume : defaultPreviewVolume,
+    waveformPayload: parsePreviewWaveform(card.dataset.previewWaveformPeaks)
+  };
+  const live = window.CuttedLiveTimeline || {};
+  const options = typeof live.createLiveTimelineOptionsFromCuttedModel === "function"
+    ? live.createLiveTimelineOptionsFromCuttedModel(model)
+    : fallbackLiveTimelineOptions(model);
+  return Object.assign(options, {
+    callbacks: liveTimelineCallbacksForCard(card),
+    logoUrl: "assets/brand/cuted-logo-transparent.png",
+    showVolume: false
+  });
+}
+function fallbackLiveTimelineOptions(model){
+  const camera = (model.cameraPath || []).map((frame, index) => ({
+    id: `camera-${index}`,
+    layer: "camera",
+    time: clampNumber(Number(frame.time || 0), 0, Math.max(model.duration, .3)),
+    label: frame.label || frame.key || frame.source || `Camera ${index + 1}`,
+    editable: true,
+    intensity: clampNumber(Number(frame.confidence ?? 0.68), .18, 1)
+  }));
+  return {
+    duration: model.duration,
+    keyframes: camera,
+    muted: model.muted,
+    peaks: model.waveformPayload,
+    playhead: model.playhead,
+    selectedKeyframeId: camera[model.selectedCameraIndex]?.id || null,
+    trimEnd: model.trimEndPosition,
+    trimStart: model.trimStart,
+    volume: model.volume
+  };
+}
+function liveTimelineEffectKeyframesForCard(card){
+  const current = cardState(card.dataset.rank);
+  const effectFrames = Array.isArray(current.effect_keyframes) ? current.effect_keyframes : [];
+  return effectFrames;
+}
+function liveTimelineCallbacksForCard(card){
+  return {
+    onSeek: time => seekTimeline(card, time, { userInitiated: true, mode: "free" }),
+    onTrimChange: trim => applyLiveTimelineTrim(card, trim),
+    onKeyframeOpen: keyframe => openLiveTimelineKeyframe(card, keyframe),
+    onPlayToggle: () => togglePreviewPlayback(card)
+  };
+}
+function applyLiveTimelineTrim(card, trim){
+  const duration = Number(card.dataset.duration) || 0;
+  const start = clampNumber(Number(trim.start || 0), 0, Math.max(duration - 1, 0));
+  const end = clampNumber(Number(trim.end || duration), start + 1, Math.max(duration, start + 1));
+  setCardState(card.dataset.rank, { trimStart: start, trimEnd: Math.max(duration - end, 0) });
+  updateTrimUi(card);
+  seekTimeline(card, trim.side === "end" ? end : start, { userInitiated: true, mode: "trim" });
+  renderCaptionQueue();
+}
+function openLiveTimelineKeyframe(card, keyframe){
+  if (!keyframe || keyframe.layer !== "camera") return;
+  const match = String(keyframe.id || "").match(/camera-(\\d+)/);
+  if (match) setSelectedCameraPathIndex(card, Number(match[1]));
+  updateCameraUi(card);
+  renderPreviewCameraTimeline(card);
+}
+function loadLiveTimelineWaveform(card){
+  if (parsePreviewWaveform(card.dataset.previewWaveformPeaks).length) return;
+  const src = previewWaveformSource(card);
+  if (!src || card.dataset.previewWaveformLoading === src) return;
+  card.dataset.previewWaveformLoading = src;
+  fetch(cacheBustedPreview(src, `waveform-${card.dataset.rank || ""}`))
+    .then(response => response.ok ? response.json() : null)
+    .then(payload => {
+      const peaks = parsePreviewWaveform(payload?.peaks);
+      delete card.dataset.previewWaveformLoading;
+      if (!peaks.length) return;
+      card.dataset.previewWaveformPeaks = JSON.stringify(peaks);
+      renderPreviewCameraTimeline(card);
+    })
+    .catch(error => {
+      console.debug("Nao consegui carregar waveform da timeline viva.", error);
+      delete card.dataset.previewWaveformLoading;
+    });
+}
+function renderLegacyPreviewCameraTimeline(card){
   const container = card.querySelector("[data-preview-camera-timeline]");
   if (!container) return;
+  container.classList.remove("preview-camera-timeline--live");
   const state = previewCameraTimelineContext(card);
   const selectedIndex = selectedCameraPathIndex(card, state.path);
   const markers = state.path.map((frame, index) => {
@@ -10807,6 +11015,7 @@ function loadCardVideo(card){
   syncPreviewVolumeButton(card);
 }
 function unloadCardVideo(card){
+  destroyLivePreviewCameraTimeline(card);
   const video = card.querySelector("video:not(.camera-fit-bg)[data-src]");
   if (!video || !video.getAttribute("src")) return;
   video.pause();
