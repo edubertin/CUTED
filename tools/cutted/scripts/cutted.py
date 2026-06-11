@@ -11945,6 +11945,7 @@ document.querySelectorAll(".card").forEach(card => {
       event.stopPropagation();
       analyzeCameraForCard(card, "ai-director");
     });
+    refreshAiReadinessForCard(card);
   }
   bindPreviewVolumeDismiss();
   const video = primaryCameraVideo(card);
