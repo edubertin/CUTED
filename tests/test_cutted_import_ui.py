@@ -116,8 +116,8 @@ class CuttedImportUiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             assets = CUTTED.write_live_timeline_assets(Path(tmp))
 
-            self.assertEqual(assets["css"], "assets/live-timeline/live-timeline.css")
-            self.assertEqual(assets["js"], "assets/live-timeline/live-timeline.js")
+            self.assertRegex(assets["css"], r"^assets/live-timeline/live-timeline\.css\?v=[0-9a-f]{10}$")
+            self.assertRegex(assets["js"], r"^assets/live-timeline/live-timeline\.js\?v=[0-9a-f]{10}$")
             self.assertTrue((Path(tmp) / "assets" / "live-timeline" / "live-timeline.css").exists())
             self.assertTrue((Path(tmp) / "assets" / "live-timeline" / "live-timeline.js").exists())
 
