@@ -184,61 +184,6 @@ h1 {
   opacity: 0.72;
 }
 
-.volume-stepper {
-  --volume: 0.72;
-  position: absolute;
-  z-index: 4;
-  display: grid;
-  grid-template-columns: repeat(2, 30px);
-  gap: 2px;
-  padding: 0;
-  background: transparent;
-  box-shadow: 0 0 calc(12px + 18px * var(--volume)) rgba(175, 207, 42, 0.14);
-}
-
-.volume-stepper::before {
-  position: absolute;
-  left: 50%;
-  top: -40px;
-  width: 1px;
-  height: 41px;
-  background: linear-gradient(180deg, rgba(231, 231, 232, 0.64), rgba(231, 231, 232, 0.08));
-  content: "";
-}
-
-.volume-stepper button {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border: 1px solid rgba(231, 231, 232, 0.26);
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 36% 28%, rgba(255, 255, 255, 0.78), rgba(231, 231, 232, 0.28) 34%, rgba(13, 13, 13, 0.82) 76%);
-  box-shadow:
-    inset 0 1px rgba(255, 255, 255, 0.45),
-    0 0 16px rgba(231, 231, 232, 0.14);
-  color: var(--color-brand-white);
-  cursor: pointer;
-  font-size: 16px;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.volume-stepper button:hover,
-.volume-stepper button:focus-visible {
-  outline: 0;
-  transform: scale(1.08);
-  border-color: rgba(231, 231, 232, 0.46);
-  box-shadow:
-    inset 0 1px rgba(255, 255, 255, 0.56),
-    0 0 18px rgba(175, 207, 42, 0.24);
-}
-
-.volume-stepper.is-muted {
-  opacity: 0.62;
-}
-
 #playhead-glyph {
   display: block;
   width: 12px;
