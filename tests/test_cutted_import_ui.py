@@ -90,6 +90,14 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("Aplicando ${smartCameraModes[smartMode].label}...", html)
         self.assertNotIn("Dirigindo", html)
 
+    def test_preview_has_camera_motion_speed_slider(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("data-camera-motion-speed", html)
+        self.assertIn("defaultCameraMotionMs = 700", html)
+        self.assertIn("--camera-transition-ms", html)
+        self.assertIn("setCameraMotionSpeed(card", html)
+
     def test_ai_director_openai_timeout_is_shorter_than_general_request(self) -> None:
         self.assertEqual(CUTTED.AI_DIRECTOR_OPENAI_TIMEOUT_SECONDS, 45)
 
@@ -171,6 +179,7 @@ class CuttedImportUiTests(unittest.TestCase):
             cache_dir = gallery / "camera-analysis"
             cache_dir.mkdir()
             good = {
+                "version": CUTTED.CAMERA_ANALYSIS_VERSION,
                 "mode": "ai-director",
                 "platform": "tiktok",
                 "resolution_preset": "vertical_9_16",
