@@ -179,7 +179,8 @@ class CuttedImportUiTests(unittest.TestCase):
         coverage = CUTTED.side_coverage_camera_frames(frames, detections, 30.0, "tiktok", False)
 
         self.assertTrue(any(float(frame.get("x") or 0) > 58.0 for frame in coverage))
-        self.assertTrue(any(str(frame.get("intent")) == "reaction_focus" for frame in coverage))
+        self.assertTrue(any(str(frame.get("intent")) == "speaker_hold" for frame in coverage))
+        self.assertTrue(all(float(frame.get("zoom") or 1.0) <= 1.08 for frame in coverage))
 
     def test_side_coverage_balances_underrepresented_side(self) -> None:
         frames = [{"time": float(index * 8), "x": 30.0, "zoom": 1.1} for index in range(6)]

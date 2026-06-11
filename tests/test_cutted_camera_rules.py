@@ -437,6 +437,24 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertAlmostEqual(float(speaker["x"]), 46.0)
         self.assertLessEqual(float(speaker["zoom"]), 1.1)
 
+    def test_speaker_focus_can_use_yolo_person_when_face_is_missing(self) -> None:
+        left_face = face(34.0, width=5.0)
+        right_body = person(70.0, width=20.0)
+        row = {
+            "time": 0.0,
+            "faces": [left_face, right_body],
+            "opencv_faces": [left_face],
+            "persons": [right_body],
+            "primary": right_body,
+        }
+
+        speaker = CUTTED.director_primary_frame(row, 0.0)
+
+        self.assertIsNotNone(speaker)
+        self.assertAlmostEqual(float(speaker["x"]), 70.0)
+        self.assertEqual(speaker["intent"], "speaker_hold")
+        self.assertLessEqual(float(speaker["zoom"]), 1.08)
+
     def test_long_group_view_gets_reaction_breakaway(self) -> None:
         frames = [
             {
@@ -453,9 +471,14 @@ class CuttedCameraRuleTests(unittest.TestCase):
         result = CUTTED.group_breakaway_camera_frames(frames, detections, 14.0, "tiktok")
         sources = [frame["source"] for frame in result]
 
-        self.assertEqual(sources, ["ai-director-cuts-group-reaction", "ai-director-cuts-group-return"])
-        self.assertEqual(result[0]["intent"], "reaction_focus")
-        self.assertGreaterEqual(float(result[1]["time"]) - float(result[0]["time"]), 3.3)
+        self.assertEqual(sources, [
+            "ai-director-cuts-group-speaker",
+            "ai-director-cuts-group-reaction",
+            "ai-director-cuts-group-return",
+        ])
+        self.assertEqual(result[0]["intent"], "speaker_hold")
+        self.assertEqual(result[1]["intent"], "reaction_focus")
+        self.assertGreaterEqual(float(result[1]["time"]) - float(result[0]["time"]), 4.1)
 
     def test_dynamic_group_breakaway_avoids_cut_sources(self) -> None:
         frames = [{"time": 0.0, "x": 50.0, "y": 50.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-group-fit"}]
@@ -464,7 +487,28 @@ class CuttedCameraRuleTests(unittest.TestCase):
         result = CUTTED.group_breakaway_camera_frames(frames, detections, 14.0, "tiktok", False, include_fit=True)
         sources = [frame["source"] for frame in result]
 
-        self.assertEqual(sources, ["ai-director-dynamic-reaction", "ai-director-dynamic-group"])
+        self.assertEqual(sources, [
+            "ai-director-dynamic-group-speaker",
+            "ai-director-dynamic-group-reaction",
+            "ai-director-dynamic-group",
+        ])
+
+    def test_missing_speaker_side_gets_medium_speaker_frame(self) -> None:
+        frames = [
+            {"time": 0.0, "x": 36.0, "y": 50.0, "zoom": 1.08, "intent": "speaker_hold", "source": "ai-director"},
+            {"time": 6.0, "x": 72.0, "y": 50.0, "zoom": 1.14, "intent": "reaction_focus", "source": "ai-director"},
+        ]
+        detections = [
+            detection(3.0, [face(34.0), face(72.0)]),
+            detection(9.0, [face(35.0), face(73.0)]),
+        ]
+
+        result = CUTTED.speaker_side_coverage_camera_frames(frames, detections, 12.0, "tiktok", False)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["intent"], "speaker_hold")
+        self.assertGreater(float(result[0]["x"]), 58.0)
+        self.assertLessEqual(float(result[0]["zoom"]), 1.08)
 
     def test_dynamic_editorial_path_caps_zoom_and_rejects_edge_focus(self) -> None:
         frames = [
@@ -691,6 +735,12 @@ class CuttedCameraRuleTests(unittest.TestCase):
 
         self.assertIn("cameraFrameUsesHardCut(next)", source)
         self.assertIn("cameraFrameUsesGroupFit(next)", source)
+
+    def test_preview_camera_motion_uses_slower_smooth_transition(self) -> None:
+        html = CUTTED.page_html("Teste", "", "{}", "assets/brand/cuted-logo-transparent.png")
+
+        self.assertIn("object-position .62s cubic-bezier(.22,.61,.36,1)", html)
+        self.assertIn("transform .62s cubic-bezier(.22,.61,.36,1)", html)
 
     def test_manual_fit_blur_uses_group_fit_contract(self) -> None:
         frame = CUTTED.default_camera_path_frame({"key": "fit-blur", "strength": 60}, 0.0)
