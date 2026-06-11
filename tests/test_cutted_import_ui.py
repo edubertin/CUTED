@@ -50,10 +50,85 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("importNeedsOpenaiKey", html)
         self.assertIn("Escolha a pasta onde os videos finais serao salvos.", html)
 
+    def test_import_form_prioritizes_local_video(self) -> None:
+        html = gallery_html()
+
+        self.assertIn('name="source_path" type="text"', html)
+        self.assertIn("data-select-video-file", html)
+        self.assertIn("Fluxo principal", html)
+        self.assertIn("Link do YouTube (experimental)", html)
+        self.assertNotIn("youtube_cookies_from_browser", html)
+        self.assertNotIn("youtube_cookies_file", html)
+
+    def test_import_payload_excludes_youtube_cookie_fields(self) -> None:
+        html = gallery_html()
+
+        self.assertIn('source_path: String(data.get("source_path")', html)
+        self.assertNotIn("youtube_cookies_from_browser", html)
+        self.assertNotIn("youtube_cookies_file", html)
+
     def test_clean_output_path_keeps_empty_value(self) -> None:
         self.assertEqual(CUTTED.clean_output_path(""), "")
         self.assertEqual(CUTTED.clean_output_path(None), "")
         self.assertEqual(CUTTED.clean_output_path('  "C:\\videos"  '), str(Path("C:\\videos")))
+
+    def test_import_command_uses_plain_experimental_youtube_url(self) -> None:
+        metadata = {
+            "preview_count": 3,
+            "preset": "tiktok",
+            "duration_profile": "medium",
+            "ai_provider": "local",
+            "context_prompt": "",
+            "language": "pt",
+            "render_previews": True,
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            command = CUTTED.import_command(Path(tmp), "https://www.youtube.com/watch?v=test", "", metadata)
+
+        self.assertIn("--youtube-url", command)
+        self.assertNotIn("--youtube-cookies-from-browser", command)
+        self.assertNotIn("--youtube-cookies-file", command)
+
+    def test_import_command_uses_local_video_path(self) -> None:
+        metadata = {
+            "preview_count": 3,
+            "preset": "tiktok",
+            "duration_profile": "medium",
+            "ai_provider": "local",
+            "context_prompt": "",
+            "language": "pt",
+            "render_previews": True,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            video_path = Path(tmp) / "video.mp4"
+            video_path.write_bytes(b"fake")
+
+            command = CUTTED.import_command(Path(tmp), "", str(video_path), metadata)
+
+        self.assertIn(str(video_path.resolve()), command)
+        self.assertNotIn("--youtube-url", command)
+
+    def test_visual_map_source_path_uses_local_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            video_path = Path(tmp) / "video.mp4"
+            video_path.write_bytes(b"fake")
+            metadata = CUTTED.source_media_metadata("local", video_path.name, str(video_path), {}, None, None)
+            source = CUTTED.SourceMedia(str(video_path), video_path, video_path.name, (), metadata)
+
+            self.assertEqual(CUTTED.visual_map_source_path(source), video_path.resolve())
+
+    def test_friendly_ytdlp_error_explains_antibot(self) -> None:
+        message = CUTTED.friendly_ytdlp_error("Sign in to confirm you're not a bot")
+
+        self.assertIn("anti-bot", message)
+        self.assertIn("arquivo local", message)
+
+    def test_import_job_error_message_uses_friendly_youtube_error(self) -> None:
+        message = CUTTED.import_job_error_message("[cutted] Error: Sign in to confirm you're not a bot")
+
+        self.assertIn("anti-bot", message)
+        self.assertNotIn("[cutted] Error", message)
 
     def test_import_request_metadata_requires_source(self) -> None:
         with self.assertRaisesRegex(ValueError, "link ou caminho local"):
@@ -91,6 +166,18 @@ class CuttedLaunchTests(unittest.TestCase):
             CUTTED.bootstrap_workspace_gallery(workspace)
 
             self.assertEqual(index_path.read_text(encoding="utf-8"), "conteudo existente")
+
+    def test_bootstrap_workspace_gallery_refreshes_empty_shell(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            index_path = workspace / "index.html"
+            index_path.write_text('<form data-import-form></form><script>{"moments": []}</script>', encoding="utf-8")
+
+            CUTTED.bootstrap_workspace_gallery(workspace)
+
+            html = index_path.read_text(encoding="utf-8")
+            self.assertIn('name="source_path"', html)
+            self.assertIn('{"moments": []}', html)
 
     def test_find_free_port_returns_port_in_launch_range(self) -> None:
         port = CUTTED.find_free_port("127.0.0.1")

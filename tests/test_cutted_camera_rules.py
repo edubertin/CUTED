@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import importlib.util
 import base64
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -53,6 +55,61 @@ def missing_detection(time_value: float) -> dict[str, object]:
 
 
 class CuttedCameraRuleTests(unittest.TestCase):
+    def test_visual_map_summary_counts_faces_people_and_groups(self) -> None:
+        rows = [
+            {"time": 0.0, "faces": [face(35.0), face(65.0)], "persons": [person(50.0)], "primary": face(35.0)},
+            {"time": 1.0, "faces": [face(48.0)], "persons": [], "primary": face(48.0)},
+            missing_detection(2.0),
+        ]
+
+        summary = CUTTED.visual_map_summary(rows, [0.0, 1.0, 2.0])
+
+        self.assertEqual(summary["detection_rows"], 3)
+        self.assertEqual(summary["max_faces"], 2)
+        self.assertEqual(summary["max_persons"], 1)
+        self.assertGreater(summary["face_detection_rate"], 0.0)
+        self.assertGreater(summary["group_rate"], 0.0)
+
+    def test_visual_map_segment_detections_rebases_times(self) -> None:
+        payload = {
+            "detections": [
+                {"time": 1.0, "faces": [face(42.0)], "primary": face(42.0)},
+                {"time": 3.0, "faces": [face(54.0)], "primary": face(54.0)},
+                {"time": 5.0, "faces": [face(62.0)], "primary": face(62.0)},
+            ]
+        }
+
+        rows = CUTTED.visual_map_segment_detections(payload, 2.0, 3.0)
+
+        self.assertEqual([row["time"] for row in rows], [1.0, 3.0])
+
+    def test_visual_map_camera_analysis_uses_cached_source_map(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery = Path(tmp)
+            source_path = gallery / "source.mp4"
+            source_path.write_bytes(b"fake")
+            payload = {
+                "ok": True,
+                "version": CUTTED.VISUAL_MAP_VERSION,
+                "source": str(source_path.resolve()),
+                "fingerprint": {"path": str(source_path.resolve())},
+                "metadata": {"width": 1920, "height": 1080, "duration": 10.0},
+                "sample_count": 4,
+                "detections": [
+                    {"time": 2.0, "faces": [face(35.0), face(65.0)], "primary": face(35.0)},
+                    {"time": 3.0, "faces": [face(38.0), face(66.0)], "primary": face(38.0)},
+                    {"time": 4.0, "faces": [face(40.0)], "primary": face(40.0)},
+                ],
+            }
+            (gallery / "visual-map.json").write_text(json.dumps(payload), encoding="utf-8")
+            media = CUTTED.CameraAnalysisMedia(source_path.resolve(), "cache", "source.mp4", "source", 2.0)
+
+            result = CUTTED.visual_map_camera_analysis(gallery, media, 3.0, "auto-director", "tiktok", "", "")
+
+        self.assertIsNotNone(result)
+        self.assertTrue(str(result["source"]).startswith("visual-map"))
+        self.assertTrue(result["diagnostics"]["visual_map"]["used"])
+
     def test_card_preview_uses_compact_camera_timeline(self) -> None:
         moment = CUTTED.Moment(
             rank=1,
@@ -329,6 +386,22 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertLessEqual(float(speaker["zoom"]), 1.16)
         self.assertGreater(float(reaction["zoom"]), float(speaker["zoom"]))
 
+    def test_speaker_focus_prefers_real_face_over_person_box(self) -> None:
+        body = person(88.0, width=24.0)
+        real_face = face(46.0, width=5.0)
+        row = {
+            "time": 0.0,
+            "faces": [body, real_face],
+            "persons": [body],
+            "primary": body,
+        }
+
+        speaker = CUTTED.director_primary_frame(row, 0.0)
+
+        self.assertIsNotNone(speaker)
+        self.assertAlmostEqual(float(speaker["x"]), 46.0)
+        self.assertLessEqual(float(speaker["zoom"]), 1.1)
+
     def test_long_group_view_gets_reaction_breakaway(self) -> None:
         frames = [
             {
@@ -348,6 +421,29 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertEqual(sources, ["ai-director-cuts-group-reaction", "ai-director-cuts-group-return"])
         self.assertEqual(result[0]["intent"], "reaction_focus")
         self.assertGreaterEqual(float(result[1]["time"]) - float(result[0]["time"]), 3.3)
+
+    def test_dynamic_group_breakaway_avoids_cut_sources(self) -> None:
+        frames = [{"time": 0.0, "x": 50.0, "y": 50.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-group-fit"}]
+        detections = [detection(4.0, [face(30.0), face(55.0), face(72.0)])]
+
+        result = CUTTED.group_breakaway_camera_frames(frames, detections, 14.0, "tiktok", False, include_fit=True)
+        sources = [frame["source"] for frame in result]
+
+        self.assertEqual(sources, ["ai-director-dynamic-reaction", "ai-director-dynamic-group"])
+
+    def test_dynamic_editorial_path_caps_zoom_and_rejects_edge_focus(self) -> None:
+        frames = [
+            {"time": 0.0, "x": 12.0, "y": 50.0, "zoom": 1.34, "source": "ai-director-cuts-distant"},
+            {"time": 3.0, "x": 56.0, "y": 50.0, "zoom": 1.3, "source": "ai-director-cuts-reaction"},
+            {"time": 6.5, "x": 48.0, "y": 50.0, "zoom": 1.24, "source": "ai-director-cuts-primary"},
+        ]
+        detections = [detection(0.0, [face(28.0), face(72.0)]), detection(3.0, [face(44.0), face(58.0)])]
+
+        result = CUTTED.dynamic_editorial_camera_path(frames, detections, 10.0, "tiktok")
+
+        self.assertTrue(all("cuts" not in str(frame["source"]) for frame in result))
+        self.assertTrue(all(float(frame["zoom"]) <= 1.16 for frame in result))
+        self.assertTrue(all(20.0 <= float(frame["x"]) <= 80.0 for frame in result))
 
     def test_solo_dominant_scene_removes_hard_cut_jitter(self) -> None:
         detections = [
