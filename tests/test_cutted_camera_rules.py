@@ -113,6 +113,45 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertTrue(result["diagnostics"]["visual_map"]["used"])
         self.assertEqual(result["diagnostics"]["vision_engine"], "yolo-visual-map")
 
+    def test_visual_map_ai_timeout_uses_dense_local_fallback(self) -> None:
+        original = CUTTED.ai_director_camera_result
+
+        def timeout_result(*_args: object, **_kwargs: object) -> dict[str, object]:
+            return {"camera_path": [], "diagnostics": {"enabled": True, "status": "timeout", "error": "demorou demais"}}
+
+        try:
+            CUTTED.ai_director_camera_result = timeout_result
+            with tempfile.TemporaryDirectory() as tmp:
+                gallery = Path(tmp)
+                source_path = gallery / "source.mp4"
+                source_path.write_bytes(b"fake")
+                payload = {
+                    "ok": True,
+                    "version": CUTTED.VISUAL_MAP_VERSION,
+                    "source": str(source_path.resolve()),
+                    "fingerprint": {"path": str(source_path.resolve())},
+                    "metadata": {"width": 1920, "height": 1080, "duration": 18.0},
+                    "sample_count": 8,
+                    "vision_engine": "yolo-visual-map",
+                    "detections": [
+                        {"time": float(index * 2), "faces": [person(30.0), person(72.0)], "primary": person(30.0)}
+                        for index in range(9)
+                    ],
+                }
+                (gallery / "visual-map.json").write_text(json.dumps(payload), encoding="utf-8")
+                media = CUTTED.CameraAnalysisMedia(source_path.resolve(), "cache", "source.mp4", "source", 0.0)
+
+                result = CUTTED.visual_map_camera_analysis(gallery, media, 18.0, "ai-director", "tiktok", "", "")
+        finally:
+            CUTTED.ai_director_camera_result = original
+
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["source"], "visual-map-ai-director-fallback")
+        self.assertEqual(result["diagnostics"]["ai_director"]["status"], "timeout")
+        self.assertIn("fallback_quality", result["diagnostics"])
+        self.assertTrue(any(str(frame.get("source") or "").startswith("ai-director") for frame in result["camera_path"]))
+
     def test_clip_visual_map_uses_camera_analysis_cache_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             gallery = Path(tmp)
@@ -122,6 +161,86 @@ class CuttedCameraRuleTests(unittest.TestCase):
 
         self.assertEqual(path.name, "clip-004-visual-map.json")
         self.assertEqual(path.parent.name, "camera-analysis")
+
+    def test_camera_status_waits_for_clip_visual_map(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery = Path(tmp)
+            clip = gallery / "clips" / "clip-001.mp4"
+            clip.parent.mkdir()
+            clip.write_bytes(b"fake")
+
+            status = CUTTED.camera_status_from_payload(
+                {"clip_file": "clips/clip-001.mp4", "mode": "ai-director", "platform": "tiktok"},
+                gallery,
+                start_background=False,
+            )
+
+        self.assertFalse(status["ready"])
+        self.assertFalse(status["cache_ready"])
+        self.assertFalse(status["visual_map"]["ready"])
+        self.assertFalse(status["visual_map"]["preparing"])
+
+    def test_camera_status_is_ready_with_clip_visual_map(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery = Path(tmp)
+            clip = gallery / "clips" / "clip-001.mp4"
+            clip.parent.mkdir()
+            clip.write_bytes(b"fake")
+            visual_map = gallery / "camera-analysis" / "clip-001-visual-map.json"
+            visual_map.parent.mkdir()
+            visual_map.write_text(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "version": CUTTED.VISUAL_MAP_VERSION,
+                        "source": str(clip.resolve()),
+                        "fingerprint": {"path": str(clip.resolve())},
+                        "detections": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            status = CUTTED.camera_status_from_payload(
+                {"clip_file": "clips/clip-001.mp4", "mode": "ai-director", "platform": "tiktok"},
+                gallery,
+                start_background=False,
+            )
+
+        self.assertTrue(status["ready"])
+        self.assertFalse(status["cache_ready"])
+        self.assertTrue(status["visual_map"]["ready"])
+
+    def test_camera_status_is_ready_with_completed_ai_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery = Path(tmp)
+            clip = gallery / "clips" / "clip-001.mp4"
+            clip.parent.mkdir()
+            clip.write_bytes(b"fake")
+            cache_dir = gallery / "camera-analysis"
+            cache_dir.mkdir()
+            (cache_dir / "clip-001-ai-director-cache.json").write_text(
+                json.dumps(
+                    {
+                        "mode": "ai-director",
+                        "resolution_preset": "vertical_9_16",
+                        "clip_file": "clips/clip-001.mp4",
+                        "camera_path": [{"time": 0.0, "x": 50.0, "zoom": 1.0}],
+                        "diagnostics": {"ai_director": {"status": "applied"}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            status = CUTTED.camera_status_from_payload(
+                {"clip_file": "clips/clip-001.mp4", "mode": "ai-director", "platform": "tiktok"},
+                gallery,
+                start_background=False,
+            )
+
+        self.assertTrue(status["ready"])
+        self.assertTrue(status["cache_ready"])
+        self.assertFalse(status["visual_map"]["ready"])
 
     def test_card_preview_uses_compact_camera_timeline(self) -> None:
         moment = CUTTED.Moment(
@@ -509,6 +628,22 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertEqual(result[0]["intent"], "speaker_hold")
         self.assertGreater(float(result[0]["x"]), 58.0)
         self.assertLessEqual(float(result[0]["zoom"]), 1.08)
+
+    def test_dominant_group_balance_inserts_active_frames(self) -> None:
+        frames = [
+            {"time": 0.0, "x": 50.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+            {"time": 6.0, "x": 51.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+            {"time": 12.0, "x": 49.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+            {"time": 18.0, "x": 52.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+            {"time": 24.0, "x": 48.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+        ]
+        detections = [detection(float(index * 2), [face(30.0), face(72.0)]) for index in range(15)]
+
+        result = CUTTED.dominant_group_balance_camera_frames(frames, detections, 30.0, "tiktok", False)
+
+        self.assertGreaterEqual(len(result), 3)
+        self.assertTrue(any(frame["intent"] == "speaker_hold" for frame in result))
+        self.assertTrue(any(frame["intent"] == "reaction_focus" for frame in result))
 
     def test_dynamic_editorial_path_caps_zoom_and_rejects_edge_focus(self) -> None:
         frames = [

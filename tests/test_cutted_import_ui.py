@@ -76,9 +76,19 @@ class CuttedImportUiTests(unittest.TestCase):
     def test_camera_analysis_fetch_has_timeout(self) -> None:
         html = gallery_html()
 
-        self.assertIn("const cameraAnalysisFetchTimeoutMs = 65000", html)
+        self.assertIn("const cameraAnalysisFetchTimeoutMs = 180000", html)
+        self.assertIn("const cameraReadinessPollMs = 3500", html)
         self.assertIn("new AbortController()", html)
-        self.assertIn("IA demorou demais", html)
+        self.assertIn("IA ainda esta aplicando", html)
+
+    def test_ai_button_waits_for_map_and_uses_applying_copy(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("/api/camera/status", html)
+        self.assertIn("refreshAiReadinessForCard(card)", html)
+        self.assertIn("Mapeando video...", html)
+        self.assertIn("Aplicando ${smartCameraModes[smartMode].label}...", html)
+        self.assertNotIn("Dirigindo", html)
 
     def test_ai_director_openai_timeout_is_shorter_than_general_request(self) -> None:
         self.assertEqual(CUTTED.AI_DIRECTOR_OPENAI_TIMEOUT_SECONDS, 45)
@@ -129,6 +139,31 @@ class CuttedImportUiTests(unittest.TestCase):
         report = CUTTED.ai_director_quality_report(path, {}, detections, 30.0)
 
         self.assertFalse(report["rejected"])
+
+    def test_ai_director_quality_rejects_group_dominant_path(self) -> None:
+        path = [
+            {"time": 0.0, "x": 50.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+            {"time": 6.0, "x": 52.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+            {"time": 12.0, "x": 48.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+            {"time": 18.0, "x": 51.0, "zoom": 1.0, "fit": "contain", "source": "ai-director-dynamic-group"},
+            {"time": 24.0, "x": 42.0, "zoom": 1.08, "source": "ai-director-dynamic-speaker"},
+        ]
+        detections = [
+            {
+                "time": float(index * 2),
+                "faces": [
+                    {"x": 30.0, "y": 45.0, "width": 12.0, "confidence": 0.65},
+                    {"x": 72.0, "y": 45.0, "width": 12.0, "confidence": 0.65},
+                ],
+            }
+            for index in range(15)
+        ]
+
+        report = CUTTED.ai_director_quality_report(path, {}, detections, 30.0)
+
+        self.assertTrue(report["rejected"])
+        self.assertEqual(report["reason"], "group_dominant")
+        self.assertGreater(report["group_duration_ratio"], CUTTED.AI_DIRECTOR_MAX_GROUP_DURATION_RATIO)
 
     def test_recover_previous_good_ai_result_preserves_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
