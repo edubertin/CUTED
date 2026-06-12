@@ -10890,10 +10890,11 @@ function destroyControlSurfaceForCard(card){
 }
 function controlSurfaceStateForCard(card){
   const rank = card.dataset.rank;
+  const current = cardState(rank);
   const platform = activePlatformForRank(rank);
   const effect = effectForRank(rank, platform);
   const video = primaryCameraVideo(card);
-  const platforms = uniquePlatforms(cardState(rank).platforms);
+  const platforms = uniquePlatforms(current.platforms);
   return {
     aiStatus: card.dataset.aiApplying === "1" ? "loading" : controlSurfaceAiStatus(card),
     aspectRatio: controlSurfaceAspectRatio(platform),
@@ -10901,7 +10902,8 @@ function controlSurfaceStateForCard(card){
     captionsEnabled: captionEnabled(),
     effectStyle: controlSurfaceEffectStyle(effect),
     muted: video ? video.muted || video.volume <= 0 : false,
-    ready: cardState(rank).status === "liked" && platforms.includes(platform),
+    ready: current.status === "liked" && platforms.includes(platform),
+    discarded: current.status === "discarded",
     status: controlSurfaceStatus(card),
     volume: video ? Math.round((video.muted ? 0 : video.volume) * 100) : Math.round(defaultPreviewVolume * 100)
   };
@@ -10925,11 +10927,13 @@ function controlSurfaceAiStatus(card){
   return explicitCameraPathForEdit(edit).length ? "active" : "idle";
 }
 function controlSurfaceStatus(card){
-  const cameraStatus = card.querySelector("[data-camera-auto-status]")?.textContent.trim();
+  const current = cardState(card.dataset.rank);
+  const platform = activePlatformForRank(card.dataset.rank);
+  const platforms = uniquePlatforms(current.platforms);
   if (card.dataset.bumperStatus) return { kind: "error", label: card.dataset.bumperStatus, tone: "red" };
+  if (current.status === "discarded") return { kind: "discarded", label: "CUT DISCARDED", persistent: true, tone: "red" };
   if (card.dataset.aiApplying === "1") return { kind: "ai", label: "AI analyzing frame safety...", progress: 42, tone: "blue" };
-  if (cameraStatus) return { kind: "ai", label: cameraStatus, tone: "blue" };
-  if (cardState(card.dataset.rank).status === "liked") return { kind: "ready", label: "Ready", tone: "green" };
+  if (current.status === "liked" && platforms.includes(platform)) return { kind: "ready", label: "Ready", persistent: true, tone: "green" };
   const effect = effectForRank(card.dataset.rank);
   if (effect.key !== "none") return { kind: "effect", label: `Effect preview: ${effect.label}`, tone: "green" };
   return null;
@@ -10985,21 +10989,37 @@ function markControlSurfaceReady(card){
   setCardState(card.dataset.rank, { status: "liked", platforms });
   paint(card);
   updatePlatformUi(card);
+  updateControlSurfaceForCard(card);
   renderCaptionQueue();
+  renderFinalStage();
 }
 function cancelControlSurfaceReady(card){
+  const current = cardState(card.dataset.rank);
+  if (current.status === "discarded") {
+    setCardState(card.dataset.rank, { status: null, platforms: [] });
+    paint(card);
+    updatePlatformUi(card);
+    updateControlSurfaceForCard(card);
+    renderCaptionQueue();
+    renderFinalStage();
+    return;
+  }
   const platform = activePlatformForRank(card.dataset.rank);
-  const platforms = uniquePlatforms(cardState(card.dataset.rank).platforms).filter(item => item !== platform);
+  const platforms = uniquePlatforms(current.platforms).filter(item => item !== platform);
   setCardState(card.dataset.rank, { status: platforms.length ? "liked" : null, platforms });
   paint(card);
   updatePlatformUi(card);
+  updateControlSurfaceForCard(card);
   renderCaptionQueue();
+  renderFinalStage();
 }
 function discardControlSurfaceCard(card){
   setCardState(card.dataset.rank, { status: "discarded", platforms: [] });
   paint(card);
   updatePlatformUi(card);
+  updateControlSurfaceForCard(card);
   renderCaptionQueue();
+  renderFinalStage();
 }
 function updateCameraUi(card){
   const edit = platformEditForRank(card.dataset.rank, activePlatformForRank(card.dataset.rank));

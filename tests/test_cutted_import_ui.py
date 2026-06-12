@@ -181,6 +181,34 @@ class CuttedImportUiTests(unittest.TestCase):
             self.assertTrue((Path(tmp) / "assets" / "control-bar" / "control-bar.css").exists())
             self.assertTrue((Path(tmp) / "assets" / "control-bar" / "control-bar.js").exists())
 
+    def test_control_bar_asset_preserves_discard_contract(self) -> None:
+        asset_dir = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar"
+        script = (asset_dir / "control-bar.js").read_text(encoding="utf-8")
+        styles = (asset_dir / "control-bar.css").read_text(encoding="utf-8")
+
+        self.assertIn("setDiscarded(discarded = true)", script)
+        self.assertIn("subscribe(listener)", script)
+        self.assertIn('CustomEvent("cuted-control-bar:statechange"', script)
+        self.assertIn("CUT DISCARDED", script)
+        self.assertIn("settings.mockBumpers", script)
+        self.assertIn(".cuted-control-bar.is-discarded", styles)
+        self.assertIn(".cuted-render-zone.is-locked", styles)
+
+    def test_control_surface_uses_app_state_for_discarded(self) -> None:
+        source = MODULE_PATH.read_text(encoding="utf-8")
+
+        self.assertIn('discarded: current.status === "discarded"', source)
+        self.assertIn('current.status === "discarded"', source)
+        self.assertIn('label: "CUT DISCARDED"', source)
+        self.assertIn("mockBumpers: false", source)
+
+    def test_control_surface_ready_cancel_restores_discarded(self) -> None:
+        source = MODULE_PATH.read_text(encoding="utf-8")
+
+        self.assertIn('if (current.status === "discarded")', source)
+        self.assertIn('setCardState(card.dataset.rank, { status: null, platforms: [] })', source)
+        self.assertIn("renderFinalStage();", source)
+
     def test_cards_include_control_surface_slot(self) -> None:
         html = CUTTED.card_html(
             CUTTED.Moment(
