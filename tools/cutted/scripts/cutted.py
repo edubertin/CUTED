@@ -8446,7 +8446,7 @@ button[data-action=discard],.result-actions a.secondary,.result-actions button.s
 .duration-profile input:checked+span,.layer-chip.is-selected{border-color:rgba(17,162,207,.72);background:var(--control-active);color:var(--color-text)}
 .camera-path-rail{background:linear-gradient(90deg,rgba(17,162,207,.28),rgba(231,231,232,.1),rgba(175,207,42,.18))}.camera-path-marker{border-color:var(--glass-border);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.035)),rgba(231,231,232,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.32),0 6px 14px rgba(0,0,0,.26)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:rgba(17,162,207,.88);box-shadow:0 0 0 4px rgba(17,162,207,.16),0 0 24px rgba(17,162,207,.26)}
 .preview-camera-marker span,.camera-path-marker span{position:absolute;left:50%;bottom:calc(100% + 4px);max-width:72px;padding:2px 5px;border:1px solid rgba(231,231,232,.2);border-radius:999px;background:rgba(5,5,5,.82);color:var(--color-text-soft);font-size:10px;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform:translateX(-50%);pointer-events:none}.camera-path-marker{overflow:visible}.preview-camera-marker{overflow:visible}.camera-path-marker span{bottom:calc(100% + 5px)}.preview-camera-marker.active span,.camera-path-marker.active span{border-color:rgba(17,162,207,.7);color:#fff}
-.preview-camera-popover-head{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center}.preview-camera-popover-head strong{font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.preview-camera-popover-head span,.preview-camera-popover small{color:var(--color-text-muted);font-size:11px}.preview-camera-popover-close{display:inline-grid!important;place-items:center;width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;padding:0!important;border-radius:999px!important}.preview-camera-popover-actions{display:grid;grid-template-columns:1fr auto;gap:8px}.preview-camera-popover [data-preview-camera-popover-delete]{color:var(--color-danger)!important}.preview-camera-popover--portal{position:fixed!important;z-index:3200!important;width:min(260px,calc(100vw - 16px))!important;max-width:calc(100vw - 16px);transform:none!important}
+.preview-camera-popover{overflow:hidden}.preview-camera-popover--live{gap:7px;padding:11px;border-color:rgba(17,162,207,.42);border-radius:12px;background:radial-gradient(circle at 26% 0,rgba(17,162,207,.26),transparent 36%),linear-gradient(135deg,rgba(231,231,232,.16),transparent 32%),rgba(7,7,7,.86);box-shadow:inset 0 1px rgba(255,255,255,.22),inset 0 -1px rgba(0,0,0,.62),0 22px 58px rgba(0,0,0,.58),0 0 36px rgba(17,162,207,.24);backdrop-filter:blur(24px) saturate(1.28);animation:preview-camera-popover-in 220ms cubic-bezier(.2,.9,.2,1)}.preview-camera-popover-aura,.preview-camera-popover-lens,.preview-camera-popover-beam{position:absolute;pointer-events:none}.preview-camera-popover-aura{inset:-34px;background:conic-gradient(from 140deg,transparent,rgba(17,162,207,.24),transparent 42%),radial-gradient(circle at 76% 18%,rgba(175,207,42,.16),transparent 20%);opacity:.48;animation:preview-camera-popover-orbit 5.2s linear infinite}.preview-camera-popover-lens{right:10px;top:12px;width:50px;height:50px;border:1px solid rgba(231,231,232,.12);border-radius:50%;background:radial-gradient(circle at 36% 30%,rgba(255,255,255,.24),transparent 28%),radial-gradient(circle,rgba(17,162,207,.16),transparent 68%);opacity:.64}.preview-camera-popover-beam{left:50%;bottom:-34px;width:2px;height:34px;background:linear-gradient(180deg,rgba(17,162,207,.9),transparent);box-shadow:0 0 18px rgba(17,162,207,.54)}.preview-camera-popover-head,.preview-camera-popover label,.preview-camera-popover small,.preview-camera-popover-actions,.preview-camera-popover-meter,.preview-camera-popover-primary{position:relative;z-index:1}.preview-camera-popover-head{display:grid;grid-template-columns:1fr auto auto;gap:7px;align-items:center}.preview-camera-popover-head strong{font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 0 16px rgba(17,162,207,.36)}.preview-camera-popover-head span,.preview-camera-popover small{color:rgba(231,231,232,.64);font-size:11px}.preview-camera-popover-close{display:inline-grid!important;place-items:center;width:22px!important;height:22px!important;min-width:22px!important;min-height:22px!important;padding:0!important;border-radius:999px!important;background:rgba(231,231,232,.08)!important}.preview-camera-popover label{gap:4px;font-size:11px;text-transform:none}.preview-camera-popover select{min-height:31px;padding:6px 8px;border-color:rgba(17,162,207,.34);background:rgba(0,0,0,.56)}.preview-camera-popover input{height:18px}.preview-camera-popover-meter{overflow:hidden;height:6px;margin:1px 0 2px;border-radius:999px;background:rgba(0,0,0,.28);box-shadow:inset 0 0 10px rgba(0,0,0,.58)}.preview-camera-popover-meter i{position:relative;display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--color-brand-blue),rgba(231,231,232,.9));box-shadow:0 0 16px rgba(17,162,207,.52);animation:preview-camera-meter-breathe 1.8s ease-in-out infinite}.preview-camera-popover-meter i::after{position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.52),transparent);content:"";transform:translateX(-110%);animation:preview-camera-meter-scan 2.4s ease-in-out infinite}.preview-camera-popover-actions{display:grid;grid-template-columns:1fr auto;gap:7px;align-items:center}.preview-camera-popover button{min-height:31px}.preview-camera-popover-primary{border-color:rgba(17,162,207,.56)!important;background:linear-gradient(180deg,rgba(17,162,207,.34),rgba(17,162,207,.12))!important;color:var(--color-text)!important;font-weight:900}.preview-camera-popover-danger{min-width:70px;color:#ff8f8f!important;border-color:rgba(255,111,111,.32)!important;background:linear-gradient(180deg,rgba(255,111,111,.12),rgba(255,111,111,.04))!important}.preview-camera-popover-danger:disabled{opacity:.42}.preview-camera-popover--portal{position:fixed!important;z-index:3200!important;width:min(236px,calc(100vw - 16px))!important;max-width:calc(100vw - 16px);transform:none!important}@keyframes preview-camera-popover-in{from{opacity:0;transform:translateY(12px) scale(.94);filter:blur(6px)}to{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}}@keyframes preview-camera-popover-orbit{to{transform:rotate(360deg)}}@keyframes preview-camera-meter-breathe{0%,100%{filter:brightness(.94)}50%{filter:brightness(1.18)}}@keyframes preview-camera-meter-scan{0%,18%{transform:translateX(-110%)}58%,100%{transform:translateX(130%)}}
 .preview-volume-group{z-index:2300}.preview-volume-popover{z-index:2600!important;width:44px!important;min-width:44px!important;height:120px!important;padding:10px 6px!important;overflow:visible}.preview-volume-slider{width:92px!important;max-width:92px}.preview-ai-button{display:inline-grid;place-items:center;min-width:42px;height:32px;padding:0 12px;border:1px solid rgba(17,162,207,.72);border-radius:999px;background:linear-gradient(180deg,rgba(17,162,207,.28),rgba(17,162,207,.1));color:var(--color-text);font-weight:900;letter-spacing:0}.preview-ai-button:disabled{opacity:.62;cursor:progress}.preview-ai-status{min-height:16px;width:100%;color:rgba(231,231,232,.62);font-size:12px;line-height:1.25;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .overlay-menu button,.overlay-layer-row button{background:rgba(231,231,232,.08);color:rgba(231,231,232,.8);border-color:var(--glass-border)}
 .overlay-danger{background:rgba(80,20,20,.72)!important;border-color:rgba(255,120,120,.46)!important;color:#ffd2d2!important}
@@ -10835,13 +10835,11 @@ function handlePreviewCameraPopoverClick(card, event){
     openPreviewCameraPopover(card, "edit");
     return;
   }
-  const move = event.target.closest("[data-preview-camera-popover-move]");
-  if (move) {
+  const done = event.target.closest("[data-preview-camera-popover-continue]");
+  if (done) {
     event.preventDefault();
     event.stopPropagation();
-    moveCameraPathFrameToPlayhead(card);
-    renderPreviewCameraTimeline(card);
-    openPreviewCameraPopover(card, "edit");
+    closePreviewCameraPopover(card);
     return;
   }
   const remove = event.target.closest("[data-preview-camera-popover-delete]");
@@ -10883,19 +10881,27 @@ function positionPreviewCameraPopover(card, popover, leftPercent){
   const container = card.querySelector("[data-preview-camera-timeline]");
   const rect = container?.getBoundingClientRect();
   if (!rect) return;
-  const width = Math.min(260, Math.max(window.innerWidth - 16, 0));
+  const width = Math.min(236, Math.max(window.innerWidth - 16, 0));
   const rawLeft = rect.left + rect.width * (leftPercent / 100) - width / 2;
   const left = clampNumber(rawLeft, 8, Math.max(window.innerWidth - width - 8, 8));
   const below = rect.bottom + 8;
-  const height = 260;
+  const height = 236;
   const top = below + height < window.innerHeight - 8 ? below : clampNumber(rect.top - height - 8, 8, Math.max(window.innerHeight - height - 8, 8));
   popover.style.left = `${left.toFixed(1)}px`;
   popover.style.top = `${top.toFixed(1)}px`;
   popover.style.right = "auto";
   popover.style.bottom = "auto";
 }
+function previewCameraPopoverDecorHtml(strength){
+  const amount = clampNumber(Number(strength ?? 60), 0, 100);
+  return `<div class="preview-camera-popover-aura" aria-hidden="true"></div>
+  <div class="preview-camera-popover-lens" aria-hidden="true"></div>
+  <div class="preview-camera-popover-beam" aria-hidden="true"></div>
+  <div class="preview-camera-popover-meter" aria-hidden="true"><i style="width:${amount}%"></i></div>`;
+}
 function previewCameraInsertPopoverHtml(position, intent){
-  return `<div class="preview-camera-popover-head">
+  return `${previewCameraPopoverDecorHtml(62)}
+  <div class="preview-camera-popover-head">
     <strong>Novo shot</strong>
     <span>${escapeHtml(fixed(position))}</span>
     <button class="preview-camera-popover-close" data-preview-camera-popover-close type="button" aria-label="Fechar">x</button>
@@ -10903,13 +10909,14 @@ function previewCameraInsertPopoverHtml(position, intent){
   <label>Intencao
     <select data-preview-camera-popover-intent>${directorIntentOptionsHtml(intent)}</select>
   </label>
-  <button data-preview-camera-popover-add type="button">Inserir na timeline</button>`;
+  <button class="preview-camera-popover-primary" data-preview-camera-popover-add type="button">Continuar</button>`;
 }
 function previewCameraEditPopoverHtml(state, frame, intent){
   const title = directorMarkerTitle(state.edit.director_plan, frame);
   const key = frame.key || "center";
   const strength = clampNumber(Number(frame.strength ?? 60), 0, 100);
-  return `<div class="preview-camera-popover-head">
+  return `${previewCameraPopoverDecorHtml(strength)}
+  <div class="preview-camera-popover-head">
     <strong>${escapeHtml(directorMarkerLabel(state.edit.director_plan, frame))}</strong>
     <span>${escapeHtml(fixed(frame.time))}</span>
     <button class="preview-camera-popover-close" data-preview-camera-popover-close type="button" aria-label="Fechar">x</button>
@@ -10925,8 +10932,8 @@ function previewCameraEditPopoverHtml(state, frame, intent){
     <input data-preview-camera-popover-strength type="range" min="0" max="100" step="5" value="${strength}">
   </label>
   <div class="preview-camera-popover-actions">
-    <button data-preview-camera-popover-move type="button">Mover para playhead</button>
-    <button data-preview-camera-popover-delete type="button"${state.path.length > 1 ? "" : " disabled"}>Excluir</button>
+    <button class="preview-camera-popover-primary" data-preview-camera-popover-continue type="button">Continuar</button>
+    <button class="preview-camera-popover-danger" data-preview-camera-popover-delete type="button"${state.path.length > 1 ? "" : " disabled"}>Excluir</button>
   </div>`;
 }
 function closePreviewCameraPopover(card){

@@ -541,9 +541,11 @@ class CuttedCameraRuleTests(unittest.TestCase):
 
         self.assertIn("data-preview-camera-popover-intent", html)
         self.assertIn("data-preview-camera-popover-add", html)
-        self.assertIn("data-preview-camera-popover-move", html)
+        self.assertIn("data-preview-camera-popover-continue", html)
         self.assertIn("data-preview-camera-popover-delete", html)
         self.assertIn("data-preview-camera-popover-close", html)
+        self.assertIn("preview-camera-popover-aura", html)
+        self.assertNotIn("data-preview-camera-popover-move", html)
         self.assertIn("preview-camera-popover-close", html)
         self.assertIn("updateCameraPathFrameIntentForCard", html)
         self.assertIn("addCameraIntentFrameForCard", html)
