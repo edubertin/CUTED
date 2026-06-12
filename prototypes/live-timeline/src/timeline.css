@@ -271,7 +271,7 @@ h1 {
   position: absolute;
   z-index: 6;
   display: grid;
-  width: 76px;
+  width: 60px;
   height: 194px;
   place-items: center;
   padding: 0;
@@ -279,6 +279,7 @@ h1 {
   background: transparent;
   box-shadow: none;
   cursor: ew-resize;
+  pointer-events: none;
   touch-action: none;
 }
 
@@ -331,9 +332,10 @@ h1 {
   top: 0;
   z-index: 1;
   display: block;
-  width: 98px;
+  width: 72px;
   height: 194px;
-  pointer-events: none;
+  cursor: ew-resize;
+  pointer-events: auto;
   transform-origin: 50% 50%;
   transition:
     filter 160ms ease,
@@ -360,7 +362,7 @@ h1 {
 }
 
 .trim-blade::after {
-  inset: 19px 24px;
+  inset: 19px 18px;
   background:
     linear-gradient(90deg, transparent 0 18%, rgba(231, 231, 232, 0.16) 32%, transparent 50%),
     var(--blade-core);
@@ -377,7 +379,7 @@ h1 {
 .trim-blade--end {
   --blade-glow: rgba(175, 207, 42, 0.52);
   --blade-main: var(--color-brand-green);
-  left: -22px;
+  left: -12px;
   transform: scaleX(-1);
 }
 
@@ -731,7 +733,7 @@ h1 {
   }
 
   .trim-handle {
-    width: 56px;
+    width: 46px;
     height: 146px;
   }
 
@@ -740,7 +742,7 @@ h1 {
   }
 
   .trim-blade {
-    width: 70px;
+    width: 54px;
     height: 146px;
   }
 
@@ -749,7 +751,7 @@ h1 {
   }
 
   .trim-blade--end {
-    left: -15px;
+    left: -8px;
     transform: scaleX(-1);
   }
 

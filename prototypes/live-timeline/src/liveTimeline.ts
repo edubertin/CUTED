@@ -1,9 +1,5 @@
 import { Application, Container, Graphics } from "pixi.js";
-import { gsap } from "gsap";
-import { Draggable } from "gsap/Draggable";
 import "./timeline.css";
-
-gsap.registerPlugin(Draggable);
 
 const COLORS = {
   blue: 0x11a2cf,
@@ -18,13 +14,13 @@ const HANDLE_ANCHOR = {
   desktop: {
     endX: 0,
     endY: 98,
-    startX: 76,
+    startX: 60,
     startY: 98
   },
   mobile: {
     endX: 0,
     endY: 73,
-    startX: 55,
+    startX: 44,
     startY: 78
   }
 };
@@ -807,18 +803,12 @@ function bindShellInteractions(elements: TimelineElements, state: TimelineState,
     if (event.button !== 0) return;
     if (isHandleTarget(event.target)) return;
     if (isTransportTarget(event.target)) return;
-    const keyframe = nearestKeyframe(event.clientX, event.clientY, elements, state);
-    if (keyframe?.editable) {
-      event.preventDefault();
-      event.stopPropagation();
-      openInspector(keyframe, state, render);
-      return;
-    }
     state.playing = false;
     state.inspectorOpen = false;
     if (state.volumeEnabled) state.volumeOpen = false;
     state.mode = "scrubbing";
     state.playhead = xToTime(event.clientX, getMetrics(elements.canvasHost), state.duration);
+    activeCallbacks.onPlayToggle?.(false);
     activeCallbacks.onSeek?.(state.playhead);
     render();
   });
@@ -862,44 +852,65 @@ function bindShellInteractions(elements: TimelineElements, state: TimelineState,
 function bindHandleDrag(elements: TimelineElements, state: TimelineState, render: () => void): void {
   const updateStart = (clientX: number): void => {
     const time = xToTime(clientX, getMetrics(elements.canvasHost), state.duration);
-    state.trimStart = clamp(snapTrimTime(time, "start", state), 0, state.trimEnd - 2);
+    state.trimStart = clamp(time, 0, state.trimEnd - 2);
     state.playhead = Math.max(state.playhead, state.trimStart);
     activeCallbacks.onTrimChange?.({ start: state.trimStart, end: state.trimEnd, side: "start" });
     render();
   };
   const updateEnd = (clientX: number): void => {
     const time = xToTime(clientX, getMetrics(elements.canvasHost), state.duration);
-    state.trimEnd = clamp(snapTrimTime(time, "end", state), state.trimStart + 2, state.duration);
+    state.trimEnd = clamp(time, state.trimStart + 2, state.duration);
     state.playhead = Math.min(state.playhead, state.trimEnd);
     activeCallbacks.onTrimChange?.({ start: state.trimStart, end: state.trimEnd, side: "end" });
     render();
   };
-  createDraggable(elements.startHandle, "start", state, updateStart);
-  createDraggable(elements.endHandle, "end", state, updateEnd);
+  bindRightButtonTrimDrag(elements.startHandle, "start", state, updateStart, render);
+  bindRightButtonTrimDrag(elements.endHandle, "end", state, updateEnd, render);
 }
 
-function createDraggable(
+function bindRightButtonTrimDrag(
   handle: HTMLElement,
   side: TrimSide,
   state: TimelineState,
-  update: (clientX: number) => void
+  update: (clientX: number) => void,
+  render: () => void
 ): void {
-  Draggable.create(handle, {
-    type: "x",
-    trigger: handle,
-    onPress() {
-      gsap.set(handle, { x: 0, y: 0 });
-      startTrimDrag(handle, side, state);
-    },
-    onDrag() {
-      update(this.pointerX);
+  handle.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
+  handle.addEventListener("pointerdown", (event) => {
+    if (event.button !== 2) return;
+    event.preventDefault();
+    event.stopPropagation();
+    handle.setPointerCapture?.(event.pointerId);
+    startTrimDrag(handle, side, state);
+    render();
+    let moved = false;
+
+    const move = (moveEvent: PointerEvent): void => {
+      if (moveEvent.pointerId !== event.pointerId) return;
+      moveEvent.preventDefault();
+      moveEvent.stopPropagation();
+      moved = true;
+      update(moveEvent.clientX);
       emitCutParticles(side, state, elements);
-      gsap.set(handle, { x: 0, y: 0 });
-    },
-    onRelease() {
-      finishTrimDrag(handle, side, state, this.deltaX !== 0);
-      gsap.set(handle, { x: 0, y: 0 });
-    }
+    };
+    const finish = (finishEvent: PointerEvent): void => {
+      if (finishEvent.pointerId !== event.pointerId) return;
+      finishEvent.preventDefault();
+      finishEvent.stopPropagation();
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      handle.releasePointerCapture?.(event.pointerId);
+      finishTrimDrag(handle, side, state, moved);
+      render();
+    };
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
   });
 }
 
@@ -909,6 +920,7 @@ function startTrimDrag(handle: HTMLElement, side: TrimSide, state: TimelineState
   state.mode = "trimming";
   state.activeHandle = side;
   state.inspectorOpen = false;
+  activeCallbacks.onPlayToggle?.(false);
   if (state.volumeEnabled) state.volumeOpen = false;
 }
 
@@ -916,7 +928,7 @@ function finishTrimDrag(handle: HTMLElement, side: TrimSide, state: TimelineStat
   handle.classList.remove("is-dragging");
   if (moved) {
     triggerCutPulse(side, state);
-    playUiTone(triggerSnapRitual(side, state) ? "snap" : "cut", state);
+    playUiTone("cut", state);
   }
   state.mode = "idle";
   state.activeHandle = null;
@@ -1014,24 +1026,13 @@ function openInspector(keyframe: TimelineKeyframe, state: TimelineState, render:
   state.selectedKeyframeId = keyframe.id;
   state.inspectorOpen = state.inspectorEnabled;
   state.mode = "editing";
+  activeCallbacks.onPlayToggle?.(false);
   activeCallbacks.onKeyframeOpen?.(keyframe);
   render();
 }
 
 function selectedKeyframe(state: TimelineState): TimelineKeyframe | null {
   return state.keyframes.find((keyframe) => keyframe.id === state.selectedKeyframeId) ?? null;
-}
-
-function snapTrimTime(time: number, side: TrimSide, state: TimelineState): number {
-  const candidates = state.keyframes
-    .filter((keyframe) => keyframe.time > state.trimStart && keyframe.time < state.trimEnd)
-    .map((keyframe) => keyframe.time);
-  const nearest = candidates.reduce<number | null>((best, candidate) => {
-    if (best === null) return candidate;
-    return Math.abs(candidate - time) < Math.abs(best - time) ? candidate : best;
-  }, null);
-  if (nearest === null || Math.abs(nearest - time) > 0.9) return time;
-  return side === "start" ? nearest - 0.12 : nearest + 0.12;
 }
 
 function placeHandles(m: TimelineMetrics, s: TimelineState, elements: TimelineElements): void {
