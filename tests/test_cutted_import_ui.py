@@ -445,9 +445,35 @@ class CuttedImportUiTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "link ou caminho local"):
             CUTTED.import_request_metadata({"output_path": "C:\\videos"})
 
-    def test_import_request_metadata_requires_destination(self) -> None:
-        with self.assertRaisesRegex(ValueError, "pasta onde os videos finais"):
-            CUTTED.import_request_metadata({"source_path": "video.mp4"})
+    def test_import_request_metadata_uses_automatic_render_destination(self) -> None:
+        original_provider = CUTTED.configured_ai_provider
+        CUTTED.configured_ai_provider = lambda: "local"
+        try:
+            metadata = CUTTED.import_request_metadata({"source_path": "video.mp4", "preview_count": 20})
+        finally:
+            CUTTED.configured_ai_provider = original_provider
+
+        self.assertEqual(metadata["output_path"], "")
+        self.assertEqual(metadata["preview_count"], 10)
+
+    def test_next_import_output_dir_uses_projects_folder(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = CUTTED.next_import_output_dir(Path(tmp), "video.mp4")
+
+            self.assertEqual(output_dir.parent.name, CUTTED.PROJECTS_DIR_NAME)
+            self.assertEqual(output_dir.parent.parent, Path(tmp))
+
+    def test_render_export_dir_prefers_project_render_output_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery_dir = Path(tmp) / "projects" / "demo"
+            render_dir = gallery_dir / "renders"
+            gallery_dir.mkdir(parents=True)
+            (gallery_dir / "import-request.json").write_text(
+                json.dumps({"render_output_path": str(render_dir), "output_path": "C:\\legacy"}),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(CUTTED.render_export_dir(gallery_dir), render_dir)
 
 
 class CuttedLaunchTests(unittest.TestCase):

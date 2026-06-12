@@ -88,6 +88,25 @@ class CuttedProjectHomeTests(unittest.TestCase):
             self.assertIn("data-open-workspace", html)
             self.assertIn("mockProjects", html)
 
+    def test_project_home_new_project_state_uses_compact_import_flow(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+
+            html = CUTTED.project_home_html(workspace, "assets/brand/cuted-logo-transparent.png", [])
+
+            self.assertIn('data-project-library', html)
+            self.assertIn('data-show-projects', html)
+            self.assertIn('name="source_mode" type="radio" value="local" checked', html)
+            self.assertIn('name="source_mode" type="radio" value="youtube"', html)
+            self.assertIn('data-source-panel="local"', html)
+            self.assertIn('data-source-panel="youtube"', html)
+            self.assertIn('<strong>S</strong>', html)
+            self.assertIn('<strong>M</strong>', html)
+            self.assertIn('<strong>L</strong>', html)
+            self.assertIn('data-context-audio', html)
+            self.assertIn('Renders salvos automaticamente no projeto.', html)
+            self.assertNotIn('name="output_path"', html)
+
     def test_bootstrap_workspace_writes_project_home(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp)
@@ -96,7 +115,8 @@ class CuttedProjectHomeTests(unittest.TestCase):
             html = (workspace / "index.html").read_text(encoding="utf-8")
 
             self.assertIn("data-project-home", html)
-            self.assertIn("home-logo-spark-left", html)
+            self.assertIn("home-brand-logo", html)
+            self.assertNotIn("home-logo-spark-left", html)
             self.assertIn("data-project-mock=\"true\"", html)
             self.assertTrue(CUTTED.workspace_index_is_empty_shell(workspace / "index.html"))
 
