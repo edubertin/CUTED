@@ -255,4 +255,3 @@ integrated until its branch is explicitly approved.
 - Deleting a project requires explicit confirmation and lists consequences.
 - Cache cleanup can free space without deleting final renders.
 - Existing sample galleries remain openable for development QA.
-
