@@ -369,9 +369,16 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row["kind"], "person")
         self.assertAlmostEqual(float(row["x"]), 20.0)
-        self.assertGreaterEqual(float(row["y"]), 35.0)
+        self.assertAlmostEqual(float(row["y"]), 32.0)
         self.assertAlmostEqual(float(row["width"]), 20.0)
         self.assertAlmostEqual(float(row["confidence"]), 0.78)
+
+    def test_camera_focus_biases_above_chin(self) -> None:
+        row = CUTTED.face_row_from_detection(100.0, 100.0, 200.0, 300.0, 1000, 1000, 1.0, False, 1.0)
+
+        self.assertIsNotNone(row)
+        self.assertAlmostEqual(float(row["y"]), 32.0)
+        self.assertEqual(CUTTED.CAMERA_ANALYSIS_VERSION, "auto-face-v31")
 
     def test_yolo_persons_merge_without_duplicating_opencv_faces(self) -> None:
         merged = CUTTED.merge_vision_subjects([face(42.0)], [person(43.0), person(75.0)])

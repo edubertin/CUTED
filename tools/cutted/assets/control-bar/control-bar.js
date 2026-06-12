@@ -6,10 +6,13 @@
     effectStyle: "clean",
     formatMenuOpen: false,
     insertMenuOpen: false,
+    volumeMenuOpen: false,
     aspectRatio: "9:16",
     bumpers: { intro: null, outro: null },
+    busy: false,
     muted: false,
     ready: false,
+    discarded: false,
     status: null,
     volume: 75
   };
@@ -31,27 +34,81 @@
     };
     const state = normalizeState({ ...DEFAULT_STATE, ...options });
     const statusClock = { id: null };
+    const subscribers = new Set();
+    reconcileReadyStatus(state);
 
     container.innerHTML = renderControlBar();
     const elements = readElements(container);
-    const teardown = bindEvents(container, elements, state, callbacks, settings, statusClock);
+    const teardown = bindEvents(container, elements, state, callbacks, settings, statusClock, subscribers);
     syncView(elements, state);
 
     return {
       destroy() {
         window.clearTimeout(statusClock.id);
         teardown();
+        subscribers.clear();
         container.innerHTML = "";
       },
       getState() {
-        return { ...state };
+        return snapshotState(state);
+      },
+      subscribe(listener) {
+        if (typeof listener !== "function") return () => {};
+        subscribers.add(listener);
+        return () => subscribers.delete(listener);
       },
       update(nextState) {
-        if (Object.prototype.hasOwnProperty.call(nextState || {}, "status")) {
+        const hasIncomingStatus = Object.prototype.hasOwnProperty.call(nextState || {}, "status");
+        const incomingStatus = hasIncomingStatus ? normalizeStatus(nextState.status) : state.status;
+        const keepLocalStatus = hasIncomingStatus && !incomingStatus && state.status && !state.status.persistent && statusClock.id;
+        if (hasIncomingStatus && !keepLocalStatus) {
           window.clearTimeout(statusClock.id);
         }
-        Object.assign(state, normalizeState({ ...state, ...nextState }));
+        const normalizedNext = normalizeState({ ...state, ...nextState });
+        if (keepLocalStatus) normalizedNext.status = state.status;
+        Object.assign(state, normalizedNext);
+        reconcileReadyStatus(state);
         syncView(elements, state);
+        emitStateChange(container, callbacks, subscribers, state);
+      },
+      setStatus(status, holdMs = 0) {
+        window.clearTimeout(statusClock.id);
+        state.status = normalizeStatus(status);
+        syncView(elements, state);
+        emitStateChange(container, callbacks, subscribers, state);
+        if (!state.status || state.status.persistent || holdMs <= 0) return;
+        statusClock.id = window.setTimeout(() => {
+          state.status = null;
+          syncView(elements, state);
+          emitStateChange(container, callbacks, subscribers, state);
+        }, holdMs);
+      },
+      clearStatus() {
+        window.clearTimeout(statusClock.id);
+        state.status = null;
+        syncView(elements, state);
+        emitStateChange(container, callbacks, subscribers, state);
+      },
+      setReady(ready = true) {
+        state.ready = Boolean(ready);
+        if (state.ready) state.discarded = false;
+        reconcileReadyStatus(state);
+        syncView(elements, state);
+        emitStateChange(container, callbacks, subscribers, state);
+      },
+      setDiscarded(discarded = true) {
+        state.discarded = Boolean(discarded);
+        if (state.discarded) state.ready = false;
+        reconcileReadyStatus(state);
+        syncView(elements, state);
+        emitStateChange(container, callbacks, subscribers, state);
+      },
+      reset(nextState = {}) {
+        window.clearTimeout(statusClock.id);
+        Object.assign(state, normalizeState({ ...DEFAULT_STATE, ...nextState }));
+        reconcileReadyStatus(state);
+        syncView(elements, state);
+        emitStateChange(container, callbacks, subscribers, state);
       }
     };
   }
@@ -71,9 +128,20 @@
       onBumperRemove: options.onBumperRemove || nested.onBumperRemove,
       onBumperChange: options.onBumperChange || nested.onBumperChange,
       onInsertClick: options.onInsertClick || nested.onInsertClick,
+      onStateChange: options.onStateChange || nested.onStateChange,
       onReadyCancel: options.onReadyCancel || nested.onReadyCancel,
       onVolumeChange: options.onVolumeChange || nested.onVolumeChange
     };
+  }
+
+  function emitStateChange(container, callbacks, subscribers, state) {
+    const snapshot = snapshotState(state);
+    callbacks.onStateChange?.(snapshot);
+    subscribers.forEach((listener) => listener(snapshot));
+    container.dispatchEvent(new CustomEvent("cuted-control-bar:statechange", {
+      bubbles: true,
+      detail: snapshot
+    }));
   }
 
   function normalizeState(state) {
@@ -82,15 +150,18 @@
 
     return {
       aiStatus,
+      busy: Boolean(state.busy),
       captionsEnabled: Boolean(state.captionsEnabled),
       effectMenuOpen: Boolean(state.effectMenuOpen),
       effectStyle,
       formatMenuOpen: Boolean(state.formatMenuOpen),
       insertMenuOpen: Boolean(state.insertMenuOpen),
+      volumeMenuOpen: Boolean(state.volumeMenuOpen),
       aspectRatio: FORMAT_OPTIONS.some((option) => option.value === state.aspectRatio) ? state.aspectRatio : "9:16",
       bumpers: normalizeBumpers(state.bumpers),
       muted: Boolean(state.muted),
       ready: Boolean(state.ready),
+      discarded: Boolean(state.discarded),
       status: normalizeStatus(state.status),
       volume: clamp(Number(state.volume), 0, 100)
     };
@@ -104,6 +175,7 @@
       kind: String(value.kind || "idle"),
       label: String(value.label || ""),
       progress: Number.isFinite(progress) ? clamp(progress, 0, 100) : null,
+      persistent: Boolean(value.persistent),
       tone
     };
   }
@@ -125,38 +197,83 @@
       formatTitle: container.querySelector("[data-cuted-format-title]"),
       bumperButtons: Array.from(container.querySelectorAll("[data-cuted-bumper-slot]")),
       bumperRemoves: Array.from(container.querySelectorAll("[data-cuted-bumper-remove]")),
+      controlBar: container.querySelector("[data-cuted-control-bar]"),
       insertButton: container.querySelector("[data-cuted-control='insert']"),
       insertDots: Array.from(container.querySelectorAll("[data-cuted-insert-dot]")),
       insertMenu: container.querySelector("[data-cuted-insert-menu]"),
       readyCancelButton: container.querySelector("[data-cuted-control='ready-cancel']"),
-      readyText: container.querySelector("[data-cuted-ready-text]"),
+      renderZone: container.querySelector("[data-cuted-render-zone]"),
       sonicRail: container.querySelector("[data-cuted-sonic-rail]"),
       soundButton: container.querySelector("[data-cuted-control='sound']"),
       toolGroup: container.querySelector("[data-cuted-tool-group]"),
-      statusBar: container.querySelector("[data-cuted-status]"),
+      statusBar: container.querySelector("[data-cuted-bar-status]"),
       statusLabel: container.querySelector("[data-cuted-status-label]"),
       statusMeter: container.querySelector("[data-cuted-status-meter]"),
+      volumeMuteButton: container.querySelector("[data-cuted-control='volume-mute']"),
+      volumePopover: container.querySelector("[data-cuted-volume-popover]"),
       volumeSlider: container.querySelector("[data-cuted-control='volume']"),
       volumeValue: container.querySelector("[data-cuted-value='volume']")
     };
   }
 
-  function bindEvents(container, elements, state, callbacks, settings, statusClock) {
+  function bindEvents(container, elements, state, callbacks, settings, statusClock, subscribers) {
     const setStatus = (status, holdMs = 2600) => {
       window.clearTimeout(statusClock.id);
       state.status = normalizeStatus(status);
       syncStatus(elements, state);
-      if (!state.status || holdMs <= 0) return;
+      emitStateChange(container, callbacks, subscribers, state);
+      if (!state.status || state.status.persistent || holdMs <= 0) return;
       statusClock.id = window.setTimeout(() => {
         state.status = null;
         syncStatus(elements, state);
+        emitStateChange(container, callbacks, subscribers, state);
       }, holdMs);
     };
+    const sync = () => {
+      syncView(elements, state);
+      emitStateChange(container, callbacks, subscribers, state);
+    };
+    const insertAutoCloseClock = { id: null };
+    const clearInsertAutoClose = () => {
+      window.clearTimeout(insertAutoCloseClock.id);
+      insertAutoCloseClock.id = null;
+    };
+    const scheduleInsertAutoClose = () => {
+      clearInsertAutoClose();
+      insertAutoCloseClock.id = window.setTimeout(() => {
+        if (!state.insertMenuOpen || isLocked()) return;
+        state.insertMenuOpen = false;
+        sync();
+      }, 2200);
+    };
     const closeMenus = () => {
+      clearInsertAutoClose();
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
-      syncView(elements, state);
+      state.volumeMenuOpen = false;
+      sync();
+    };
+    const isLocked = () => state.ready || state.discarded || state.busy;
+    const lockReady = () => {
+      state.ready = true;
+      state.discarded = false;
+      state.effectMenuOpen = false;
+      state.formatMenuOpen = false;
+      state.insertMenuOpen = false;
+      state.volumeMenuOpen = false;
+      setStatus(buildReadyStatus(), 0);
+      sync();
+    };
+    const lockDiscarded = () => {
+      state.ready = false;
+      state.discarded = true;
+      state.effectMenuOpen = false;
+      state.formatMenuOpen = false;
+      state.insertMenuOpen = false;
+      state.volumeMenuOpen = false;
+      setStatus(buildDiscardedStatus(), 0);
+      sync();
     };
     const dismissClick = (event) => {
       if (container.contains(event.target)) return;
@@ -166,127 +283,154 @@
       if (event.key === "Escape") closeMenus();
     };
 
-    document.addEventListener("click", dismissClick);
+    document.addEventListener("click", dismissClick, true);
     document.addEventListener("keydown", dismissKey);
 
     elements.volumeSlider.addEventListener("input", () => {
+      if (isLocked()) return;
       state.volume = Number(elements.volumeSlider.value);
       state.muted = state.volume === 0;
-      setStatus({ kind: "volume", label: `Volume ${state.volume}%`, progress: state.volume, tone: "blue" });
-      syncView(elements, state);
+      sync();
       callbacks.onVolumeChange?.({ muted: state.muted, volume: state.volume });
     });
 
     elements.soundButton.addEventListener("click", () => {
+      if (isLocked()) return;
+      state.volumeMenuOpen = !state.volumeMenuOpen;
+      state.effectMenuOpen = false;
+      state.formatMenuOpen = false;
+      state.insertMenuOpen = false;
+      sync();
+    });
+
+    elements.volumeMuteButton.addEventListener("click", () => {
+      if (isLocked()) return;
       state.muted = !state.muted;
       state.volume = state.muted ? 0 : Math.max(state.volume, 75);
-      setStatus({
-        kind: "volume",
-        label: state.muted ? "Audio muted" : `Volume ${state.volume}%`,
-        progress: state.volume,
-        tone: state.muted ? "neutral" : "blue"
-      });
-      syncView(elements, state);
+      sync();
       callbacks.onVolumeChange?.({ muted: state.muted, volume: state.volume });
     });
 
     elements.aiButton.addEventListener("click", () => {
+      if (isLocked()) return;
+      state.volumeMenuOpen = false;
       callbacks.onAiClick?.({ ...state });
       if (state.aiStatus === "idle") {
         state.aiStatus = "loading";
         setStatus({ kind: "ai", label: "AI analyzing frame safety...", progress: 42, tone: "blue" });
-        syncView(elements, state);
+        sync();
         callbacks.onAiStatusChange?.({ aiStatus: state.aiStatus });
         window.setTimeout(() => {
+          if (isLocked()) return;
           state.aiStatus = "active";
           setStatus({ kind: "ai", label: "AI ready for this cut", tone: "blue" });
-          syncView(elements, state);
+          sync();
           callbacks.onAiStatusChange?.({ aiStatus: state.aiStatus });
         }, 1400);
       }
     });
 
     elements.effectButton.addEventListener("click", () => {
+      if (isLocked()) return;
       state.effectMenuOpen = !state.effectMenuOpen;
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
+      state.volumeMenuOpen = false;
       setStatus({
         kind: "effect",
         label: state.effectMenuOpen ? "Choose a visual effect" : "Effect menu closed",
         tone: state.effectMenuOpen ? "green" : "neutral"
       });
-      syncView(elements, state);
+      sync();
       callbacks.onEffectClick?.({ effectMenuOpen: state.effectMenuOpen, effectStyle: state.effectStyle });
     });
 
     elements.effectOptions.forEach((button) => {
       button.addEventListener("click", () => {
+        if (isLocked()) return;
         state.effectStyle = button.dataset.cutedEffectStyle;
         state.effectMenuOpen = false;
+        state.volumeMenuOpen = false;
         setStatus({ kind: "effect", label: `Effect preview: ${button.textContent.trim()}`, tone: "green" });
-        syncView(elements, state);
+        sync();
         callbacks.onEffectStyleChange?.({ effectStyle: state.effectStyle });
       });
     });
 
     elements.captionButton.addEventListener("click", () => {
+      if (isLocked()) return;
       state.captionsEnabled = !state.captionsEnabled;
+      state.volumeMenuOpen = false;
       setStatus({ kind: "caption", label: state.captionsEnabled ? "Captions on" : "Captions off", tone: state.captionsEnabled ? "blue" : "neutral" });
-      syncView(elements, state);
+      sync();
       callbacks.onCaptionToggle?.({ captionsEnabled: state.captionsEnabled });
     });
     elements.approveButton.addEventListener("click", () => {
-      state.ready = true;
-      setStatus({ kind: "ready", label: "Ready", tone: "green" });
-      syncView(elements, state);
-      callbacks.onApproveClick?.({ ...state });
+      if (isLocked()) return;
+      lockReady();
+      callbacks.onApproveClick?.(snapshotState(state));
     });
     elements.discardButton.addEventListener("click", () => {
-      setStatus({ kind: "discard", label: "Cut discarded", tone: "red" });
-      callbacks.onDiscardClick?.({ ...state });
+      if (isLocked()) return;
+      lockDiscarded();
+      callbacks.onDiscardClick?.(snapshotState(state));
     });
     elements.readyCancelButton.addEventListener("click", () => {
       state.ready = false;
-      setStatus({ kind: "ready", label: "Back to editing", tone: "neutral" });
-      syncView(elements, state);
-      callbacks.onReadyCancel?.({ ...state });
+      state.discarded = false;
+      setStatus({ kind: "editing", label: "Back to editing", tone: "neutral" }, 1800);
+      sync();
+      callbacks.onReadyCancel?.(snapshotState(state));
     });
 
     elements.formatButton.addEventListener("click", () => {
+      if (isLocked()) return;
       state.formatMenuOpen = !state.formatMenuOpen;
       state.effectMenuOpen = false;
       state.insertMenuOpen = false;
+      state.volumeMenuOpen = false;
       setStatus({ kind: "format", label: state.formatMenuOpen ? "Choose output format" : "Format menu closed", tone: "blue" });
-      syncView(elements, state);
+      sync();
     });
 
     elements.formatOptions.forEach((button) => {
       button.addEventListener("click", () => {
+        if (isLocked()) return;
         state.aspectRatio = button.dataset.cutedFormat;
         state.formatMenuOpen = false;
+        state.volumeMenuOpen = false;
         setStatus({ kind: "format", label: `Format selected: ${state.aspectRatio}`, tone: "blue" });
-        syncView(elements, state);
+        sync();
         callbacks.onFormatChange?.({ aspectRatio: state.aspectRatio });
       });
     });
 
     elements.insertButton.addEventListener("click", () => {
+      if (isLocked()) return;
       state.insertMenuOpen = !state.insertMenuOpen;
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
+      state.volumeMenuOpen = false;
       setStatus({ kind: "insert", label: state.insertMenuOpen ? "Insert bumper: Start or End" : "Insert menu closed", tone: "blue" });
-      syncView(elements, state);
+      if (state.insertMenuOpen) {
+        scheduleInsertAutoClose();
+      } else {
+        clearInsertAutoClose();
+      }
+      sync();
       callbacks.onInsertClick?.({ insertMenuOpen: state.insertMenuOpen, bumpers: { ...state.bumpers } });
     });
 
     elements.bumperButtons.forEach((button) => {
       button.addEventListener("click", () => {
+        if (isLocked()) return;
         const slot = button.dataset.cutedBumperSlot;
         if (!state.bumpers[slot] && settings.mockBumpers) {
           state.bumpers[slot] = mockBumper(slot);
         }
+        clearInsertAutoClose();
         setStatus({ kind: "insert", label: `${slot === "intro" ? "Start" : "End"} bumper attached`, tone: "green" });
-        syncView(elements, state);
+        sync();
         callbacks.onBumperClick?.({ slot, bumper: state.bumpers[slot] });
         callbacks.onBumperChange?.({ bumpers: { ...state.bumpers } });
       });
@@ -295,25 +439,40 @@
     elements.bumperRemoves.forEach((button) => {
       button.addEventListener("click", (event) => {
         event.stopPropagation();
+        if (isLocked()) return;
         const slot = button.dataset.cutedBumperRemove;
         state.bumpers[slot] = null;
         setStatus({ kind: "insert", label: `${slot === "intro" ? "Start" : "End"} bumper removed`, tone: "red" });
-        syncView(elements, state);
+        sync();
         callbacks.onBumperRemove?.({ slot });
         callbacks.onBumperChange?.({ bumpers: { ...state.bumpers } });
       });
     });
 
     return () => {
+      clearInsertAutoClose();
       window.clearTimeout(statusClock.id);
-      document.removeEventListener("click", dismissClick);
+      document.removeEventListener("click", dismissClick, true);
       document.removeEventListener("keydown", dismissKey);
     };
   }
 
   function syncView(elements, state) {
+    const locked = state.ready || state.discarded || state.busy;
+    elements.controlBar.classList.toggle("is-busy", state.busy);
+    elements.controlBar.classList.toggle("is-ready", state.ready);
+    elements.controlBar.classList.toggle("is-discarded", state.discarded);
+    elements.controlBar.classList.toggle("is-locked", locked);
+    elements.renderZone.classList.toggle("is-ready", state.ready);
+    elements.renderZone.classList.toggle("is-discarded", state.discarded);
+    elements.renderZone.classList.toggle("is-locked", locked);
     elements.soundButton.classList.toggle("is-muted", state.muted);
+    elements.soundButton.classList.toggle("is-active", state.volumeMenuOpen);
+    elements.soundButton.setAttribute("aria-expanded", String(state.volumeMenuOpen));
+    elements.volumePopover.dataset.open = String(state.volumeMenuOpen);
     elements.sonicRail.classList.toggle("is-muted", state.muted);
+    elements.volumeMuteButton.classList.toggle("is-muted", state.muted);
+    elements.volumeMuteButton.textContent = state.muted ? "Unmute" : "Mute";
     elements.sonicRail.style.setProperty("--volume", `${state.volume}%`);
     elements.sonicRail.style.setProperty("--volume-num", String(state.volume / 100));
     elements.volumeSlider.value = String(state.volume);
@@ -323,11 +482,16 @@
     elements.aiButton.classList.toggle("is-active", state.aiStatus === "loading" || state.aiStatus === "active");
     elements.captionButton.classList.toggle("is-active", state.captionsEnabled);
     elements.effectButton.classList.toggle("is-active", true);
+    if (locked) {
+      state.effectMenuOpen = false;
+      state.formatMenuOpen = false;
+      state.insertMenuOpen = false;
+      state.volumeMenuOpen = false;
+    }
     elements.effectMenu.dataset.open = String(state.effectMenuOpen);
     syncInsert(elements, state);
     syncStatus(elements, state);
-    elements.readyText.innerHTML = renderReadyLetters("Ready");
-    elements.approveButton.closest("[data-cuted-ready-region]").dataset.ready = String(state.ready);
+    elements.approveButton.closest("[data-cuted-ready-region]").dataset.ready = String(state.ready || state.discarded);
 
     elements.effectOptions.forEach((button) => {
       button.classList.toggle("is-active", button.dataset.cutedEffectStyle === state.effectStyle);
@@ -346,9 +510,16 @@
   }
 
   function syncStatus(elements, state) {
-    const status = state.status;
+    const status = state.discarded ? buildDiscardedStatus() : state.ready ? buildReadyStatus() : state.status;
     const hasStatus = Boolean(status && status.label);
     window.clearTimeout(elements.statusBar._cutedHideTimer);
+    elements.controlBar.classList.toggle("has-status", hasStatus);
+    elements.controlBar.classList.toggle("is-status-transient", hasStatus && status.kind !== "ready" && status.kind !== "discarded");
+    elements.controlBar.dataset.statusKind = hasStatus ? status.kind : "idle";
+    elements.controlBar.dataset.statusTone = hasStatus ? status.tone : "neutral";
+    elements.toolGroup.classList.toggle("is-ready", state.ready);
+    elements.toolGroup.classList.toggle("is-discarded", state.discarded);
+    elements.readyCancelButton.setAttribute("aria-label", state.discarded ? "Restore cut" : "Back to editing");
     if (hasStatus) {
       elements.statusBar.hidden = false;
       elements.statusBar.classList.remove("is-hiding");
@@ -362,10 +533,19 @@
       }, 260);
     } else {
       elements.statusBar.hidden = true;
+      elements.statusLabel.textContent = "";
+      elements.statusMeter.style.setProperty("--status-progress", "0%");
+      elements.controlBar.classList.remove("has-status");
+      elements.controlBar.classList.remove("is-status-transient");
       elements.toolGroup.classList.remove("is-status-active");
     }
     elements.statusBar.dataset.tone = hasStatus ? status.tone : "neutral";
-    if (hasStatus) elements.statusLabel.textContent = status.label;
+    elements.statusBar.dataset.kind = hasStatus ? status.kind : "idle";
+    if (hasStatus && (status.kind === "ready" || status.kind === "discarded")) {
+      elements.statusLabel.innerHTML = renderReadyLetters(status.label);
+    } else if (hasStatus) {
+      elements.statusLabel.textContent = status.label;
+    }
     const progress = hasStatus && status.progress !== null ? status.progress : 0;
     elements.statusMeter.style.setProperty("--status-progress", `${progress}%`);
     elements.statusMeter.hidden = !hasStatus || status.progress === null;
@@ -373,7 +553,7 @@
 
   function renderControlBar() {
     return `
-      <nav class="cuted-control-bar" aria-label="CUTED video controls">
+      <nav class="cuted-control-bar" aria-label="CUTED video controls" data-cuted-control-bar>
         <div class="cuted-effect-menu" data-open="false" data-cuted-effect-menu>
           <button class="cuted-look-option is-active" type="button" aria-label="Clean" data-cuted-effect-style="clean">
             <span class="cuted-look-preview cuted-clean-preview"></span>
@@ -393,8 +573,13 @@
           </button>
         </div>
 
+        <div class="cuted-bar-status-layer" data-kind="idle" data-tone="neutral" data-cuted-bar-status hidden>
+          <span data-cuted-status-label></span>
+          <i data-cuted-status-meter></i>
+        </div>
+
         <div class="cuted-control-group cuted-audio-group">
-          <button class="cuted-icon-button cuted-sound-button" type="button" aria-label="Volume" data-cuted-control="sound">
+          <button class="cuted-icon-button cuted-sound-button" type="button" aria-label="Volume" aria-haspopup="true" aria-expanded="false" data-cuted-control="sound">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 9v6h4l5 4V5L8 9z"></path>
               <path class="cuted-volume-voice voice-one" d="M17 8a5 5 0 0 1 0 8"></path>
@@ -406,14 +591,20 @@
             <span class="cuted-sound-wave wave-two"></span>
             <span class="cuted-sound-wave wave-three"></span>
           </button>
-          <div class="cuted-sonic-rail" data-cuted-sonic-rail>
-            <div class="cuted-sonic-fill"></div>
-            <div class="cuted-sonic-bars" aria-hidden="true">
-              ${renderSonicBars()}
+          <div class="cuted-volume-popover" data-open="false" data-cuted-volume-popover>
+            <div class="cuted-volume-popover-head">
+              <span>Volume</span>
+              <button class="cuted-volume-mute-button" type="button" data-cuted-control="volume-mute">Mute</button>
             </div>
-            <input class="cuted-volume-slider" type="range" min="0" max="100" value="75" aria-label="Volume" data-cuted-control="volume" />
+            <div class="cuted-sonic-rail" data-cuted-sonic-rail>
+              <div class="cuted-sonic-fill"></div>
+              <div class="cuted-sonic-bars" aria-hidden="true">
+                ${renderSonicBars()}
+              </div>
+              <input class="cuted-volume-slider" type="range" min="0" max="100" value="75" aria-label="Volume" data-cuted-control="volume" />
+            </div>
+            <span class="cuted-volume-value" data-cuted-value="volume">75%</span>
           </div>
-          <span class="cuted-volume-value" data-cuted-value="volume">75%</span>
         </div>
 
         <div class="cuted-divider" aria-hidden="true"></div>
@@ -424,58 +615,55 @@
 
         <div class="cuted-divider" aria-hidden="true"></div>
 
-        <div class="cuted-control-group cuted-tool-group" data-cuted-tool-group>
-          <div class="cuted-tool-buttons">
-            <button class="cuted-tile-button cuted-ai-button" type="button" aria-label="IA" data-cuted-control="ai">
-              <span>IA</span>
-              <i class="cuted-ai-loader" aria-hidden="true"></i>
-            </button>
-            <button class="cuted-tile-button cuted-fx-button is-active" type="button" aria-label="FX" data-cuted-control="effect">
-              <span>FX</span>
-            </button>
-            <button class="cuted-tile-button cuted-insert-button" type="button" aria-label="Insert" data-cuted-control="insert">
-              <span>Insert</span>
-              <i data-cuted-insert-dot="intro"></i>
-              <i data-cuted-insert-dot="outro"></i>
-            </button>
-            <button class="cuted-tile-button cuted-cc-button" type="button" aria-label="Closed captions" data-cuted-control="caption">
-              <span>CC</span>
-            </button>
+        <div class="cuted-render-zone" data-cuted-render-zone>
+          <div class="cuted-control-group cuted-tool-group" data-cuted-tool-group>
+            <div class="cuted-tool-buttons">
+              <button class="cuted-tile-button cuted-ai-button" type="button" aria-label="IA" data-cuted-control="ai">
+                <span>IA</span>
+                <i class="cuted-ai-loader" aria-hidden="true"></i>
+              </button>
+              <button class="cuted-tile-button cuted-fx-button is-active" type="button" aria-label="FX" data-cuted-control="effect">
+                <span>FX</span>
+              </button>
+              <button class="cuted-tile-button cuted-insert-button" type="button" aria-label="Insert" data-cuted-control="insert">
+                <span>INS</span>
+                <i data-cuted-insert-dot="intro"></i>
+                <i data-cuted-insert-dot="outro"></i>
+              </button>
+              <button class="cuted-tile-button cuted-cc-button" type="button" aria-label="Closed captions" data-cuted-control="caption">
+                <span>CC</span>
+              </button>
+            </div>
           </div>
-          <div class="cuted-tool-status" data-tone="neutral" data-cuted-status hidden>
-            <span data-cuted-status-label></span>
-            <i data-cuted-status-meter></i>
+
+          <div class="cuted-divider cuted-ready-divider" aria-hidden="true"></div>
+
+          <div class="cuted-ready-region" data-ready="false" data-cuted-ready-region>
+            <div class="cuted-control-group cuted-action-group" aria-label="Acoes">
+              <button class="cuted-action-button cuted-discard-button" type="button" aria-label="Descartar" data-cuted-control="discard">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M18 6 6 18"></path>
+                  <path d="M6 6l12 12"></path>
+                </svg>
+              </button>
+              <button class="cuted-action-button cuted-approve-button" type="button" aria-label="Aprovar" data-cuted-control="approve">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M20 6 9 17l-5-5"></path>
+                </svg>
+              </button>
+            </div>
+            <div class="cuted-ready-pill" aria-live="polite">
+              <button class="cuted-ready-cancel" type="button" aria-label="Back to editing" data-cuted-control="ready-cancel">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M18 6 6 18"></path>
+                  <path d="M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
         ${renderInsertMenu()}
-
-        <div class="cuted-divider" aria-hidden="true"></div>
-
-        <div class="cuted-ready-region" data-ready="false" data-cuted-ready-region>
-          <div class="cuted-control-group cuted-action-group" aria-label="Acoes">
-            <button class="cuted-action-button cuted-discard-button" type="button" aria-label="Descartar" data-cuted-control="discard">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M18 6 6 18"></path>
-                <path d="M6 6l12 12"></path>
-              </svg>
-            </button>
-            <button class="cuted-action-button cuted-approve-button" type="button" aria-label="Aprovar" data-cuted-control="approve">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M20 6 9 17l-5-5"></path>
-              </svg>
-            </button>
-          </div>
-          <div class="cuted-ready-pill" aria-live="polite">
-            <span class="cuted-ready-text" data-cuted-ready-text></span>
-            <button class="cuted-ready-cancel" type="button" aria-label="Cancel ready" data-cuted-control="ready-cancel">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M18 6 6 18"></path>
-                <path d="M6 6l12 12"></path>
-              </svg>
-            </button>
-          </div>
-        </div>
       </nav>
     `;
   }
@@ -587,11 +775,55 @@
     return normalizeBumper(slot, {});
   }
 
+  function buildReadyStatus() {
+    return {
+      kind: "ready",
+      label: "READY",
+      persistent: true,
+      tone: "green"
+    };
+  }
+
+  function buildDiscardedStatus() {
+    return {
+      kind: "discarded",
+      label: "CUT DISCARDED",
+      persistent: true,
+      tone: "red"
+    };
+  }
+
+  function reconcileReadyStatus(state) {
+    if (state.discarded) {
+      state.ready = false;
+      state.status = buildDiscardedStatus();
+      return;
+    }
+    if (state.ready) {
+      state.status = buildReadyStatus();
+      return;
+    }
+    if (state.status?.kind === "ready" || state.status?.kind === "discarded") {
+      state.status = null;
+    }
+  }
+
+  function snapshotState(state) {
+    return {
+      ...state,
+      bumpers: {
+        intro: state.bumpers.intro ? { ...state.bumpers.intro } : null,
+        outro: state.bumpers.outro ? { ...state.bumpers.outro } : null
+      },
+      status: state.discarded ? buildDiscardedStatus() : state.ready ? buildReadyStatus() : state.status ? { ...state.status } : null
+    };
+  }
+
   function renderReadyLetters(text) {
     return Array.from(text)
       .map((letter, index) => {
         const content = letter === " " ? "&nbsp;" : letter;
-        return `<span style="--i:${index}">${content}</span>`;
+        return `<span data-cuted-status-letter style="--i:${index}">${content}</span>`;
       })
       .join("");
   }
