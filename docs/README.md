@@ -22,10 +22,14 @@ class application workflow.
 13. [Video Bumpers Spec](product/SPEC-010-video-bumpers.md)
 14. [Local Beta Installer Spec](product/SPEC-011-local-beta-installer.md)
 15. [AI Director Resolution Workspace Spec](product/SPEC-012-ai-director-resolution-workspace.md)
-16. [AI Director Visual Map Refactor](AI_DIRECTOR_VISUAL_MAP_REFACTOR.md)
-17. [AI Director Visual Map First ADR](architecture/ADR-0004-ai-director-visual-map-first.md)
-18. [QA Regression Matrix](qa/REGRESSION_MATRIX.md)
-19. [Local Development Runbook](operations/LOCAL_DEV.md)
+16. [Live Timeline Integration Spec](product/SPEC-013-live-timeline-integration.md)
+17. [Project Home and Workspace Lifecycle Spec](product/SPEC-014-project-home-and-workspace-lifecycle.md)
+18. [Project Home Implementation Plan](product/PLAN-001-project-home-clean-workspace-implementation.md)
+19. [AI Director Visual Map Refactor](AI_DIRECTOR_VISUAL_MAP_REFACTOR.md)
+20. [AI Director Visual Map First ADR](architecture/ADR-0004-ai-director-visual-map-first.md)
+21. [Local Project Memory and Cleanup ADR](architecture/ADR-0005-local-project-memory-and-cleanup.md)
+22. [QA Regression Matrix](qa/REGRESSION_MATRIX.md)
+23. [Local Development Runbook](operations/LOCAL_DEV.md)
 
 ## Current Source of Truth
 

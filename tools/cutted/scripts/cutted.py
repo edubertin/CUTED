@@ -29,6 +29,10 @@ from types import SimpleNamespace
 
 BRAND_LOGO_FILE = "cuted-logo-transparent.png"
 LIVE_TIMELINE_ASSET_FILES = ("live-timeline.css", "live-timeline.js")
+CONTROL_BAR_ASSET_FILES = ("control-bar.css", "control-bar.js")
+PROJECT_CATALOG_VERSION = 1
+PROJECT_CATALOG_LIMIT = 12
+PROJECT_CATALOG_SIZE_FILE_LIMIT = 3000
 GROUP_FIT_LOGO_TOP_RATIO = 0.11
 GROUP_FIT_LOGO_WIDTH_RATIO = 0.38
 GROUP_FIT_LOGO_OPACITY = 0.9
@@ -299,6 +303,7 @@ class ImportJob:
     created_at: float
     updated_at: float
     output_dir: Path
+    base_dir: Path
     output_url: str
     process: subprocess.Popen[str] | None
     message: str = ""
@@ -636,7 +641,7 @@ def bootstrap_workspace_gallery(workspace: Path) -> None:
     index_path = workspace / "index.html"
     if index_path.exists() and not workspace_index_is_empty_shell(index_path):
         return
-    write_html(index_path, [], "CUTED")
+    write_project_home(index_path, workspace)
 
 
 def workspace_index_is_empty_shell(index_path: Path) -> bool:
@@ -644,7 +649,191 @@ def workspace_index_is_empty_shell(index_path: Path) -> bool:
         html = index_path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return False
-    return "data-import-form" in html and '"moments": []' in html
+    return ("data-import-form" in html and '"moments": []' in html) or "data-project-home" in html
+
+
+def project_catalog_path() -> Path:
+    return launch_data_dir() / "projects.json"
+
+
+def empty_project_catalog() -> dict[str, object]:
+    return {"version": PROJECT_CATALOG_VERSION, "projects": []}
+
+
+def read_project_catalog(path: Path | None = None) -> dict[str, object]:
+    catalog_path = path or project_catalog_path()
+    if not catalog_path.exists():
+        return empty_project_catalog()
+    try:
+        data = json.loads(catalog_path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return empty_project_catalog()
+    if not isinstance(data, dict):
+        return empty_project_catalog()
+    projects = data.get("projects")
+    if not isinstance(projects, list):
+        projects = []
+    return {"version": PROJECT_CATALOG_VERSION, "projects": [item for item in projects if isinstance(item, dict)]}
+
+
+def write_project_catalog(catalog: dict[str, object], path: Path | None = None) -> None:
+    catalog_path = path or project_catalog_path()
+    catalog_path.parent.mkdir(parents=True, exist_ok=True)
+    rows = catalog.get("projects") if isinstance(catalog, dict) else []
+    projects = rows if isinstance(rows, list) else []
+    payload = {"version": PROJECT_CATALOG_VERSION, "projects": projects[:200]}
+    temp_path = catalog_path.with_suffix(".tmp")
+    temp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp_path.replace(catalog_path)
+
+
+def project_catalog_recent(workspace: Path, limit: int = PROJECT_CATALOG_LIMIT) -> list[dict[str, object]]:
+    projects = read_project_catalog().get("projects")
+    rows = [project_home_entry(row, workspace) for row in projects if isinstance(row, dict)]
+    rows = [row for row in rows if row]
+    rows.sort(key=lambda row: str(row.get("last_opened_at") or row.get("updated_at") or ""), reverse=True)
+    return rows[:limit]
+
+
+def project_home_entry(row: dict[str, object], workspace: Path) -> dict[str, object]:
+    project_id = clean_project_id(row.get("id"))
+    raw_path = str(row.get("path") or "").strip()
+    if not project_id or not raw_path:
+        return {}
+    project_path = Path(raw_path).expanduser()
+    url = project_url_for_workspace(project_path, workspace)
+    return {
+        "id": project_id,
+        "title": clean_optional_text(row.get("title"), 100) or project_path.name,
+        "path": str(project_path),
+        "url": url,
+        "clip_count": clamp_int(row.get("clip_count"), 0, 9999, 0),
+        "render_count": clamp_int(row.get("render_count"), 0, 9999, 0),
+        "size_bytes": clamp_int(row.get("size_bytes"), 0, 10_000_000_000, 0),
+        "last_opened_at": clean_optional_text(row.get("last_opened_at"), 40),
+        "source_label": clean_optional_text(row.get("source_label"), 140),
+    }
+
+
+def clean_project_id(value: object) -> str:
+    return re.sub(r"[^a-zA-Z0-9_-]+", "-", str(value or "")).strip("-")[:80]
+
+
+def upsert_project_catalog_entry(entry: dict[str, object], path: Path | None = None) -> None:
+    project_id = clean_project_id(entry.get("id"))
+    project_path = str(entry.get("path") or "")
+    if not project_id or not project_path:
+        return
+    catalog = read_project_catalog(path)
+    existing = catalog.get("projects")
+    projects = existing if isinstance(existing, list) else []
+    filtered = [
+        row for row in projects
+        if isinstance(row, dict) and clean_project_id(row.get("id")) != project_id and str(row.get("path") or "") != project_path
+    ]
+    filtered.insert(0, {**entry, "id": project_id, "path": project_path})
+    catalog["projects"] = filtered
+    write_project_catalog(catalog, path)
+
+
+def delete_project_from_catalog(project_id: str, workspace: Path, delete_files: bool) -> dict[str, object]:
+    catalog = read_project_catalog()
+    projects = catalog.get("projects")
+    rows = projects if isinstance(projects, list) else []
+    target = next((row for row in rows if isinstance(row, dict) and clean_project_id(row.get("id")) == project_id), None)
+    if target is None:
+        raise ValueError("Projeto nao encontrado.")
+    catalog["projects"] = [row for row in rows if not (isinstance(row, dict) and clean_project_id(row.get("id")) == project_id)]
+    write_project_catalog(catalog)
+    deleted = False
+    if delete_files:
+        project_dir = safe_project_delete_dir(Path(str(target.get("path") or "")), workspace)
+        shutil.rmtree(project_dir)
+        deleted = True
+    return {"ok": True, "deleted_files": deleted, "projects": project_catalog_recent(workspace)}
+
+
+def safe_project_delete_dir(project_dir: Path, workspace: Path) -> Path:
+    resolved = project_dir.expanduser().resolve()
+    root = workspace.resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as error:
+        raise ValueError("So posso apagar projetos dentro do workspace atual.") from error
+    if resolved == root or not (resolved / "index.html").exists():
+        raise ValueError("Diretorio de projeto invalido para apagar.")
+    return resolved
+
+
+def project_entry_from_gallery(gallery_dir: Path, workspace: Path) -> dict[str, object]:
+    metadata = read_import_metadata(gallery_dir)
+    source_label = project_source_label(metadata, gallery_dir)
+    return {
+        "id": project_id_for_path(gallery_dir),
+        "title": source_label,
+        "path": str(gallery_dir.resolve()),
+        "source_label": source_label,
+        "clip_count": len(read_gallery_moments(gallery_dir)),
+        "render_count": len(recovered_captioned_files(gallery_dir)),
+        "size_bytes": directory_size(gallery_dir),
+        "updated_at": iso_timestamp(),
+        "last_opened_at": iso_timestamp(),
+        "workspace": str(workspace.resolve()),
+    }
+
+
+def project_source_label(metadata: dict[str, object], gallery_dir: Path) -> str:
+    source_path = str(metadata.get("source_path") or "").strip()
+    source_url = str(metadata.get("source_url") or "").strip()
+    if source_path:
+        return Path(source_path).name or gallery_dir.name
+    if source_url:
+        parsed = urllib.parse.urlparse(source_url)
+        return parsed.netloc or source_url[:80]
+    return gallery_dir.name
+
+
+def read_gallery_moments(gallery_dir: Path) -> list[object]:
+    path = gallery_dir / "moments.json"
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    moments = data.get("moments") if isinstance(data, dict) else data
+    return moments if isinstance(moments, list) else []
+
+
+def project_id_for_path(path: Path) -> str:
+    return f"{safe_slug(path.name)}-{hashlib.sha1(str(path.resolve()).encode('utf-8')).hexdigest()[:8]}"
+
+
+def project_url_for_workspace(project_path: Path, workspace: Path) -> str:
+    try:
+        rel = project_path.resolve().relative_to(workspace.resolve())
+    except (OSError, ValueError):
+        return ""
+    return f"/{urllib.parse.quote(rel.as_posix(), safe='/')}/index.html"
+
+
+def directory_size(path: Path) -> int:
+    total = 0
+    count = 0
+    for item in path.rglob("*"):
+        if count >= PROJECT_CATALOG_SIZE_FILE_LIMIT:
+            break
+        if item.is_file():
+            count += 1
+            try:
+                total += item.stat().st_size
+            except OSError:
+                continue
+    return total
+
+
+def iso_timestamp() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S%z")
 
 
 def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler]:
@@ -675,6 +864,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if path == "/api/open-folder":
                 self.handle_open_folder()
                 return
+            if re.fullmatch(r"/api/projects/[^/]+/delete", path):
+                self.handle_project_delete(base_dir, path)
+                return
             if path == "/api/settings/openai":
                 self.handle_openai_settings_save()
                 return
@@ -690,6 +882,12 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
 
         def do_GET(self) -> None:
             path = urllib.parse.urlparse(self.path).path
+            if path == "/api/finalize-results":
+                self.handle_finalize_results(base_dir)
+                return
+            if path == "/api/projects":
+                self.handle_projects(base_dir)
+                return
             if path == "/api/camera/status":
                 self.handle_camera_status(base_dir)
                 return
@@ -750,6 +948,13 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             except Exception as error:
                 send_json_response(self, 500, {"ok": False, "error": str(error)})
 
+        def handle_finalize_results(self, request_base_dir: Path) -> None:
+            try:
+                result = finalize_results_from_request(self, request_base_dir)
+                send_json_response(self, 200, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
+
         def handle_import_job(self, request_base_dir: Path) -> None:
             try:
                 result = start_import_job(self, request_base_dir)
@@ -769,6 +974,18 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             job_id = path.split("/")[-2]
             result = cancel_import_job(job_id)
             send_json_response(self, 200 if result.get("ok") else 404, result)
+
+        def handle_projects(self, request_base_dir: Path) -> None:
+            send_json_response(self, 200, {"ok": True, "projects": project_catalog_recent(request_base_dir)})
+
+        def handle_project_delete(self, request_base_dir: Path, path: str) -> None:
+            try:
+                project_id = urllib.parse.unquote(path.split("/")[-2])
+                payload = read_json_body(self)
+                result = delete_project_from_catalog(project_id, request_base_dir, bool(payload.get("delete_files")))
+                send_json_response(self, 200, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
 
         def handle_camera_analyze(self, request_base_dir: Path) -> None:
             try:
@@ -880,6 +1097,91 @@ def finalize_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir:
         manifest["export_dir"] = str(export_dir)
     (out_dir / "captioned-clips.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"ok": True, "count": len(captioned), "files": finalized_file_urls(captioned, gallery_dir), "export_dir": str(export_dir) if export_dir else ""}
+
+
+def finalize_results_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
+    parsed = urllib.parse.urlparse(handler.path)
+    query = urllib.parse.parse_qs(parsed.query)
+    gallery_dir = resolve_request_gallery_dir(base_dir, {"gallery_path": query.get("gallery_path", [""])[0]})
+    return finalized_results_from_gallery(gallery_dir)
+
+
+def finalized_results_from_gallery(gallery_dir: Path) -> dict[str, object]:
+    manifest_path = gallery_dir / "captioned-clips" / "captioned-clips.json"
+    if manifest_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError):
+            manifest = {}
+        rows = manifest.get("captioned") if isinstance(manifest, dict) else None
+        if isinstance(rows, list):
+            captioned = [row for row in rows if isinstance(row, dict)]
+            export_dir = str(manifest.get("export_dir") or "") if isinstance(manifest, dict) else ""
+            return {
+                "ok": True,
+                "ready": True,
+                "partial": False,
+                "count": len(captioned),
+                "files": finalized_file_urls(captioned, gallery_dir),
+                "export_dir": export_dir,
+            }
+    recovered = recovered_captioned_files(gallery_dir)
+    return {
+        "ok": True,
+        "ready": False,
+        "partial": bool(recovered),
+        "count": len(recovered),
+        "files": finalized_file_urls(recovered, gallery_dir) if recovered else [],
+        "export_dir": "",
+    }
+
+
+def recovered_captioned_files(gallery_dir: Path) -> list[dict[str, object]]:
+    out_dir = gallery_dir / "captioned-clips"
+    if not out_dir.exists():
+        return []
+    queue_rows = caption_queue_rows_by_output(gallery_dir)
+    recovered: list[dict[str, object]] = []
+    for file_path in sorted(out_dir.glob("clip-*-*-captioned.mp4")):
+        if not file_path.is_file() or file_path.stat().st_size <= 0:
+            continue
+        match = re.fullmatch(r"clip-(\d+)-([a-z0-9_-]+)-captioned\.mp4", file_path.name)
+        if not match:
+            continue
+        rank = int(match.group(1))
+        platform = match.group(2)
+        row = dict(queue_rows.get((rank, platform)) or queue_rows.get((rank, representative_platform(platform))) or {})
+        preset = PLATFORM_PRESETS.get(platform, PLATFORM_PRESETS["tiktok"])
+        row.update({
+            "rank": rank,
+            "platform": platform,
+            "label": row.get("platform_label") or preset.label,
+            "width": row.get("width") or preset.width,
+            "height": row.get("height") or preset.height,
+            "file": str(file_path),
+        })
+        recovered.append(row)
+    return recovered
+
+
+def caption_queue_rows_by_output(gallery_dir: Path) -> dict[tuple[int, str], dict[str, object]]:
+    path = gallery_dir / "caption-queue.json"
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    rows: dict[tuple[int, str], dict[str, object]] = {}
+    for row in caption_rows_from_data(data):
+        try:
+            rank = int(row.get("rank") or 0)
+        except (TypeError, ValueError):
+            continue
+        platform = representative_platform(str(row.get("platform") or "tiktok"))
+        if rank > 0:
+            rows[(rank, platform)] = row
+    return rows
 
 
 def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
@@ -4958,7 +5260,7 @@ def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path
     job_id = uuid.uuid4().hex[:12]
     output_url = import_output_url(base_dir, out_dir)
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
-    job = ImportJob(job_id, "running", time.time(), time.time(), out_dir, output_url, process, "Importacao iniciada.")
+    job = ImportJob(job_id, "running", time.time(), time.time(), out_dir, base_dir, output_url, process, "Importacao iniciada.")
     with IMPORT_JOBS_LOCK:
         IMPORT_JOBS[job_id] = job
     thread = threading.Thread(target=wait_for_import_job, args=(job_id,), daemon=True)
@@ -5021,6 +5323,8 @@ def wait_for_import_job(job_id: str) -> None:
         current.stderr = import_job_error_message(stderr) if status == "failed" else stderr[-6000:]
         current.message = message
         current.process = None
+        if status == "ready":
+            upsert_project_catalog_entry(project_entry_from_gallery(current.output_dir, current.base_dir))
 
 
 def cancel_import_job(job_id: str) -> dict[str, object]:
@@ -7971,7 +8275,164 @@ def write_html(path: Path, moments: list[Moment], source_label: str) -> None:
     data = json.dumps({"moments": [moment_to_dict(item) for item in moments]}, ensure_ascii=False)
     logo_src = write_brand_logo_asset(path.parent)
     live_timeline_assets = write_live_timeline_assets(path.parent)
-    path.write_text(page_html(source_label, cards, data, logo_src, live_timeline_assets), encoding="utf-8")
+    control_bar_assets = write_control_bar_assets(path.parent)
+    path.write_text(page_html(source_label, cards, data, logo_src, live_timeline_assets, control_bar_assets), encoding="utf-8")
+
+
+def write_project_home(path: Path, workspace: Path) -> None:
+    logo_src = write_brand_logo_asset(path.parent)
+    recent = project_catalog_recent(workspace)
+    path.write_text(project_home_html(workspace, logo_src, recent), encoding="utf-8")
+
+
+def project_home_html(workspace: Path, logo_src: str, recent: list[dict[str, object]]) -> str:
+    project_rows = "\n".join(project_home_card_html(project) for project in recent)
+    empty = "" if project_rows else '<div class="project-empty">Nenhum projeto recente nesta maquina.</div>'
+    return f"""<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CUTED</title>
+  <style>{css()}{project_home_css()}</style>
+</head>
+<body data-project-home>
+  <header>
+    <div></div>
+    <div class="brand-lockup" aria-label="CUTED">
+      <img class="brand-logo" src="{html.escape(logo_src)}" alt="CUTED">
+      <p>Workspace local</p>
+    </div>
+    <div class="header-actions">
+      <button type="button" data-open-workspace>Workspace</button>
+    </div>
+  </header>
+  <main class="project-home">
+    <section class="project-intro" aria-label="Inicio">
+      <div>
+        <span class="project-kicker">CUTED Studio</span>
+        <h1>Novo projeto</h1>
+        <p>Importe um video limpo para criar uma area de edicao nova, sem carregar titulo, mapas ou cortes de trabalhos anteriores.</p>
+      </div>
+      <div class="project-actions">
+        <button type="button" class="project-primary" data-new-project>Novo projeto</button>
+        <button type="button" data-open-workspace>Projetos locais</button>
+      </div>
+    </section>
+    <section class="project-import" data-home-import hidden>
+      {project_import_form_html()}
+    </section>
+    <section class="project-library" aria-label="Projetos recentes">
+      <div class="project-section-head">
+        <div>
+          <strong>Projetos recentes</strong>
+          <p>Volte a um trabalho local ou limpe amostras que nao usa mais.</p>
+        </div>
+        <button type="button" data-refresh-projects>Atualizar</button>
+      </div>
+      <div class="project-list" data-project-list>
+        {project_rows}
+        {empty}
+      </div>
+    </section>
+  </main>
+  <script>{project_home_js(workspace)}</script>
+</body>
+</html>"""
+
+
+def project_home_card_html(project: dict[str, object]) -> str:
+    title = html.escape(str(project.get("title") or "Projeto sem titulo"))
+    source = html.escape(str(project.get("source_label") or ""))
+    url = html.escape(str(project.get("url") or ""))
+    project_id = html.escape(str(project.get("id") or ""))
+    path = html.escape(str(project.get("path") or ""))
+    clip_count = int(project.get("clip_count") or 0)
+    render_count = int(project.get("render_count") or 0)
+    size_label = file_size_label(int(project.get("size_bytes") or 0))
+    open_action = f'<a href="{url}">Abrir</a>' if url else '<button type="button" disabled>Abrir</button>'
+    return f"""
+        <article class="project-card" data-project-id="{project_id}">
+          <div>
+            <strong>{title}</strong>
+            <p>{source}</p>
+            <small>{html.escape(path)}</small>
+          </div>
+          <dl>
+            <div><dt>Cortes</dt><dd>{clip_count}</dd></div>
+            <div><dt>Renders</dt><dd>{render_count}</dd></div>
+            <div><dt>Tamanho</dt><dd>{size_label}</dd></div>
+          </dl>
+          <div class="project-card-actions">
+            {open_action}
+            <button type="button" data-forget-project>Remover</button>
+            <button type="button" data-delete-project>Apagar</button>
+          </div>
+        </article>"""
+
+
+def project_import_form_html() -> str:
+    return f"""
+      <form class="import-panel" data-import-form>
+        <div class="stage-head">
+          <div>
+            <strong>Importar novo projeto</strong>
+            <p>Escolha um video local ou link de teste e defina a pasta dos renders.</p>
+          </div>
+          <button type="submit">Importar</button>
+        </div>
+        <div class="import-key-banner" data-import-key-banner hidden>
+          <span>Adicione sua chave OpenAI nas configuracoes antes de importar com IA.</span>
+        </div>
+        <div class="import-grid">
+          <label>Video local
+            <span class="import-path-row">
+              <input name="source_path" type="text" value="" placeholder="Selecione um MP4, MOV, M4V ou WebM" autocomplete="off">
+              <button type="button" data-select-video-file>Video</button>
+            </span>
+            <small>Entrada principal para mapa visual, camera e render local.</small>
+          </label>
+          <label>Link do YouTube (experimental)
+            <input name="source_url" type="url" placeholder="Cole um link apenas para teste rapido" autocomplete="off">
+            <small>Use arquivo local quando a plataforma bloquear o download.</small>
+          </label>
+          <label>Destino dos renders
+            <span class="import-path-row">
+              <input name="output_path" type="text" value="" placeholder="Selecione a pasta dos videos finais" autocomplete="off">
+              <button type="button" data-select-folder>Pasta</button>
+            </span>
+          </label>
+          <label>Quantidade de sugestoes
+            <select name="preview_count">
+              {suggestion_count_options()}
+            </select>
+          </label>
+        </div>
+        <input name="language" type="hidden" value="pt">
+        <input name="preset" type="hidden" value="tiktok">
+        <fieldset class="duration-profile">
+          <legend>Duracao dos cortes</legend>
+          <label><input name="duration_profile" type="radio" value="short"><span><strong>Curto</strong><small>20-45s</small></span></label>
+          <label><input name="duration_profile" type="radio" value="medium" checked><span><strong>Medio</strong><small>30-70s</small></span></label>
+          <label><input name="duration_profile" type="radio" value="long"><span><strong>Longo</strong><small>60-120s</small></span></label>
+        </fieldset>
+        <label class="import-context">Contexto para a IA
+          <textarea name="context_prompt" rows="5" placeholder="Opcional. Ex.: priorize momentos com gancho forte e frase completa."></textarea>
+        </label>
+        <div class="import-status" data-import-status>Pronto.</div>
+        <div class="import-result" data-import-result></div>
+      </form>"""
+
+
+def file_size_label(size_bytes: int) -> str:
+    if size_bytes <= 0:
+        return "0 MB"
+    value = float(size_bytes)
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1024 or unit == "GB":
+            return f"{value:.1f} {unit}" if unit != "B" else f"{int(value)} B"
+        value /= 1024
+    return f"{value:.1f} GB"
 
 
 def write_brand_logo_asset(output_dir: Path) -> str:
@@ -7985,10 +8446,27 @@ def write_brand_logo_asset(output_dir: Path) -> str:
 
 
 def write_live_timeline_assets(output_dir: Path) -> dict[str, str]:
-    source_dir = live_timeline_asset_source_dir()
-    destination_dir = output_dir / "assets" / "live-timeline"
+    return write_static_asset_group(
+        output_dir,
+        live_timeline_asset_source_dir(),
+        "live-timeline",
+        LIVE_TIMELINE_ASSET_FILES,
+    )
+
+
+def write_control_bar_assets(output_dir: Path) -> dict[str, str]:
+    return write_static_asset_group(
+        output_dir,
+        control_bar_asset_source_dir(),
+        "control-bar",
+        CONTROL_BAR_ASSET_FILES,
+    )
+
+
+def write_static_asset_group(output_dir: Path, source_dir: Path, asset_group: str, filenames: tuple[str, ...]) -> dict[str, str]:
+    destination_dir = output_dir / "assets" / asset_group
     assets: dict[str, str] = {}
-    for filename in LIVE_TIMELINE_ASSET_FILES:
+    for filename in filenames:
         source = source_dir / filename
         if not source.exists():
             continue
@@ -7998,12 +8476,16 @@ def write_live_timeline_assets(output_dir: Path) -> dict[str, str]:
         if not destination.exists() or source_bytes != destination.read_bytes():
             destination.write_bytes(source_bytes)
         digest = hashlib.sha1(source_bytes).hexdigest()[:10]
-        assets[filename.rsplit(".", 1)[-1]] = f"assets/live-timeline/{filename}?v={digest}"
+        assets[filename.rsplit(".", 1)[-1]] = f"assets/{asset_group}/{filename}?v={digest}"
     return assets
 
 
 def live_timeline_asset_source_dir() -> Path:
     return Path(__file__).resolve().parents[1] / "assets" / "live-timeline"
+
+
+def control_bar_asset_source_dir() -> Path:
+    return Path(__file__).resolve().parents[1] / "assets" / "control-bar"
 
 
 def brand_logo_path() -> Path:
@@ -8055,6 +8537,7 @@ def card_html(moment: Moment) -> str:
           <span data-status-pill>Em edicao</span>
         </span>
       </summary>
+      <div class="cuted-control-surface-slot" data-cuted-control-surface aria-label="Control surface do corte"></div>
       <div class="editor-shell">
         <div class="editor-preview">
           <div class="preview-frame">
@@ -8202,9 +8685,18 @@ def preview_cache_token(moment: Moment) -> str:
     return f"{moment.rank}-{int(moment.start * 1000)}-{int(moment.end * 1000)}"
 
 
-def page_html(source_label: str, cards: str, data: str, logo_src: str, live_timeline_assets: dict[str, str] | None = None) -> str:
+def page_html(
+    source_label: str,
+    cards: str,
+    data: str,
+    logo_src: str,
+    live_timeline_assets: dict[str, str] | None = None,
+    control_bar_assets: dict[str, str] | None = None,
+) -> str:
     live_timeline_css = live_timeline_assets_html(live_timeline_assets or {}, "css")
     live_timeline_js = live_timeline_assets_html(live_timeline_assets or {}, "js")
+    control_bar_css = static_assets_html(control_bar_assets or {}, "css")
+    control_bar_js = static_assets_html(control_bar_assets or {}, "js")
     return f"""<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -8212,6 +8704,7 @@ def page_html(source_label: str, cards: str, data: str, logo_src: str, live_time
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CUTED Review</title>
 {live_timeline_css}
+{control_bar_css}
   <style>{css()}</style>
 </head>
 <body data-format="tiktok" data-tab="edit">
@@ -8356,6 +8849,7 @@ def page_html(source_label: str, cards: str, data: str, logo_src: str, live_time
   </div>
   <main>{cards}</main>
 {live_timeline_js}
+{control_bar_js}
   <script>window.CUTTED_DATA = {data}; window.CUTTED_SCRIPT = {json.dumps(str(Path(__file__).resolve()))};</script>
   <script>{js()}</script>
 </body>
@@ -8363,6 +8857,10 @@ def page_html(source_label: str, cards: str, data: str, logo_src: str, live_time
 
 
 def live_timeline_assets_html(assets: dict[str, str], kind: str) -> str:
+    return static_assets_html(assets, kind)
+
+
+def static_assets_html(assets: dict[str, str], kind: str) -> str:
     value = assets.get(kind)
     if not value:
         return ""
@@ -8372,6 +8870,172 @@ def live_timeline_assets_html(assets: dict[str, str], kind: str) -> str:
     if kind == "js":
         return f'  <script src="{escaped}"></script>'
     return ""
+
+
+def project_home_css() -> str:
+    return """
+body[data-project-home] header{position:relative}.project-home{max-width:1180px;padding:20px 18px 36px}.project-intro{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px;align-items:end;padding:28px 0 22px;border-bottom:1px solid rgba(231,231,232,.12)}.project-kicker{display:inline-flex;min-height:26px;align-items:center;padding:4px 10px;border:1px solid rgba(17,162,207,.34);border-radius:999px;background:rgba(17,162,207,.1);color:var(--color-text-soft);font-size:12px}.project-intro h1{margin:14px 0 8px;font-size:42px;line-height:1.02;letter-spacing:0}.project-intro p,.project-section-head p,.project-card p{margin:0;color:var(--color-text-muted)}.project-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}.project-primary{border-color:rgba(175,207,42,.52)!important;background:linear-gradient(180deg,rgba(175,207,42,.24),rgba(17,162,207,.08)),rgba(23,32,14,.78)!important;color:var(--color-text)!important}.project-import{margin-top:18px}.project-import[hidden]{display:none}.project-library{display:grid;gap:12px;margin-top:18px}.project-section-head{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:14px 0}.project-section-head strong{font-size:18px}.project-list{display:grid;gap:10px}.project-card{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:16px;align-items:center;padding:14px;border:1px solid var(--glass-border);border-radius:8px;background:var(--glass-bg);box-shadow:inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(18px) saturate(1.25)}.project-card strong{font-size:15px}.project-card small{display:block;margin-top:5px;color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-card dl{display:flex;gap:12px;margin:0}.project-card dl div{display:grid;gap:2px;min-width:64px;text-align:right}.project-card dt{font-size:11px;color:var(--color-text-muted)}.project-card dd{margin:0;color:var(--color-text);font-weight:800}.project-card-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.project-card-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:8px 12px;border:1px solid var(--glass-border);border-radius:999px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.project-card-actions button[data-delete-project]{color:var(--color-danger)}.project-empty{padding:18px;border:1px dashed var(--color-border-strong);border-radius:8px;color:var(--color-text-muted);text-align:center}@media(max-width:860px){.project-intro,.project-card{grid-template-columns:1fr}.project-actions,.project-card-actions{justify-content:flex-start}.project-card dl{justify-content:space-between}.project-card dl div{text-align:left}.project-intro h1{font-size:34px}}
+"""
+
+
+def project_home_js(workspace: Path) -> str:
+    script = r"""
+const workspacePath = __WORKSPACE_PATH__;
+const homeImport = document.querySelector("[data-home-import]");
+const projectList = document.querySelector("[data-project-list]");
+function escapeHtml(value){
+  return String(value || "").replace(/[&<>"']/g, char => {
+    if (char === "&") return "&amp;";
+    if (char === "<") return "&lt;";
+    if (char === ">") return "&gt;";
+    if (char === '"') return "&quot;";
+    return "&#39;";
+  });
+}
+function escapeAttr(value){ return escapeHtml(value); }
+function projectPayload(form){
+  const data = new FormData(form);
+  return {
+    source_path: String(data.get("source_path") || "").trim(),
+    source_url: String(data.get("source_url") || "").trim(),
+    output_path: String(data.get("output_path") || "").trim(),
+    preview_count: Number(data.get("preview_count") || 10),
+    language: String(data.get("language") || "pt"),
+    preset: String(data.get("preset") || "tiktok"),
+    duration_profile: String(data.get("duration_profile") || "medium"),
+    context_prompt: String(data.get("context_prompt") || ""),
+    render_previews: true
+  };
+}
+function setStatus(text){
+  const status = document.querySelector("[data-import-status]");
+  if (status) status.textContent = text;
+}
+function setResult(html){
+  const result = document.querySelector("[data-import-result]");
+  if (result) result.innerHTML = html;
+}
+async function postJson(url, payload){
+  const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload || {}) });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) throw new Error(data.error || "Operacao local falhou.");
+  return data;
+}
+async function startImport(form){
+  const button = form.querySelector("button[type=submit]");
+  const payload = projectPayload(form);
+  if (!payload.output_path) {
+    setStatus("Escolha a pasta onde os videos finais serao salvos.");
+    form.querySelector("[name=output_path]")?.focus();
+    return;
+  }
+  setResult("");
+  setStatus("Criando job de importacao...");
+  if (button) button.disabled = true;
+  try {
+    const data = await postJson("/api/import-jobs", payload);
+    setStatus(data.job?.message || "Importacao iniciada.");
+    pollImport(data.job.id, button);
+  } catch (error) {
+    if (button) button.disabled = false;
+    setStatus("Nao consegui iniciar a importacao.");
+    setResult(`<code>${escapeHtml(error.message || String(error))}</code>`);
+  }
+}
+async function pollImport(jobId, button){
+  try {
+    const response = await fetch(`/api/import-jobs/${encodeURIComponent(jobId)}`);
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || "Job nao encontrado.");
+    const job = data.job || {};
+    setStatus(`${job.message || "Processando..."} (${job.status || "running"})`);
+    if (job.status === "ready") {
+      if (button) button.disabled = false;
+      setResult(`<a href="${escapeAttr(job.output_url)}">Abrir projeto importado</a>`);
+      if (job.output_url) window.location.assign(job.output_url);
+      return;
+    }
+    if (job.status === "failed" || job.status === "cancelled") {
+      if (button) button.disabled = false;
+      setResult(`<code>${escapeHtml(job.stderr || job.message || "Importacao encerrada.")}</code>`);
+      return;
+    }
+    window.setTimeout(() => pollImport(jobId, button), 1200);
+  } catch (error) {
+    if (button) button.disabled = false;
+    setStatus("Nao consegui acompanhar a importacao.");
+    setResult(`<code>${escapeHtml(error.message || String(error))}</code>`);
+  }
+}
+function bindImportForm(){
+  const form = document.querySelector("[data-import-form]");
+  if (!form) return;
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    startImport(form);
+  });
+  form.querySelector("[data-select-folder]")?.addEventListener("click", () => selectPath("/api/select-folder", "[name=output_path]", "Pasta selecionada."));
+  form.querySelector("[data-select-video-file]")?.addEventListener("click", () => selectPath("/api/select-video-file", "[name=source_path]", "Video local selecionado."));
+}
+async function selectPath(url, selector, message){
+  setStatus("Abrindo seletor local...");
+  try {
+    const data = await postJson(url);
+    const input = document.querySelector(selector);
+    if (input) input.value = data.path || input.value;
+    setStatus(message);
+  } catch (error) {
+    setStatus(error.message || "Seletor local indisponivel.");
+  }
+}
+function projectCard(project){
+  const open = project.url ? `<a href="${escapeAttr(project.url)}">Abrir</a>` : `<button type="button" disabled>Abrir</button>`;
+  return `<article class="project-card" data-project-id="${escapeAttr(project.id)}">
+    <div><strong>${escapeHtml(project.title || "Projeto sem titulo")}</strong><p>${escapeHtml(project.source_label || "")}</p><small>${escapeHtml(project.path || "")}</small></div>
+    <dl><div><dt>Cortes</dt><dd>${Number(project.clip_count || 0)}</dd></div><div><dt>Renders</dt><dd>${Number(project.render_count || 0)}</dd></div><div><dt>Tamanho</dt><dd>${escapeHtml(sizeLabel(project.size_bytes || 0))}</dd></div></dl>
+    <div class="project-card-actions">${open}<button type="button" data-forget-project>Remover</button><button type="button" data-delete-project>Apagar</button></div>
+  </article>`;
+}
+function sizeLabel(bytes){
+  let value = Number(bytes || 0);
+  for (const unit of ["B", "KB", "MB", "GB"]) {
+    if (value < 1024 || unit === "GB") return unit === "B" ? `${Math.round(value)} B` : `${value.toFixed(1)} ${unit}`;
+    value /= 1024;
+  }
+  return "0 MB";
+}
+async function refreshProjects(){
+  if (!projectList) return;
+  const response = await fetch("/api/projects");
+  const data = await response.json();
+  if (!response.ok || !data.ok) throw new Error(data.error || "Nao consegui carregar projetos.");
+  projectList.innerHTML = data.projects.length ? data.projects.map(projectCard).join("") : '<div class="project-empty">Nenhum projeto recente nesta maquina.</div>';
+}
+async function deleteProject(card, deleteFiles){
+  const projectId = card?.dataset.projectId || "";
+  const message = deleteFiles ? "Apagar os arquivos locais deste projeto?" : "Remover este projeto da lista recente?";
+  if (!projectId || !window.confirm(message)) return;
+  await postJson(`/api/projects/${encodeURIComponent(projectId)}/delete`, { delete_files: deleteFiles });
+  await refreshProjects();
+}
+document.querySelectorAll("[data-new-project]").forEach(button => {
+  button.addEventListener("click", () => {
+    if (homeImport) homeImport.hidden = false;
+    document.querySelector("[data-import-form]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+});
+document.querySelectorAll("[data-open-workspace]").forEach(button => {
+  button.addEventListener("click", () => postJson("/api/open-folder", { path: workspacePath }).catch(error => setStatus(error.message || "Nao consegui abrir a pasta.")));
+});
+document.querySelector("[data-refresh-projects]")?.addEventListener("click", () => refreshProjects().catch(error => setStatus(error.message || "Nao consegui atualizar projetos.")));
+projectList?.addEventListener("click", event => {
+  const card = event.target.closest("[data-project-id]");
+  if (event.target.closest("[data-forget-project]")) deleteProject(card, false);
+  if (event.target.closest("[data-delete-project]")) deleteProject(card, true);
+});
+bindImportForm();
+"""
+    return script.replace("__WORKSPACE_PATH__", json.dumps(str(workspace)))
 
 
 def css() -> str:
@@ -8386,6 +9050,7 @@ main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px
 .app-notice{position:sticky;top:0;z-index:30;margin:0;padding:10px 14px;background:#2b1717;color:#ffd7d7;border-bottom:1px solid #6d2b2b;font-size:13px;text-align:center}.app-notice[hidden]{display:none}
 .import-stage{display:none;max-width:1080px;margin:18px auto;padding:0 18px}.import-panel{display:grid;gap:14px;padding:18px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised)}.import-panel p{margin:4px 0 0;color:var(--color-text-muted)}.import-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.import-panel label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.import-panel input,.import-panel select,.import-panel textarea{width:100%;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black);color:var(--color-text);padding:9px 10px;font:inherit}.import-panel textarea{resize:vertical;min-height:112px}.import-panel small{color:var(--color-text-muted);line-height:1.35}.import-path-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.import-key-banner{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 12px;border:1px solid rgba(17,162,207,.4);border-radius:8px;background:rgba(17,162,207,.1);color:var(--color-text)}.import-key-banner[hidden]{display:none}.import-key-banner button{min-height:34px}.import-path-row button{min-height:38px;background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.duration-profile{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0}.duration-profile legend{grid-column:1/-1;color:var(--color-text-muted);font-size:12px}.duration-profile label{position:relative;display:grid!important}.duration-profile input{position:absolute;opacity:0;pointer-events:none}.duration-profile span{display:grid;gap:2px;min-height:54px;padding:10px 12px;border:1px solid var(--color-border-strong);border-radius:8px;background:var(--color-surface-muted);color:var(--color-text-soft)}.duration-profile input:checked+span{border-color:var(--color-brand-green);background:#182011;color:var(--color-text)}.duration-profile small{color:var(--color-text-muted)}.import-context{display:grid}.import-status{min-height:20px;color:var(--color-text-muted)}.import-result{display:flex;gap:8px;flex-wrap:wrap}.import-result a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.import-result code{display:block;width:100%;padding:10px;border:1px solid #3a2525;border-radius:6px;background:#180d0d;color:#ffcccc;white-space:pre-wrap}
 .layer-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:100%;min-height:0}.layer-strip:empty{display:none}.bumper-sequence{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;min-height:24px;color:var(--color-text-muted);font-size:12px}.bumper-sequence:empty{display:none}.bumper-sequence span{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bumper-sequence b{color:var(--color-brand-green);font-weight:800}.layer-chip{display:inline-flex;gap:6px;align-items:center;max-width:100%;min-height:30px;padding:4px 5px 4px 9px;border:1px solid #303030;border-radius:999px;background:var(--color-surface-muted);color:var(--color-text-soft);font-size:12px}.layer-chip.is-selected{border-color:var(--color-focus);background:#182011;color:var(--color-text)}.layer-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.layer-chip button{display:inline-grid;place-items:center;width:22px;height:22px;min-width:22px;padding:0;border:1px solid #3a3a3a;border-radius:999px;background:#242424;color:var(--color-text-soft);font-size:14px;line-height:1}
+.cuted-control-surface-slot{display:none;position:relative;z-index:90;margin:0 14px 14px}.cuted-control-surface-slot:empty{display:none}.card[open]>.cuted-control-surface-slot:not(:empty){display:block}.cuted-control-surface-slot .cuted-control-bar{width:100%;min-height:118px;padding:14px 22px;border-radius:18px}.cuted-control-surface-slot .cuted-tile-button{flex:0 0 78px;width:78px;height:72px;font-size:34px}.cuted-control-surface-slot .cuted-insert-button span{font-size:20px}.cuted-control-surface-slot .cuted-format-trigger{flex:0 0 154px;width:154px;height:72px}.cuted-control-surface-slot .cuted-divider{flex:0 0 1px;height:58px;margin:0 12px}.cuted-control-surface-slot .cuted-audio-group{flex:0 0 252px;min-width:238px}.cuted-control-surface-slot .cuted-ready-region{flex:0 0 172px;width:172px;min-height:72px}
 .editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;justify-items:center;gap:10px}.preview-frame{display:grid;gap:10px;width:100%;max-width:520px}.media{position:relative;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000;pointer-events:none}.placeholder{display:grid;place-items:center;height:100%;color:#777}.preview-bar{display:grid;grid-template-columns:1fr;gap:8px;justify-items:center;width:100%;padding:8px;border:1px solid #252525;border-radius:8px;background:#0a0a0a}.preview-controls,.preview-volume-group{display:flex;gap:6px;align-items:center}.preview-controls{justify-content:center;padding:4px;border:1px solid #202020;border-radius:999px;background:var(--color-surface-raised)}.preview-volume-group{padding-left:4px;border-left:1px solid #2d2d2d}.preview-icon,.preview-step{display:inline-grid;place-items:center;width:32px;height:32px;min-width:32px;padding:0;border:1px solid var(--color-border-strong);border-radius:999px;background:var(--color-surface-control);color:var(--color-text-soft)}.preview-play{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}.preview-icon svg{width:16px;height:16px;display:block;stroke:currentColor}.preview-step{width:26px;height:26px;min-width:26px;font-weight:700}.preview-volume-group output{min-width:32px;color:#d8d8d8;font-size:12px;text-align:center}.card[data-preview-format=tiktok] .preview-frame,.card[data-preview-format=shorts] .preview-frame,.card[data-preview-format=instagram] .preview-frame{max-width:min(100%,calc(72vh * 9 / 16))}.card[data-preview-format=facebook] .preview-frame{max-width:min(100%,calc(72vh * 4 / 5))}.card[data-preview-format=youtube] .preview-frame{max-width:min(100%,520px)}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;overflow:visible;padding-bottom:1px}.preview-strip button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 10px;min-height:34px;border-radius:999px;white-space:nowrap}.preview-strip button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
 .preview-camera-timeline--live{display:block!important;width:100%;min-height:152px;padding:0!important;border-color:rgba(17,162,207,.34)!important;overflow:hidden}.preview-camera-timeline--live .timeline-shell{min-height:150px;border:0;border-radius:4px;background:linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px) 0 0/28px 100%,linear-gradient(180deg,rgba(17,162,207,.08),transparent 34%),#070707}.preview-camera-timeline--live .volume-popover[data-disabled=true]{display:none!important}.preview-live-timeline-loading{display:grid;place-items:center;min-height:86px;color:var(--color-text-muted);font-size:12px}
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-stack{display:grid;gap:10px}.tool-section{border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:0;overflow:hidden}.tool-section>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:10px 12px;cursor:pointer;list-style:none;color:var(--color-text);font-weight:800}.tool-section>summary::-webkit-details-marker{display:none}.tool-section>summary:after{content:"";width:8px;height:8px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg);opacity:.62;transition:transform .16s ease}.tool-section[open]>summary:after{transform:rotate(225deg)}.tool-section>summary small{color:var(--color-text-muted);font-size:12px;font-weight:600;text-align:right}.tool-section[open]>summary{border-bottom:1px solid rgba(231,231,232,.08)}.tool-section>*:not(summary){margin:12px}.timeline-editor{padding:0}.timeline-head,.timeline-timebar,.timeline-values{display:flex;justify-content:space-between;gap:12px;color:var(--color-text-muted);font-size:12px}.timeline-head output,.timeline-timebar output{color:var(--color-text);text-align:right}.timeline-timebar{margin-top:10px}.timeline-timebar span:last-child{color:#777;text-align:right}.timeline-scrub{position:relative;height:42px;margin-top:8px}.timeline-scrub-track{position:absolute;left:0;right:0;top:17px;height:8px;border:1px solid #343434;border-radius:999px;background:linear-gradient(90deg,var(--color-surface-muted),#252525);overflow:hidden}.timeline-selected{position:absolute;top:0;bottom:0;background:rgba(175,207,42,.22);border-left:1px solid var(--color-brand-green);border-right:1px solid var(--color-brand-green)}.timeline-playhead{position:absolute;top:-8px;bottom:-8px;width:2px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7)}.timeline-playhead:before{content:"";position:absolute;left:50%;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--color-brand-white);transform:translateX(-50%)}.timeline-scrub input{position:absolute;inset:0;width:100%;height:42px;margin:0;background:transparent;opacity:0;cursor:pointer}.timeline{position:relative;height:38px;margin-top:6px}.timeline-track{position:absolute;left:0;right:0;top:16px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:var(--color-brand-white);border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:38px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{margin-top:6px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
@@ -8588,6 +9253,7 @@ function applyTab(tab){
     btn.classList.toggle("active", btn.dataset.tab === next);
   });
   renderFinalStage();
+  if (next === "final") restoreFinalizeResults();
 }
 function platformLabel(key){
   return resolutionPresetLabel(resolutionPresetForPlatform(key));
@@ -9230,6 +9896,7 @@ async function analyzeCameraForCard(card, mode = "auto-director"){
 function setCameraAutoStatus(card, message){
   const status = card.querySelector("[data-camera-auto-status]");
   if (status) status.textContent = message || "";
+  updateControlSurfaceForCard(card);
 }
 function cameraDiagnosticsText(diagnostics){
   if (!diagnostics || typeof diagnostics !== "object") return "";
@@ -9458,7 +10125,10 @@ function setEffectForRank(rank, patch){
   const current = effectForRank(rank, platform);
   setPlatformEditForRank(rank, platform, { effect: normalizeEffect(Object.assign({}, current, patch)) });
   const card = cardForRank(rank);
-  if (card) updateEffectUi(card);
+  if (card) {
+    updateEffectUi(card);
+    updateControlSurfaceForCard(card);
+  }
   renderFinalStage();
 }
 function effectOpacity(effect){
@@ -9502,7 +10172,10 @@ function setBumperForRank(rank, slot, bumper, platform = activePlatformForRank(r
   if (!next[safeSlot]) delete next[safeSlot];
   setPlatformEditForRank(rank, key, { bumpers: normalizeBumpers(next) });
   const card = cardForRank(rank);
-  if (card) updateEffectUi(card);
+  if (card) {
+    updateEffectUi(card);
+    updateControlSurfaceForCard(card);
+  }
   renderFinalStage();
 }
 function removeBumperForRank(rank, slot, platform = activePlatformForRank(rank)){
@@ -9512,7 +10185,10 @@ function removeBumperForRank(rank, slot, platform = activePlatformForRank(rank))
   delete next[safeSlot];
   setPlatformEditForRank(rank, key, { bumpers: normalizeBumpers(next) });
   const card = cardForRank(rank);
-  if (card) updateEffectUi(card);
+  if (card) {
+    updateEffectUi(card);
+    updateControlSurfaceForCard(card);
+  }
   renderFinalStage();
 }
 function bumperSlotLabel(slot){ return normalizeBumperSlot(slot) === "intro" ? "Entrada" : "Saida"; }
@@ -9681,6 +10357,7 @@ function setCardPreviewFormat(card, format){
   if (label) label.textContent = platformLabel(next);
   const status = card.querySelector("[data-platform-preset-current]");
   if (status) status.textContent = `Preset: ${platformLabel(next)}`;
+  updateControlSurfaceForCard(card);
 }
 function closePreviewFormatMenus(except = null){
   document.querySelectorAll("[data-preview-format-menu]").forEach(menu => {
@@ -9714,6 +10391,142 @@ function updateCardTools(card){
   updateCameraUi(card);
   updateEffectUi(card);
   updateOverlayUi(card);
+  updateControlSurfaceForCard(card);
+}
+function updateControlSurfaceForCard(card){
+  if (!card || !card.open) {
+    destroyControlSurfaceForCard(card);
+    return;
+  }
+  const slot = card.querySelector("[data-cuted-control-surface]");
+  if (!slot || typeof window.createCutedControlBar !== "function") return;
+  const next = controlSurfaceStateForCard(card);
+  if (card.__cutedControlSurface) {
+    card.__cutedControlSurface.update(next);
+    return;
+  }
+  card.__cutedControlSurface = window.createCutedControlBar(slot, Object.assign(next, {
+    mockBumpers: false,
+    callbacks: controlSurfaceCallbacksForCard(card)
+  }));
+}
+function destroyControlSurfaceForCard(card){
+  if (!card || !card.__cutedControlSurface) return;
+  card.__cutedControlSurface.destroy();
+  delete card.__cutedControlSurface;
+}
+function controlSurfaceStateForCard(card){
+  const rank = card.dataset.rank;
+  const platform = activePlatformForRank(rank);
+  const effect = effectForRank(rank, platform);
+  const video = primaryCameraVideo(card);
+  const platforms = uniquePlatforms(cardState(rank).platforms);
+  return {
+    aiStatus: card.dataset.aiApplying === "1" ? "loading" : controlSurfaceAiStatus(card),
+    aspectRatio: controlSurfaceAspectRatio(platform),
+    bumpers: bumpersForRank(rank, platform),
+    captionsEnabled: captionEnabled(),
+    effectStyle: controlSurfaceEffectStyle(effect),
+    muted: video ? video.muted || video.volume <= 0 : false,
+    ready: cardState(rank).status === "liked" && platforms.includes(platform),
+    status: controlSurfaceStatus(card),
+    volume: video ? Math.round((video.muted ? 0 : video.volume) * 100) : Math.round(defaultPreviewVolume * 100)
+  };
+}
+function controlSurfaceCallbacksForCard(card){
+  return {
+    onAiClick: () => analyzeCameraForCard(card, "ai-director"),
+    onApproveClick: () => markControlSurfaceReady(card),
+    onBumperClick: payload => openControlSurfaceBumperInput(card, payload.slot),
+    onBumperRemove: payload => removeBumperForRank(card.dataset.rank, payload.slot),
+    onCaptionToggle: payload => setControlSurfaceCaptions(payload.captionsEnabled),
+    onDiscardClick: () => discardControlSurfaceCard(card),
+    onEffectStyleChange: payload => setEffectForRank(card.dataset.rank, { key: appEffectKeyFromControlSurface(payload.effectStyle) }),
+    onFormatChange: payload => setControlSurfaceFormat(card, payload.aspectRatio),
+    onReadyCancel: () => cancelControlSurfaceReady(card),
+    onVolumeChange: payload => setPreviewVolume(card, payload.muted ? 0 : payload.volume / 100)
+  };
+}
+function controlSurfaceAiStatus(card){
+  const edit = platformEditForRank(card.dataset.rank, activePlatformForRank(card.dataset.rank));
+  return explicitCameraPathForEdit(edit).length ? "active" : "idle";
+}
+function controlSurfaceStatus(card){
+  const cameraStatus = card.querySelector("[data-camera-auto-status]")?.textContent.trim();
+  if (card.dataset.bumperStatus) return { kind: "error", label: card.dataset.bumperStatus, tone: "red" };
+  if (card.dataset.aiApplying === "1") return { kind: "ai", label: "AI analyzing frame safety...", progress: 42, tone: "blue" };
+  if (cameraStatus) return { kind: "ai", label: cameraStatus, tone: "blue" };
+  if (cardState(card.dataset.rank).status === "liked") return { kind: "ready", label: "Ready", tone: "green" };
+  const effect = effectForRank(card.dataset.rank);
+  if (effect.key !== "none") return { kind: "effect", label: `Effect preview: ${effect.label}`, tone: "green" };
+  return null;
+}
+function controlSurfaceAspectRatio(platform){
+  const preset = resolutionPresetForPlatform(platform);
+  if (preset === "vertical_4_5") return "4:5";
+  if (preset === "horizontal_16_9") return "16:9";
+  return "9:16";
+}
+function controlSurfacePlatform(aspectRatio){
+  if (aspectRatio === "4:5") return "facebook";
+  if (aspectRatio === "16:9") return "youtube";
+  return "tiktok";
+}
+function controlSurfaceEffectStyle(effect){
+  const key = normalizeEffect(effect).key;
+  if (key === "vhs") return "vhs";
+  if (key === "old-film") return "film";
+  if (key === "light-grain" || key === "bw-old") return "grain";
+  return "clean";
+}
+function appEffectKeyFromControlSurface(style){
+  if (style === "vhs") return "vhs";
+  if (style === "film") return "old-film";
+  if (style === "grain") return "light-grain";
+  return "none";
+}
+function setControlSurfaceFormat(card, aspectRatio){
+  card.dataset.previewTouched = "1";
+  setPreviewPlayback(card, false);
+  setCardPreviewFormat(card, controlSurfacePlatform(aspectRatio));
+  updateCardTools(card);
+  renderFinalStage();
+}
+function openControlSurfaceBumperInput(card, slot){
+  const safeSlot = normalizeBumperSlot(slot);
+  updateEffectUi(card);
+  const input = card.querySelector(`[data-bumper-video="${safeSlot}"]`);
+  if (input) input.click();
+}
+function setControlSurfaceCaptions(enabled){
+  localStorage.setItem("cutted-caption-enabled", enabled ? "1" : "0");
+  syncCaptionInputs();
+  renderCaptionQueue();
+  renderFinalStage();
+  document.querySelectorAll(".card[open]").forEach(updateControlSurfaceForCard);
+}
+function markControlSurfaceReady(card){
+  const current = cardState(card.dataset.rank);
+  const platform = activePlatformForRank(card.dataset.rank);
+  const platforms = uniquePlatforms([...(current.platforms || []), platform]);
+  setCardState(card.dataset.rank, { status: "liked", platforms });
+  paint(card);
+  updatePlatformUi(card);
+  renderCaptionQueue();
+}
+function cancelControlSurfaceReady(card){
+  const platform = activePlatformForRank(card.dataset.rank);
+  const platforms = uniquePlatforms(cardState(card.dataset.rank).platforms).filter(item => item !== platform);
+  setCardState(card.dataset.rank, { status: platforms.length ? "liked" : null, platforms });
+  paint(card);
+  updatePlatformUi(card);
+  renderCaptionQueue();
+}
+function discardControlSurfaceCard(card){
+  setCardState(card.dataset.rank, { status: "discarded", platforms: [] });
+  paint(card);
+  updatePlatformUi(card);
+  renderCaptionQueue();
 }
 function updateCameraUi(card){
   const edit = platformEditForRank(card.dataset.rank, activePlatformForRank(card.dataset.rank));
@@ -11092,6 +11905,7 @@ function syncPreviewVolumeButton(card){
   button.setAttribute("aria-label", "Volume");
   button.title = "Volume";
   if (slider) slider.value = String(value);
+  updateControlSurfaceForCard(card);
 }
 function openPreviewVolumePopover(card){
   const popover = card.querySelector("[data-preview-volume-popover]");
@@ -11141,6 +11955,7 @@ function loadCardVideo(card){
 }
 function unloadCardVideo(card){
   destroyLivePreviewCameraTimeline(card);
+  destroyControlSurfaceForCard(card);
   const video = card.querySelector("video:not(.camera-fit-bg)[data-src]");
   if (!video || !video.getAttribute("src")) return;
   video.pause();
@@ -12087,14 +12902,62 @@ async function finalizeVideos(){
     button.disabled = false;
   }
 }
-function renderFinalizeResults(files){
+function finalizeStorageKey(){
+  return `cutted-finalize-results:${currentGalleryPath()}`;
+}
+function storeFinalizeResults(files){
+  if (!Array.isArray(files) || !files.length) return;
+  try {
+    localStorage.setItem(finalizeStorageKey(), JSON.stringify(files));
+  } catch (error) {
+    console.warn("Nao foi possivel salvar os resultados renderizados.", error);
+  }
+}
+function storedFinalizeResults(){
+  try {
+    const raw = localStorage.getItem(finalizeStorageKey());
+    const files = raw ? JSON.parse(raw) : [];
+    return Array.isArray(files) ? files : [];
+  } catch (error) {
+    console.warn("Nao foi possivel restaurar os resultados renderizados.", error);
+    return [];
+  }
+}
+async function restoreFinalizeResults(){
+  const status = document.querySelector("[data-render-status]");
+  const cached = storedFinalizeResults();
+  if (cached.length) {
+    renderFinalizeResults(cached, { skipPersist: true });
+    if (status && !status.textContent) status.textContent = `${cached.length} video(s) restaurado(s) desta galeria.`;
+  }
+  try {
+    const response = await fetch(`/api/finalize-results?gallery_path=${encodeURIComponent(currentGalleryPath())}`, { cache: "no-store" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) return;
+    const files = Array.isArray(payload.files) ? payload.files : [];
+    if (!files.length) return;
+    renderFinalizeResults(files);
+    const exported = payload.export_dir ? ` Exportado em: ${payload.export_dir}` : "";
+    if (status) {
+      status.textContent = payload.ready
+        ? `${payload.count || files.length} video(s) renderizado(s) restaurado(s).${exported}`
+        : `${payload.count || files.length} video(s) ja pronto(s); render ainda pode estar finalizando.`;
+    }
+  } catch (error) {
+    if (cached.length || !status || status.textContent) return;
+    status.textContent = "Nao consegui restaurar a fila renderizada agora.";
+  }
+}
+function renderFinalizeResults(files, options = {}){
   const results = document.querySelector("[data-render-results]");
   if (!results) return;
-  if (!files.length) {
+  const safeFiles = Array.isArray(files) ? files : [];
+  if (!safeFiles.length) {
     results.innerHTML = '<div class="effect-empty">Nenhum video renderizado ainda.</div>';
     return;
   }
-  results.innerHTML = files.map((file, index) => {
+  if (!options.skipPersist) storeFinalizeResults(safeFiles);
+  results.innerHTML = safeFiles.map((file, index) => {
     const camera = normalizeCamera(file.camera);
     const effect = normalizeEffect(file.effect);
     const overlay = normalizeOverlay(file.overlay);
