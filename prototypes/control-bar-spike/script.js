@@ -44,13 +44,14 @@
         container.innerHTML = "";
       },
       getState() {
-        return { ...state };
+        return snapshotState(state);
       },
       update(nextState) {
         if (Object.prototype.hasOwnProperty.call(nextState || {}, "status")) {
           window.clearTimeout(statusClock.id);
         }
         Object.assign(state, normalizeState({ ...state, ...nextState }));
+        reconcileReadyStatus(state);
         syncView(elements, state);
       }
     };
@@ -104,6 +105,7 @@
       kind: String(value.kind || "idle"),
       label: String(value.label || ""),
       progress: Number.isFinite(progress) ? clamp(progress, 0, 100) : null,
+      persistent: Boolean(value.persistent),
       tone
     };
   }
@@ -125,15 +127,16 @@
       formatTitle: container.querySelector("[data-cuted-format-title]"),
       bumperButtons: Array.from(container.querySelectorAll("[data-cuted-bumper-slot]")),
       bumperRemoves: Array.from(container.querySelectorAll("[data-cuted-bumper-remove]")),
+      controlBar: container.querySelector("[data-cuted-control-bar]"),
       insertButton: container.querySelector("[data-cuted-control='insert']"),
       insertDots: Array.from(container.querySelectorAll("[data-cuted-insert-dot]")),
       insertMenu: container.querySelector("[data-cuted-insert-menu]"),
       readyCancelButton: container.querySelector("[data-cuted-control='ready-cancel']"),
-      readyText: container.querySelector("[data-cuted-ready-text]"),
+      renderZone: container.querySelector("[data-cuted-render-zone]"),
       sonicRail: container.querySelector("[data-cuted-sonic-rail]"),
       soundButton: container.querySelector("[data-cuted-control='sound']"),
       toolGroup: container.querySelector("[data-cuted-tool-group]"),
-      statusBar: container.querySelector("[data-cuted-status]"),
+      statusBar: container.querySelector("[data-cuted-bar-status]"),
       statusLabel: container.querySelector("[data-cuted-status-label]"),
       statusMeter: container.querySelector("[data-cuted-status-meter]"),
       volumeSlider: container.querySelector("[data-cuted-control='volume']"),
@@ -146,7 +149,7 @@
       window.clearTimeout(statusClock.id);
       state.status = normalizeStatus(status);
       syncStatus(elements, state);
-      if (!state.status || holdMs <= 0) return;
+      if (!state.status || state.status.persistent || holdMs <= 0) return;
       statusClock.id = window.setTimeout(() => {
         state.status = null;
         syncStatus(elements, state);
@@ -156,6 +159,14 @@
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
+      syncView(elements, state);
+    };
+    const lockReady = () => {
+      state.ready = true;
+      state.effectMenuOpen = false;
+      state.formatMenuOpen = false;
+      state.insertMenuOpen = false;
+      setStatus(buildReadyStatus(), 0);
       syncView(elements, state);
     };
     const dismissClick = (event) => {
@@ -236,10 +247,8 @@
       callbacks.onCaptionToggle?.({ captionsEnabled: state.captionsEnabled });
     });
     elements.approveButton.addEventListener("click", () => {
-      state.ready = true;
-      setStatus({ kind: "ready", label: "Ready", tone: "green" });
-      syncView(elements, state);
-      callbacks.onApproveClick?.({ ...state });
+      lockReady();
+      callbacks.onApproveClick?.(snapshotState(state));
     });
     elements.discardButton.addEventListener("click", () => {
       setStatus({ kind: "discard", label: "Cut discarded", tone: "red" });
@@ -247,9 +256,9 @@
     });
     elements.readyCancelButton.addEventListener("click", () => {
       state.ready = false;
-      setStatus({ kind: "ready", label: "Back to editing", tone: "neutral" });
+      setStatus({ kind: "editing", label: "Back to editing", tone: "neutral" }, 1800);
       syncView(elements, state);
-      callbacks.onReadyCancel?.({ ...state });
+      callbacks.onReadyCancel?.(snapshotState(state));
     });
 
     elements.formatButton.addEventListener("click", () => {
@@ -312,6 +321,8 @@
   }
 
   function syncView(elements, state) {
+    elements.controlBar.classList.toggle("is-ready", state.ready);
+    elements.renderZone.classList.toggle("is-ready", state.ready);
     elements.soundButton.classList.toggle("is-muted", state.muted);
     elements.sonicRail.classList.toggle("is-muted", state.muted);
     elements.sonicRail.style.setProperty("--volume", `${state.volume}%`);
@@ -323,10 +334,14 @@
     elements.aiButton.classList.toggle("is-active", state.aiStatus === "loading" || state.aiStatus === "active");
     elements.captionButton.classList.toggle("is-active", state.captionsEnabled);
     elements.effectButton.classList.toggle("is-active", true);
+    if (state.ready) {
+      state.effectMenuOpen = false;
+      state.formatMenuOpen = false;
+      state.insertMenuOpen = false;
+    }
     elements.effectMenu.dataset.open = String(state.effectMenuOpen);
     syncInsert(elements, state);
     syncStatus(elements, state);
-    elements.readyText.innerHTML = renderReadyLetters("Ready");
     elements.approveButton.closest("[data-cuted-ready-region]").dataset.ready = String(state.ready);
 
     elements.effectOptions.forEach((button) => {
@@ -346,9 +361,13 @@
   }
 
   function syncStatus(elements, state) {
-    const status = state.status;
+    const status = state.ready ? buildReadyStatus() : state.status;
     const hasStatus = Boolean(status && status.label);
     window.clearTimeout(elements.statusBar._cutedHideTimer);
+    elements.controlBar.classList.toggle("has-status", hasStatus);
+    elements.controlBar.dataset.statusKind = hasStatus ? status.kind : "idle";
+    elements.controlBar.dataset.statusTone = hasStatus ? status.tone : "neutral";
+    elements.toolGroup.classList.toggle("is-ready", state.ready);
     if (hasStatus) {
       elements.statusBar.hidden = false;
       elements.statusBar.classList.remove("is-hiding");
@@ -362,10 +381,16 @@
       }, 260);
     } else {
       elements.statusBar.hidden = true;
+      elements.controlBar.classList.remove("has-status");
       elements.toolGroup.classList.remove("is-status-active");
     }
     elements.statusBar.dataset.tone = hasStatus ? status.tone : "neutral";
-    if (hasStatus) elements.statusLabel.textContent = status.label;
+    elements.statusBar.dataset.kind = hasStatus ? status.kind : "idle";
+    if (hasStatus && status.kind === "ready") {
+      elements.statusLabel.innerHTML = renderReadyLetters(status.label);
+    } else if (hasStatus) {
+      elements.statusLabel.textContent = status.label;
+    }
     const progress = hasStatus && status.progress !== null ? status.progress : 0;
     elements.statusMeter.style.setProperty("--status-progress", `${progress}%`);
     elements.statusMeter.hidden = !hasStatus || status.progress === null;
@@ -373,7 +398,7 @@
 
   function renderControlBar() {
     return `
-      <nav class="cuted-control-bar" aria-label="CUTED video controls">
+      <nav class="cuted-control-bar" aria-label="CUTED video controls" data-cuted-control-bar>
         <div class="cuted-effect-menu" data-open="false" data-cuted-effect-menu>
           <button class="cuted-look-option is-active" type="button" aria-label="Clean" data-cuted-effect-style="clean">
             <span class="cuted-look-preview cuted-clean-preview"></span>
@@ -391,6 +416,11 @@
             <span class="cuted-look-preview cuted-grain-preview"></span>
             <strong>GRAIN</strong>
           </button>
+        </div>
+
+        <div class="cuted-bar-status-layer" data-kind="idle" data-tone="neutral" data-cuted-bar-status hidden>
+          <span data-cuted-status-label></span>
+          <i data-cuted-status-meter></i>
         </div>
 
         <div class="cuted-control-group cuted-audio-group">
@@ -424,58 +454,55 @@
 
         <div class="cuted-divider" aria-hidden="true"></div>
 
-        <div class="cuted-control-group cuted-tool-group" data-cuted-tool-group>
-          <div class="cuted-tool-buttons">
-            <button class="cuted-tile-button cuted-ai-button" type="button" aria-label="IA" data-cuted-control="ai">
-              <span>IA</span>
-              <i class="cuted-ai-loader" aria-hidden="true"></i>
-            </button>
-            <button class="cuted-tile-button cuted-fx-button is-active" type="button" aria-label="FX" data-cuted-control="effect">
-              <span>FX</span>
-            </button>
-            <button class="cuted-tile-button cuted-insert-button" type="button" aria-label="Insert" data-cuted-control="insert">
-              <span>Insert</span>
-              <i data-cuted-insert-dot="intro"></i>
-              <i data-cuted-insert-dot="outro"></i>
-            </button>
-            <button class="cuted-tile-button cuted-cc-button" type="button" aria-label="Closed captions" data-cuted-control="caption">
-              <span>CC</span>
-            </button>
+        <div class="cuted-render-zone" data-cuted-render-zone>
+          <div class="cuted-control-group cuted-tool-group" data-cuted-tool-group>
+            <div class="cuted-tool-buttons">
+              <button class="cuted-tile-button cuted-ai-button" type="button" aria-label="IA" data-cuted-control="ai">
+                <span>IA</span>
+                <i class="cuted-ai-loader" aria-hidden="true"></i>
+              </button>
+              <button class="cuted-tile-button cuted-fx-button is-active" type="button" aria-label="FX" data-cuted-control="effect">
+                <span>FX</span>
+              </button>
+              <button class="cuted-tile-button cuted-insert-button" type="button" aria-label="Insert" data-cuted-control="insert">
+                <span>Insert</span>
+                <i data-cuted-insert-dot="intro"></i>
+                <i data-cuted-insert-dot="outro"></i>
+              </button>
+              <button class="cuted-tile-button cuted-cc-button" type="button" aria-label="Closed captions" data-cuted-control="caption">
+                <span>CC</span>
+              </button>
+            </div>
           </div>
-          <div class="cuted-tool-status" data-tone="neutral" data-cuted-status hidden>
-            <span data-cuted-status-label></span>
-            <i data-cuted-status-meter></i>
+
+          <div class="cuted-divider cuted-ready-divider" aria-hidden="true"></div>
+
+          <div class="cuted-ready-region" data-ready="false" data-cuted-ready-region>
+            <div class="cuted-control-group cuted-action-group" aria-label="Acoes">
+              <button class="cuted-action-button cuted-discard-button" type="button" aria-label="Descartar" data-cuted-control="discard">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M18 6 6 18"></path>
+                  <path d="M6 6l12 12"></path>
+                </svg>
+              </button>
+              <button class="cuted-action-button cuted-approve-button" type="button" aria-label="Aprovar" data-cuted-control="approve">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M20 6 9 17l-5-5"></path>
+                </svg>
+              </button>
+            </div>
+            <div class="cuted-ready-pill" aria-live="polite">
+              <button class="cuted-ready-cancel" type="button" aria-label="Back to editing" data-cuted-control="ready-cancel">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M18 6 6 18"></path>
+                  <path d="M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
         ${renderInsertMenu()}
-
-        <div class="cuted-divider" aria-hidden="true"></div>
-
-        <div class="cuted-ready-region" data-ready="false" data-cuted-ready-region>
-          <div class="cuted-control-group cuted-action-group" aria-label="Acoes">
-            <button class="cuted-action-button cuted-discard-button" type="button" aria-label="Descartar" data-cuted-control="discard">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M18 6 6 18"></path>
-                <path d="M6 6l12 12"></path>
-              </svg>
-            </button>
-            <button class="cuted-action-button cuted-approve-button" type="button" aria-label="Aprovar" data-cuted-control="approve">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M20 6 9 17l-5-5"></path>
-              </svg>
-            </button>
-          </div>
-          <div class="cuted-ready-pill" aria-live="polite">
-            <span class="cuted-ready-text" data-cuted-ready-text></span>
-            <button class="cuted-ready-cancel" type="button" aria-label="Cancel ready" data-cuted-control="ready-cancel">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M18 6 6 18"></path>
-                <path d="M6 6l12 12"></path>
-              </svg>
-            </button>
-          </div>
-        </div>
       </nav>
     `;
   }
@@ -587,11 +614,41 @@
     return normalizeBumper(slot, {});
   }
 
+  function buildReadyStatus() {
+    return {
+      kind: "ready",
+      label: "READY",
+      persistent: true,
+      tone: "green"
+    };
+  }
+
+  function reconcileReadyStatus(state) {
+    if (state.ready) {
+      state.status = buildReadyStatus();
+      return;
+    }
+    if (state.status?.kind === "ready") {
+      state.status = null;
+    }
+  }
+
+  function snapshotState(state) {
+    return {
+      ...state,
+      bumpers: {
+        intro: state.bumpers.intro ? { ...state.bumpers.intro } : null,
+        outro: state.bumpers.outro ? { ...state.bumpers.outro } : null
+      },
+      status: state.ready ? buildReadyStatus() : state.status ? { ...state.status } : null
+    };
+  }
+
   function renderReadyLetters(text) {
     return Array.from(text)
       .map((letter, index) => {
         const content = letter === " " ? "&nbsp;" : letter;
-        return `<span style="--i:${index}">${content}</span>`;
+        return `<span data-cuted-status-letter style="--i:${index}">${content}</span>`;
       })
       .join("");
   }
