@@ -33,6 +33,8 @@ CONTROL_BAR_ASSET_FILES = ("control-bar.css", "control-bar.js")
 PROJECT_CATALOG_VERSION = 1
 PROJECT_CATALOG_LIMIT = 12
 PROJECT_CATALOG_SIZE_FILE_LIMIT = 3000
+PROJECTS_DIR_NAME = "projects"
+PROJECT_RENDERS_DIR_NAME = "renders"
 GROUP_FIT_LOGO_TOP_RATIO = 0.11
 GROUP_FIT_LOGO_WIDTH_RATIO = 0.38
 GROUP_FIT_LOGO_OPACITY = 0.9
@@ -5186,6 +5188,9 @@ def export_captioned_rows(rows: list[dict[str, object]], gallery_dir: Path) -> t
 
 def render_export_dir(gallery_dir: Path) -> Path | None:
     metadata = read_import_metadata(gallery_dir)
+    render_raw = str(metadata.get("render_output_path") or "").strip()
+    if render_raw:
+        return Path(render_raw).expanduser()
     raw = str(metadata.get("output_path") or "").strip()
     if not raw and metadata.get("source_url"):
         legacy_path = Path(str(metadata.get("source_path") or "")).expanduser()
@@ -5228,8 +5233,6 @@ def import_request_metadata(payload: dict[str, object]) -> dict[str, object]:
     if not source_url and not source_path:
         raise ValueError("Informe um link ou caminho local para importar.")
     output_path = clean_output_path(payload.get("output_path"))
-    if not output_path:
-        raise ValueError("Escolha a pasta onde os videos finais serao salvos.")
     ai_provider = configured_ai_provider()
     if ai_provider == "openai" and not openai_api_key():
         raise ValueError("Adicione sua chave OpenAI nas configuracoes (engrenagem) antes de importar com IA.")
@@ -5237,7 +5240,7 @@ def import_request_metadata(payload: dict[str, object]) -> dict[str, object]:
         "source_url": source_url,
         "source_path": source_path,
         "output_path": output_path,
-        "preview_count": clamp_int(payload.get("preview_count"), 1, 20, 10),
+        "preview_count": clamp_int(payload.get("preview_count"), 1, 10, 10),
         "language": clean_optional_text(payload.get("language"), 24) or "pt",
         "preset": clean_preset(payload.get("preset")),
         "duration_profile": clean_duration_profile(payload.get("duration_profile")),
@@ -5255,6 +5258,8 @@ def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path
     source_path = str(metadata["source_path"])
     out_dir = next_import_output_dir(base_dir, source_url or source_path)
     out_dir.mkdir(parents=True, exist_ok=True)
+    metadata["project_dir"] = str(out_dir)
+    metadata["render_output_path"] = str(project_render_output_dir(out_dir))
     (out_dir / "import-request.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
     command = import_command(out_dir, source_url, source_path, metadata)
     job_id = uuid.uuid4().hex[:12]
@@ -5369,7 +5374,7 @@ def import_job_error_message(stderr: str) -> str:
 
 
 def next_import_output_dir(base_dir: Path, source: str) -> Path:
-    imports_dir = base_dir / "_imports"
+    imports_dir = base_dir / PROJECTS_DIR_NAME
     slug = safe_slug(Path(urllib.parse.urlparse(source).path).stem or source)
     stamp = time.strftime("%Y%m%d-%H%M%S")
     candidate = imports_dir / f"{stamp}-{slug}"
@@ -5378,6 +5383,10 @@ def next_import_output_dir(base_dir: Path, source: str) -> Path:
         candidate = imports_dir / f"{stamp}-{slug}-{index}"
         index += 1
     return candidate
+
+
+def project_render_output_dir(project_dir: Path) -> Path:
+    return project_dir / PROJECT_RENDERS_DIR_NAME
 
 
 def import_output_url(base_dir: Path, out_dir: Path) -> str:
@@ -8301,18 +8310,16 @@ def project_home_html(workspace: Path, logo_src: str, recent: list[dict[str, obj
   <main class="project-home">
     <section class="home-brand-stage" aria-label="CUTED">
       <div class="home-logo-orbit">
-        <span class="home-logo-spark home-logo-spark-left" aria-hidden="true"></span>
         <img class="home-brand-logo" src="{html.escape(logo_src)}" alt="CUTED">
-        <span class="home-logo-spark home-logo-spark-right" aria-hidden="true"></span>
       </div>
     </section>
-    <section class="project-library" aria-label="Projetos recentes">
+    <section class="project-library" data-project-library aria-label="Projetos recentes">
       <div class="project-section-head">
         <strong>Projetos recentes</strong>
         <div class="project-toolbar" aria-label="Acoes dos projetos">
           <button type="button" class="project-icon-button project-primary" data-new-project aria-label="Novo projeto" title="Novo projeto">+</button>
-          <button type="button" data-open-workspace title="Projetos locais">Workspace</button>
           <button type="button" class="project-icon-button" data-refresh-projects aria-label="Atualizar" title="Atualizar">↻</button>
+          <button type="button" data-open-workspace title="Projetos locais">Workspace</button>
         </div>
       </div>
       <div class="project-table" data-project-list>
@@ -8422,54 +8429,53 @@ def project_home_mock_projects(workspace: Path) -> list[dict[str, object]]:
 
 def project_import_form_html() -> str:
     return f"""
-      <form class="import-panel" data-import-form>
-        <div class="stage-head">
-          <div>
-            <strong>Importar novo projeto</strong>
-            <p>Escolha um video local ou link de teste e defina a pasta dos renders.</p>
-          </div>
-          <button type="submit">Importar</button>
+      <form class="import-panel new-project-panel" data-import-form data-source-mode="local">
+        <div class="new-project-head">
+          <strong>Novo projeto</strong>
+          <button type="button" data-show-projects>Recentes</button>
         </div>
         <div class="import-key-banner" data-import-key-banner hidden>
           <span>Adicione sua chave OpenAI nas configuracoes antes de importar com IA.</span>
         </div>
-        <div class="import-grid">
-          <label>Video local
-            <span class="import-path-row">
-              <input name="source_path" type="text" value="" placeholder="Selecione um MP4, MOV, M4V ou WebM" autocomplete="off">
-              <button type="button" data-select-video-file>Video</button>
-            </span>
-            <small>Entrada principal para mapa visual, camera e render local.</small>
-          </label>
-          <label>Link do YouTube (experimental)
-            <input name="source_url" type="url" placeholder="Cole um link apenas para teste rapido" autocomplete="off">
-            <small>Use arquivo local quando a plataforma bloquear o download.</small>
-          </label>
-          <label>Destino dos renders
-            <span class="import-path-row">
-              <input name="output_path" type="text" value="" placeholder="Selecione a pasta dos videos finais" autocomplete="off">
-              <button type="button" data-select-folder>Pasta</button>
-            </span>
-          </label>
-          <label>Quantidade de sugestoes
+        <div class="source-toggle" role="group" aria-label="Origem do projeto">
+          <label><input name="source_mode" type="radio" value="local" checked><span>Video local</span></label>
+          <label><input name="source_mode" type="radio" value="youtube"><span>YouTube</span></label>
+        </div>
+        <div class="source-panel" data-source-panel="local">
+          <input name="source_path" type="text" value="" placeholder="Nenhum video selecionado" autocomplete="off" readonly>
+          <button type="button" data-select-video-file>Selecionar video</button>
+        </div>
+        <div class="source-panel" data-source-panel="youtube" hidden>
+          <input name="source_url" type="url" placeholder="Cole o link do YouTube" autocomplete="off">
+        </div>
+        <div class="new-project-grid">
+          <label class="suggestion-field">Sugestoes
             <select name="preview_count">
               {suggestion_count_options()}
             </select>
           </label>
+          <fieldset class="duration-profile duration-size-toggle">
+            <legend>Duracao</legend>
+            <label><input name="duration_profile" type="radio" value="short"><span><strong>S</strong><small>20-45s</small></span></label>
+            <label><input name="duration_profile" type="radio" value="medium" checked><span><strong>M</strong><small>30-70s</small></span></label>
+            <label><input name="duration_profile" type="radio" value="long"><span><strong>L</strong><small>60-120s</small></span></label>
+          </fieldset>
         </div>
         <input name="language" type="hidden" value="pt">
         <input name="preset" type="hidden" value="tiktok">
-        <fieldset class="duration-profile">
-          <legend>Duracao dos cortes</legend>
-          <label><input name="duration_profile" type="radio" value="short"><span><strong>Curto</strong><small>20-45s</small></span></label>
-          <label><input name="duration_profile" type="radio" value="medium" checked><span><strong>Medio</strong><small>30-70s</small></span></label>
-          <label><input name="duration_profile" type="radio" value="long"><span><strong>Longo</strong><small>60-120s</small></span></label>
-        </fieldset>
-        <label class="import-context">Contexto para a IA
-          <textarea name="context_prompt" rows="5" placeholder="Opcional. Ex.: priorize momentos com gancho forte e frase completa."></textarea>
-        </label>
+        <section class="ai-context-box" aria-label="Contexto para IA">
+          <div class="ai-context-head">
+            <strong>Contexto IA</strong>
+            <button type="button" data-context-audio title="Transcrever por audio">Audio</button>
+          </div>
+          <textarea name="context_prompt" rows="5" placeholder="Direcao, publico, ganchos e cortes que a IA deve priorizar."></textarea>
+        </section>
         <div class="import-status" data-import-status>Pronto.</div>
         <div class="import-result" data-import-result></div>
+        <footer class="new-project-footer">
+          <span>Renders salvos automaticamente no projeto.</span>
+          <button type="submit">Importar</button>
+        </footer>
       </form>"""
 
 
@@ -8542,7 +8548,7 @@ def brand_logo_path() -> Path:
 
 
 def suggestion_count_options() -> str:
-    return "\n".join(f'<option value="{value}"{" selected" if value == 10 else ""}>{value}</option>' for value in range(1, 21))
+    return "\n".join(f'<option value="{value}"{" selected" if value == 10 else ""}>{value}</option>' for value in range(1, 11))
 
 
 def openai_model_options() -> str:
@@ -8923,7 +8929,7 @@ def static_assets_html(assets: dict[str, str], kind: str) -> str:
 
 def project_home_css() -> str:
     return """
-body[data-project-home]{overflow-x:hidden}body[data-project-home] header{display:none}.project-home{width:min(1180px,calc(100vw - 28px));max-width:none;min-height:100vh;padding:24px 0 42px}.home-brand-stage{display:grid;place-items:center;min-height:210px;padding:12px 0 20px}.home-logo-orbit{position:relative;display:grid;place-items:center;width:min(720px,88vw);isolation:isolate}.home-logo-orbit:before{position:absolute;inset:18% 10%;z-index:-1;border-radius:999px;background:radial-gradient(circle at 22% 50%,rgba(17,162,207,.36),transparent 32%),radial-gradient(circle at 78% 50%,rgba(175,207,42,.32),transparent 32%);filter:blur(28px);content:"";animation:home-logo-aura 4.8s ease-in-out infinite}.home-brand-logo{display:block;width:min(560px,82vw);height:116px;object-fit:contain;filter:drop-shadow(0 0 18px rgba(17,162,207,.24)) drop-shadow(0 0 18px rgba(175,207,42,.14));animation:home-logo-breathe 5.4s ease-in-out infinite}.home-logo-spark{position:absolute;top:50%;width:70px;height:86px;border:1px solid rgba(231,231,232,.3);border-radius:50%;transform:translateY(-50%);opacity:.78;filter:drop-shadow(0 0 12px currentColor)}.home-logo-spark:before,.home-logo-spark:after{position:absolute;left:50%;top:50%;content:"";background:currentColor;transform:translate(-50%,-50%)}.home-logo-spark:before{width:2px;height:84px}.home-logo-spark:after{width:66px;height:2px}.home-logo-spark-left{left:0;color:var(--color-brand-blue);animation:home-spark-left 3.6s ease-in-out infinite}.home-logo-spark-right{right:0;color:var(--color-brand-green);animation:home-spark-right 3.6s ease-in-out infinite}.project-library{display:grid;gap:0;border:1px solid var(--glass-border);border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.018)),rgba(7,7,7,.74);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(22px) saturate(1.22);overflow:hidden}.project-section-head{display:flex;justify-content:space-between;gap:14px;align-items:center;min-height:66px;padding:14px 16px;border-bottom:1px solid rgba(231,231,232,.1)}.project-section-head strong{font-size:18px;letter-spacing:0}.project-toolbar{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.project-toolbar button,.project-row-actions button,.project-row-actions a{min-height:34px;padding:7px 11px}.project-icon-button{display:inline-grid!important;place-items:center;width:38px;min-width:38px;padding:0!important;font-size:18px;font-weight:900}.project-primary{border-color:rgba(175,207,42,.58)!important;background:linear-gradient(180deg,rgba(175,207,42,.26),rgba(17,162,207,.1)),rgba(23,32,14,.78)!important;color:var(--color-text)!important}.project-table{display:grid}.project-table-head,.project-row{display:grid;grid-template-columns:minmax(230px,1fr) minmax(260px,.9fr) 112px minmax(220px,.6fr);gap:14px;align-items:center}.project-table-head{min-height:38px;padding:0 16px;border-bottom:1px solid rgba(231,231,232,.08);color:var(--color-text-muted);font-size:11px;text-transform:uppercase}.project-row{min-height:78px;padding:13px 16px;border-bottom:1px solid rgba(231,231,232,.075);animation:home-row-in .42s ease both}.project-row:last-child{border-bottom:0}.project-row:nth-child(2){animation-delay:.03s}.project-row:nth-child(3){animation-delay:.08s}.project-row:nth-child(4){animation-delay:.13s}.project-row:nth-child(5){animation-delay:.18s}.project-row:hover{background:linear-gradient(90deg,rgba(17,162,207,.085),rgba(175,207,42,.045),transparent)}.project-row[data-project-mock=true]{background:rgba(255,255,255,.018)}.project-name-cell{display:grid;gap:3px;min-width:0}.project-name-cell strong{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-name-cell p{margin:0;color:rgba(175,207,42,.82);font-size:12px}.project-name-cell small{display:block;color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-meta-cell{display:flex;gap:10px;margin:0}.project-meta-cell div{display:grid;gap:2px;min-width:68px}.project-meta-cell dt{color:var(--color-text-muted);font-size:11px}.project-meta-cell dd{margin:0;color:var(--color-text);font-weight:800}.project-updated-cell{color:var(--color-text-muted);font-size:12px}.project-row-actions{display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap}.project-row-actions a{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--glass-border);border-radius:999px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.project-row-actions button[data-delete-project]{color:var(--color-danger)}.project-row-actions button:disabled{opacity:.38;cursor:not-allowed}.project-import{margin-top:14px}.project-import[hidden]{display:none}.project-import .import-panel{animation:home-row-in .28s ease both}@keyframes home-logo-aura{0%,100%{opacity:.68;transform:scale(.96)}50%{opacity:1;transform:scale(1.04)}}@keyframes home-logo-breathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-2px) scale(1.012)}}@keyframes home-spark-left{0%,100%{transform:translateY(-50%) scale(.94);opacity:.54}50%{transform:translateY(-50%) scale(1.06);opacity:.9}}@keyframes home-spark-right{0%,100%{transform:translateY(-50%) scale(1.04);opacity:.86}50%{transform:translateY(-50%) scale(.94);opacity:.58}}@keyframes home-row-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@media(max-width:900px){.project-home{width:min(100vw - 20px,760px);padding-top:16px}.home-brand-stage{min-height:160px}.home-brand-logo{height:86px}.home-logo-spark{display:none}.project-section-head{align-items:flex-start;flex-direction:column}.project-toolbar{justify-content:flex-start}.project-table-head{display:none}.project-row{grid-template-columns:1fr;gap:10px}.project-meta-cell{justify-content:space-between}.project-row-actions{justify-content:flex-start}.project-updated-cell{display:none}}
+body[data-project-home]{overflow-x:hidden}body[data-project-home] header{display:none}.project-home{width:min(1080px,calc(100vw - 36px));max-width:none;min-height:100vh;padding:30px 0 34px;align-content:start;gap:12px}.home-brand-stage{display:grid;place-items:center;min-height:164px;padding:4px 0 0}.home-logo-orbit{position:relative;display:grid;place-items:center;width:min(620px,84vw);isolation:isolate}.home-logo-orbit:before{position:absolute;inset:18% 12%;z-index:-1;border-radius:999px;background:radial-gradient(circle at 26% 50%,rgba(17,162,207,.28),transparent 34%),radial-gradient(circle at 74% 50%,rgba(175,207,42,.24),transparent 34%);filter:blur(24px);content:"";animation:home-logo-aura 5.2s ease-in-out infinite}.home-brand-logo{display:block;width:min(520px,80vw);height:104px;object-fit:contain;filter:drop-shadow(0 0 12px rgba(17,162,207,.18)) drop-shadow(0 0 12px rgba(175,207,42,.12));animation:home-logo-breathe 5.8s ease-in-out infinite}.project-library{display:grid;align-content:start;gap:0;border:1px solid var(--glass-border);border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,.052),rgba(255,255,255,.016)),rgba(7,7,7,.76);box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(22px) saturate(1.22);overflow:hidden}.project-section-head{display:flex;justify-content:space-between;gap:12px;align-items:center;min-height:52px;padding:9px 16px;border-bottom:1px solid rgba(231,231,232,.1)}.project-section-head strong{font-size:17px;letter-spacing:0}.project-toolbar{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.project-toolbar button,.project-row-actions button,.project-row-actions a{min-height:32px;padding:6px 11px}.project-icon-button{display:inline-grid!important;place-items:center;width:36px;min-width:36px;padding:0!important;font-size:17px;font-weight:900}.project-primary{border-color:rgba(175,207,42,.58)!important;background:linear-gradient(180deg,rgba(175,207,42,.26),rgba(17,162,207,.1)),rgba(23,32,14,.78)!important;color:var(--color-text)!important}.project-table{display:grid;max-height:min(456px,calc(100vh - 304px));overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(175,207,42,.55) rgba(255,255,255,.055)}.project-table::-webkit-scrollbar{width:10px}.project-table::-webkit-scrollbar-track{background:rgba(255,255,255,.04);border-left:1px solid rgba(231,231,232,.06)}.project-table::-webkit-scrollbar-thumb{border:2px solid rgba(7,7,7,.76);border-radius:999px;background:linear-gradient(180deg,rgba(17,162,207,.72),rgba(175,207,42,.72));box-shadow:0 0 12px rgba(17,162,207,.22)}.project-table::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,var(--color-brand-blue),var(--color-brand-green))}.project-table-head,.project-row{display:grid;grid-template-columns:minmax(230px,1fr) minmax(245px,.82fr) 100px minmax(214px,.58fr);gap:14px;align-items:center}.project-table-head{position:sticky;top:0;z-index:2;min-height:34px;padding:0 16px;border-bottom:1px solid rgba(231,231,232,.08);background:rgba(11,11,11,.92);color:var(--color-text-muted);font-size:11px;text-transform:uppercase;backdrop-filter:blur(12px)}.project-row{min-height:76px;padding:12px 16px;border-bottom:1px solid rgba(231,231,232,.075);animation:home-row-in .42s ease both}.project-row:last-child{border-bottom:0}.project-row:nth-child(2){animation-delay:.03s}.project-row:nth-child(3){animation-delay:.08s}.project-row:nth-child(4){animation-delay:.13s}.project-row:nth-child(5){animation-delay:.18s}.project-row:hover{background:linear-gradient(90deg,rgba(17,162,207,.085),rgba(175,207,42,.045),transparent)}.project-row[data-project-mock=true]{background:rgba(255,255,255,.018)}.project-name-cell{display:grid;gap:3px;min-width:0}.project-name-cell strong{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-name-cell p{margin:0;color:rgba(175,207,42,.82);font-size:12px}.project-name-cell small{display:block;color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-meta-cell{display:flex;gap:10px;margin:0}.project-meta-cell div{display:grid;gap:2px;min-width:62px}.project-meta-cell dt{color:var(--color-text-muted);font-size:11px}.project-meta-cell dd{margin:0;color:var(--color-text);font-weight:800}.project-updated-cell{color:var(--color-text-muted);font-size:12px}.project-row-actions{display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap}.project-row-actions a{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--glass-border);border-radius:999px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.project-row-actions button[data-delete-project]{color:var(--color-danger)}.project-row-actions button:disabled{opacity:.38;cursor:not-allowed}.project-import{margin-top:12px}.project-import[hidden],.project-library[hidden]{display:none}.project-import .import-panel{animation:home-row-in .28s ease both}.new-project-panel{gap:14px;border-color:var(--glass-border);background:linear-gradient(180deg,rgba(255,255,255,.052),rgba(255,255,255,.016)),rgba(7,7,7,.76);box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(22px) saturate(1.22)}.new-project-head,.new-project-footer,.ai-context-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.new-project-head{min-height:38px;padding-bottom:10px;border-bottom:1px solid rgba(231,231,232,.1)}.new-project-head strong{font-size:17px}.source-toggle{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.source-toggle label,.duration-size-toggle label{position:relative;display:grid}.source-toggle input,.duration-size-toggle input{position:absolute;opacity:0;pointer-events:none}.source-toggle span,.duration-size-toggle span{display:grid;place-items:center;min-height:48px;padding:8px 12px;border:1px solid var(--glass-border);border-radius:8px;background:rgba(231,231,232,.055);box-shadow:inset 0 1px rgba(255,255,255,.14);color:var(--color-text-soft);font-weight:800}.source-toggle input:checked+span,.duration-size-toggle input:checked+span{border-color:rgba(175,207,42,.72);background:linear-gradient(180deg,rgba(175,207,42,.2),rgba(17,162,207,.08)),rgba(13,18,12,.84);color:var(--color-text);box-shadow:inset 0 1px rgba(255,255,255,.18),0 0 22px rgba(175,207,42,.12)}.source-panel{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}.source-panel[hidden]{display:none}.new-project-grid{display:grid;grid-template-columns:minmax(140px,.32fr) minmax(0,1fr);gap:12px;align-items:end}.suggestion-field{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.duration-size-toggle{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0}.duration-size-toggle legend{grid-column:1/-1;color:var(--color-text-muted);font-size:12px}.duration-size-toggle span{min-height:58px}.duration-size-toggle strong{font-size:22px;line-height:1}.duration-size-toggle small{color:var(--color-text-muted);font-size:11px}.ai-context-box{display:grid;gap:8px;padding:12px;border:1px solid rgba(17,162,207,.28);border-radius:8px;background:linear-gradient(135deg,rgba(17,162,207,.09),rgba(175,207,42,.035)),rgba(0,0,0,.18)}.ai-context-box textarea{min-height:126px;border-color:rgba(17,162,207,.28);background:rgba(0,0,0,.44)}.new-project-footer{padding-top:4px}.new-project-footer span{color:var(--color-text-muted);font-size:12px}@keyframes home-logo-aura{0%,100%{opacity:.56;transform:scale(.98)}50%{opacity:.84;transform:scale(1.03)}}@keyframes home-logo-breathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-1px) scale(1.006)}}@keyframes home-row-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@media(max-width:900px){.project-home{width:min(100vw - 20px,760px);padding-top:26px}.home-brand-stage{min-height:138px}.home-brand-logo{height:78px}.project-section-head{align-items:flex-start;flex-direction:column}.project-toolbar{justify-content:flex-start}.project-table{max-height:none}.project-table-head{display:none}.project-row,.new-project-grid,.source-panel{grid-template-columns:1fr;gap:10px}.project-meta-cell{justify-content:space-between}.project-row-actions{justify-content:flex-start}.project-updated-cell{display:none}}
 """
 
 
@@ -8932,6 +8938,7 @@ def project_home_js(workspace: Path, mock_projects: list[dict[str, object]]) -> 
 const workspacePath = __WORKSPACE_PATH__;
 const mockProjects = __MOCK_PROJECTS__;
 const homeImport = document.querySelector("[data-home-import]");
+const projectLibrary = document.querySelector("[data-project-library]");
 const projectList = document.querySelector("[data-project-list]");
 function escapeHtml(value){
   return String(value || "").replace(/[&<>"']/g, char => {
@@ -8945,9 +8952,10 @@ function escapeHtml(value){
 function escapeAttr(value){ return escapeHtml(value); }
 function projectPayload(form){
   const data = new FormData(form);
+  const sourceMode = String(data.get("source_mode") || form.dataset.sourceMode || "local");
   return {
-    source_path: String(data.get("source_path") || "").trim(),
-    source_url: String(data.get("source_url") || "").trim(),
+    source_path: sourceMode === "local" ? String(data.get("source_path") || "").trim() : "",
+    source_url: sourceMode === "youtube" ? String(data.get("source_url") || "").trim() : "",
     output_path: String(data.get("output_path") || "").trim(),
     preview_count: Number(data.get("preview_count") || 10),
     language: String(data.get("language") || "pt"),
@@ -8974,9 +8982,9 @@ async function postJson(url, payload){
 async function startImport(form){
   const button = form.querySelector("button[type=submit]");
   const payload = projectPayload(form);
-  if (!payload.output_path) {
-    setStatus("Escolha a pasta onde os videos finais serao salvos.");
-    form.querySelector("[name=output_path]")?.focus();
+  if (!payload.source_path && !payload.source_url) {
+    setStatus(form.dataset.sourceMode === "youtube" ? "Cole um link do YouTube." : "Selecione um video local.");
+    form.querySelector(form.dataset.sourceMode === "youtube" ? "[name=source_url]" : "[name=source_path]")?.focus();
     return;
   }
   setResult("");
@@ -9020,12 +9028,25 @@ async function pollImport(jobId, button){
 function bindImportForm(){
   const form = document.querySelector("[data-import-form]");
   if (!form) return;
+  bindSourceMode(form);
   form.addEventListener("submit", event => {
     event.preventDefault();
     startImport(form);
   });
-  form.querySelector("[data-select-folder]")?.addEventListener("click", () => selectPath("/api/select-folder", "[name=output_path]", "Pasta selecionada."));
   form.querySelector("[data-select-video-file]")?.addEventListener("click", () => selectPath("/api/select-video-file", "[name=source_path]", "Video local selecionado."));
+  form.querySelector("[data-context-audio]")?.addEventListener("click", () => setStatus("Transcricao por audio entra na proxima fase."));
+}
+function bindSourceMode(form){
+  const inputs = form.querySelectorAll("[name=source_mode]");
+  const sync = () => {
+    const mode = String(new FormData(form).get("source_mode") || "local");
+    form.dataset.sourceMode = mode;
+    form.querySelectorAll("[data-source-panel]").forEach(panel => {
+      panel.hidden = panel.dataset.sourcePanel !== mode;
+    });
+  };
+  inputs.forEach(input => input.addEventListener("change", sync));
+  sync();
 }
 async function selectPath(url, selector, message){
   setStatus("Abrindo seletor local...");
@@ -9077,9 +9098,14 @@ async function deleteProject(card, deleteFiles){
 }
 document.querySelectorAll("[data-new-project]").forEach(button => {
   button.addEventListener("click", () => {
+    if (projectLibrary) projectLibrary.hidden = true;
     if (homeImport) homeImport.hidden = false;
     document.querySelector("[data-import-form]")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+});
+document.querySelector("[data-show-projects]")?.addEventListener("click", () => {
+  if (homeImport) homeImport.hidden = true;
+  if (projectLibrary) projectLibrary.hidden = false;
 });
 document.querySelectorAll("[data-open-workspace]").forEach(button => {
   button.addEventListener("click", () => postJson("/api/open-folder", { path: workspacePath }).catch(error => setStatus(error.message || "Nao consegui abrir a pasta.")));
