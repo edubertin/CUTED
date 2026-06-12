@@ -249,11 +249,34 @@ class CuttedImportUiTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn("margin:-22px 14px 10px;justify-content:center", source)
-        self.assertIn("width:min(82%,1160px)", source)
+        self.assertIn("margin:-34px 14px 8px;justify-content:center", source)
+        self.assertIn("width:min(66%,930px)", source)
+        self.assertIn("min-height:98px", source)
+        self.assertIn(".cuted-control-surface-slot .cuted-render-zone{justify-content:flex-end;overflow:visible;min-height:74px}", source)
+        self.assertIn(".cuted-control-surface-slot .cuted-tool-group{flex:0 0 316px;min-height:74px}", source)
+        self.assertIn(".cuted-control-surface-slot .cuted-audio-group{flex:0 0 58px;min-width:58px}", source)
         self.assertIn("margin-left:auto", source)
-        self.assertIn("width: min(100%, 1160px)", styles)
+        self.assertIn("width: min(100%, 930px)", styles)
+        self.assertIn("min-height: 112px", styles)
         self.assertIn("justify-content: flex-end", styles)
+
+    def test_control_bar_volume_uses_compact_popover(self) -> None:
+        asset_dir = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar"
+        script = (asset_dir / "control-bar.js").read_text(encoding="utf-8")
+        styles = (asset_dir / "control-bar.css").read_text(encoding="utf-8")
+
+        self.assertIn("volumeMenuOpen: false", script)
+        self.assertIn("data-cuted-volume-popover", script)
+        self.assertIn("data-cuted-control=\"volume-mute\"", script)
+        self.assertIn("<span>INS</span>", script)
+        self.assertIn("state.volumeMenuOpen = !state.volumeMenuOpen", script)
+        self.assertIn('document.addEventListener("click", dismissClick, true)', script)
+        self.assertIn('document.removeEventListener("click", dismissClick, true)', script)
+        self.assertNotIn('kind: "volume"', script)
+        self.assertNotIn("Volume controls", script)
+        self.assertIn(".cuted-volume-popover", styles)
+        self.assertIn("top: calc(100% + 14px)", styles)
+        self.assertIn("flex: 0 0 58px", styles)
 
     def test_cards_include_control_surface_slot(self) -> None:
         html = CUTTED.card_html(
