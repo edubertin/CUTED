@@ -307,4 +307,3 @@ Start with phases 1 and 2:
 
 This gives the app the right front door without touching the editor internals or
 the in-progress Control Bar.
-

@@ -189,4 +189,3 @@ Negative:
 - Delete project asks for explicit confirmation and moves files to Recycle Bin
   when available.
 - Repo samples remain openable with `serve --dir` for QA.
-
