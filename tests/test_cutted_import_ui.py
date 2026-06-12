@@ -202,12 +202,58 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn('label: "CUT DISCARDED"', source)
         self.assertIn("mockBumpers: false", source)
 
+    def test_control_surface_does_not_persist_effect_feedback(self) -> None:
+        source = MODULE_PATH.read_text(encoding="utf-8")
+        script = (Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar" / "control-bar.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertNotIn('kind: "effect", label: `Effect preview: ${effect.label}`', source)
+        self.assertIn("keepLocalStatus", script)
+        self.assertIn("!state.status.persistent && statusClock.id", script)
+        self.assertIn('statusMeter.style.setProperty("--status-progress", "0%")', script)
+        self.assertNotIn("statusProgress", script)
+
     def test_control_surface_ready_cancel_restores_discarded(self) -> None:
         source = MODULE_PATH.read_text(encoding="utf-8")
 
         self.assertIn('if (current.status === "discarded")', source)
         self.assertIn('setCardState(card.dataset.rank, { status: null, platforms: [] })', source)
         self.assertIn("renderFinalStage();", source)
+
+    def test_control_surface_locks_during_mapping_and_ai_apply(self) -> None:
+        source = MODULE_PATH.read_text(encoding="utf-8")
+        asset_dir = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar"
+        script = (asset_dir / "control-bar.js").read_text(encoding="utf-8")
+        styles = (asset_dir / "control-bar.css").read_text(encoding="utf-8")
+
+        self.assertIn("const busy = controlSurfaceBusy(card)", source)
+        self.assertIn("busy,", source)
+        self.assertIn('label: "Projeto sendo mapeado..."', source)
+        self.assertIn('label: "IA ajustando keyframes..."', source)
+        self.assertIn("state.ready || state.discarded || state.busy", script)
+        self.assertIn('classList.toggle("is-busy"', script)
+        self.assertIn(".cuted-control-bar.is-busy .cuted-audio-group", styles)
+
+    def test_control_surface_timeline_click_does_not_toggle_card(self) -> None:
+        source = MODULE_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("const isSummaryTimelineTarget", source)
+        self.assertIn("[data-preview-camera-timeline], .timeline-shell", source)
+        self.assertIn('summary.addEventListener("pointerdown", stopSummaryTimelinePointer)', source)
+        self.assertIn('summary.addEventListener("touchstart", stopSummaryTimelinePointer, { passive: true })', source)
+
+    def test_control_surface_card_layout_is_compact_and_centered(self) -> None:
+        source = MODULE_PATH.read_text(encoding="utf-8")
+        styles = (Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar" / "control-bar.css").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("margin:-22px 14px 10px;justify-content:center", source)
+        self.assertIn("width:min(82%,1160px)", source)
+        self.assertIn("margin-left:auto", source)
+        self.assertIn("width: min(100%, 1160px)", styles)
+        self.assertIn("justify-content: flex-end", styles)
 
     def test_cards_include_control_surface_slot(self) -> None:
         html = CUTTED.card_html(

@@ -8,6 +8,7 @@
     insertMenuOpen: false,
     aspectRatio: "9:16",
     bumpers: { intro: null, outro: null },
+    busy: false,
     muted: false,
     ready: false,
     discarded: false,
@@ -56,10 +57,15 @@
         return () => subscribers.delete(listener);
       },
       update(nextState) {
-        if (Object.prototype.hasOwnProperty.call(nextState || {}, "status")) {
+        const hasIncomingStatus = Object.prototype.hasOwnProperty.call(nextState || {}, "status");
+        const incomingStatus = hasIncomingStatus ? normalizeStatus(nextState.status) : state.status;
+        const keepLocalStatus = hasIncomingStatus && !incomingStatus && state.status && !state.status.persistent && statusClock.id;
+        if (hasIncomingStatus && !keepLocalStatus) {
           window.clearTimeout(statusClock.id);
         }
-        Object.assign(state, normalizeState({ ...state, ...nextState }));
+        const normalizedNext = normalizeState({ ...state, ...nextState });
+        if (keepLocalStatus) normalizedNext.status = state.status;
+        Object.assign(state, normalizedNext);
         reconcileReadyStatus(state);
         syncView(elements, state);
         emitStateChange(container, callbacks, subscribers, state);
@@ -143,6 +149,7 @@
 
     return {
       aiStatus,
+      busy: Boolean(state.busy),
       captionsEnabled: Boolean(state.captionsEnabled),
       effectMenuOpen: Boolean(state.effectMenuOpen),
       effectStyle,
@@ -228,7 +235,7 @@
       state.insertMenuOpen = false;
       sync();
     };
-    const isLocked = () => state.ready || state.discarded;
+    const isLocked = () => state.ready || state.discarded || state.busy;
     const lockReady = () => {
       state.ready = true;
       state.discarded = false;
@@ -414,7 +421,8 @@
   }
 
   function syncView(elements, state) {
-    const locked = state.ready || state.discarded;
+    const locked = state.ready || state.discarded || state.busy;
+    elements.controlBar.classList.toggle("is-busy", state.busy);
     elements.controlBar.classList.toggle("is-ready", state.ready);
     elements.controlBar.classList.toggle("is-discarded", state.discarded);
     elements.controlBar.classList.toggle("is-locked", locked);
@@ -482,6 +490,8 @@
       }, 260);
     } else {
       elements.statusBar.hidden = true;
+      elements.statusLabel.textContent = "";
+      elements.statusMeter.style.setProperty("--status-progress", "0%");
       elements.controlBar.classList.remove("has-status");
       elements.controlBar.classList.remove("is-status-transient");
       elements.toolGroup.classList.remove("is-status-active");
