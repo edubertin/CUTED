@@ -8286,8 +8286,9 @@ def write_project_home(path: Path, workspace: Path) -> None:
 
 
 def project_home_html(workspace: Path, logo_src: str, recent: list[dict[str, object]]) -> str:
-    project_rows = "\n".join(project_home_card_html(project) for project in recent)
-    empty = "" if project_rows else '<div class="project-empty">Nenhum projeto recente nesta maquina.</div>'
+    mock_projects = project_home_mock_projects(workspace)
+    display_projects = recent if recent else mock_projects
+    project_rows = "\n".join(project_home_card_html(project) for project in display_projects)
     return f"""<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -8297,46 +8298,38 @@ def project_home_html(workspace: Path, logo_src: str, recent: list[dict[str, obj
   <style>{css()}{project_home_css()}</style>
 </head>
 <body data-project-home>
-  <header>
-    <div></div>
-    <div class="brand-lockup" aria-label="CUTED">
-      <img class="brand-logo" src="{html.escape(logo_src)}" alt="CUTED">
-      <p>Workspace local</p>
-    </div>
-    <div class="header-actions">
-      <button type="button" data-open-workspace>Workspace</button>
-    </div>
-  </header>
   <main class="project-home">
-    <section class="project-intro" aria-label="Inicio">
-      <div>
-        <span class="project-kicker">CUTED Studio</span>
-        <h1>Novo projeto</h1>
-        <p>Importe um video limpo para criar uma area de edicao nova, sem carregar titulo, mapas ou cortes de trabalhos anteriores.</p>
+    <section class="home-brand-stage" aria-label="CUTED">
+      <div class="home-logo-orbit">
+        <span class="home-logo-spark home-logo-spark-left" aria-hidden="true"></span>
+        <img class="home-brand-logo" src="{html.escape(logo_src)}" alt="CUTED">
+        <span class="home-logo-spark home-logo-spark-right" aria-hidden="true"></span>
       </div>
-      <div class="project-actions">
-        <button type="button" class="project-primary" data-new-project>Novo projeto</button>
-        <button type="button" data-open-workspace>Projetos locais</button>
+    </section>
+    <section class="project-library" aria-label="Projetos recentes">
+      <div class="project-section-head">
+        <strong>Projetos recentes</strong>
+        <div class="project-toolbar" aria-label="Acoes dos projetos">
+          <button type="button" class="project-icon-button project-primary" data-new-project aria-label="Novo projeto" title="Novo projeto">+</button>
+          <button type="button" data-open-workspace title="Projetos locais">Workspace</button>
+          <button type="button" class="project-icon-button" data-refresh-projects aria-label="Atualizar" title="Atualizar">↻</button>
+        </div>
+      </div>
+      <div class="project-table" data-project-list>
+        <div class="project-table-head" aria-hidden="true">
+          <span>Projeto</span>
+          <span>Status</span>
+          <span>Atualizado</span>
+          <span>Acoes</span>
+        </div>
+        {project_rows}
       </div>
     </section>
     <section class="project-import" data-home-import hidden>
       {project_import_form_html()}
     </section>
-    <section class="project-library" aria-label="Projetos recentes">
-      <div class="project-section-head">
-        <div>
-          <strong>Projetos recentes</strong>
-          <p>Volte a um trabalho local ou limpe amostras que nao usa mais.</p>
-        </div>
-        <button type="button" data-refresh-projects>Atualizar</button>
-      </div>
-      <div class="project-list" data-project-list>
-        {project_rows}
-        {empty}
-      </div>
-    </section>
   </main>
-  <script>{project_home_js(workspace)}</script>
+  <script>{project_home_js(workspace, mock_projects)}</script>
 </body>
 </html>"""
 
@@ -8350,25 +8343,81 @@ def project_home_card_html(project: dict[str, object]) -> str:
     clip_count = int(project.get("clip_count") or 0)
     render_count = int(project.get("render_count") or 0)
     size_label = file_size_label(int(project.get("size_bytes") or 0))
+    is_mock = bool(project.get("is_mock"))
+    mock_attr = " data-project-mock=\"true\"" if is_mock else ""
     open_action = f'<a href="{url}">Abrir</a>' if url else '<button type="button" disabled>Abrir</button>'
+    remove_disabled = " disabled" if is_mock else ""
+    delete_disabled = " disabled" if is_mock else ""
+    updated = html.escape(str(project.get("last_opened_at") or "Mock"))
     return f"""
-        <article class="project-card" data-project-id="{project_id}">
-          <div>
+        <article class="project-row" data-project-id="{project_id}"{mock_attr}>
+          <div class="project-name-cell">
             <strong>{title}</strong>
             <p>{source}</p>
             <small>{html.escape(path)}</small>
           </div>
-          <dl>
+          <dl class="project-meta-cell">
             <div><dt>Cortes</dt><dd>{clip_count}</dd></div>
             <div><dt>Renders</dt><dd>{render_count}</dd></div>
             <div><dt>Tamanho</dt><dd>{size_label}</dd></div>
           </dl>
-          <div class="project-card-actions">
+          <time class="project-updated-cell">{updated}</time>
+          <div class="project-row-actions">
             {open_action}
-            <button type="button" data-forget-project>Remover</button>
-            <button type="button" data-delete-project>Apagar</button>
+            <button type="button" data-forget-project{remove_disabled}>Remover</button>
+            <button type="button" data-delete-project{delete_disabled}>Apagar</button>
           </div>
         </article>"""
+
+
+def project_home_mock_projects(workspace: Path) -> list[dict[str, object]]:
+    base = workspace / "_mock"
+    return [
+        {
+            "id": "mock-podcast-cortes",
+            "title": "Podcast cortes virais",
+            "source_label": "Mock visual",
+            "path": str(base / "podcast-cortes"),
+            "clip_count": 12,
+            "render_count": 4,
+            "size_bytes": 328_000_000,
+            "last_opened_at": "Hoje",
+            "is_mock": True,
+        },
+        {
+            "id": "mock-aula-masterclass",
+            "title": "Aula masterclass",
+            "source_label": "Mock visual",
+            "path": str(base / "aula-masterclass"),
+            "clip_count": 8,
+            "render_count": 2,
+            "size_bytes": 184_000_000,
+            "last_opened_at": "Ontem",
+            "is_mock": True,
+        },
+        {
+            "id": "mock-reacts-live",
+            "title": "React live highlights",
+            "source_label": "Mock visual",
+            "path": str(base / "react-live"),
+            "clip_count": 15,
+            "render_count": 6,
+            "size_bytes": 512_000_000,
+            "last_opened_at": "Semana",
+            "is_mock": True,
+        },
+        {
+            "id": "mock-lancamento-produto",
+            "title": "Lancamento produto",
+            "source_label": "Mock visual",
+            "path": str(base / "lancamento-produto"),
+            "clip_count": 5,
+            "render_count": 1,
+            "size_bytes": 96_000_000,
+            "last_opened_at": "Arquivo",
+            "is_mock": True,
+        },
+    ]
 
 
 def project_import_form_html() -> str:
@@ -8874,13 +8923,14 @@ def static_assets_html(assets: dict[str, str], kind: str) -> str:
 
 def project_home_css() -> str:
     return """
-body[data-project-home] header{position:relative}.project-home{max-width:1180px;padding:20px 18px 36px}.project-intro{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px;align-items:end;padding:28px 0 22px;border-bottom:1px solid rgba(231,231,232,.12)}.project-kicker{display:inline-flex;min-height:26px;align-items:center;padding:4px 10px;border:1px solid rgba(17,162,207,.34);border-radius:999px;background:rgba(17,162,207,.1);color:var(--color-text-soft);font-size:12px}.project-intro h1{margin:14px 0 8px;font-size:42px;line-height:1.02;letter-spacing:0}.project-intro p,.project-section-head p,.project-card p{margin:0;color:var(--color-text-muted)}.project-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}.project-primary{border-color:rgba(175,207,42,.52)!important;background:linear-gradient(180deg,rgba(175,207,42,.24),rgba(17,162,207,.08)),rgba(23,32,14,.78)!important;color:var(--color-text)!important}.project-import{margin-top:18px}.project-import[hidden]{display:none}.project-library{display:grid;gap:12px;margin-top:18px}.project-section-head{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:14px 0}.project-section-head strong{font-size:18px}.project-list{display:grid;gap:10px}.project-card{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:16px;align-items:center;padding:14px;border:1px solid var(--glass-border);border-radius:8px;background:var(--glass-bg);box-shadow:inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(18px) saturate(1.25)}.project-card strong{font-size:15px}.project-card small{display:block;margin-top:5px;color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-card dl{display:flex;gap:12px;margin:0}.project-card dl div{display:grid;gap:2px;min-width:64px;text-align:right}.project-card dt{font-size:11px;color:var(--color-text-muted)}.project-card dd{margin:0;color:var(--color-text);font-weight:800}.project-card-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.project-card-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:8px 12px;border:1px solid var(--glass-border);border-radius:999px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.project-card-actions button[data-delete-project]{color:var(--color-danger)}.project-empty{padding:18px;border:1px dashed var(--color-border-strong);border-radius:8px;color:var(--color-text-muted);text-align:center}@media(max-width:860px){.project-intro,.project-card{grid-template-columns:1fr}.project-actions,.project-card-actions{justify-content:flex-start}.project-card dl{justify-content:space-between}.project-card dl div{text-align:left}.project-intro h1{font-size:34px}}
+body[data-project-home]{overflow-x:hidden}body[data-project-home] header{display:none}.project-home{width:min(1180px,calc(100vw - 28px));max-width:none;min-height:100vh;padding:24px 0 42px}.home-brand-stage{display:grid;place-items:center;min-height:210px;padding:12px 0 20px}.home-logo-orbit{position:relative;display:grid;place-items:center;width:min(720px,88vw);isolation:isolate}.home-logo-orbit:before{position:absolute;inset:18% 10%;z-index:-1;border-radius:999px;background:radial-gradient(circle at 22% 50%,rgba(17,162,207,.36),transparent 32%),radial-gradient(circle at 78% 50%,rgba(175,207,42,.32),transparent 32%);filter:blur(28px);content:"";animation:home-logo-aura 4.8s ease-in-out infinite}.home-brand-logo{display:block;width:min(560px,82vw);height:116px;object-fit:contain;filter:drop-shadow(0 0 18px rgba(17,162,207,.24)) drop-shadow(0 0 18px rgba(175,207,42,.14));animation:home-logo-breathe 5.4s ease-in-out infinite}.home-logo-spark{position:absolute;top:50%;width:70px;height:86px;border:1px solid rgba(231,231,232,.3);border-radius:50%;transform:translateY(-50%);opacity:.78;filter:drop-shadow(0 0 12px currentColor)}.home-logo-spark:before,.home-logo-spark:after{position:absolute;left:50%;top:50%;content:"";background:currentColor;transform:translate(-50%,-50%)}.home-logo-spark:before{width:2px;height:84px}.home-logo-spark:after{width:66px;height:2px}.home-logo-spark-left{left:0;color:var(--color-brand-blue);animation:home-spark-left 3.6s ease-in-out infinite}.home-logo-spark-right{right:0;color:var(--color-brand-green);animation:home-spark-right 3.6s ease-in-out infinite}.project-library{display:grid;gap:0;border:1px solid var(--glass-border);border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.018)),rgba(7,7,7,.74);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(22px) saturate(1.22);overflow:hidden}.project-section-head{display:flex;justify-content:space-between;gap:14px;align-items:center;min-height:66px;padding:14px 16px;border-bottom:1px solid rgba(231,231,232,.1)}.project-section-head strong{font-size:18px;letter-spacing:0}.project-toolbar{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.project-toolbar button,.project-row-actions button,.project-row-actions a{min-height:34px;padding:7px 11px}.project-icon-button{display:inline-grid!important;place-items:center;width:38px;min-width:38px;padding:0!important;font-size:18px;font-weight:900}.project-primary{border-color:rgba(175,207,42,.58)!important;background:linear-gradient(180deg,rgba(175,207,42,.26),rgba(17,162,207,.1)),rgba(23,32,14,.78)!important;color:var(--color-text)!important}.project-table{display:grid}.project-table-head,.project-row{display:grid;grid-template-columns:minmax(230px,1fr) minmax(260px,.9fr) 112px minmax(220px,.6fr);gap:14px;align-items:center}.project-table-head{min-height:38px;padding:0 16px;border-bottom:1px solid rgba(231,231,232,.08);color:var(--color-text-muted);font-size:11px;text-transform:uppercase}.project-row{min-height:78px;padding:13px 16px;border-bottom:1px solid rgba(231,231,232,.075);animation:home-row-in .42s ease both}.project-row:last-child{border-bottom:0}.project-row:nth-child(2){animation-delay:.03s}.project-row:nth-child(3){animation-delay:.08s}.project-row:nth-child(4){animation-delay:.13s}.project-row:nth-child(5){animation-delay:.18s}.project-row:hover{background:linear-gradient(90deg,rgba(17,162,207,.085),rgba(175,207,42,.045),transparent)}.project-row[data-project-mock=true]{background:rgba(255,255,255,.018)}.project-name-cell{display:grid;gap:3px;min-width:0}.project-name-cell strong{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-name-cell p{margin:0;color:rgba(175,207,42,.82);font-size:12px}.project-name-cell small{display:block;color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-meta-cell{display:flex;gap:10px;margin:0}.project-meta-cell div{display:grid;gap:2px;min-width:68px}.project-meta-cell dt{color:var(--color-text-muted);font-size:11px}.project-meta-cell dd{margin:0;color:var(--color-text);font-weight:800}.project-updated-cell{color:var(--color-text-muted);font-size:12px}.project-row-actions{display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap}.project-row-actions a{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--glass-border);border-radius:999px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.project-row-actions button[data-delete-project]{color:var(--color-danger)}.project-row-actions button:disabled{opacity:.38;cursor:not-allowed}.project-import{margin-top:14px}.project-import[hidden]{display:none}.project-import .import-panel{animation:home-row-in .28s ease both}@keyframes home-logo-aura{0%,100%{opacity:.68;transform:scale(.96)}50%{opacity:1;transform:scale(1.04)}}@keyframes home-logo-breathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-2px) scale(1.012)}}@keyframes home-spark-left{0%,100%{transform:translateY(-50%) scale(.94);opacity:.54}50%{transform:translateY(-50%) scale(1.06);opacity:.9}}@keyframes home-spark-right{0%,100%{transform:translateY(-50%) scale(1.04);opacity:.86}50%{transform:translateY(-50%) scale(.94);opacity:.58}}@keyframes home-row-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@media(max-width:900px){.project-home{width:min(100vw - 20px,760px);padding-top:16px}.home-brand-stage{min-height:160px}.home-brand-logo{height:86px}.home-logo-spark{display:none}.project-section-head{align-items:flex-start;flex-direction:column}.project-toolbar{justify-content:flex-start}.project-table-head{display:none}.project-row{grid-template-columns:1fr;gap:10px}.project-meta-cell{justify-content:space-between}.project-row-actions{justify-content:flex-start}.project-updated-cell{display:none}}
 """
 
 
-def project_home_js(workspace: Path) -> str:
+def project_home_js(workspace: Path, mock_projects: list[dict[str, object]]) -> str:
     script = r"""
 const workspacePath = __WORKSPACE_PATH__;
+const mockProjects = __MOCK_PROJECTS__;
 const homeImport = document.querySelector("[data-home-import]");
 const projectList = document.querySelector("[data-project-list]");
 function escapeHtml(value){
@@ -8989,11 +9039,15 @@ async function selectPath(url, selector, message){
   }
 }
 function projectCard(project){
+  const isMock = Boolean(project.is_mock);
+  const mockAttr = isMock ? ' data-project-mock="true"' : "";
+  const disabled = isMock ? " disabled" : "";
   const open = project.url ? `<a href="${escapeAttr(project.url)}">Abrir</a>` : `<button type="button" disabled>Abrir</button>`;
-  return `<article class="project-card" data-project-id="${escapeAttr(project.id)}">
-    <div><strong>${escapeHtml(project.title || "Projeto sem titulo")}</strong><p>${escapeHtml(project.source_label || "")}</p><small>${escapeHtml(project.path || "")}</small></div>
-    <dl><div><dt>Cortes</dt><dd>${Number(project.clip_count || 0)}</dd></div><div><dt>Renders</dt><dd>${Number(project.render_count || 0)}</dd></div><div><dt>Tamanho</dt><dd>${escapeHtml(sizeLabel(project.size_bytes || 0))}</dd></div></dl>
-    <div class="project-card-actions">${open}<button type="button" data-forget-project>Remover</button><button type="button" data-delete-project>Apagar</button></div>
+  return `<article class="project-row" data-project-id="${escapeAttr(project.id)}"${mockAttr}>
+    <div class="project-name-cell"><strong>${escapeHtml(project.title || "Projeto sem titulo")}</strong><p>${escapeHtml(project.source_label || "")}</p><small>${escapeHtml(project.path || "")}</small></div>
+    <dl class="project-meta-cell"><div><dt>Cortes</dt><dd>${Number(project.clip_count || 0)}</dd></div><div><dt>Renders</dt><dd>${Number(project.render_count || 0)}</dd></div><div><dt>Tamanho</dt><dd>${escapeHtml(sizeLabel(project.size_bytes || 0))}</dd></div></dl>
+    <time class="project-updated-cell">${escapeHtml(project.last_opened_at || "Mock")}</time>
+    <div class="project-row-actions">${open}<button type="button" data-forget-project${disabled}>Remover</button><button type="button" data-delete-project${disabled}>Apagar</button></div>
   </article>`;
 }
 function sizeLabel(bytes){
@@ -9009,10 +9063,13 @@ async function refreshProjects(){
   const response = await fetch("/api/projects");
   const data = await response.json();
   if (!response.ok || !data.ok) throw new Error(data.error || "Nao consegui carregar projetos.");
-  projectList.innerHTML = data.projects.length ? data.projects.map(projectCard).join("") : '<div class="project-empty">Nenhum projeto recente nesta maquina.</div>';
+  const realProjects = Array.isArray(data.projects) ? data.projects : [];
+  const projects = realProjects.length ? realProjects : mockProjects;
+  projectList.innerHTML = `<div class="project-table-head" aria-hidden="true"><span>Projeto</span><span>Status</span><span>Atualizado</span><span>Acoes</span></div>${projects.map(projectCard).join("")}`;
 }
 async function deleteProject(card, deleteFiles){
   const projectId = card?.dataset.projectId || "";
+  if (card?.dataset.projectMock === "true") return;
   const message = deleteFiles ? "Apagar os arquivos locais deste projeto?" : "Remover este projeto da lista recente?";
   if (!projectId || !window.confirm(message)) return;
   await postJson(`/api/projects/${encodeURIComponent(projectId)}/delete`, { delete_files: deleteFiles });
@@ -9035,7 +9092,7 @@ projectList?.addEventListener("click", event => {
 });
 bindImportForm();
 """
-    return script.replace("__WORKSPACE_PATH__", json.dumps(str(workspace)))
+    return script.replace("__WORKSPACE_PATH__", json.dumps(str(workspace))).replace("__MOCK_PROJECTS__", json.dumps(mock_projects, ensure_ascii=False))
 
 
 def css() -> str:
