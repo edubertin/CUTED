@@ -28,6 +28,13 @@ from types import SimpleNamespace
 
 
 BRAND_LOGO_FILE = "cuted-logo-transparent.png"
+LIVE_TIMELINE_ASSET_FILES = ("live-timeline.css", "live-timeline.js")
+CONTROL_BAR_ASSET_FILES = ("control-bar.css", "control-bar.js")
+PROJECT_CATALOG_VERSION = 1
+PROJECT_CATALOG_LIMIT = 12
+PROJECT_CATALOG_SIZE_FILE_LIMIT = 3000
+PROJECTS_DIR_NAME = "projects"
+PROJECT_RENDERS_DIR_NAME = "renders"
 GROUP_FIT_LOGO_TOP_RATIO = 0.11
 GROUP_FIT_LOGO_WIDTH_RATIO = 0.38
 GROUP_FIT_LOGO_OPACITY = 0.9
@@ -298,9 +305,12 @@ class ImportJob:
     created_at: float
     updated_at: float
     output_dir: Path
+    base_dir: Path
     output_url: str
     process: subprocess.Popen[str] | None
     message: str = ""
+    source_kind: str = "local"
+    ai_provider: str = "local"
     return_code: int | None = None
     stdout: str = ""
     stderr: str = ""
@@ -635,7 +645,7 @@ def bootstrap_workspace_gallery(workspace: Path) -> None:
     index_path = workspace / "index.html"
     if index_path.exists() and not workspace_index_is_empty_shell(index_path):
         return
-    write_html(index_path, [], "CUTED")
+    write_project_home(index_path, workspace)
 
 
 def workspace_index_is_empty_shell(index_path: Path) -> bool:
@@ -643,7 +653,191 @@ def workspace_index_is_empty_shell(index_path: Path) -> bool:
         html = index_path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return False
-    return "data-import-form" in html and '"moments": []' in html
+    return ("data-import-form" in html and '"moments": []' in html) or "data-project-home" in html
+
+
+def project_catalog_path() -> Path:
+    return launch_data_dir() / "projects.json"
+
+
+def empty_project_catalog() -> dict[str, object]:
+    return {"version": PROJECT_CATALOG_VERSION, "projects": []}
+
+
+def read_project_catalog(path: Path | None = None) -> dict[str, object]:
+    catalog_path = path or project_catalog_path()
+    if not catalog_path.exists():
+        return empty_project_catalog()
+    try:
+        data = json.loads(catalog_path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return empty_project_catalog()
+    if not isinstance(data, dict):
+        return empty_project_catalog()
+    projects = data.get("projects")
+    if not isinstance(projects, list):
+        projects = []
+    return {"version": PROJECT_CATALOG_VERSION, "projects": [item for item in projects if isinstance(item, dict)]}
+
+
+def write_project_catalog(catalog: dict[str, object], path: Path | None = None) -> None:
+    catalog_path = path or project_catalog_path()
+    catalog_path.parent.mkdir(parents=True, exist_ok=True)
+    rows = catalog.get("projects") if isinstance(catalog, dict) else []
+    projects = rows if isinstance(rows, list) else []
+    payload = {"version": PROJECT_CATALOG_VERSION, "projects": projects[:200]}
+    temp_path = catalog_path.with_suffix(".tmp")
+    temp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp_path.replace(catalog_path)
+
+
+def project_catalog_recent(workspace: Path, limit: int = PROJECT_CATALOG_LIMIT) -> list[dict[str, object]]:
+    projects = read_project_catalog().get("projects")
+    rows = [project_home_entry(row, workspace) for row in projects if isinstance(row, dict)]
+    rows = [row for row in rows if row]
+    rows.sort(key=lambda row: str(row.get("last_opened_at") or row.get("updated_at") or ""), reverse=True)
+    return rows[:limit]
+
+
+def project_home_entry(row: dict[str, object], workspace: Path) -> dict[str, object]:
+    project_id = clean_project_id(row.get("id"))
+    raw_path = str(row.get("path") or "").strip()
+    if not project_id or not raw_path:
+        return {}
+    project_path = Path(raw_path).expanduser()
+    url = project_url_for_workspace(project_path, workspace)
+    return {
+        "id": project_id,
+        "title": clean_optional_text(row.get("title"), 100) or project_path.name,
+        "path": str(project_path),
+        "url": url,
+        "clip_count": clamp_int(row.get("clip_count"), 0, 9999, 0),
+        "render_count": clamp_int(row.get("render_count"), 0, 9999, 0),
+        "size_bytes": clamp_int(row.get("size_bytes"), 0, 10_000_000_000, 0),
+        "last_opened_at": clean_optional_text(row.get("last_opened_at"), 40),
+        "source_label": clean_optional_text(row.get("source_label"), 140),
+    }
+
+
+def clean_project_id(value: object) -> str:
+    return re.sub(r"[^a-zA-Z0-9_-]+", "-", str(value or "")).strip("-")[:80]
+
+
+def upsert_project_catalog_entry(entry: dict[str, object], path: Path | None = None) -> None:
+    project_id = clean_project_id(entry.get("id"))
+    project_path = str(entry.get("path") or "")
+    if not project_id or not project_path:
+        return
+    catalog = read_project_catalog(path)
+    existing = catalog.get("projects")
+    projects = existing if isinstance(existing, list) else []
+    filtered = [
+        row for row in projects
+        if isinstance(row, dict) and clean_project_id(row.get("id")) != project_id and str(row.get("path") or "") != project_path
+    ]
+    filtered.insert(0, {**entry, "id": project_id, "path": project_path})
+    catalog["projects"] = filtered
+    write_project_catalog(catalog, path)
+
+
+def delete_project_from_catalog(project_id: str, workspace: Path, delete_files: bool) -> dict[str, object]:
+    catalog = read_project_catalog()
+    projects = catalog.get("projects")
+    rows = projects if isinstance(projects, list) else []
+    target = next((row for row in rows if isinstance(row, dict) and clean_project_id(row.get("id")) == project_id), None)
+    if target is None:
+        raise ValueError("Projeto nao encontrado.")
+    catalog["projects"] = [row for row in rows if not (isinstance(row, dict) and clean_project_id(row.get("id")) == project_id)]
+    write_project_catalog(catalog)
+    deleted = False
+    if delete_files:
+        project_dir = safe_project_delete_dir(Path(str(target.get("path") or "")), workspace)
+        shutil.rmtree(project_dir)
+        deleted = True
+    return {"ok": True, "deleted_files": deleted, "projects": project_catalog_recent(workspace)}
+
+
+def safe_project_delete_dir(project_dir: Path, workspace: Path) -> Path:
+    resolved = project_dir.expanduser().resolve()
+    root = workspace.resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as error:
+        raise ValueError("So posso apagar projetos dentro do workspace atual.") from error
+    if resolved == root or not (resolved / "index.html").exists():
+        raise ValueError("Diretorio de projeto invalido para apagar.")
+    return resolved
+
+
+def project_entry_from_gallery(gallery_dir: Path, workspace: Path) -> dict[str, object]:
+    metadata = read_import_metadata(gallery_dir)
+    source_label = project_source_label(metadata, gallery_dir)
+    return {
+        "id": project_id_for_path(gallery_dir),
+        "title": source_label,
+        "path": str(gallery_dir.resolve()),
+        "source_label": source_label,
+        "clip_count": len(read_gallery_moments(gallery_dir)),
+        "render_count": len(recovered_captioned_files(gallery_dir)),
+        "size_bytes": directory_size(gallery_dir),
+        "updated_at": iso_timestamp(),
+        "last_opened_at": iso_timestamp(),
+        "workspace": str(workspace.resolve()),
+    }
+
+
+def project_source_label(metadata: dict[str, object], gallery_dir: Path) -> str:
+    source_path = str(metadata.get("source_path") or "").strip()
+    source_url = str(metadata.get("source_url") or "").strip()
+    if source_path:
+        return Path(source_path).name or gallery_dir.name
+    if source_url:
+        parsed = urllib.parse.urlparse(source_url)
+        return parsed.netloc or source_url[:80]
+    return gallery_dir.name
+
+
+def read_gallery_moments(gallery_dir: Path) -> list[object]:
+    path = gallery_dir / "moments.json"
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    moments = data.get("moments") if isinstance(data, dict) else data
+    return moments if isinstance(moments, list) else []
+
+
+def project_id_for_path(path: Path) -> str:
+    return f"{safe_slug(path.name)}-{hashlib.sha1(str(path.resolve()).encode('utf-8')).hexdigest()[:8]}"
+
+
+def project_url_for_workspace(project_path: Path, workspace: Path) -> str:
+    try:
+        rel = project_path.resolve().relative_to(workspace.resolve())
+    except (OSError, ValueError):
+        return ""
+    return f"/{urllib.parse.quote(rel.as_posix(), safe='/')}/index.html"
+
+
+def directory_size(path: Path) -> int:
+    total = 0
+    count = 0
+    for item in path.rglob("*"):
+        if count >= PROJECT_CATALOG_SIZE_FILE_LIMIT:
+            break
+        if item.is_file():
+            count += 1
+            try:
+                total += item.stat().st_size
+            except OSError:
+                continue
+    return total
+
+
+def iso_timestamp() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S%z")
 
 
 def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler]:
@@ -674,6 +868,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if path == "/api/open-folder":
                 self.handle_open_folder()
                 return
+            if re.fullmatch(r"/api/projects/[^/]+/delete", path):
+                self.handle_project_delete(base_dir, path)
+                return
             if path == "/api/settings/openai":
                 self.handle_openai_settings_save()
                 return
@@ -689,6 +886,12 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
 
         def do_GET(self) -> None:
             path = urllib.parse.urlparse(self.path).path
+            if path == "/api/finalize-results":
+                self.handle_finalize_results(base_dir)
+                return
+            if path == "/api/projects":
+                self.handle_projects(base_dir)
+                return
             if path == "/api/camera/status":
                 self.handle_camera_status(base_dir)
                 return
@@ -749,6 +952,13 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             except Exception as error:
                 send_json_response(self, 500, {"ok": False, "error": str(error)})
 
+        def handle_finalize_results(self, request_base_dir: Path) -> None:
+            try:
+                result = finalize_results_from_request(self, request_base_dir)
+                send_json_response(self, 200, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
+
         def handle_import_job(self, request_base_dir: Path) -> None:
             try:
                 result = start_import_job(self, request_base_dir)
@@ -768,6 +978,18 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             job_id = path.split("/")[-2]
             result = cancel_import_job(job_id)
             send_json_response(self, 200 if result.get("ok") else 404, result)
+
+        def handle_projects(self, request_base_dir: Path) -> None:
+            send_json_response(self, 200, {"ok": True, "projects": project_catalog_recent(request_base_dir)})
+
+        def handle_project_delete(self, request_base_dir: Path, path: str) -> None:
+            try:
+                project_id = urllib.parse.unquote(path.split("/")[-2])
+                payload = read_json_body(self)
+                result = delete_project_from_catalog(project_id, request_base_dir, bool(payload.get("delete_files")))
+                send_json_response(self, 200, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
 
         def handle_camera_analyze(self, request_base_dir: Path) -> None:
             try:
@@ -879,6 +1101,91 @@ def finalize_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir:
         manifest["export_dir"] = str(export_dir)
     (out_dir / "captioned-clips.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"ok": True, "count": len(captioned), "files": finalized_file_urls(captioned, gallery_dir), "export_dir": str(export_dir) if export_dir else ""}
+
+
+def finalize_results_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
+    parsed = urllib.parse.urlparse(handler.path)
+    query = urllib.parse.parse_qs(parsed.query)
+    gallery_dir = resolve_request_gallery_dir(base_dir, {"gallery_path": query.get("gallery_path", [""])[0]})
+    return finalized_results_from_gallery(gallery_dir)
+
+
+def finalized_results_from_gallery(gallery_dir: Path) -> dict[str, object]:
+    manifest_path = gallery_dir / "captioned-clips" / "captioned-clips.json"
+    if manifest_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError):
+            manifest = {}
+        rows = manifest.get("captioned") if isinstance(manifest, dict) else None
+        if isinstance(rows, list):
+            captioned = [row for row in rows if isinstance(row, dict)]
+            export_dir = str(manifest.get("export_dir") or "") if isinstance(manifest, dict) else ""
+            return {
+                "ok": True,
+                "ready": True,
+                "partial": False,
+                "count": len(captioned),
+                "files": finalized_file_urls(captioned, gallery_dir),
+                "export_dir": export_dir,
+            }
+    recovered = recovered_captioned_files(gallery_dir)
+    return {
+        "ok": True,
+        "ready": False,
+        "partial": bool(recovered),
+        "count": len(recovered),
+        "files": finalized_file_urls(recovered, gallery_dir) if recovered else [],
+        "export_dir": "",
+    }
+
+
+def recovered_captioned_files(gallery_dir: Path) -> list[dict[str, object]]:
+    out_dir = gallery_dir / "captioned-clips"
+    if not out_dir.exists():
+        return []
+    queue_rows = caption_queue_rows_by_output(gallery_dir)
+    recovered: list[dict[str, object]] = []
+    for file_path in sorted(out_dir.glob("clip-*-*-captioned.mp4")):
+        if not file_path.is_file() or file_path.stat().st_size <= 0:
+            continue
+        match = re.fullmatch(r"clip-(\d+)-([a-z0-9_-]+)-captioned\.mp4", file_path.name)
+        if not match:
+            continue
+        rank = int(match.group(1))
+        platform = match.group(2)
+        row = dict(queue_rows.get((rank, platform)) or queue_rows.get((rank, representative_platform(platform))) or {})
+        preset = PLATFORM_PRESETS.get(platform, PLATFORM_PRESETS["tiktok"])
+        row.update({
+            "rank": rank,
+            "platform": platform,
+            "label": row.get("platform_label") or preset.label,
+            "width": row.get("width") or preset.width,
+            "height": row.get("height") or preset.height,
+            "file": str(file_path),
+        })
+        recovered.append(row)
+    return recovered
+
+
+def caption_queue_rows_by_output(gallery_dir: Path) -> dict[tuple[int, str], dict[str, object]]:
+    path = gallery_dir / "caption-queue.json"
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    rows: dict[tuple[int, str], dict[str, object]] = {}
+    for row in caption_rows_from_data(data):
+        try:
+            rank = int(row.get("rank") or 0)
+        except (TypeError, ValueError):
+            continue
+        platform = representative_platform(str(row.get("platform") or "tiktok"))
+        if rank > 0:
+            rows[(rank, platform)] = row
+    return rows
 
 
 def analyze_camera_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
@@ -4883,6 +5190,9 @@ def export_captioned_rows(rows: list[dict[str, object]], gallery_dir: Path) -> t
 
 def render_export_dir(gallery_dir: Path) -> Path | None:
     metadata = read_import_metadata(gallery_dir)
+    render_raw = str(metadata.get("render_output_path") or "").strip()
+    if render_raw:
+        return Path(render_raw).expanduser()
     raw = str(metadata.get("output_path") or "").strip()
     if not raw and metadata.get("source_url"):
         legacy_path = Path(str(metadata.get("source_path") or "")).expanduser()
@@ -4925,8 +5235,6 @@ def import_request_metadata(payload: dict[str, object]) -> dict[str, object]:
     if not source_url and not source_path:
         raise ValueError("Informe um link ou caminho local para importar.")
     output_path = clean_output_path(payload.get("output_path"))
-    if not output_path:
-        raise ValueError("Escolha a pasta onde os videos finais serao salvos.")
     ai_provider = configured_ai_provider()
     if ai_provider == "openai" and not openai_api_key():
         raise ValueError("Adicione sua chave OpenAI nas configuracoes (engrenagem) antes de importar com IA.")
@@ -4934,7 +5242,7 @@ def import_request_metadata(payload: dict[str, object]) -> dict[str, object]:
         "source_url": source_url,
         "source_path": source_path,
         "output_path": output_path,
-        "preview_count": clamp_int(payload.get("preview_count"), 1, 20, 10),
+        "preview_count": clamp_int(payload.get("preview_count"), 1, 10, 10),
         "language": clean_optional_text(payload.get("language"), 24) or "pt",
         "preset": clean_preset(payload.get("preset")),
         "duration_profile": clean_duration_profile(payload.get("duration_profile")),
@@ -4952,12 +5260,27 @@ def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path
     source_path = str(metadata["source_path"])
     out_dir = next_import_output_dir(base_dir, source_url or source_path)
     out_dir.mkdir(parents=True, exist_ok=True)
+    metadata["project_dir"] = str(out_dir)
+    metadata["render_output_path"] = str(project_render_output_dir(out_dir))
     (out_dir / "import-request.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
     command = import_command(out_dir, source_url, source_path, metadata)
     job_id = uuid.uuid4().hex[:12]
     output_url = import_output_url(base_dir, out_dir)
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
-    job = ImportJob(job_id, "running", time.time(), time.time(), out_dir, output_url, process, "Importacao iniciada.")
+    source_kind = "youtube" if source_url else "local"
+    job = ImportJob(
+        job_id,
+        "running",
+        time.time(),
+        time.time(),
+        out_dir,
+        base_dir,
+        output_url,
+        process,
+        "Importacao iniciada.",
+        source_kind,
+        str(metadata["ai_provider"]),
+    )
     with IMPORT_JOBS_LOCK:
         IMPORT_JOBS[job_id] = job
     thread = threading.Thread(target=wait_for_import_job, args=(job_id,), daemon=True)
@@ -5020,6 +5343,8 @@ def wait_for_import_job(job_id: str) -> None:
         current.stderr = import_job_error_message(stderr) if status == "failed" else stderr[-6000:]
         current.message = message
         current.process = None
+        if status == "ready":
+            upsert_project_catalog_entry(project_entry_from_gallery(current.output_dir, current.base_dir))
 
 
 def cancel_import_job(job_id: str) -> dict[str, object]:
@@ -5042,10 +5367,12 @@ def import_job_snapshot(job_id: str) -> dict[str, object] | None:
 
 
 def import_job_to_dict(job: ImportJob) -> dict[str, object]:
+    progress = import_job_progress(job)
     return {
         "id": job.id,
         "status": job.status,
-        "message": job.message,
+        "message": progress["message"],
+        "progress": progress,
         "created_at": job.created_at,
         "updated_at": job.updated_at,
         "output_url": job.output_url,
@@ -5053,6 +5380,34 @@ def import_job_to_dict(job: ImportJob) -> dict[str, object]:
         "return_code": job.return_code,
         "stderr": job.stderr,
     }
+
+
+def import_job_progress(job: ImportJob) -> dict[str, object]:
+    if job.status == "ready":
+        return {"percent": 100, "label": "Pronto", "message": "Projeto importado. Abrindo editor..."}
+    if job.status == "failed":
+        return {"percent": 100, "label": "Falha", "message": job.message or "Falha ao importar projeto."}
+    if job.status == "cancelled":
+        return {"percent": 100, "label": "Cancelado", "message": job.message or "Importacao cancelada."}
+    elapsed = max(0.0, time.time() - job.created_at)
+    stages = import_job_running_stages(job.source_kind, job.ai_provider)
+    index = min(int(elapsed // 7), len(stages) - 1)
+    percent = min(92, int(8 + elapsed * 4))
+    label, message = stages[index]
+    return {"percent": percent, "label": label, "message": message}
+
+
+def import_job_running_stages(source_kind: str, ai_provider: str) -> list[tuple[str, str]]:
+    media_message = "Baixando video..." if source_kind == "youtube" else "Lendo video local..."
+    ai_message = "Consultando IA..." if ai_provider == "openai" else "Analisando cortes..."
+    return [
+        ("Preparando", "Preparando projeto..."),
+        ("Midia", media_message),
+        ("Audio", "Transcrevendo audio..."),
+        ("Analise", ai_message),
+        ("Sugestoes", "Gerando sugestoes de cortes..."),
+        ("Editor", "Montando area de edicao..."),
+    ]
 
 
 def import_job_error_message(stderr: str) -> str:
@@ -5064,7 +5419,7 @@ def import_job_error_message(stderr: str) -> str:
 
 
 def next_import_output_dir(base_dir: Path, source: str) -> Path:
-    imports_dir = base_dir / "_imports"
+    imports_dir = base_dir / PROJECTS_DIR_NAME
     slug = safe_slug(Path(urllib.parse.urlparse(source).path).stem or source)
     stamp = time.strftime("%Y%m%d-%H%M%S")
     candidate = imports_dir / f"{stamp}-{slug}"
@@ -5073,6 +5428,10 @@ def next_import_output_dir(base_dir: Path, source: str) -> Path:
         candidate = imports_dir / f"{stamp}-{slug}-{index}"
         index += 1
     return candidate
+
+
+def project_render_output_dir(project_dir: Path) -> Path:
+    return project_dir / PROJECT_RENDERS_DIR_NAME
 
 
 def import_output_url(base_dir: Path, out_dir: Path) -> str:
@@ -7969,7 +8328,285 @@ def write_html(path: Path, moments: list[Moment], source_label: str) -> None:
     cards = "\n".join(card_html(moment) for moment in moments)
     data = json.dumps({"moments": [moment_to_dict(item) for item in moments]}, ensure_ascii=False)
     logo_src = write_brand_logo_asset(path.parent)
-    path.write_text(page_html(source_label, cards, data, logo_src), encoding="utf-8")
+    live_timeline_assets = write_live_timeline_assets(path.parent)
+    control_bar_assets = write_control_bar_assets(path.parent)
+    path.write_text(page_html(source_label, cards, data, logo_src, live_timeline_assets, control_bar_assets), encoding="utf-8")
+
+
+def write_project_home(path: Path, workspace: Path) -> None:
+    logo_src = write_brand_logo_asset(path.parent)
+    recent = project_catalog_recent(workspace)
+    path.write_text(project_home_html(workspace, logo_src, recent), encoding="utf-8")
+
+
+def project_home_html(workspace: Path, logo_src: str, recent: list[dict[str, object]]) -> str:
+    mock_projects = project_home_mock_projects(workspace)
+    display_projects = recent if recent else mock_projects
+    project_rows = "\n".join(project_home_card_html(project) for project in display_projects)
+    return f"""<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CUTED</title>
+  <style>{css()}{project_home_css()}{project_home_compact_import_css()}</style>
+</head>
+<body data-project-home>
+  <main class="project-home">
+    <button id="open-settings" class="home-settings-button icon-button" type="button" aria-label="Configuracoes OpenAI" title="Configuracoes OpenAI">{gear_icon_svg()}</button>
+    <section class="home-brand-stage" aria-label="CUTED">
+      <div class="home-logo-orbit">
+        <img class="home-brand-logo" src="{html.escape(logo_src)}" alt="CUTED">
+      </div>
+    </section>
+    <section class="project-library" data-project-library aria-label="Projetos recentes">
+      <div class="project-section-head">
+        <strong>Projetos recentes</strong>
+        <div class="project-toolbar" aria-label="Acoes dos projetos">
+          <button type="button" class="project-icon-button project-primary" data-new-project aria-label="Novo projeto" title="Novo projeto">+</button>
+          <button type="button" class="project-icon-button" data-refresh-projects aria-label="Atualizar" title="Atualizar">↻</button>
+          <button type="button" data-open-workspace title="Projetos locais">Workspace</button>
+        </div>
+      </div>
+      <div class="project-table" data-project-list>
+        <div class="project-table-head" aria-hidden="true">
+          <span>Projeto</span>
+          <span>Status</span>
+          <span>Atualizado</span>
+          <span>Acoes</span>
+        </div>
+        {project_rows}
+      </div>
+    </section>
+    <section class="project-import" data-home-import hidden>
+      {project_import_form_html()}
+    </section>
+  </main>
+  {project_home_import_loading_html(logo_src)}
+  {settings_modal_html()}
+  <script>{project_home_js(workspace, mock_projects)}</script>
+</body>
+</html>"""
+
+
+def project_home_card_html(project: dict[str, object]) -> str:
+    title = html.escape(str(project.get("title") or "Projeto sem titulo"))
+    source = html.escape(str(project.get("source_label") or ""))
+    url = html.escape(str(project.get("url") or ""))
+    project_id = html.escape(str(project.get("id") or ""))
+    path = html.escape(str(project.get("path") or ""))
+    clip_count = int(project.get("clip_count") or 0)
+    render_count = int(project.get("render_count") or 0)
+    size_label = file_size_label(int(project.get("size_bytes") or 0))
+    is_mock = bool(project.get("is_mock"))
+    mock_attr = " data-project-mock=\"true\"" if is_mock else ""
+    open_action = f'<a href="{url}">Abrir</a>' if url else '<button type="button" disabled>Abrir</button>'
+    remove_disabled = " disabled" if is_mock else ""
+    delete_disabled = " disabled" if is_mock else ""
+    updated = html.escape(str(project.get("last_opened_at") or "Mock"))
+    return f"""
+        <article class="project-row" data-project-id="{project_id}"{mock_attr}>
+          <div class="project-name-cell">
+            <strong>{title}</strong>
+            <p>{source}</p>
+            <small>{html.escape(path)}</small>
+          </div>
+          <dl class="project-meta-cell">
+            <div><dt>Cortes</dt><dd>{clip_count}</dd></div>
+            <div><dt>Renders</dt><dd>{render_count}</dd></div>
+            <div><dt>Tamanho</dt><dd>{size_label}</dd></div>
+          </dl>
+          <time class="project-updated-cell">{updated}</time>
+          <div class="project-row-actions">
+            {open_action}
+            <button type="button" data-forget-project{remove_disabled}>Remover</button>
+            <button type="button" data-delete-project{delete_disabled}>Apagar</button>
+          </div>
+        </article>"""
+
+
+def project_home_mock_projects(workspace: Path) -> list[dict[str, object]]:
+    base = workspace / "_mock"
+    return [
+        {
+            "id": "mock-podcast-cortes",
+            "title": "Podcast cortes virais",
+            "source_label": "Mock visual",
+            "path": str(base / "podcast-cortes"),
+            "clip_count": 12,
+            "render_count": 4,
+            "size_bytes": 328_000_000,
+            "last_opened_at": "Hoje",
+            "is_mock": True,
+        },
+        {
+            "id": "mock-aula-masterclass",
+            "title": "Aula masterclass",
+            "source_label": "Mock visual",
+            "path": str(base / "aula-masterclass"),
+            "clip_count": 8,
+            "render_count": 2,
+            "size_bytes": 184_000_000,
+            "last_opened_at": "Ontem",
+            "is_mock": True,
+        },
+        {
+            "id": "mock-reacts-live",
+            "title": "React live highlights",
+            "source_label": "Mock visual",
+            "path": str(base / "react-live"),
+            "clip_count": 15,
+            "render_count": 6,
+            "size_bytes": 512_000_000,
+            "last_opened_at": "Semana",
+            "is_mock": True,
+        },
+        {
+            "id": "mock-lancamento-produto",
+            "title": "Lancamento produto",
+            "source_label": "Mock visual",
+            "path": str(base / "lancamento-produto"),
+            "clip_count": 5,
+            "render_count": 1,
+            "size_bytes": 96_000_000,
+            "last_opened_at": "Arquivo",
+            "is_mock": True,
+        },
+    ]
+
+
+def project_import_form_html() -> str:
+    return f"""
+      <form class="import-panel new-project-panel" data-import-form data-source-mode="local">
+        <div class="new-project-head">
+          <strong>Novo projeto</strong>
+          <button type="button" data-show-projects>Recentes</button>
+        </div>
+        <div class="import-key-banner" data-import-key-banner hidden>
+          <span>Adicione sua chave OpenAI nas configuracoes antes de importar com IA.</span>
+          <button type="button" data-import-key-open>Configurar</button>
+        </div>
+        <div class="new-project-config-grid">
+          <section class="new-project-config-block source-config-block" aria-label="Midia de origem">
+            <div class="new-project-block-title"><strong>Midia</strong><span>Arquivo ou link</span></div>
+            <div class="source-toggle icon-source-toggle" role="group" aria-label="Origem do projeto">
+              <label title="Video local"><input name="source_mode" type="radio" value="local" aria-label="Video local" checked><span>{project_home_icon_svg("local-video")}<strong>Local</strong></span></label>
+              <label title="YouTube"><input name="source_mode" type="radio" value="youtube" aria-label="YouTube"><span>{project_home_icon_svg("youtube")}<strong>YouTube</strong></span></label>
+            </div>
+            <div class="source-panel" data-source-panel="local">
+              <input name="source_path" type="text" value="" placeholder="Nenhum video selecionado" autocomplete="off" readonly>
+              <button class="icon-action-button" type="button" data-select-video-file aria-label="Selecionar video" title="Selecionar video">{project_home_icon_svg("folder-video")}</button>
+            </div>
+            <div class="source-panel" data-source-panel="youtube" hidden>
+              <input name="source_url" type="url" placeholder="Cole o link do YouTube" autocomplete="off">
+            </div>
+          </section>
+          <section class="new-project-config-block tuning-config-block" aria-label="Ajustes do projeto">
+            <div class="new-project-block-title"><strong>Cortes</strong><span>Sugestoes e duracao</span></div>
+            <div class="cuts-control-grid">
+              <label class="cut-count-field" title="Quantidade de cortes">
+                <span class="tuning-copy">Quantidade</span>
+                <select name="preview_count" aria-label="Quantidade de cortes">
+                  {suggestion_count_options()}
+                </select>
+              </label>
+              <fieldset class="duration-profile duration-size-toggle duration-tile-grid" aria-label="Duracao dos cortes">
+                <legend class="sr-only">Duracao dos cortes</legend>
+                <label class="duration-option-short" title="Curto: 20 a 45 segundos"><input name="duration_profile" type="radio" value="short" aria-label="Curto"><span><strong>S</strong><small>20-45s</small></span></label>
+                <label class="duration-option-medium" title="Medio: 30 a 70 segundos"><input name="duration_profile" type="radio" value="medium" aria-label="Medio" checked><span><strong>M</strong><small>30-70s</small></span></label>
+                <label class="duration-option-long" title="Longo: 60 a 120 segundos"><input name="duration_profile" type="radio" value="long" aria-label="Longo"><span><strong>L</strong><small>60-120s</small></span></label>
+              </fieldset>
+            </div>
+          </section>
+        </div>
+        <input name="language" type="hidden" value="pt">
+        <input name="preset" type="hidden" value="tiktok">
+        <section class="ai-context-box" aria-label="Contexto para IA">
+          <div class="ai-context-head">
+            <strong>Contexto IA</strong>
+            <button class="icon-action-button context-audio-button" type="button" data-context-audio aria-label="Transcrever por audio" title="Transcrever por audio">{project_home_icon_svg("mic")}</button>
+          </div>
+          <textarea name="context_prompt" rows="5" placeholder="Direcao, publico, ganchos e cortes que a IA deve priorizar."></textarea>
+        </section>
+        <div class="import-status" data-import-status>Pronto.</div>
+        <div class="import-result" data-import-result></div>
+        <footer class="new-project-footer">
+          <span>Renders salvos automaticamente no projeto.</span>
+          <button class="import-submit-button" type="submit">Importar</button>
+        </footer>
+      </form>"""
+
+
+def project_home_import_loading_html(logo_src: str) -> str:
+    return f"""
+  <section class="home-import-loading" data-import-loading hidden aria-live="polite" aria-label="Importando projeto">
+    <div class="home-import-loading-inner">
+      <img src="{html.escape(logo_src)}" alt="CUTED">
+      <div class="home-import-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="8">
+        <span data-import-loading-bar></span>
+        <strong data-import-loading-message>Preparando projeto...</strong>
+      </div>
+      <small data-import-loading-label>Importacao</small>
+      <button type="button" data-import-loading-back hidden>Voltar</button>
+    </div>
+  </section>"""
+
+
+def settings_modal_html() -> str:
+    return f"""
+  <div class="settings-backdrop" data-settings-modal hidden>
+    <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="settings-head">
+        <div>
+          <strong id="settings-title">Configuracoes</strong>
+          <p>OpenAI local, sem salvar token no navegador.</p>
+        </div>
+        <button type="button" data-settings-close>Fechar</button>
+      </div>
+      <form data-settings-form class="settings-form">
+        <div class="settings-status" data-settings-status>Carregando...</div>
+        <label>Token OpenAI
+          <input name="api_key" type="password" autocomplete="off" placeholder="Cole aqui apenas se quiser trocar o token">
+        </label>
+        <div class="settings-grid">
+          <label>Provedor IA
+            <select name="ai_provider">
+              <option value="openai">OpenAI</option>
+              <option value="auto">Auto</option>
+              <option value="local">Local</option>
+            </select>
+          </label>
+          <label>Modelo de analise
+            <select name="openai_model">
+              {openai_model_options()}
+            </select>
+          </label>
+          <label>Transcricao
+            <select name="transcribe_model">
+              {transcribe_model_options()}
+            </select>
+          </label>
+        </div>
+        <div class="settings-usage" data-settings-usage>Sem uso registrado nesta maquina.</div>
+        <div class="settings-actions">
+          <button type="button" data-settings-test>Testar conexao</button>
+          <button type="submit">Salvar</button>
+        </div>
+        <small>Estimativa local. Confira o valor oficial no painel da OpenAI.</small>
+      </form>
+    </section>
+  </div>"""
+
+
+def file_size_label(size_bytes: int) -> str:
+    if size_bytes <= 0:
+        return "0 MB"
+    value = float(size_bytes)
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1024 or unit == "GB":
+            return f"{value:.1f} {unit}" if unit != "B" else f"{int(value)} B"
+        value /= 1024
+    return f"{value:.1f} GB"
 
 
 def write_brand_logo_asset(output_dir: Path) -> str:
@@ -7982,12 +8619,67 @@ def write_brand_logo_asset(output_dir: Path) -> str:
     return f"assets/brand/{BRAND_LOGO_FILE}"
 
 
+def write_live_timeline_assets(output_dir: Path) -> dict[str, str]:
+    return write_static_asset_group(
+        output_dir,
+        live_timeline_asset_source_dir(),
+        "live-timeline",
+        LIVE_TIMELINE_ASSET_FILES,
+    )
+
+
+def write_control_bar_assets(output_dir: Path) -> dict[str, str]:
+    return write_static_asset_group(
+        output_dir,
+        control_bar_asset_source_dir(),
+        "control-bar",
+        CONTROL_BAR_ASSET_FILES,
+    )
+
+
+def write_static_asset_group(output_dir: Path, source_dir: Path, asset_group: str, filenames: tuple[str, ...]) -> dict[str, str]:
+    destination_dir = output_dir / "assets" / asset_group
+    assets: dict[str, str] = {}
+    for filename in filenames:
+        source = source_dir / filename
+        if not source.exists():
+            continue
+        source_bytes = source.read_bytes()
+        destination_dir.mkdir(parents=True, exist_ok=True)
+        destination = destination_dir / filename
+        if not destination.exists() or source_bytes != destination.read_bytes():
+            destination.write_bytes(source_bytes)
+        digest = hashlib.sha1(source_bytes).hexdigest()[:10]
+        assets[filename.rsplit(".", 1)[-1]] = f"assets/{asset_group}/{filename}?v={digest}"
+    return assets
+
+
+def live_timeline_asset_source_dir() -> Path:
+    return Path(__file__).resolve().parents[1] / "assets" / "live-timeline"
+
+
+def control_bar_asset_source_dir() -> Path:
+    return Path(__file__).resolve().parents[1] / "assets" / "control-bar"
+
+
 def brand_logo_path() -> Path:
     return Path(__file__).resolve().parents[3] / "assets" / "brand" / BRAND_LOGO_FILE
 
 
+def project_home_icon_svg(name: str) -> str:
+    icons = {
+        "clock": '<svg data-cuted-icon="clock" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>',
+        "folder-video": '<svg data-cuted-icon="folder-video" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5Z"/><path d="m10 11 5 3-5 3Z"/></svg>',
+        "local-video": '<svg data-cuted-icon="local-video" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="4" y="5" width="12" height="14" rx="2"/><path d="m16 10 4-2v8l-4-2M8 9h4M8 13h3"/></svg>',
+        "mic": '<svg data-cuted-icon="mic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></svg>',
+        "sparkles": '<svg data-cuted-icon="sparkles" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 1.4 4.1L17 9l-3.6 1.9L12 15l-1.4-4.1L7 9l3.6-1.9Z"/><path d="m5 14 .9 2.6L8 18l-2.1 1.4L5 22l-.9-2.6L2 18l2.1-1.4ZM19 13l.8 2.2L22 16l-2.2.8L19 19l-.8-2.2L16 16l2.2-.8Z"/></svg>',
+        "youtube": '<svg data-cuted-icon="youtube" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="6" width="18" height="12" rx="4"/><path d="m10 9 5 3-5 3Z"/></svg>',
+    }
+    return icons.get(name, "")
+
+
 def suggestion_count_options() -> str:
-    return "\n".join(f'<option value="{value}"{" selected" if value == 10 else ""}>{value}</option>' for value in range(1, 21))
+    return "\n".join(f'<option value="{value}"{" selected" if value == 10 else ""}>{value}</option>' for value in range(1, 11))
 
 
 def openai_model_options() -> str:
@@ -8025,18 +8717,19 @@ def card_html(moment: Moment) -> str:
           <strong>{html.escape(moment.title)}</strong>
           <small data-card-summary>{moment.start:.1f}s - {moment.end:.1f}s ({duration:.1f}s)</small>
         </span>
+        <span class="clip-row-timeline preview-camera-timeline" data-card-row-timeline data-preview-camera-timeline aria-label="Timeline do corte"></span>
         <span class="clip-status">
           <span data-platform-summary>Sem destino</span>
           <span data-status-pill>Em edicao</span>
         </span>
       </summary>
+      <div class="cuted-control-surface-slot" data-cuted-control-surface aria-label="Control surface do corte"></div>
       <div class="editor-shell">
         <div class="editor-preview">
           <div class="preview-frame">
             <div class="preview-bar">
               <div class="preview-topbar">
-                <div class="preview-transport-group" aria-label="Player e volume">
-                  <button class="preview-icon preview-play" data-preview-play type="button" aria-label="Reproduzir" title="Reproduzir"></button>
+                <div class="preview-transport-group" aria-label="Controles do preview">
                   <div class="preview-volume-group" aria-label="Volume do preview">
                     <button class="preview-icon preview-volume" data-preview-volume type="button" aria-label="Volume" title="Volume"></button>
                     <div class="preview-volume-popover" data-preview-volume-popover hidden>
@@ -8059,9 +8752,6 @@ def card_html(moment: Moment) -> str:
                   <span>Movimento</span>
                   <input data-camera-motion-speed type="range" min="350" max="1400" step="50" value="700" aria-label="Velocidade da transicao da camera">
                 </label>
-              </div>
-              <div class="preview-controls" aria-label="Timeline do preview">
-                <div class="preview-camera-timeline" data-preview-camera-timeline aria-label="Timeline de camera"></div>
               </div>
               <div class="preview-ai-status" data-camera-auto-status aria-live="polite"></div>
             </div>
@@ -8181,13 +8871,26 @@ def preview_cache_token(moment: Moment) -> str:
     return f"{moment.rank}-{int(moment.start * 1000)}-{int(moment.end * 1000)}"
 
 
-def page_html(source_label: str, cards: str, data: str, logo_src: str) -> str:
+def page_html(
+    source_label: str,
+    cards: str,
+    data: str,
+    logo_src: str,
+    live_timeline_assets: dict[str, str] | None = None,
+    control_bar_assets: dict[str, str] | None = None,
+) -> str:
+    live_timeline_css = live_timeline_assets_html(live_timeline_assets or {}, "css")
+    live_timeline_js = live_timeline_assets_html(live_timeline_assets or {}, "js")
+    control_bar_css = static_assets_html(control_bar_assets or {}, "css")
+    control_bar_js = static_assets_html(control_bar_assets or {}, "js")
     return f"""<!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CUTED Review</title>
+{live_timeline_css}
+{control_bar_css}
   <style>{css()}</style>
 </head>
 <body data-format="tiktok" data-tab="edit">
@@ -8331,10 +9034,481 @@ def page_html(source_label: str, cards: str, data: str, logo_src: str) -> str:
     </section>
   </div>
   <main>{cards}</main>
+{live_timeline_js}
+{control_bar_js}
   <script>window.CUTTED_DATA = {data}; window.CUTTED_SCRIPT = {json.dumps(str(Path(__file__).resolve()))};</script>
   <script>{js()}</script>
 </body>
 </html>"""
+
+
+def live_timeline_assets_html(assets: dict[str, str], kind: str) -> str:
+    return static_assets_html(assets, kind)
+
+
+def static_assets_html(assets: dict[str, str], kind: str) -> str:
+    value = assets.get(kind)
+    if not value:
+        return ""
+    escaped = html.escape(value)
+    if kind == "css":
+        return f'  <link rel="stylesheet" href="{escaped}">'
+    if kind == "js":
+        return f'  <script src="{escaped}"></script>'
+    return ""
+
+
+def project_home_css() -> str:
+    return """
+body[data-project-home]{overflow-x:hidden}body[data-project-home] header{display:none}.project-home{width:min(1080px,calc(100vw - 36px));max-width:none;min-height:100vh;padding:30px 0 34px;align-content:start;gap:12px}.home-brand-stage{display:grid;place-items:center;min-height:164px;padding:4px 0 0}.home-logo-orbit{position:relative;display:grid;place-items:center;width:min(620px,84vw);isolation:isolate}.home-logo-orbit:before{position:absolute;inset:18% 12%;z-index:-1;border-radius:999px;background:radial-gradient(circle at 26% 50%,rgba(17,162,207,.28),transparent 34%),radial-gradient(circle at 74% 50%,rgba(175,207,42,.24),transparent 34%);filter:blur(24px);content:"";animation:home-logo-aura 5.2s ease-in-out infinite}.home-brand-logo{display:block;width:min(520px,80vw);height:104px;object-fit:contain;filter:drop-shadow(0 0 12px rgba(17,162,207,.18)) drop-shadow(0 0 12px rgba(175,207,42,.12));animation:home-logo-breathe 5.8s ease-in-out infinite}.project-library{display:grid;align-content:start;gap:0;border:1px solid var(--glass-border);border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,.052),rgba(255,255,255,.016)),rgba(7,7,7,.76);box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(22px) saturate(1.22);overflow:hidden}.project-section-head{display:flex;justify-content:space-between;gap:12px;align-items:center;min-height:52px;padding:9px 16px;border-bottom:1px solid rgba(231,231,232,.1)}.project-section-head strong{font-size:17px;letter-spacing:0}.project-toolbar{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.project-toolbar button,.project-row-actions button,.project-row-actions a{min-height:32px;padding:6px 11px}.project-icon-button{display:inline-grid!important;place-items:center;width:36px;min-width:36px;padding:0!important;font-size:17px;font-weight:900}.project-primary{border-color:rgba(175,207,42,.58)!important;background:linear-gradient(180deg,rgba(175,207,42,.26),rgba(17,162,207,.1)),rgba(23,32,14,.78)!important;color:var(--color-text)!important}.project-table{display:grid;max-height:min(456px,calc(100vh - 304px));overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(175,207,42,.55) rgba(255,255,255,.055)}.project-table::-webkit-scrollbar{width:10px}.project-table::-webkit-scrollbar-track{background:rgba(255,255,255,.04);border-left:1px solid rgba(231,231,232,.06)}.project-table::-webkit-scrollbar-thumb{border:2px solid rgba(7,7,7,.76);border-radius:999px;background:linear-gradient(180deg,rgba(17,162,207,.72),rgba(175,207,42,.72));box-shadow:0 0 12px rgba(17,162,207,.22)}.project-table::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,var(--color-brand-blue),var(--color-brand-green))}.project-table-head,.project-row{display:grid;grid-template-columns:minmax(230px,1fr) minmax(245px,.82fr) 100px minmax(214px,.58fr);gap:14px;align-items:center}.project-table-head{position:sticky;top:0;z-index:2;min-height:34px;padding:0 16px;border-bottom:1px solid rgba(231,231,232,.08);background:rgba(11,11,11,.92);color:var(--color-text-muted);font-size:11px;text-transform:uppercase;backdrop-filter:blur(12px)}.project-row{min-height:76px;padding:12px 16px;border-bottom:1px solid rgba(231,231,232,.075);animation:home-row-in .42s ease both}.project-row:last-child{border-bottom:0}.project-row:nth-child(2){animation-delay:.03s}.project-row:nth-child(3){animation-delay:.08s}.project-row:nth-child(4){animation-delay:.13s}.project-row:nth-child(5){animation-delay:.18s}.project-row:hover{background:linear-gradient(90deg,rgba(17,162,207,.085),rgba(175,207,42,.045),transparent)}.project-row[data-project-mock=true]{background:rgba(255,255,255,.018)}.project-name-cell{display:grid;gap:3px;min-width:0}.project-name-cell strong{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-name-cell p{margin:0;color:rgba(175,207,42,.82);font-size:12px}.project-name-cell small{display:block;color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-meta-cell{display:flex;gap:10px;margin:0}.project-meta-cell div{display:grid;gap:2px;min-width:62px}.project-meta-cell dt{color:var(--color-text-muted);font-size:11px}.project-meta-cell dd{margin:0;color:var(--color-text);font-weight:800}.project-updated-cell{color:var(--color-text-muted);font-size:12px}.project-row-actions{display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap}.project-row-actions a{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--glass-border);border-radius:999px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.project-row-actions button[data-delete-project]{color:var(--color-danger)}.project-row-actions button:disabled{opacity:.38;cursor:not-allowed}.project-import{margin-top:12px}.project-import[hidden],.project-library[hidden]{display:none}.project-import .import-panel{animation:home-row-in .28s ease both}.new-project-panel{gap:14px;border-color:var(--glass-border);background:linear-gradient(180deg,rgba(255,255,255,.052),rgba(255,255,255,.016)),rgba(7,7,7,.76);box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(22px) saturate(1.22)}.new-project-head,.new-project-footer,.ai-context-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.new-project-head{min-height:38px;padding-bottom:10px;border-bottom:1px solid rgba(231,231,232,.1)}.new-project-head strong{font-size:17px}.source-toggle{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.source-toggle label,.duration-size-toggle label{position:relative;display:grid}.source-toggle input,.duration-size-toggle input{position:absolute;opacity:0;pointer-events:none}.source-toggle span,.duration-size-toggle span{display:grid;place-items:center;min-height:48px;padding:8px 12px;border:1px solid var(--glass-border);border-radius:8px;background:rgba(231,231,232,.055);box-shadow:inset 0 1px rgba(255,255,255,.14);color:var(--color-text-soft);font-weight:800}.source-toggle input:checked+span,.duration-size-toggle input:checked+span{border-color:rgba(175,207,42,.72);background:linear-gradient(180deg,rgba(175,207,42,.2),rgba(17,162,207,.08)),rgba(13,18,12,.84);color:var(--color-text);box-shadow:inset 0 1px rgba(255,255,255,.18),0 0 22px rgba(175,207,42,.12)}.source-panel{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}.source-panel[hidden]{display:none}.new-project-grid{display:grid;grid-template-columns:minmax(140px,.32fr) minmax(0,1fr);gap:12px;align-items:end}.suggestion-field{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.duration-size-toggle{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0}.duration-size-toggle legend{grid-column:1/-1;color:var(--color-text-muted);font-size:12px}.duration-size-toggle span{min-height:58px}.duration-size-toggle strong{font-size:22px;line-height:1}.duration-size-toggle small{color:var(--color-text-muted);font-size:11px}.ai-context-box{display:grid;gap:8px;padding:12px;border:1px solid rgba(17,162,207,.28);border-radius:8px;background:linear-gradient(135deg,rgba(17,162,207,.09),rgba(175,207,42,.035)),rgba(0,0,0,.18)}.ai-context-box textarea{min-height:126px;border-color:rgba(17,162,207,.28);background:rgba(0,0,0,.44)}.new-project-footer{padding-top:4px}.new-project-footer span{color:var(--color-text-muted);font-size:12px}@keyframes home-logo-aura{0%,100%{opacity:.56;transform:scale(.98)}50%{opacity:.84;transform:scale(1.03)}}@keyframes home-logo-breathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-1px) scale(1.006)}}@keyframes home-row-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@media(max-width:900px){.project-home{width:min(100vw - 20px,760px);padding-top:26px}.home-brand-stage{min-height:138px}.home-brand-logo{height:78px}.project-section-head{align-items:flex-start;flex-direction:column}.project-toolbar{justify-content:flex-start}.project-table{max-height:none}.project-table-head{display:none}.project-row,.new-project-grid,.source-panel{grid-template-columns:1fr;gap:10px}.project-meta-cell{justify-content:space-between}.project-row-actions{justify-content:flex-start}.project-updated-cell{display:none}}
+"""
+
+
+def project_home_compact_import_css() -> str:
+    return """
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.home-settings-button{position:fixed;top:18px;right:22px;z-index:20;border-color:var(--glass-border);background:rgba(231,231,232,.055);color:var(--color-text-soft);box-shadow:inset 0 1px rgba(255,255,255,.14)}
+.home-settings-button:hover{border-color:rgba(17,162,207,.5);color:var(--color-text);background:rgba(17,162,207,.1)}
+.home-settings-button svg{display:block;width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.new-project-config-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+.new-project-config-block{display:grid;gap:8px;justify-self:stretch;width:100%;min-height:170px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.018)}
+.new-project-block-title{display:flex;align-items:baseline;justify-content:space-between;gap:10px;min-height:18px}
+.new-project-block-title strong{color:var(--color-text);font-size:12px;text-transform:uppercase}
+.new-project-block-title span,.tuning-copy{color:var(--color-text-muted);font-size:11px}
+.icon-source-toggle{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%}
+.icon-source-toggle span,.duration-size-toggle label span,.icon-action-button,.field-icon{display:grid;place-items:center;border:1px solid var(--glass-border);border-radius:8px;background:rgba(231,231,232,.055);box-shadow:inset 0 1px rgba(255,255,255,.14);color:var(--color-text-soft)}
+.icon-source-toggle span{grid-template-rows:auto auto;gap:4px;min-height:68px;padding:9px 8px}
+.icon-source-toggle span strong{font-size:11px;letter-spacing:0;text-transform:uppercase}
+.icon-source-toggle input:checked+span,.duration-size-toggle input:checked+span{border-color:rgba(175,207,42,.72);background:rgba(25,33,18,.9);color:var(--color-text);box-shadow:inset 0 1px rgba(255,255,255,.18),0 0 18px rgba(175,207,42,.13)}
+.icon-source-toggle svg,.duration-size-toggle svg,.icon-action-button svg,.field-icon svg{display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.icon-source-toggle svg{width:30px;height:30px}
+.source-panel{grid-template-columns:minmax(0,1fr) 52px;gap:8px;width:100%}
+.source-panel[data-source-panel=youtube]{grid-template-columns:minmax(0,1fr)}
+.source-panel input,.suggestion-field select{min-height:44px}
+.icon-action-button{width:52px;min-width:52px;min-height:44px;padding:0!important}
+.icon-action-button svg,.field-icon svg{width:19px;height:19px}
+.icon-action-button:hover{border-color:rgba(17,162,207,.52);color:var(--color-text);background:rgba(17,162,207,.1)}
+.cuts-control-grid{display:grid;grid-template-columns:minmax(128px,.42fr) minmax(0,.58fr);gap:10px;align-items:stretch}
+.cut-count-field{display:grid!important;grid-template-rows:auto 1fr;gap:8px;min-width:0;color:inherit;font-size:inherit}
+.cut-count-field .tuning-copy{align-self:end;font-weight:800;text-transform:uppercase}
+.cut-count-field select{width:100%;min-height:96px;padding:0 14px;border:1px solid var(--glass-border);border-radius:8px;background:#202020;color:var(--color-text);font-weight:900;text-align:center}
+.cut-count-field select option{background:#111;color:var(--color-text)}
+.duration-size-toggle{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,62px);gap:8px;align-items:center;margin:0;padding:0;border:0}
+.duration-size-toggle legend.sr-only{position:absolute;grid-column:auto;color:inherit;font-size:inherit}
+.duration-size-toggle>.tuning-copy{display:flex!important;align-items:center;min-height:auto!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;color:var(--color-text-muted)!important;font-weight:600}
+.duration-size-toggle label span{gap:2px;min-width:62px;min-height:44px;padding:6px 8px}
+.duration-size-toggle label small{color:var(--color-text-muted);font-size:10px;line-height:1}
+.duration-tile-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));align-items:stretch}
+.duration-tile-grid label span{width:100%;min-width:0;min-height:44px}
+.duration-option-long{grid-column:1/-1}
+.duration-size-toggle svg{width:14px;height:14px;opacity:.72}
+.duration-size-toggle strong{font-size:17px;line-height:1}
+.context-audio-button{border-radius:999px}
+.import-submit-button{min-width:116px;min-height:42px!important;border-color:var(--color-brand-white)!important;background:var(--color-brand-white)!important;color:var(--color-brand-black)!important;font-weight:900;box-shadow:0 10px 24px rgba(0,0,0,.32)}
+.import-submit-button:hover{transform:translateY(-1px);border-color:var(--color-brand-green)!important;background:var(--color-brand-green)!important;color:var(--color-brand-black)!important;box-shadow:0 12px 26px rgba(0,0,0,.36),0 0 16px rgba(175,207,42,.16)}
+.home-import-loading{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:radial-gradient(circle at 50% 42%,rgba(17,162,207,.12),transparent 30%),radial-gradient(circle at 56% 52%,rgba(175,207,42,.09),transparent 34%),rgba(5,5,5,.88);backdrop-filter:blur(18px) saturate(1.25)}
+.home-import-loading[hidden]{display:none}
+.home-import-loading-inner{display:grid;justify-items:center;gap:14px;width:min(520px,calc(100vw - 44px));animation:home-row-in .28s ease both}
+.home-import-loading img{display:block;width:min(360px,76vw);height:96px;object-fit:contain;filter:drop-shadow(0 0 14px rgba(17,162,207,.16)) drop-shadow(0 0 12px rgba(175,207,42,.12))}
+.home-import-progress{position:relative;width:100%;height:42px;border:1px solid var(--glass-border);border-radius:999px;background:rgba(231,231,232,.055);box-shadow:inset 0 1px rgba(255,255,255,.14),0 18px 44px rgba(0,0,0,.34);overflow:hidden}
+.home-import-progress span{position:absolute;inset:0 auto 0 0;width:8%;border-radius:999px;background:linear-gradient(90deg,var(--color-brand-blue),var(--color-brand-green));transition:width .5s ease}
+.home-import-progress strong{position:relative;z-index:1;display:grid;place-items:center;height:100%;padding:0 18px;color:var(--color-text);font-size:13px;text-align:center;text-shadow:0 1px 8px rgba(0,0,0,.6)}
+.home-import-loading small{color:var(--color-text-muted);font-size:12px;text-transform:uppercase}
+.home-import-loading[data-state=failed] .home-import-progress span{background:linear-gradient(90deg,#7f1d1d,var(--color-danger))}
+.home-import-loading button{min-height:38px;padding:8px 14px;border-color:var(--glass-border);background:var(--color-brand-white);color:var(--color-brand-black)}
+body[data-importing=true] .project-home{opacity:0;pointer-events:none;transition:opacity .24s ease}
+@media(max-width:900px){.new-project-config-grid{grid-template-columns:1fr}.new-project-config-block{width:100%}.source-panel,.source-panel[data-source-panel=youtube]{grid-template-columns:minmax(0,1fr) 52px}.source-panel[data-source-panel=youtube]{grid-template-columns:minmax(0,1fr)}.cuts-control-grid{grid-template-columns:1fr}.cut-count-field select{min-height:54px}.duration-tile-grid{grid-template-columns:repeat(2,minmax(54px,1fr))}.duration-size-toggle span{min-width:0}}
+"""
+
+
+def project_home_js(workspace: Path, mock_projects: list[dict[str, object]]) -> str:
+    script = r"""
+const workspacePath = __WORKSPACE_PATH__;
+const mockProjects = __MOCK_PROJECTS__;
+const homeImport = document.querySelector("[data-home-import]");
+const projectLibrary = document.querySelector("[data-project-library]");
+const projectList = document.querySelector("[data-project-list]");
+function escapeHtml(value){
+  return String(value || "").replace(/[&<>"']/g, char => {
+    if (char === "&") return "&amp;";
+    if (char === "<") return "&lt;";
+    if (char === ">") return "&gt;";
+    if (char === '"') return "&quot;";
+    return "&#39;";
+  });
+}
+function escapeAttr(value){ return escapeHtml(value); }
+function projectPayload(form){
+  const data = new FormData(form);
+  const sourceMode = String(data.get("source_mode") || form.dataset.sourceMode || "local");
+  return {
+    source_path: sourceMode === "local" ? String(data.get("source_path") || "").trim() : "",
+    source_url: sourceMode === "youtube" ? String(data.get("source_url") || "").trim() : "",
+    output_path: String(data.get("output_path") || "").trim(),
+    preview_count: Number(data.get("preview_count") || 10),
+    language: String(data.get("language") || "pt"),
+    preset: String(data.get("preset") || "tiktok"),
+    duration_profile: String(data.get("duration_profile") || "medium"),
+    context_prompt: String(data.get("context_prompt") || ""),
+    render_previews: true
+  };
+}
+function setStatus(text){
+  const status = document.querySelector("[data-import-status]");
+  if (status) status.textContent = text;
+}
+function setResult(html){
+  const result = document.querySelector("[data-import-result]");
+  if (result) result.innerHTML = html;
+}
+async function postJson(url, payload){
+  const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload || {}) });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) throw new Error(data.error || "Operacao local falhou.");
+  return data;
+}
+let importOpenaiState = { provider: "local", keyConfigured: true };
+function importNeedsOpenaiKey(){
+  return importOpenaiState.provider === "openai" && !importOpenaiState.keyConfigured;
+}
+function setImportLoading(message, label = "Importacao", percent = 8){
+  const loading = document.querySelector("[data-import-loading]");
+  if (!loading) return;
+  const value = Math.max(0, Math.min(100, Number(percent || 0)));
+  loading.hidden = false;
+  loading.dataset.state = "running";
+  document.body.dataset.importing = "true";
+  loading.querySelector("[data-import-loading-message]").textContent = message || "Processando...";
+  loading.querySelector("[data-import-loading-label]").textContent = label || "Importacao";
+  loading.querySelector("[data-import-loading-bar]").style.width = `${value}%`;
+  loading.querySelector("[role=progressbar]").setAttribute("aria-valuenow", String(value));
+  loading.querySelector("[data-import-loading-back]").hidden = true;
+}
+function updateImportLoading(job){
+  const progress = job.progress || {};
+  setImportLoading(progress.message || job.message || "Processando importacao...", progress.label || job.status || "Importacao", progress.percent || 35);
+}
+function failImportLoading(message){
+  const loading = document.querySelector("[data-import-loading]");
+  if (!loading) return;
+  loading.hidden = false;
+  loading.dataset.state = "failed";
+  loading.querySelector("[data-import-loading-message]").textContent = message || "Nao consegui importar este projeto.";
+  loading.querySelector("[data-import-loading-label]").textContent = "Importacao interrompida";
+  loading.querySelector("[data-import-loading-bar]").style.width = "100%";
+  loading.querySelector("[role=progressbar]").setAttribute("aria-valuenow", "100");
+  loading.querySelector("[data-import-loading-back]").hidden = false;
+}
+function hideImportLoading(){
+  const loading = document.querySelector("[data-import-loading]");
+  if (loading) loading.hidden = true;
+  delete document.body.dataset.importing;
+}
+async function startImport(form){
+  const button = form.querySelector("button[type=submit]");
+  const payload = projectPayload(form);
+  if (!payload.source_path && !payload.source_url) {
+    setStatus(form.dataset.sourceMode === "youtube" ? "Cole um link do YouTube." : "Selecione um video local.");
+    form.querySelector(form.dataset.sourceMode === "youtube" ? "[name=source_url]" : "[name=source_path]")?.focus();
+    return;
+  }
+  if (importNeedsOpenaiKey()) {
+    setStatus("Adicione sua chave OpenAI nas configuracoes para importar com IA.");
+    openSettingsPanel();
+    return;
+  }
+  setResult("");
+  setImportLoading("Preparando projeto...", "Preparando", 8);
+  setStatus("Criando job de importacao...");
+  if (button) button.disabled = true;
+  try {
+    const data = await postJson("/api/import-jobs", payload);
+    setStatus(data.job?.message || "Importacao iniciada.");
+    updateImportLoading(data.job || {});
+    pollImport(data.job.id, button);
+  } catch (error) {
+    if (button) button.disabled = false;
+    failImportLoading(error.message || "Nao consegui iniciar a importacao.");
+    setStatus("Nao consegui iniciar a importacao.");
+    setResult(`<code>${escapeHtml(error.message || String(error))}</code>`);
+  }
+}
+async function pollImport(jobId, button){
+  try {
+    const response = await fetch(`/api/import-jobs/${encodeURIComponent(jobId)}`);
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || "Job nao encontrado.");
+    const job = data.job || {};
+    setStatus(`${job.message || "Processando..."} (${job.status || "running"})`);
+    updateImportLoading(job);
+    if (job.status === "ready") {
+      if (button) button.disabled = false;
+      setResult(`<a href="${escapeAttr(job.output_url)}">Abrir projeto importado</a>`);
+      if (job.output_url) window.setTimeout(() => window.location.assign(job.output_url), 450);
+      return;
+    }
+    if (job.status === "failed" || job.status === "cancelled") {
+      if (button) button.disabled = false;
+      failImportLoading(job.stderr || job.message || "Importacao encerrada.");
+      setResult(`<code>${escapeHtml(job.stderr || job.message || "Importacao encerrada.")}</code>`);
+      return;
+    }
+    window.setTimeout(() => pollImport(jobId, button), 1200);
+  } catch (error) {
+    if (button) button.disabled = false;
+    failImportLoading(error.message || "Nao consegui acompanhar a importacao.");
+    setStatus("Nao consegui acompanhar a importacao.");
+    setResult(`<code>${escapeHtml(error.message || String(error))}</code>`);
+  }
+}
+function bindImportForm(){
+  const form = document.querySelector("[data-import-form]");
+  if (!form) return;
+  bindSourceMode(form);
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    startImport(form);
+  });
+  form.querySelector("[data-select-video-file]")?.addEventListener("click", () => selectPath("/api/select-video-file", "[name=source_path]", "Video local selecionado."));
+  form.querySelector("[data-context-audio]")?.addEventListener("click", () => setStatus("Transcricao por audio entra na proxima fase."));
+  document.querySelector("[data-import-loading-back]")?.addEventListener("click", () => hideImportLoading());
+}
+function bindSourceMode(form){
+  const inputs = form.querySelectorAll("[name=source_mode]");
+  const sync = () => {
+    const mode = String(new FormData(form).get("source_mode") || "local");
+    form.dataset.sourceMode = mode;
+    form.querySelectorAll("[data-source-panel]").forEach(panel => {
+      panel.hidden = panel.dataset.sourcePanel !== mode;
+    });
+  };
+  inputs.forEach(input => input.addEventListener("change", sync));
+  sync();
+}
+async function selectPath(url, selector, message){
+  setStatus("Abrindo seletor local...");
+  try {
+    const data = await postJson(url);
+    const input = document.querySelector(selector);
+    if (input) input.value = data.path || input.value;
+    setStatus(message);
+  } catch (error) {
+    setStatus(error.message || "Seletor local indisponivel.");
+  }
+}
+function setupHomeSettingsPanel(){
+  const modal = document.querySelector("[data-settings-modal]");
+  const form = document.querySelector("[data-settings-form]");
+  const open = document.getElementById("open-settings");
+  const close = document.querySelector("[data-settings-close]");
+  const test = document.querySelector("[data-settings-test]");
+  if (!modal || !form || !open) return;
+  open.addEventListener("click", () => openSettingsPanel());
+  close?.addEventListener("click", () => closeSettingsPanel());
+  modal.addEventListener("click", event => { if (event.target === modal) closeSettingsPanel(); });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !modal.hidden) closeSettingsPanel();
+  });
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    saveSettingsForm(form);
+  });
+  test?.addEventListener("click", () => testSettingsConnection(form));
+  loadOpenaiSettings();
+}
+function openSettingsPanel(){
+  const modal = document.querySelector("[data-settings-modal]");
+  if (!modal) return;
+  modal.hidden = false;
+  loadOpenaiSettings();
+  modal.querySelector("[name=api_key]")?.focus();
+}
+function closeSettingsPanel(){
+  const modal = document.querySelector("[data-settings-modal]");
+  if (modal) modal.hidden = true;
+}
+async function loadOpenaiSettings(){
+  const form = document.querySelector("[data-settings-form]");
+  const status = document.querySelector("[data-settings-status]");
+  if (!form) return;
+  try {
+    const response = await fetch("/api/settings/openai");
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao carregar configuracoes.");
+    applySettingsPayload(form, payload.settings || {}, payload.usage || {});
+  } catch (error) {
+    if (status) status.textContent = error.message || "Nao consegui carregar configuracoes.";
+  }
+}
+function applySettingsPayload(form, settings, usage){
+  form.elements.ai_provider.value = settings.ai_provider || "local";
+  form.elements.openai_model.value = settings.openai_model || "gpt-5-mini";
+  form.elements.transcribe_model.value = settings.transcribe_model || "whisper-1";
+  form.elements.api_key.value = "";
+  importOpenaiState = {
+    provider: String(settings.ai_provider || "local"),
+    keyConfigured: Boolean(settings.key_configured)
+  };
+  const status = document.querySelector("[data-settings-status]");
+  if (status) {
+    const key = settings.key_configured ? "Token configurado" : "Token nao configurado";
+    status.textContent = `${key} - ${settings.openai_model || "gpt-5-mini"} / ${settings.transcribe_model || "whisper-1"}`;
+  }
+  renderSettingsUsage(usage);
+  refreshImportKeyBannerFromState();
+}
+function settingsPayloadFromForm(form){
+  const data = new FormData(form);
+  const payload = {
+    ai_provider: String(data.get("ai_provider") || "local"),
+    openai_model: String(data.get("openai_model") || "gpt-5-mini"),
+    transcribe_model: String(data.get("transcribe_model") || "whisper-1")
+  };
+  const apiKey = String(data.get("api_key") || "").trim();
+  if (apiKey) payload.api_key = apiKey;
+  return payload;
+}
+async function saveSettingsForm(form){
+  const status = document.querySelector("[data-settings-status]");
+  if (status) status.textContent = "Salvando...";
+  try {
+    const response = await fetch("/api/settings/openai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settingsPayloadFromForm(form))
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao salvar configuracoes.");
+    applySettingsPayload(form, payload.settings || {}, payload.usage || {});
+    if (status) status.textContent = `Salvo. ${status.textContent}`;
+  } catch (error) {
+    if (status) status.textContent = error.message || "Nao consegui salvar.";
+  }
+}
+async function testSettingsConnection(form){
+  const status = document.querySelector("[data-settings-status]");
+  const button = document.querySelector("[data-settings-test]");
+  if (status) status.textContent = "Testando conexao...";
+  if (button) button.disabled = true;
+  try {
+    const response = await fetch("/api/settings/openai/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settingsPayloadFromForm(form))
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || "Falha ao testar conexao.");
+    if (status) status.textContent = data.message || "Conexao OpenAI validada.";
+  } catch (error) {
+    if (status) status.textContent = error.message || "Nao consegui validar a conexao.";
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+function renderSettingsUsage(usage){
+  const target = document.querySelector("[data-settings-usage]");
+  if (!target) return;
+  const total = Number(usage?.estimated_total_usd || 0);
+  const count = Number(usage?.event_count || 0);
+  const last = usage?.last_event || {};
+  const lastText = last.operation
+    ? `Ultimo: ${escapeHtml(last.operation)} em ${escapeHtml(last.model || "-")} - ${formatUsd(last.estimated_usd || 0)}`
+    : "Ultimo: sem registro.";
+  target.innerHTML = `<strong>Total local estimado: ${formatUsd(total)}</strong><span>${count} evento(s) registrado(s).</span><span>${lastText}</span>`;
+}
+function formatUsd(value){
+  return `$${Number(value || 0).toFixed(4)}`;
+}
+async function refreshImportKeyBanner(){
+  const banner = document.querySelector("[data-import-key-banner]");
+  if (!banner) return;
+  try {
+    const response = await fetch("/api/settings/openai");
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao carregar configuracoes.");
+    const settings = payload.settings || {};
+    importOpenaiState = {
+      provider: String(settings.ai_provider || "local"),
+      keyConfigured: Boolean(settings.key_configured)
+    };
+  } catch (error) {
+    console.warn("Nao consegui checar a chave OpenAI:", error);
+    importOpenaiState = { provider: "local", keyConfigured: true };
+  }
+  refreshImportKeyBannerFromState();
+}
+function refreshImportKeyBannerFromState(){
+  const banner = document.querySelector("[data-import-key-banner]");
+  if (banner) banner.hidden = !importNeedsOpenaiKey();
+}
+function setupImportKeyBanner(){
+  const banner = document.querySelector("[data-import-key-banner]");
+  if (!banner) return;
+  banner.querySelector("[data-import-key-open]")?.addEventListener("click", () => openSettingsPanel());
+  refreshImportKeyBanner();
+}
+function projectCard(project){
+  const isMock = Boolean(project.is_mock);
+  const mockAttr = isMock ? ' data-project-mock="true"' : "";
+  const disabled = isMock ? " disabled" : "";
+  const open = project.url ? `<a href="${escapeAttr(project.url)}">Abrir</a>` : `<button type="button" disabled>Abrir</button>`;
+  return `<article class="project-row" data-project-id="${escapeAttr(project.id)}"${mockAttr}>
+    <div class="project-name-cell"><strong>${escapeHtml(project.title || "Projeto sem titulo")}</strong><p>${escapeHtml(project.source_label || "")}</p><small>${escapeHtml(project.path || "")}</small></div>
+    <dl class="project-meta-cell"><div><dt>Cortes</dt><dd>${Number(project.clip_count || 0)}</dd></div><div><dt>Renders</dt><dd>${Number(project.render_count || 0)}</dd></div><div><dt>Tamanho</dt><dd>${escapeHtml(sizeLabel(project.size_bytes || 0))}</dd></div></dl>
+    <time class="project-updated-cell">${escapeHtml(project.last_opened_at || "Mock")}</time>
+    <div class="project-row-actions">${open}<button type="button" data-forget-project${disabled}>Remover</button><button type="button" data-delete-project${disabled}>Apagar</button></div>
+  </article>`;
+}
+function sizeLabel(bytes){
+  let value = Number(bytes || 0);
+  for (const unit of ["B", "KB", "MB", "GB"]) {
+    if (value < 1024 || unit === "GB") return unit === "B" ? `${Math.round(value)} B` : `${value.toFixed(1)} ${unit}`;
+    value /= 1024;
+  }
+  return "0 MB";
+}
+async function refreshProjects(){
+  if (!projectList) return;
+  const response = await fetch("/api/projects");
+  const data = await response.json();
+  if (!response.ok || !data.ok) throw new Error(data.error || "Nao consegui carregar projetos.");
+  const realProjects = Array.isArray(data.projects) ? data.projects : [];
+  const projects = realProjects.length ? realProjects : mockProjects;
+  projectList.innerHTML = `<div class="project-table-head" aria-hidden="true"><span>Projeto</span><span>Status</span><span>Atualizado</span><span>Acoes</span></div>${projects.map(projectCard).join("")}`;
+}
+async function deleteProject(card, deleteFiles){
+  const projectId = card?.dataset.projectId || "";
+  if (card?.dataset.projectMock === "true") return;
+  const message = deleteFiles ? "Apagar os arquivos locais deste projeto?" : "Remover este projeto da lista recente?";
+  if (!projectId || !window.confirm(message)) return;
+  await postJson(`/api/projects/${encodeURIComponent(projectId)}/delete`, { delete_files: deleteFiles });
+  await refreshProjects();
+}
+document.querySelectorAll("[data-new-project]").forEach(button => {
+  button.addEventListener("click", () => {
+    if (projectLibrary) projectLibrary.hidden = true;
+    if (homeImport) homeImport.hidden = false;
+    document.querySelector("[data-import-form]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+});
+document.querySelector("[data-show-projects]")?.addEventListener("click", () => {
+  if (homeImport) homeImport.hidden = true;
+  if (projectLibrary) projectLibrary.hidden = false;
+});
+document.querySelectorAll("[data-open-workspace]").forEach(button => {
+  button.addEventListener("click", () => postJson("/api/open-folder", { path: workspacePath }).catch(error => setStatus(error.message || "Nao consegui abrir a pasta.")));
+});
+document.querySelector("[data-refresh-projects]")?.addEventListener("click", () => refreshProjects().catch(error => setStatus(error.message || "Nao consegui atualizar projetos.")));
+projectList?.addEventListener("click", event => {
+  const card = event.target.closest("[data-project-id]");
+  if (event.target.closest("[data-forget-project]")) deleteProject(card, false);
+  if (event.target.closest("[data-delete-project]")) deleteProject(card, true);
+});
+setupHomeSettingsPanel();
+setupImportKeyBanner();
+bindImportForm();
+"""
+    return script.replace("__WORKSPACE_PATH__", json.dumps(str(workspace))).replace("__MOCK_PROJECTS__", json.dumps(mock_projects, ensure_ascii=False))
 
 
 def css() -> str:
@@ -8345,11 +9519,13 @@ def base_css() -> str:
     return """
 *{box-sizing:border-box}:root{--color-brand-blue:#11A2CF;--color-brand-green:#AFCF2A;--color-brand-white:#E7E7E8;--color-brand-black:#050505;--color-metal-gray:#68686A;--color-surface:#0D0D0D;--color-surface-raised:#111;--color-surface-muted:#151515;--color-surface-control:#191919;--color-border:#272727;--color-border-strong:#333;--color-text:#f4f4f4;--color-text-soft:#ddd;--color-text-muted:#9a9a9a;--color-focus:#11A2CF;--color-danger:#ffb3b3;--shadow-panel:0 14px 42px rgba(0,0,0,.5)}body{margin:0;background:var(--color-brand-black);color:var(--color-text);font:14px/1.45 Arial,sans-serif}
 header{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:minmax(90px,1fr) auto minmax(90px,1fr);gap:16px;align-items:center;padding:10px 22px 12px;background:var(--color-brand-black);border-bottom:1px solid var(--color-border)}.header-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.icon-button{display:inline-grid;place-items:center;width:38px;min-width:38px;padding:0}.icon-button svg{display:block;width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.brand-lockup{display:grid;justify-items:center;gap:8px;min-width:0}.brand-logo{display:block;width:min(540px,54vw);height:78px;object-fit:contain;object-position:center;border:0;border-radius:0;filter:none}.brand-lockup p{margin:2px 0 0;color:var(--color-text-muted);font-size:11px;line-height:1.1;text-align:center;max-width:min(520px,56vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tabs{position:sticky;top:119px;z-index:4;display:flex;gap:8px;padding:10px 22px;background:#060606;border-bottom:1px solid #1f1f1f}.tabs button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 12px}.tabs button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
-main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px}.card{border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface);overflow:hidden}.card[open]{border-color:var(--color-metal-gray);background:var(--color-surface-raised)}.card.liked{border-color:var(--color-brand-green)}.card.discarded{opacity:.46}.clip-summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;min-height:62px;padding:12px 14px;cursor:pointer;list-style:none}.clip-summary::-webkit-details-marker{display:none}.clip-rank{color:var(--color-metal-gray);font-weight:700}.clip-title{display:grid;gap:2px;min-width:0}.clip-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}.clip-title small{color:var(--color-text-muted)}.clip-status{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.clip-status span,.format-previews span{display:inline-flex;align-items:center;min-height:26px;padding:4px 8px;border-radius:999px;background:#242424;color:var(--color-text-soft);font-size:12px}
+main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px}.card{border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface);overflow:hidden}.card[open]{border-color:var(--color-metal-gray);background:var(--color-surface-raised)}.card.liked{border-color:var(--color-brand-green)}.card.discarded{opacity:.46}.clip-summary{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(180px,.55fr) auto;gap:12px;align-items:center;min-height:62px;padding:12px 14px;cursor:pointer;list-style:none}.clip-summary::-webkit-details-marker{display:none}.clip-rank{color:var(--color-metal-gray);font-weight:700}.clip-title{display:grid;gap:2px;min-width:0}.clip-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}.clip-title small{color:var(--color-text-muted)}.clip-row-timeline{position:relative;display:block;min-width:160px;height:30px;border:1px solid rgba(17,162,207,.22);border-radius:4px;background:linear-gradient(180deg,rgba(17,162,207,.08),rgba(255,255,255,.02)),rgba(5,5,5,.28);overflow:hidden}.clip-row-timeline-track{position:absolute;left:8px;right:8px;top:50%;height:3px;border-radius:999px;background:rgba(231,231,232,.12);transform:translateY(-50%)}.clip-row-timeline-window{position:absolute;top:7px;bottom:7px;border:1px solid rgba(175,207,42,.5);border-radius:3px;background:rgba(175,207,42,.08)}.clip-row-timeline-marker{position:absolute;top:6px;width:7px;height:18px;border:1px solid rgba(17,162,207,.8);border-radius:3px;background:rgba(17,162,207,.22);transform:translateX(-50%)}.clip-row-timeline-playhead{position:absolute;top:5px;width:2px;height:20px;border-radius:999px;background:var(--color-brand-white);transform:translateX(-50%);opacity:.72}.clip-status{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.clip-status span,.format-previews span{display:inline-flex;align-items:center;min-height:26px;padding:4px 8px;border-radius:999px;background:#242424;color:var(--color-text-soft);font-size:12px}
 .app-notice{position:sticky;top:0;z-index:30;margin:0;padding:10px 14px;background:#2b1717;color:#ffd7d7;border-bottom:1px solid #6d2b2b;font-size:13px;text-align:center}.app-notice[hidden]{display:none}
 .import-stage{display:none;max-width:1080px;margin:18px auto;padding:0 18px}.import-panel{display:grid;gap:14px;padding:18px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised)}.import-panel p{margin:4px 0 0;color:var(--color-text-muted)}.import-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.import-panel label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.import-panel input,.import-panel select,.import-panel textarea{width:100%;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black);color:var(--color-text);padding:9px 10px;font:inherit}.import-panel textarea{resize:vertical;min-height:112px}.import-panel small{color:var(--color-text-muted);line-height:1.35}.import-path-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.import-key-banner{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 12px;border:1px solid rgba(17,162,207,.4);border-radius:8px;background:rgba(17,162,207,.1);color:var(--color-text)}.import-key-banner[hidden]{display:none}.import-key-banner button{min-height:34px}.import-path-row button{min-height:38px;background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.duration-profile{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0}.duration-profile legend{grid-column:1/-1;color:var(--color-text-muted);font-size:12px}.duration-profile label{position:relative;display:grid!important}.duration-profile input{position:absolute;opacity:0;pointer-events:none}.duration-profile span{display:grid;gap:2px;min-height:54px;padding:10px 12px;border:1px solid var(--color-border-strong);border-radius:8px;background:var(--color-surface-muted);color:var(--color-text-soft)}.duration-profile input:checked+span{border-color:var(--color-brand-green);background:#182011;color:var(--color-text)}.duration-profile small{color:var(--color-text-muted)}.import-context{display:grid}.import-status{min-height:20px;color:var(--color-text-muted)}.import-result{display:flex;gap:8px;flex-wrap:wrap}.import-result a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.import-result code{display:block;width:100%;padding:10px;border:1px solid #3a2525;border-radius:6px;background:#180d0d;color:#ffcccc;white-space:pre-wrap}
 .layer-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:100%;min-height:0}.layer-strip:empty{display:none}.bumper-sequence{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;min-height:24px;color:var(--color-text-muted);font-size:12px}.bumper-sequence:empty{display:none}.bumper-sequence span{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bumper-sequence b{color:var(--color-brand-green);font-weight:800}.layer-chip{display:inline-flex;gap:6px;align-items:center;max-width:100%;min-height:30px;padding:4px 5px 4px 9px;border:1px solid #303030;border-radius:999px;background:var(--color-surface-muted);color:var(--color-text-soft);font-size:12px}.layer-chip.is-selected{border-color:var(--color-focus);background:#182011;color:var(--color-text)}.layer-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.layer-chip button{display:inline-grid;place-items:center;width:22px;height:22px;min-width:22px;padding:0;border:1px solid #3a3a3a;border-radius:999px;background:#242424;color:var(--color-text-soft);font-size:14px;line-height:1}
+.cuted-control-surface-slot{display:none;position:relative;z-index:90;margin:0 14px 14px}.cuted-control-surface-slot:empty{display:none}.card[open]>.cuted-control-surface-slot:not(:empty){display:block}.cuted-control-surface-slot .cuted-control-bar{width:100%;min-height:118px;padding:14px 22px;border-radius:18px}.cuted-control-surface-slot .cuted-tile-button{flex:0 0 78px;width:78px;height:72px;font-size:34px}.cuted-control-surface-slot .cuted-insert-button span{font-size:20px}.cuted-control-surface-slot .cuted-format-trigger{flex:0 0 154px;width:154px;height:72px}.cuted-control-surface-slot .cuted-divider{flex:0 0 1px;height:58px;margin:0 12px}.cuted-control-surface-slot .cuted-audio-group{flex:0 0 252px;min-width:238px}.cuted-control-surface-slot .cuted-ready-region{flex:0 0 172px;width:172px;min-height:72px}
 .editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;justify-items:center;gap:10px}.preview-frame{display:grid;gap:10px;width:100%;max-width:520px}.media{position:relative;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000;pointer-events:none}.placeholder{display:grid;place-items:center;height:100%;color:#777}.preview-bar{display:grid;grid-template-columns:1fr;gap:8px;justify-items:center;width:100%;padding:8px;border:1px solid #252525;border-radius:8px;background:#0a0a0a}.preview-controls,.preview-volume-group{display:flex;gap:6px;align-items:center}.preview-controls{justify-content:center;padding:4px;border:1px solid #202020;border-radius:999px;background:var(--color-surface-raised)}.preview-volume-group{padding-left:4px;border-left:1px solid #2d2d2d}.preview-icon,.preview-step{display:inline-grid;place-items:center;width:32px;height:32px;min-width:32px;padding:0;border:1px solid var(--color-border-strong);border-radius:999px;background:var(--color-surface-control);color:var(--color-text-soft)}.preview-play{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}.preview-icon svg{width:16px;height:16px;display:block;stroke:currentColor}.preview-step{width:26px;height:26px;min-width:26px;font-weight:700}.preview-volume-group output{min-width:32px;color:#d8d8d8;font-size:12px;text-align:center}.card[data-preview-format=tiktok] .preview-frame,.card[data-preview-format=shorts] .preview-frame,.card[data-preview-format=instagram] .preview-frame{max-width:min(100%,calc(72vh * 9 / 16))}.card[data-preview-format=facebook] .preview-frame{max-width:min(100%,calc(72vh * 4 / 5))}.card[data-preview-format=youtube] .preview-frame{max-width:min(100%,520px)}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;overflow:visible;padding-bottom:1px}.preview-strip button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 10px;min-height:34px;border-radius:999px;white-space:nowrap}.preview-strip button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
+.preview-camera-timeline--live{display:block!important;width:100%;min-height:152px;padding:0!important;border-color:rgba(17,162,207,.34)!important;overflow:hidden}.preview-camera-timeline--live .timeline-shell{min-height:150px;border:0;border-radius:4px;background:linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px) 0 0/28px 100%,linear-gradient(180deg,rgba(17,162,207,.08),transparent 34%),#070707}.preview-camera-timeline--live .volume-popover[data-disabled=true]{display:none!important}.preview-live-timeline-loading{display:grid;place-items:center;min-height:86px;color:var(--color-text-muted);font-size:12px}
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-stack{display:grid;gap:10px}.tool-section{border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:0;overflow:hidden}.tool-section>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:10px 12px;cursor:pointer;list-style:none;color:var(--color-text);font-weight:800}.tool-section>summary::-webkit-details-marker{display:none}.tool-section>summary:after{content:"";width:8px;height:8px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg);opacity:.62;transition:transform .16s ease}.tool-section[open]>summary:after{transform:rotate(225deg)}.tool-section>summary small{color:var(--color-text-muted);font-size:12px;font-weight:600;text-align:right}.tool-section[open]>summary{border-bottom:1px solid rgba(231,231,232,.08)}.tool-section>*:not(summary){margin:12px}.timeline-editor{padding:0}.timeline-head,.timeline-timebar,.timeline-values{display:flex;justify-content:space-between;gap:12px;color:var(--color-text-muted);font-size:12px}.timeline-head output,.timeline-timebar output{color:var(--color-text);text-align:right}.timeline-timebar{margin-top:10px}.timeline-timebar span:last-child{color:#777;text-align:right}.timeline-scrub{position:relative;height:42px;margin-top:8px}.timeline-scrub-track{position:absolute;left:0;right:0;top:17px;height:8px;border:1px solid #343434;border-radius:999px;background:linear-gradient(90deg,var(--color-surface-muted),#252525);overflow:hidden}.timeline-selected{position:absolute;top:0;bottom:0;background:rgba(175,207,42,.22);border-left:1px solid var(--color-brand-green);border-right:1px solid var(--color-brand-green)}.timeline-playhead{position:absolute;top:-8px;bottom:-8px;width:2px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7)}.timeline-playhead:before{content:"";position:absolute;left:50%;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--color-brand-white);transform:translateX(-50%)}.timeline-scrub input{position:absolute;inset:0;width:100%;height:42px;margin:0;background:transparent;opacity:0;cursor:pointer}.timeline{position:relative;height:38px;margin-top:6px}.timeline-track{position:absolute;left:0;right:0;top:16px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:var(--color-brand-white);border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:38px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{margin-top:6px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .export-dock{display:grid;gap:8px;margin-top:2px;padding:12px;border:1px solid #303030;border-radius:8px;background:#111}.export-dock strong{display:block;font-size:13px}.export-dock span{color:#a8a8a8;font-size:12px}
 .platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:var(--color-text);border-color:var(--color-brand-green)}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.effect-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.75fr);gap:10px}.effect-subpanel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.effect-subpanel strong{font-size:12px}.bumper-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.bumper-upload{display:grid;gap:6px;align-content:start;min-height:64px;padding:9px;border:1px dashed var(--color-border-strong);border-radius:8px;background:var(--color-surface-control);cursor:pointer}.bumper-upload input{font-size:11px}.bumper-strip{display:flex;gap:6px;flex-wrap:wrap;min-height:28px}.bumper-empty{color:var(--color-text-muted);font-size:12px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:var(--color-brand-blue)}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.camera-path-editor,.camera-manual-panel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-path-head,.camera-panel-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.camera-path-head strong,.camera-panel-title strong{font-size:12px}.camera-path-head span,.camera-panel-title span{color:var(--color-text-muted);font-size:12px}.camera-smart-panel{display:grid;gap:9px;padding:10px;border:1px solid rgba(17,162,207,.28);border-radius:8px;background:linear-gradient(135deg,rgba(17,162,207,.12),rgba(175,207,42,.06))}.camera-smart-row,.camera-smart-ai{display:grid;gap:8px}.camera-smart-row{grid-template-columns:repeat(3,minmax(0,1fr))}.camera-smart-ai{grid-template-columns:repeat(5,minmax(0,1fr))}.camera-smart-panel button{display:grid;gap:3px;justify-items:center;background:rgba(17,162,207,.1);color:var(--color-text);border:1px solid rgba(17,162,207,.34);text-align:center}.camera-smart-panel button:hover{border-color:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.14)}.camera-path-track{position:relative;height:34px}.camera-path-rail{position:absolute;left:0;right:0;top:15px;height:5px;border-radius:999px;background:#292929}.camera-path-marker{position:absolute;top:7px;width:20px;height:20px;min-width:20px;padding:0;border-radius:999px;transform:translateX(-50%);background:var(--color-surface-control);border:1px solid var(--color-border-strong)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:var(--color-brand-blue);box-shadow:0 0 0 4px rgba(17,162,207,.18)}.camera-path-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-keyframe-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}.camera-auto-status{min-height:18px;color:var(--color-text-muted);font-size:12px}.camera-path-delete{color:var(--color-danger)!important}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:minmax(160px,1fr) 120px 150px;gap:12px;max-width:none}.caption-toggle{align-content:center}.caption-toggle input{justify-self:start;width:auto;min-height:20px;accent-color:var(--color-brand-blue)}
@@ -8361,7 +9537,7 @@ body[data-tab=import] main,body[data-tab=import] .final-stage{display:none}body[
 .empty-project-stage{display:none;max-width:720px;margin:18px auto;padding:0 18px}.empty-project-panel{display:grid;gap:10px;padding:18px;border:1px solid var(--glass-border);border-radius:var(--radius-panel);background:var(--glass-bg-strong);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(24px) saturate(1.45);text-align:center}.empty-project-panel p{margin:0;color:var(--color-text-muted)}.empty-project-panel button{justify-self:center}body[data-project-empty=true][data-tab=edit] main{display:none}body[data-project-empty=true][data-tab=edit] .empty-project-stage{display:block}
 .settings-backdrop{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:18px;background:rgba(0,0,0,.58)}.settings-backdrop[hidden]{display:none}.settings-panel{width:min(560px,100%);border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised);box-shadow:var(--shadow-panel);padding:16px}.settings-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.settings-head p{margin:3px 0 0;color:var(--color-text-muted)}.settings-form{display:grid;gap:12px;margin-top:14px}.settings-form label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.settings-form input,.settings-form select{width:100%;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black);color:var(--color-text);padding:9px 10px;font:inherit}.settings-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.settings-status,.settings-usage{padding:10px;border:1px solid var(--color-border);border-radius:8px;background:#0b0b0b;color:var(--color-text-soft)}.settings-usage{display:grid;gap:3px;color:var(--color-text-muted)}.settings-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}.settings-form small{color:var(--color-text-muted)}
 button{background:var(--color-brand-white);color:var(--color-brand-black);border:0;border-radius:6px;padding:9px 12px;cursor:pointer}#reset-ui,button[data-action=discard]{background:#242424;color:var(--color-text-soft)}
-@media(max-width:860px){header{position:relative;grid-template-columns:1fr;justify-items:center}.header-actions{justify-content:center}.brand-logo{width:min(390px,88vw);height:64px}.brand-lockup p{max-width:86vw}.tabs{top:0;overflow:auto}.preview-strip button{font-size:12px;padding:7px 9px}main{padding:12px}.clip-summary{grid-template-columns:auto minmax(0,1fr);align-items:start}.clip-status{grid-column:1/-1;justify-content:flex-start}.editor-shell,.result-body,.camera-segments,.camera-smart-row,.camera-smart-ai,.camera-path-actions,.camera-keyframe-panel,.caption-settings,.preview-bar,.import-grid,.duration-profile,.import-path-row,.settings-grid,.effect-split,.bumper-actions{grid-template-columns:1fr}.preview-frame{max-width:100%}.preview-strip{justify-content:center}.preview-controls{width:max-content;max-width:100%;flex-wrap:wrap}.media{max-height:none}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons,.overlay-menu{grid-template-columns:1fr}}
+@media(max-width:860px){header{position:relative;grid-template-columns:1fr;justify-items:center}.header-actions{justify-content:center}.brand-logo{width:min(390px,88vw);height:64px}.brand-lockup p{max-width:86vw}.tabs{top:0;overflow:auto}.preview-strip button{font-size:12px;padding:7px 9px}main{padding:12px}.clip-summary{grid-template-columns:auto minmax(0,1fr);align-items:start}.clip-row-timeline,.clip-status{grid-column:1/-1}.clip-status{justify-content:flex-start}.editor-shell,.result-body,.camera-segments,.camera-smart-row,.camera-smart-ai,.camera-path-actions,.camera-keyframe-panel,.caption-settings,.preview-bar,.import-grid,.duration-profile,.import-path-row,.settings-grid,.effect-split,.bumper-actions{grid-template-columns:1fr}.preview-frame{max-width:100%}.preview-strip{justify-content:center}.preview-controls{width:max-content;max-width:100%;flex-wrap:wrap}.media{max-height:none}.stage-head{align-items:flex-start;flex-direction:column}.result-item summary{align-items:flex-start;flex-direction:column}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons,.overlay-menu{grid-template-columns:1fr}}
 """
 
 
@@ -8395,6 +9571,7 @@ header{background:linear-gradient(180deg,rgba(5,5,5,.92),rgba(5,5,5,.68));backdr
 .preview-bar,.preview-controls,.preview-camera-timeline,.preview-volume-group{overflow:visible}.preview-bar{position:relative;z-index:20}.preview-topbar{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-width:0}.preview-topbar .preview-strip{flex:1 1 auto;width:auto;min-width:0;justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;padding-bottom:0;scrollbar-width:none}.preview-topbar .preview-strip::-webkit-scrollbar{display:none}.preview-topbar .preview-strip button{flex:0 0 auto;min-height:32px;padding:7px 9px;font-size:12px}.preview-controls{display:block;width:100%;max-width:100%;padding:0;border:0;background:transparent;box-shadow:none;backdrop-filter:none}.preview-transport-group{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:5px 6px;border:1px solid var(--glass-border);border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.025)),rgba(5,5,5,.26);box-shadow:inset 0 1px 0 var(--glass-edge),0 8px 22px rgba(0,0,0,.18);backdrop-filter:blur(18px) saturate(1.45)}.preview-volume-group{position:relative;padding-left:0;border-left:0}.preview-camera-timeline{position:relative;width:100%;min-width:0;display:grid;align-items:center;min-height:42px;padding:6px 12px;border:1px solid rgba(17,162,207,.42);border-radius:4px;background:linear-gradient(180deg,rgba(17,162,207,.11),rgba(255,255,255,.025)),rgba(5,5,5,.24);box-shadow:inset 0 1px 0 var(--glass-edge),0 8px 22px rgba(0,0,0,.18);backdrop-filter:blur(18px) saturate(1.45)}.preview-camera-rail{position:relative;width:100%;height:24px;cursor:pointer;touch-action:none}.preview-audio-waveform{position:absolute;inset:1px 0;z-index:0;display:flex;align-items:center;gap:1px;opacity:.78;pointer-events:none}.preview-audio-waveform[hidden]{display:none}.preview-audio-waveform span{flex:1;min-width:1px;max-height:21px;background:rgba(175,207,42,.42);border-radius:1px}.preview-camera-track{position:absolute;left:0;right:0;top:50%;z-index:1;height:3px;border-radius:0;background:linear-gradient(90deg,rgba(17,162,207,.5),rgba(231,231,232,.12));box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);transform:translateY(-50%)}.preview-camera-playhead{position:absolute;top:50%;z-index:4;width:2px;height:20px;border-radius:999px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7);transform:translate(-50%,-50%);pointer-events:none}.preview-camera-marker{position:absolute;top:50%;z-index:3;width:9px;height:22px;min-width:9px;padding:0;border:1px solid rgba(17,162,207,.84);border-radius:3px;background:rgba(17,162,207,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 0 0 2px rgba(17,162,207,.06);transform:translate(-50%,-50%);cursor:pointer}.preview-camera-marker:active{transform:translate(-50%,-50%)}.preview-camera-marker.active{background:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.18),0 0 14px rgba(17,162,207,.32)}.preview-camera-popover,.preview-volume-popover{position:absolute;z-index:1000;display:grid;gap:8px;padding:10px;border:1px solid var(--glass-border);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel)}.preview-camera-popover{top:calc(100% + 8px);left:50%;width:min(260px,92vw);transform:translateX(-50%)}.preview-camera-popover[hidden],.preview-volume-popover[hidden]{display:none}.preview-camera-popover label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.preview-camera-popover select{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.preview-camera-popover input{width:100%;accent-color:var(--color-brand-blue)}.preview-camera-popover button{min-height:32px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.preview-volume-popover{right:50%;bottom:calc(100% + 8px);width:auto;height:128px;padding:12px 8px;place-items:center;transform:translateX(50%)}.preview-volume-slider{display:block;width:110px;accent-color:var(--color-brand-blue);writing-mode:vertical-rl;direction:rtl}
 .preview-topbar{justify-content:flex-start;position:relative;z-index:80}.preview-format-menu{position:relative;z-index:1400;min-width:134px}.preview-format-trigger{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:38px;padding:8px 12px;border:1px solid var(--glass-border);border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.025)),rgba(5,5,5,.26);color:var(--color-text-soft);font-weight:800}.preview-format-trigger:after{content:"";width:7px;height:7px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg) translateY(-2px);opacity:.72}.preview-format-trigger[aria-expanded=true]{border-color:rgba(17,162,207,.72);color:var(--color-brand-blue)}.preview-format-options{position:absolute;top:calc(100% + 7px);left:0;z-index:1500;display:grid;gap:4px;width:max(100%,160px);padding:7px;border:1px solid var(--glass-border);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel)}.preview-format-options[hidden]{display:none}.preview-format-options button{display:flex;justify-content:flex-start;min-height:32px;padding:7px 9px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--color-text-soft);font-weight:700;text-align:left}.preview-format-options button.active{border-color:rgba(17,162,207,.52);background:rgba(17,162,207,.14);color:var(--color-brand-blue)}
 .preview-motion-control{display:flex;align-items:center;gap:7px;min-height:38px;padding:7px 10px;border:1px solid var(--glass-border);border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.02)),rgba(5,5,5,.22);color:var(--color-text-muted);font-size:11px;font-weight:800;white-space:nowrap}.preview-motion-control input{width:82px;accent-color:var(--color-brand-blue)}
+.clip-summary{grid-template-columns:auto minmax(0,1fr) auto;align-items:start;gap:10px 12px;cursor:pointer}.clip-status{grid-column:3;grid-row:1;align-self:start}.clip-row-timeline{grid-column:2/4;width:100%;min-width:0;height:36px;min-height:36px;padding:0;cursor:default}.clip-row-timeline.preview-camera-timeline{display:block;align-items:initial}.card[open]{overflow:visible}.card[open] .clip-summary{position:relative;overflow:visible;padding:14px 18px 16px;grid-template-columns:auto minmax(0,1fr) auto}.card[open] .clip-row-timeline{grid-column:1/-1;height:auto;min-height:226px}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:calc(100% + 36px);min-height:226px;margin:4px -18px 0;border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible!important;backdrop-filter:none}.card[open] .clip-row-timeline.preview-camera-timeline--live .timeline-shell{min-height:224px;overflow:visible!important;border:0!important;border-radius:0!important;background:linear-gradient(90deg,rgba(255,255,255,.028) 1px,transparent 1px) 0 0/28px 100%,linear-gradient(180deg,rgba(17,162,207,.055),transparent 38%)!important;box-shadow:none!important}.card[open] .clip-row-timeline.preview-camera-timeline--live .timeline-canvas{overflow:visible}.card[open] .clip-row-timeline.preview-camera-timeline--live .playhead-control{z-index:12}.card[open] .clip-row-timeline.preview-camera-timeline--live .trim-handle,.card[open] .clip-row-timeline.preview-camera-timeline--live .trim-handle:hover,.card[open] .clip-row-timeline.preview-camera-timeline--live .trim-handle:focus-visible,.card[open] .clip-row-timeline.preview-camera-timeline--live .trim-handle.is-dragging{z-index:10!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;transform:none!important}.card:not([open]) .clip-row-timeline.preview-camera-timeline{overflow:hidden}.card:not([open]) .clip-row-timeline .preview-camera-popover,.card:not([open]) .clip-row-timeline .volume-popover{display:none!important}
 .media{border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-panel);background:#000;box-shadow:0 14px 44px rgba(0,0,0,.32)}
 .tool-section,.export-dock,.overlay-menu,.settings-panel{border-color:var(--glass-border);border-radius:var(--radius-panel);background:linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.025) 36%,rgba(0,0,0,.08) 100%),var(--glass-bg-strong);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-edge),inset 0 -18px 28px rgba(0,0,0,.14);backdrop-filter:blur(24px) saturate(1.45)}
 .tool-section>summary{color:rgba(231,231,232,.9)}.export-dock{padding:14px}.export-dock span{color:rgba(231,231,232,.6)}
@@ -8407,7 +9584,7 @@ button[data-action=discard],.result-actions a.secondary,.result-actions button.s
 .duration-profile input:checked+span,.layer-chip.is-selected{border-color:rgba(17,162,207,.72);background:var(--control-active);color:var(--color-text)}
 .camera-path-rail{background:linear-gradient(90deg,rgba(17,162,207,.28),rgba(231,231,232,.1),rgba(175,207,42,.18))}.camera-path-marker{border-color:var(--glass-border);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.035)),rgba(231,231,232,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.32),0 6px 14px rgba(0,0,0,.26)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:rgba(17,162,207,.88);box-shadow:0 0 0 4px rgba(17,162,207,.16),0 0 24px rgba(17,162,207,.26)}
 .preview-camera-marker span,.camera-path-marker span{position:absolute;left:50%;bottom:calc(100% + 4px);max-width:72px;padding:2px 5px;border:1px solid rgba(231,231,232,.2);border-radius:999px;background:rgba(5,5,5,.82);color:var(--color-text-soft);font-size:10px;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform:translateX(-50%);pointer-events:none}.camera-path-marker{overflow:visible}.preview-camera-marker{overflow:visible}.camera-path-marker span{bottom:calc(100% + 5px)}.preview-camera-marker.active span,.camera-path-marker.active span{border-color:rgba(17,162,207,.7);color:#fff}
-.preview-camera-popover-head{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center}.preview-camera-popover-head strong{font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.preview-camera-popover-head span,.preview-camera-popover small{color:var(--color-text-muted);font-size:11px}.preview-camera-popover-close{display:inline-grid!important;place-items:center;width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;padding:0!important;border-radius:999px!important}.preview-camera-popover-actions{display:grid;grid-template-columns:1fr auto;gap:8px}.preview-camera-popover [data-preview-camera-popover-delete]{color:var(--color-danger)!important}
+.preview-camera-popover{overflow:hidden}.preview-camera-popover--live{gap:7px;padding:11px;border-color:rgba(17,162,207,.42);border-radius:12px;background:radial-gradient(circle at 26% 0,rgba(17,162,207,.26),transparent 36%),linear-gradient(135deg,rgba(231,231,232,.16),transparent 32%),rgba(7,7,7,.86);box-shadow:inset 0 1px rgba(255,255,255,.22),inset 0 -1px rgba(0,0,0,.62),0 22px 58px rgba(0,0,0,.58),0 0 36px rgba(17,162,207,.24);backdrop-filter:blur(24px) saturate(1.28);animation:preview-camera-popover-in 220ms cubic-bezier(.2,.9,.2,1)}.preview-camera-popover-aura,.preview-camera-popover-lens,.preview-camera-popover-beam{position:absolute;pointer-events:none}.preview-camera-popover-aura{inset:-34px;background:conic-gradient(from 140deg,transparent,rgba(17,162,207,.24),transparent 42%),radial-gradient(circle at 76% 18%,rgba(175,207,42,.16),transparent 20%);opacity:.48;animation:preview-camera-popover-orbit 5.2s linear infinite}.preview-camera-popover-lens{right:10px;top:12px;width:50px;height:50px;border:1px solid rgba(231,231,232,.12);border-radius:50%;background:radial-gradient(circle at 36% 30%,rgba(255,255,255,.24),transparent 28%),radial-gradient(circle,rgba(17,162,207,.16),transparent 68%);opacity:.64}.preview-camera-popover-beam{left:50%;bottom:-34px;width:2px;height:34px;background:linear-gradient(180deg,rgba(17,162,207,.9),transparent);box-shadow:0 0 18px rgba(17,162,207,.54)}.preview-camera-popover-head,.preview-camera-popover label,.preview-camera-popover small,.preview-camera-popover-actions,.preview-camera-popover-meter,.preview-camera-popover-primary{position:relative;z-index:1}.preview-camera-popover-head{display:grid;grid-template-columns:1fr auto auto;gap:7px;align-items:center}.preview-camera-popover-head strong{font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 0 16px rgba(17,162,207,.36)}.preview-camera-popover-head span,.preview-camera-popover small{color:rgba(231,231,232,.64);font-size:11px}.preview-camera-popover-close{display:inline-grid!important;place-items:center;width:22px!important;height:22px!important;min-width:22px!important;min-height:22px!important;padding:0!important;border-radius:999px!important;background:rgba(231,231,232,.08)!important}.preview-camera-popover label{gap:4px;font-size:11px;text-transform:none}.preview-camera-popover select{min-height:31px;padding:6px 8px;border-color:rgba(17,162,207,.34);background:rgba(0,0,0,.56)}.preview-camera-popover input{height:18px}.preview-camera-popover-meter{overflow:hidden;height:6px;margin:1px 0 2px;border-radius:999px;background:rgba(0,0,0,.28);box-shadow:inset 0 0 10px rgba(0,0,0,.58)}.preview-camera-popover-meter i{position:relative;display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--color-brand-blue),rgba(231,231,232,.9));box-shadow:0 0 16px rgba(17,162,207,.52);animation:preview-camera-meter-breathe 1.8s ease-in-out infinite}.preview-camera-popover-meter i::after{position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.52),transparent);content:"";transform:translateX(-110%);animation:preview-camera-meter-scan 2.4s ease-in-out infinite}.preview-camera-popover-actions{display:grid;grid-template-columns:1fr auto;gap:7px;align-items:center}.preview-camera-popover button{min-height:31px}.preview-camera-popover-primary{border-color:rgba(17,162,207,.56)!important;background:linear-gradient(180deg,rgba(17,162,207,.34),rgba(17,162,207,.12))!important;color:var(--color-text)!important;font-weight:900}.preview-camera-popover-danger{min-width:70px;color:#ff8f8f!important;border-color:rgba(255,111,111,.32)!important;background:linear-gradient(180deg,rgba(255,111,111,.12),rgba(255,111,111,.04))!important}.preview-camera-popover-danger:disabled{opacity:.42}.preview-camera-popover--portal{position:fixed!important;z-index:3200!important;width:min(236px,calc(100vw - 16px))!important;max-width:calc(100vw - 16px);transform:none!important}@keyframes preview-camera-popover-in{from{opacity:0;transform:translateY(12px) scale(.94);filter:blur(6px)}to{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}}@keyframes preview-camera-popover-orbit{to{transform:rotate(360deg)}}@keyframes preview-camera-meter-breathe{0%,100%{filter:brightness(.94)}50%{filter:brightness(1.18)}}@keyframes preview-camera-meter-scan{0%,18%{transform:translateX(-110%)}58%,100%{transform:translateX(130%)}}
 .preview-volume-group{z-index:2300}.preview-volume-popover{z-index:2600!important;width:44px!important;min-width:44px!important;height:120px!important;padding:10px 6px!important;overflow:visible}.preview-volume-slider{width:92px!important;max-width:92px}.preview-ai-button{display:inline-grid;place-items:center;min-width:42px;height:32px;padding:0 12px;border:1px solid rgba(17,162,207,.72);border-radius:999px;background:linear-gradient(180deg,rgba(17,162,207,.28),rgba(17,162,207,.1));color:var(--color-text);font-weight:900;letter-spacing:0}.preview-ai-button:disabled{opacity:.62;cursor:progress}.preview-ai-status{min-height:16px;width:100%;color:rgba(231,231,232,.62);font-size:12px;line-height:1.25;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .overlay-menu button,.overlay-layer-row button{background:rgba(231,231,232,.08);color:rgba(231,231,232,.8);border-color:var(--glass-border)}
 .overlay-danger{background:rgba(80,20,20,.72)!important;border-color:rgba(255,120,120,.46)!important;color:#ffd2d2!important}
@@ -8549,6 +9726,7 @@ function applyTab(tab){
     btn.classList.toggle("active", btn.dataset.tab === next);
   });
   renderFinalStage();
+  if (next === "final") restoreFinalizeResults();
 }
 function platformLabel(key){
   return resolutionPresetLabel(resolutionPresetForPlatform(key));
@@ -8947,7 +10125,7 @@ function cameraPathFrameWithPreset(frame, key, strength){
 }
 function setCameraPathForRank(rank, path, platform = activePlatformForRank(rank), rerender = true){
   const normalized = normalizeCameraPath(path);
-  const duration = cardForRank(rank) ? cameraContextForCard(cardForRank(rank)).duration : 0;
+  const duration = cardForRank(rank) ? cameraTimelineDurationForCard(cardForRank(rank)) : 0;
   setPlatformEditForRank(rank, platform, { camera_path: normalized, director_plan: directorPlanFromCameraPath(normalized, duration, platform) });
   const card = cardForRank(rank);
   if (card) {
@@ -8962,11 +10140,11 @@ function setCameraPathForRank(rank, path, platform = activePlatformForRank(rank)
 function addCameraPathFrameForCard(card){
   const rank = card.dataset.rank;
   const platform = activePlatformForRank(rank);
-  const context = cameraContextForCard(card);
+  const duration = cameraTimelineDurationForCard(card);
+  const position = cameraTimelinePositionForCard(card);
   const edit = platformEditForRank(rank, platform);
-  const sourcePath = cameraPathForEdit(edit, context.duration);
-  const position = clampNumber(context.position, 0, Math.max(context.duration, .3));
-  const frame = cameraFrameForTime(edit.camera, sourcePath, position, context.duration);
+  const sourcePath = cameraPathForEdit(edit, duration);
+  const frame = cameraFrameForTime(edit.camera, sourcePath, position, duration);
   const next = Object.assign({}, frame, { time: Number(position.toFixed(3)), source: "manual-path" });
   const path = cameraPathWithFrame(sourcePath, next);
   const index = path.findIndex(item => Math.abs(item.time - next.time) < .01);
@@ -8976,10 +10154,10 @@ function addCameraPathFrameForCard(card){
 function addCenterCameraFrameForCard(card){
   const rank = card.dataset.rank;
   const platform = activePlatformForRank(rank);
-  const context = cameraContextForCard(card);
+  const duration = cameraTimelineDurationForCard(card);
+  const position = cameraTimelinePositionForCard(card);
   const edit = platformEditForRank(rank, platform);
-  const sourcePath = cameraPathForEdit(edit, context.duration);
-  const position = clampNumber(context.position, 0, Math.max(context.duration, .3));
+  const sourcePath = cameraPathForEdit(edit, duration);
   const next = normalizeCameraPathFrame({
     time: Number(position.toFixed(3)),
     key: "center",
@@ -8995,10 +10173,11 @@ function updateCameraPathFrameForCard(card, patch, rerender = true){
   const rank = card.dataset.rank;
   const platform = activePlatformForRank(rank);
   const edit = platformEditForRank(rank, platform);
-  const context = cameraContextForCard(card);
-  const path = cameraPathForEdit(edit, context.duration);
+  const duration = cameraTimelineDurationForCard(card);
+  const position = cameraTimelinePositionForCard(card);
+  const path = cameraPathForEdit(edit, duration);
   const index = selectedCameraPathIndex(card, path);
-  const current = path[index] || cameraFrameForTime(edit.camera, path, context.position, context.duration);
+  const current = path[index] || cameraFrameForTime(edit.camera, path, position, duration);
   let frame = Object.assign({}, current, patch);
   if (patch.key || patch.strength !== undefined) {
     frame = cameraPathFrameWithPreset(frame, patch.key || current.key || "center", patch.strength ?? current.strength ?? 60);
@@ -9011,10 +10190,11 @@ function updateCameraPathFrameIntentForCard(card, intent){
   const rank = card.dataset.rank;
   const platform = activePlatformForRank(rank);
   const edit = platformEditForRank(rank, platform);
-  const context = cameraContextForCard(card);
-  const path = cameraPathForEdit(edit, context.duration);
+  const duration = cameraTimelineDurationForCard(card);
+  const position = cameraTimelinePositionForCard(card);
+  const path = cameraPathForEdit(edit, duration);
   const index = selectedCameraPathIndex(card, path);
-  const current = path[index] || cameraFrameForTime(edit.camera, path, context.position, context.duration);
+  const current = path[index] || cameraFrameForTime(edit.camera, path, position, duration);
   const frame = cameraFramePatchForIntent(intent, current);
   const nextPath = cameraPathWithFrame(path, frame, index);
   setSelectedCameraPathIndex(card, Math.min(index, nextPath.length - 1));
@@ -9023,11 +10203,11 @@ function updateCameraPathFrameIntentForCard(card, intent){
 function addCameraIntentFrameForCard(card, intent){
   const rank = card.dataset.rank;
   const platform = activePlatformForRank(rank);
-  const context = cameraContextForCard(card);
+  const duration = cameraTimelineDurationForCard(card);
+  const position = cameraTimelinePositionForCard(card);
   const edit = platformEditForRank(rank, platform);
-  const sourcePath = cameraPathForEdit(edit, context.duration);
-  const position = clampNumber(context.position, 0, Math.max(context.duration, .3));
-  const base = cameraFrameForTime(edit.camera, sourcePath, position, context.duration);
+  const sourcePath = cameraPathForEdit(edit, duration);
+  const base = cameraFrameForTime(edit.camera, sourcePath, position, duration);
   const frame = cameraFramePatchForIntent(intent, Object.assign({}, base, { time: Number(position.toFixed(3)) }));
   const path = cameraPathWithFrame(sourcePath, frame);
   const index = path.findIndex(item => Math.abs(item.time - frame.time) < .01);
@@ -9035,15 +10215,15 @@ function addCameraIntentFrameForCard(card, intent){
   setCameraPathForRank(rank, path, platform);
 }
 function moveCameraPathFrameToPlayhead(card){
-  const context = cameraContextForCard(card);
-  updateCameraPathFrameForCard(card, { time: Number(context.position.toFixed(3)) });
+  const position = cameraTimelinePositionForCard(card);
+  updateCameraPathFrameForCard(card, { time: Number(position.toFixed(3)) });
 }
 function deleteCameraPathFrameForCard(card){
   const rank = card.dataset.rank;
   const platform = activePlatformForRank(rank);
   const edit = platformEditForRank(rank, platform);
-  const context = cameraContextForCard(card);
-  const path = cameraPathForEdit(edit, context.duration);
+  const duration = cameraTimelineDurationForCard(card);
+  const path = cameraPathForEdit(edit, duration);
   if (path.length <= 1) return;
   const index = selectedCameraPathIndex(card, path);
   path.splice(index, 1);
@@ -9189,6 +10369,7 @@ async function analyzeCameraForCard(card, mode = "auto-director"){
 function setCameraAutoStatus(card, message){
   const status = card.querySelector("[data-camera-auto-status]");
   if (status) status.textContent = message || "";
+  updateControlSurfaceForCard(card);
 }
 function cameraDiagnosticsText(diagnostics){
   if (!diagnostics || typeof diagnostics !== "object") return "";
@@ -9359,10 +10540,21 @@ function cameraContextForCard(card, time = null){
     duration: Math.max(values.endPos - values.trimStart, .3)
   };
 }
+function cameraTimelineDurationForCard(card){
+  const values = trimValues(card);
+  return Math.max(Number(values.duration) || Number(card?.dataset?.duration) || 0, .3);
+}
+function cameraTimelinePositionForCard(card, time = null){
+  const values = trimValues(card);
+  const video = primaryCameraVideo(card);
+  const raw = time === null && video && Number.isFinite(video.currentTime) ? video.currentTime : time;
+  return clampPreviewTime(values, Number(raw ?? values.trimStart));
+}
 function updateCameraSurfaceForCard(card, time = null){
-  const context = cameraContextForCard(card, time);
+  const duration = cameraTimelineDurationForCard(card);
+  const position = cameraTimelinePositionForCard(card, time);
   const edit = platformEditForRank(card.dataset.rank, activePlatformForRank(card.dataset.rank));
-  applyCameraSurface(card.querySelector(".camera-surface"), edit.camera, context.position, context.duration, cameraPathForEdit(edit, context.duration));
+  applyCameraSurface(card.querySelector(".camera-surface"), edit.camera, position, duration, cameraPathForEdit(edit, duration));
 }
 function startCameraFrameSync(video, update){
   if (!video || typeof requestAnimationFrame !== "function") return;
@@ -9406,7 +10598,10 @@ function setEffectForRank(rank, patch){
   const current = effectForRank(rank, platform);
   setPlatformEditForRank(rank, platform, { effect: normalizeEffect(Object.assign({}, current, patch)) });
   const card = cardForRank(rank);
-  if (card) updateEffectUi(card);
+  if (card) {
+    updateEffectUi(card);
+    updateControlSurfaceForCard(card);
+  }
   renderFinalStage();
 }
 function effectOpacity(effect){
@@ -9450,7 +10645,10 @@ function setBumperForRank(rank, slot, bumper, platform = activePlatformForRank(r
   if (!next[safeSlot]) delete next[safeSlot];
   setPlatformEditForRank(rank, key, { bumpers: normalizeBumpers(next) });
   const card = cardForRank(rank);
-  if (card) updateEffectUi(card);
+  if (card) {
+    updateEffectUi(card);
+    updateControlSurfaceForCard(card);
+  }
   renderFinalStage();
 }
 function removeBumperForRank(rank, slot, platform = activePlatformForRank(rank)){
@@ -9460,7 +10658,10 @@ function removeBumperForRank(rank, slot, platform = activePlatformForRank(rank))
   delete next[safeSlot];
   setPlatformEditForRank(rank, key, { bumpers: normalizeBumpers(next) });
   const card = cardForRank(rank);
-  if (card) updateEffectUi(card);
+  if (card) {
+    updateEffectUi(card);
+    updateControlSurfaceForCard(card);
+  }
   renderFinalStage();
 }
 function bumperSlotLabel(slot){ return normalizeBumperSlot(slot) === "intro" ? "Entrada" : "Saida"; }
@@ -9629,6 +10830,7 @@ function setCardPreviewFormat(card, format){
   if (label) label.textContent = platformLabel(next);
   const status = card.querySelector("[data-platform-preset-current]");
   if (status) status.textContent = `Preset: ${platformLabel(next)}`;
+  updateControlSurfaceForCard(card);
 }
 function closePreviewFormatMenus(except = null){
   document.querySelectorAll("[data-preview-format-menu]").forEach(menu => {
@@ -9662,6 +10864,142 @@ function updateCardTools(card){
   updateCameraUi(card);
   updateEffectUi(card);
   updateOverlayUi(card);
+  updateControlSurfaceForCard(card);
+}
+function updateControlSurfaceForCard(card){
+  if (!card || !card.open) {
+    destroyControlSurfaceForCard(card);
+    return;
+  }
+  const slot = card.querySelector("[data-cuted-control-surface]");
+  if (!slot || typeof window.createCutedControlBar !== "function") return;
+  const next = controlSurfaceStateForCard(card);
+  if (card.__cutedControlSurface) {
+    card.__cutedControlSurface.update(next);
+    return;
+  }
+  card.__cutedControlSurface = window.createCutedControlBar(slot, Object.assign(next, {
+    mockBumpers: false,
+    callbacks: controlSurfaceCallbacksForCard(card)
+  }));
+}
+function destroyControlSurfaceForCard(card){
+  if (!card || !card.__cutedControlSurface) return;
+  card.__cutedControlSurface.destroy();
+  delete card.__cutedControlSurface;
+}
+function controlSurfaceStateForCard(card){
+  const rank = card.dataset.rank;
+  const platform = activePlatformForRank(rank);
+  const effect = effectForRank(rank, platform);
+  const video = primaryCameraVideo(card);
+  const platforms = uniquePlatforms(cardState(rank).platforms);
+  return {
+    aiStatus: card.dataset.aiApplying === "1" ? "loading" : controlSurfaceAiStatus(card),
+    aspectRatio: controlSurfaceAspectRatio(platform),
+    bumpers: bumpersForRank(rank, platform),
+    captionsEnabled: captionEnabled(),
+    effectStyle: controlSurfaceEffectStyle(effect),
+    muted: video ? video.muted || video.volume <= 0 : false,
+    ready: cardState(rank).status === "liked" && platforms.includes(platform),
+    status: controlSurfaceStatus(card),
+    volume: video ? Math.round((video.muted ? 0 : video.volume) * 100) : Math.round(defaultPreviewVolume * 100)
+  };
+}
+function controlSurfaceCallbacksForCard(card){
+  return {
+    onAiClick: () => analyzeCameraForCard(card, "ai-director"),
+    onApproveClick: () => markControlSurfaceReady(card),
+    onBumperClick: payload => openControlSurfaceBumperInput(card, payload.slot),
+    onBumperRemove: payload => removeBumperForRank(card.dataset.rank, payload.slot),
+    onCaptionToggle: payload => setControlSurfaceCaptions(payload.captionsEnabled),
+    onDiscardClick: () => discardControlSurfaceCard(card),
+    onEffectStyleChange: payload => setEffectForRank(card.dataset.rank, { key: appEffectKeyFromControlSurface(payload.effectStyle) }),
+    onFormatChange: payload => setControlSurfaceFormat(card, payload.aspectRatio),
+    onReadyCancel: () => cancelControlSurfaceReady(card),
+    onVolumeChange: payload => setPreviewVolume(card, payload.muted ? 0 : payload.volume / 100)
+  };
+}
+function controlSurfaceAiStatus(card){
+  const edit = platformEditForRank(card.dataset.rank, activePlatformForRank(card.dataset.rank));
+  return explicitCameraPathForEdit(edit).length ? "active" : "idle";
+}
+function controlSurfaceStatus(card){
+  const cameraStatus = card.querySelector("[data-camera-auto-status]")?.textContent.trim();
+  if (card.dataset.bumperStatus) return { kind: "error", label: card.dataset.bumperStatus, tone: "red" };
+  if (card.dataset.aiApplying === "1") return { kind: "ai", label: "AI analyzing frame safety...", progress: 42, tone: "blue" };
+  if (cameraStatus) return { kind: "ai", label: cameraStatus, tone: "blue" };
+  if (cardState(card.dataset.rank).status === "liked") return { kind: "ready", label: "Ready", tone: "green" };
+  const effect = effectForRank(card.dataset.rank);
+  if (effect.key !== "none") return { kind: "effect", label: `Effect preview: ${effect.label}`, tone: "green" };
+  return null;
+}
+function controlSurfaceAspectRatio(platform){
+  const preset = resolutionPresetForPlatform(platform);
+  if (preset === "vertical_4_5") return "4:5";
+  if (preset === "horizontal_16_9") return "16:9";
+  return "9:16";
+}
+function controlSurfacePlatform(aspectRatio){
+  if (aspectRatio === "4:5") return "facebook";
+  if (aspectRatio === "16:9") return "youtube";
+  return "tiktok";
+}
+function controlSurfaceEffectStyle(effect){
+  const key = normalizeEffect(effect).key;
+  if (key === "vhs") return "vhs";
+  if (key === "old-film") return "film";
+  if (key === "light-grain" || key === "bw-old") return "grain";
+  return "clean";
+}
+function appEffectKeyFromControlSurface(style){
+  if (style === "vhs") return "vhs";
+  if (style === "film") return "old-film";
+  if (style === "grain") return "light-grain";
+  return "none";
+}
+function setControlSurfaceFormat(card, aspectRatio){
+  card.dataset.previewTouched = "1";
+  setPreviewPlayback(card, false);
+  setCardPreviewFormat(card, controlSurfacePlatform(aspectRatio));
+  updateCardTools(card);
+  renderFinalStage();
+}
+function openControlSurfaceBumperInput(card, slot){
+  const safeSlot = normalizeBumperSlot(slot);
+  updateEffectUi(card);
+  const input = card.querySelector(`[data-bumper-video="${safeSlot}"]`);
+  if (input) input.click();
+}
+function setControlSurfaceCaptions(enabled){
+  localStorage.setItem("cutted-caption-enabled", enabled ? "1" : "0");
+  syncCaptionInputs();
+  renderCaptionQueue();
+  renderFinalStage();
+  document.querySelectorAll(".card[open]").forEach(updateControlSurfaceForCard);
+}
+function markControlSurfaceReady(card){
+  const current = cardState(card.dataset.rank);
+  const platform = activePlatformForRank(card.dataset.rank);
+  const platforms = uniquePlatforms([...(current.platforms || []), platform]);
+  setCardState(card.dataset.rank, { status: "liked", platforms });
+  paint(card);
+  updatePlatformUi(card);
+  renderCaptionQueue();
+}
+function cancelControlSurfaceReady(card){
+  const platform = activePlatformForRank(card.dataset.rank);
+  const platforms = uniquePlatforms(cardState(card.dataset.rank).platforms).filter(item => item !== platform);
+  setCardState(card.dataset.rank, { status: platforms.length ? "liked" : null, platforms });
+  paint(card);
+  updatePlatformUi(card);
+  renderCaptionQueue();
+}
+function discardControlSurfaceCard(card){
+  setCardState(card.dataset.rank, { status: "discarded", platforms: [] });
+  paint(card);
+  updatePlatformUi(card);
+  renderCaptionQueue();
 }
 function updateCameraUi(card){
   const edit = platformEditForRank(card.dataset.rank, activePlatformForRank(card.dataset.rank));
@@ -10364,7 +11702,32 @@ function updateTrimUi(card){
   }
   const windowLabel = card.querySelector("[data-timeline-window]");
   if (windowLabel) windowLabel.textContent = `${fixed(values.startPos)} - ${fixed(values.endPos)} no clipe`;
+  renderCardRowTimeline(card, values);
   updateTimelinePlayhead(card);
+}
+function renderCardRowTimeline(card, values = null){
+  const container = card.querySelector("[data-card-row-timeline]");
+  if (!container) return;
+  if (card.open && (card.__liveTimelineController || card.__liveTimelineLoading)) return;
+  const current = values || trimValues(card);
+  const duration = Math.max(current.duration, .1);
+  const endPos = trimEndPosition(current);
+  const platform = activePlatformForRank(card.dataset.rank);
+  const edit = platformEditForRank(card.dataset.rank, platform);
+  const path = cameraPathForEdit(edit, duration).slice(0, 24);
+  const left = clampNumber((current.trimStart / duration) * 100, 0, 100);
+  const right = clampNumber((endPos / duration) * 100, 0, 100);
+  const context = cameraContextForCard(card);
+  const playhead = clampNumber((context.position / duration) * 100, 0, 100);
+  const markers = path.map(frame => {
+    const markerLeft = clampNumber((Number(frame.time || 0) / duration) * 100, 0, 100);
+    const label = directorMarkerTitle(edit.director_plan, frame);
+    return `<span class="clip-row-timeline-marker" style="left:${markerLeft.toFixed(2)}%" title="${escapeAttr(label)}"></span>`;
+  }).join("");
+  container.innerHTML = `<span class="clip-row-timeline-track"></span>
+    <span class="clip-row-timeline-window" style="left:${left.toFixed(2)}%;right:${(100 - right).toFixed(2)}%"></span>
+    ${markers}
+    <span class="clip-row-timeline-playhead" style="left:${playhead.toFixed(2)}%"></span>`;
 }
 function updateTimelinePlayhead(card, time = null){
   const values = trimValues(card);
@@ -10386,15 +11749,198 @@ function updateTimelinePlayhead(card, time = null){
 function previewCameraTimelineContext(card){
   const values = trimValues(card);
   const context = cameraContextForCard(card);
-  const duration = Math.max(context.duration, .3);
+  const duration = cameraTimelineDurationForCard(card);
   const platform = activePlatformForRank(card.dataset.rank);
   const edit = platformEditForRank(card.dataset.rank, platform);
   const path = cameraPathForEdit(edit, duration);
   return { values, context, duration, platform, edit, path };
 }
 function renderPreviewCameraTimeline(card){
+  if (card.open) {
+    if (renderLivePreviewCameraTimeline(card)) return;
+    renderLegacyPreviewCameraTimeline(card);
+    return;
+  }
+  destroyLivePreviewCameraTimeline(card);
+  renderCardRowTimeline(card);
+}
+function renderLivePreviewCameraTimeline(card){
+  const container = card.querySelector("[data-preview-camera-timeline]");
+  if (!container || container.dataset.liveTimelineFailed === "1") return false;
+  const live = window.CuttedLiveTimeline;
+  if (!live || typeof live.createLiveTimeline !== "function") return false;
+  const options = liveTimelineOptionsForCard(card);
+  container.classList.add("preview-camera-timeline--live");
+  if (card.__liveTimelineController) {
+    ensureLivePreviewCameraPopover(card);
+    card.__liveTimelineController.update(options);
+    loadLiveTimelineWaveform(card);
+    return true;
+  }
+  if (card.__liveTimelineLoading) return true;
+  card.__liveTimelineLoading = true;
+  container.innerHTML = '<div class="preview-live-timeline-loading">Carregando timeline...</div>';
+  live.createLiveTimeline(container, options).then(controller => {
+    card.__liveTimelineController = controller;
+    delete card.__liveTimelineLoading;
+    controller.update(liveTimelineOptionsForCard(card));
+    ensureLivePreviewCameraPopover(card);
+    loadLiveTimelineWaveform(card);
+  }).catch(error => {
+    console.warn("Timeline viva indisponivel; usando timeline compacta.", error);
+    delete card.__liveTimelineLoading;
+    container.dataset.liveTimelineFailed = "1";
+    renderLegacyPreviewCameraTimeline(card);
+  });
+  return true;
+}
+function destroyLivePreviewCameraTimeline(card){
+  if (card.__liveTimelineController && typeof card.__liveTimelineController.destroy === "function") {
+    card.__liveTimelineController.destroy();
+  }
+  delete card.__liveTimelineController;
+  delete card.__liveTimelineLoading;
+  const container = card.querySelector("[data-preview-camera-timeline]");
+  if (container) {
+    container.classList.remove("preview-camera-timeline--live");
+    container.removeAttribute("style");
+  }
+}
+function liveTimelineOptionsForCard(card){
+  const values = trimValues(card);
+  const duration = cameraTimelineDurationForCard(card);
+  const platform = activePlatformForRank(card.dataset.rank);
+  const edit = platformEditForRank(card.dataset.rank, platform);
+  const path = cameraPathForEdit(edit, duration);
+  const video = primaryCameraVideo(card);
+  const pending = Number(card.dataset.pendingSeek);
+  const playhead = Number.isFinite(pending) ? pending : cameraTimelinePositionForCard(card);
+  const model = {
+    cameraPath: path,
+    duration,
+    effectKeyframes: liveTimelineEffectKeyframesForCard(card),
+    muted: video ? video.muted : false,
+    playhead,
+    selectedCameraIndex: selectedCameraPathIndex(card, path),
+    trimEndPosition: trimEndPosition(values),
+    trimStart: values.trimStart,
+    volume: video ? video.volume : defaultPreviewVolume,
+    waveformPayload: parsePreviewWaveform(card.dataset.previewWaveformPeaks)
+  };
+  const live = window.CuttedLiveTimeline || {};
+  const options = typeof live.createLiveTimelineOptionsFromCuttedModel === "function"
+    ? live.createLiveTimelineOptionsFromCuttedModel(model)
+    : fallbackLiveTimelineOptions(model);
+  return Object.assign(options, {
+    callbacks: liveTimelineCallbacksForCard(card),
+    logoUrl: "assets/brand/cuted-logo-transparent.png",
+    playing: video ? !video.paused && !video.ended : false,
+    showInspector: false,
+    showVolume: false
+  });
+}
+function fallbackLiveTimelineOptions(model){
+  const camera = (model.cameraPath || []).map((frame, index) => ({
+    id: `camera-${index}`,
+    layer: "camera",
+    time: clampNumber(Number(frame.time || 0), 0, Math.max(model.duration, .3)),
+    label: frame.label || frame.key || frame.source || `Camera ${index + 1}`,
+    editable: true,
+    intensity: clampNumber(Number(frame.confidence ?? 0.68), .18, 1)
+  }));
+  return {
+    duration: model.duration,
+    keyframes: camera,
+    muted: model.muted,
+    peaks: model.waveformPayload,
+    playhead: model.playhead,
+    selectedKeyframeId: camera[model.selectedCameraIndex]?.id || null,
+    trimEnd: model.trimEndPosition,
+    trimStart: model.trimStart,
+    volume: model.volume
+  };
+}
+function liveTimelineEffectKeyframesForCard(card){
+  const current = cardState(card.dataset.rank);
+  const effectFrames = Array.isArray(current.effect_keyframes) ? current.effect_keyframes : [];
+  return effectFrames;
+}
+function liveTimelineCallbacksForCard(card){
+  return {
+    onSeek: time => {
+      setPreviewPlayback(card, false);
+      seekTimeline(card, time, { userInitiated: true, mode: "free" });
+    },
+    onTrimChange: trim => applyLiveTimelineTrim(card, trim),
+    onKeyframeOpen: keyframe => openLiveTimelineKeyframe(card, keyframe),
+    onPlayToggle: playing => setPreviewPlayback(card, playing)
+  };
+}
+function applyLiveTimelineTrim(card, trim){
+  setPreviewPlayback(card, false);
+  const duration = Number(card.dataset.duration) || 0;
+  const start = clampNumber(Number(trim.start || 0), 0, Math.max(duration - 1, 0));
+  const end = clampNumber(Number(trim.end || duration), start + 1, Math.max(duration, start + 1));
+  setCardState(card.dataset.rank, { trimStart: start, trimEnd: Math.max(duration - end, 0) });
+  updateTrimUi(card);
+  seekTimeline(card, trim.side === "end" ? end : start, { userInitiated: true, mode: "trim" });
+  renderCaptionQueue();
+}
+function openLiveTimelineKeyframe(card, keyframe){
+  if (!keyframe || keyframe.layer !== "camera") return;
+  setPreviewPlayback(card, false);
+  const match = String(keyframe.id || "").match(/camera-(\\d+)/);
+  if (match) setSelectedCameraPathIndex(card, Number(match[1]));
+  ensureLivePreviewCameraPopover(card);
+  updateCameraUi(card);
+  openPreviewCameraPopover(card, "edit");
+}
+function ensureLivePreviewCameraPopover(card){
+  const rank = String(card?.dataset?.rank || "");
+  if (!rank) return null;
+  let popover = livePreviewCameraPopoverForRank(rank);
+  if (!popover) {
+    popover = document.createElement("div");
+    popover.className = "preview-camera-popover preview-camera-popover--live preview-camera-popover--portal";
+    popover.dataset.previewCameraPopover = "";
+    popover.dataset.previewCameraPopoverRank = rank;
+    popover.hidden = true;
+    document.body.appendChild(popover);
+    bindPreviewCameraPopover(card, popover);
+  }
+  bindPreviewCameraTimeline(card);
+  return popover;
+}
+function livePreviewCameraPopoverForRank(rank){
+  return Array.from(document.querySelectorAll(".preview-camera-popover--portal"))
+    .find(popover => String(popover.dataset.previewCameraPopoverRank || "") === String(rank)) || null;
+}
+function previewCameraPopoverForCard(card){
+  return livePreviewCameraPopoverForRank(card?.dataset?.rank) || card.querySelector("[data-preview-camera-popover]");
+}
+function loadLiveTimelineWaveform(card){
+  if (parsePreviewWaveform(card.dataset.previewWaveformPeaks).length) return;
+  const src = previewWaveformSource(card);
+  if (!src || card.dataset.previewWaveformLoading === src) return;
+  card.dataset.previewWaveformLoading = src;
+  fetch(cacheBustedPreview(src, `waveform-${card.dataset.rank || ""}`))
+    .then(response => response.ok ? response.json() : null)
+    .then(payload => {
+      const peaks = parsePreviewWaveform(payload?.peaks);
+      delete card.dataset.previewWaveformLoading;
+      if (!peaks.length) return;
+      card.dataset.previewWaveformPeaks = JSON.stringify(peaks);
+      renderPreviewCameraTimeline(card);
+    })
+    .catch(error => {
+      console.debug("Nao consegui carregar waveform da timeline viva.", error);
+      delete card.dataset.previewWaveformLoading;
+    });
+}
+function renderLegacyPreviewCameraTimeline(card){
   const container = card.querySelector("[data-preview-camera-timeline]");
   if (!container) return;
+  container.classList.remove("preview-camera-timeline--live");
   const state = previewCameraTimelineContext(card);
   const selectedIndex = selectedCameraPathIndex(card, state.path);
   const markers = state.path.map((frame, index) => {
@@ -10476,8 +12022,9 @@ function previewWaveformBarsHtml(peaks){
 function updatePreviewCameraTimelinePlayhead(card, time = null){
   const playhead = card.querySelector("[data-preview-camera-playhead]");
   if (!playhead) return;
-  const context = cameraContextForCard(card, time);
-  const left = clampNumber((context.position / Math.max(context.duration, .3)) * 100, 0, 100);
+  const duration = cameraTimelineDurationForCard(card);
+  const position = cameraTimelinePositionForCard(card, time);
+  const left = clampNumber((position / Math.max(duration, .3)) * 100, 0, 100);
   playhead.style.left = `${left.toFixed(2)}%`;
 }
 function bindPreviewCameraTimeline(card){
@@ -10504,98 +12051,143 @@ function bindPreviewCameraTimeline(card){
     openPreviewCameraPopover(card, "insert", position);
   });
   container.addEventListener("change", event => {
-    if (event.target.matches("[data-preview-camera-popover-intent]")) {
-      event.preventDefault();
-      const mode = event.target.closest("[data-preview-camera-popover]")?.dataset.previewCameraPopoverMode || "edit";
-      if (mode === "edit") {
-        const index = selectedCameraPathIndex(card, previewCameraTimelineContext(card).path);
-        updateCameraPathFrameIntentForCard(card, event.target.value);
-        setSelectedCameraPathIndex(card, index);
-        renderPreviewCameraTimeline(card);
-        openPreviewCameraPopover(card, "edit");
-      }
-      return;
-    }
-    if (event.target.matches("[data-preview-camera-popover-key]")) {
-      event.preventDefault();
-      const index = selectedCameraPathIndex(card, previewCameraTimelineContext(card).path);
-      updateCameraPathFrameForCard(card, { key: event.target.value });
-      setSelectedCameraPathIndex(card, index);
-      renderPreviewCameraTimeline(card);
-      openPreviewCameraPopover(card);
-    }
+    handlePreviewCameraPopoverChange(card, event);
   });
   container.addEventListener("input", event => {
-    if (event.target.matches("[data-preview-camera-popover-strength]")) {
-      const index = selectedCameraPathIndex(card, previewCameraTimelineContext(card).path);
-      updateCameraPathFrameForCard(card, { strength: Number(event.target.value) }, false);
-      setSelectedCameraPathIndex(card, index);
-      renderPreviewCameraTimeline(card);
-      openPreviewCameraPopover(card);
-    }
+    handlePreviewCameraPopoverInput(card, event);
   });
   container.addEventListener("click", event => {
-    const close = event.target.closest("[data-preview-camera-popover-close]");
-    if (close) {
-      event.preventDefault();
-      event.stopPropagation();
-      closePreviewCameraPopover(card);
-      return;
-    }
-    const add = event.target.closest("[data-preview-camera-popover-add]");
-    if (add) {
-      event.preventDefault();
-      event.stopPropagation();
-      const intent = card.querySelector("[data-preview-camera-popover-intent]")?.value || "speaker_hold";
-      addCameraIntentFrameForCard(card, intent);
+    handlePreviewCameraPopoverClick(card, event);
+  });
+}
+function bindPreviewCameraPopover(card, popover){
+  if (!popover || popover.dataset.previewCameraPopoverBound) return;
+  const rank = String(card?.dataset?.rank || "");
+  const currentCard = () => cardForRank(rank) || card;
+  popover.dataset.previewCameraPopoverBound = "1";
+  popover.addEventListener("change", event => handlePreviewCameraPopoverChange(currentCard(), event));
+  popover.addEventListener("input", event => handlePreviewCameraPopoverInput(currentCard(), event));
+  popover.addEventListener("click", event => handlePreviewCameraPopoverClick(currentCard(), event));
+  popover.addEventListener("contextmenu", event => {
+    event.stopPropagation();
+  });
+}
+function handlePreviewCameraPopoverChange(card, event){
+  if (event.target.matches("[data-preview-camera-popover-intent]")) {
+    event.preventDefault();
+    const mode = event.target.closest("[data-preview-camera-popover]")?.dataset.previewCameraPopoverMode || "edit";
+    if (mode === "edit") {
+      const index = selectedCameraPathIndex(card, previewCameraTimelineContext(card).path);
+      updateCameraPathFrameIntentForCard(card, event.target.value);
+      setSelectedCameraPathIndex(card, index);
       renderPreviewCameraTimeline(card);
       openPreviewCameraPopover(card, "edit");
-      return;
     }
-    const move = event.target.closest("[data-preview-camera-popover-move]");
-    if (move) {
-      event.preventDefault();
-      event.stopPropagation();
-      moveCameraPathFrameToPlayhead(card);
-      renderPreviewCameraTimeline(card);
-      openPreviewCameraPopover(card, "edit");
-      return;
-    }
-    const remove = event.target.closest("[data-preview-camera-popover-delete]");
-    if (!remove) return;
+    return;
+  }
+  if (event.target.matches("[data-preview-camera-popover-key]")) {
+    event.preventDefault();
+    const index = selectedCameraPathIndex(card, previewCameraTimelineContext(card).path);
+    updateCameraPathFrameForCard(card, { key: event.target.value });
+    setSelectedCameraPathIndex(card, index);
+    renderPreviewCameraTimeline(card);
+    openPreviewCameraPopover(card);
+  }
+}
+function handlePreviewCameraPopoverInput(card, event){
+  if (!event.target.matches("[data-preview-camera-popover-strength]")) return;
+  const index = selectedCameraPathIndex(card, previewCameraTimelineContext(card).path);
+  updateCameraPathFrameForCard(card, { strength: Number(event.target.value) }, false);
+  setSelectedCameraPathIndex(card, index);
+  renderPreviewCameraTimeline(card);
+  openPreviewCameraPopover(card);
+}
+function handlePreviewCameraPopoverClick(card, event){
+  const close = event.target.closest("[data-preview-camera-popover-close]");
+  if (close) {
     event.preventDefault();
     event.stopPropagation();
-    deleteCameraPathFrameForCard(card);
     closePreviewCameraPopover(card);
-  });
+    return;
+  }
+  const add = event.target.closest("[data-preview-camera-popover-add]");
+  if (add) {
+    event.preventDefault();
+    event.stopPropagation();
+    const popover = event.target.closest("[data-preview-camera-popover]");
+    const intent = popover?.querySelector("[data-preview-camera-popover-intent]")?.value || "speaker_hold";
+    addCameraIntentFrameForCard(card, intent);
+    renderPreviewCameraTimeline(card);
+    openPreviewCameraPopover(card, "edit");
+    return;
+  }
+  const done = event.target.closest("[data-preview-camera-popover-continue]");
+  if (done) {
+    event.preventDefault();
+    event.stopPropagation();
+    closePreviewCameraPopover(card);
+    return;
+  }
+  const remove = event.target.closest("[data-preview-camera-popover-delete]");
+  if (!remove) return;
+  event.preventDefault();
+  event.stopPropagation();
+  deleteCameraPathFrameForCard(card);
+  closePreviewCameraPopover(card);
 }
 function seekPreviewCameraTimeline(card, event, rail){
   const rect = rail.getBoundingClientRect();
   const ratio = rect.width ? clampNumber((event.clientX - rect.left) / rect.width, 0, 1) : 0;
   const values = trimValues(card);
-  const duration = Math.max(values.endPos - values.trimStart, .3);
+  const duration = Math.max(values.duration, .3);
   const position = ratio * duration;
-  seekTimeline(card, values.trimStart + position, { userInitiated: true, mode: "free" });
+  seekTimeline(card, position, { userInitiated: true, mode: "free" });
   return position;
 }
 function openPreviewCameraPopover(card, mode = "edit", positionOverride = null){
-  const popover = card.querySelector("[data-preview-camera-popover]");
+  const popover = previewCameraPopoverForCard(card) || ensureLivePreviewCameraPopover(card);
   if (!popover) return;
   closePreviewVolumePopover(card);
   const state = previewCameraTimelineContext(card);
   const index = selectedCameraPathIndex(card, state.path);
   const frame = state.path[index] || state.path[0] || normalizeCameraPathFrame({ time: 0, key: "center", strength: 60 });
-  const context = cameraContextForCard(card);
-  const position = mode === "insert" ? Number(positionOverride ?? context.position) : Number(frame.time || 0);
+  const position = mode === "insert" ? Number(positionOverride ?? cameraTimelinePositionForCard(card)) : Number(frame.time || 0);
   const left = clampNumber((position / state.duration) * 100, 6, 94);
   const intent = mode === "insert" ? "speaker_hold" : directorIntentFromFrame(frame);
-  popover.style.left = `${left.toFixed(2)}%`;
+  positionPreviewCameraPopover(card, popover, left);
   popover.dataset.previewCameraPopoverMode = mode;
   popover.innerHTML = mode === "insert" ? previewCameraInsertPopoverHtml(position, intent) : previewCameraEditPopoverHtml(state, frame, intent);
   popover.hidden = false;
 }
+function positionPreviewCameraPopover(card, popover, leftPercent){
+  if (!popover.classList.contains("preview-camera-popover--portal")) {
+    popover.style.left = `${leftPercent.toFixed(2)}%`;
+    return;
+  }
+  const container = card.querySelector("[data-preview-camera-timeline]");
+  const rect = container?.getBoundingClientRect();
+  if (!rect) return;
+  const width = Math.min(236, Math.max(window.innerWidth - 16, 0));
+  const rawLeft = rect.left + rect.width * (leftPercent / 100) - width / 2;
+  const left = clampNumber(rawLeft, 8, Math.max(window.innerWidth - width - 8, 8));
+  const below = rect.bottom + 8;
+  const height = 236;
+  const top = below + height < window.innerHeight - 8 ? below : clampNumber(rect.top - height - 8, 8, Math.max(window.innerHeight - height - 8, 8));
+  popover.style.left = `${left.toFixed(1)}px`;
+  popover.style.top = `${top.toFixed(1)}px`;
+  popover.style.right = "auto";
+  popover.style.bottom = "auto";
+}
+function previewCameraPopoverDecorHtml(strength){
+  const amount = clampNumber(Number(strength ?? 60), 0, 100);
+  return `<div class="preview-camera-popover-aura" aria-hidden="true"></div>
+  <div class="preview-camera-popover-lens" aria-hidden="true"></div>
+  <div class="preview-camera-popover-beam" aria-hidden="true"></div>
+  <div class="preview-camera-popover-meter" aria-hidden="true"><i style="width:${amount}%"></i></div>`;
+}
 function previewCameraInsertPopoverHtml(position, intent){
-  return `<div class="preview-camera-popover-head">
+  return `${previewCameraPopoverDecorHtml(62)}
+  <div class="preview-camera-popover-head">
     <strong>Novo shot</strong>
     <span>${escapeHtml(fixed(position))}</span>
     <button class="preview-camera-popover-close" data-preview-camera-popover-close type="button" aria-label="Fechar">x</button>
@@ -10603,11 +12195,14 @@ function previewCameraInsertPopoverHtml(position, intent){
   <label>Intencao
     <select data-preview-camera-popover-intent>${directorIntentOptionsHtml(intent)}</select>
   </label>
-  <button data-preview-camera-popover-add type="button">Inserir na timeline</button>`;
+  <button class="preview-camera-popover-primary" data-preview-camera-popover-add type="button">Continuar</button>`;
 }
 function previewCameraEditPopoverHtml(state, frame, intent){
   const title = directorMarkerTitle(state.edit.director_plan, frame);
-  return `<div class="preview-camera-popover-head">
+  const key = frame.key || "center";
+  const strength = clampNumber(Number(frame.strength ?? 60), 0, 100);
+  return `${previewCameraPopoverDecorHtml(strength)}
+  <div class="preview-camera-popover-head">
     <strong>${escapeHtml(directorMarkerLabel(state.edit.director_plan, frame))}</strong>
     <span>${escapeHtml(fixed(frame.time))}</span>
     <button class="preview-camera-popover-close" data-preview-camera-popover-close type="button" aria-label="Fechar">x</button>
@@ -10616,13 +12211,19 @@ function previewCameraEditPopoverHtml(state, frame, intent){
   <label>Intencao
     <select data-preview-camera-popover-intent>${directorIntentOptionsHtml(intent)}</select>
   </label>
+  <label>Camera
+    <select data-preview-camera-popover-key>${cameraOptionsHtml(key)}</select>
+  </label>
+  <label>Forca
+    <input data-preview-camera-popover-strength type="range" min="0" max="100" step="5" value="${strength}">
+  </label>
   <div class="preview-camera-popover-actions">
-    <button data-preview-camera-popover-move type="button">Mover para playhead</button>
-    <button data-preview-camera-popover-delete type="button"${state.path.length > 1 ? "" : " disabled"}>Excluir</button>
+    <button class="preview-camera-popover-primary" data-preview-camera-popover-continue type="button">Continuar</button>
+    <button class="preview-camera-popover-danger" data-preview-camera-popover-delete type="button"${state.path.length > 1 ? "" : " disabled"}>Excluir</button>
   </div>`;
 }
 function closePreviewCameraPopover(card){
-  const popover = card.querySelector("[data-preview-camera-popover]");
+  const popover = previewCameraPopoverForCard(card);
   if (popover) popover.hidden = true;
 }
 function applyTimelineSeek(card, video, current){
@@ -10703,17 +12304,35 @@ function pauseAtTrimEnd(card, video, values){
   updateTimelinePlayhead(card, endPos);
   return true;
 }
-function togglePreviewPlayback(card){
+function setPreviewPlayback(card, shouldPlay){
   const video = primaryCameraVideo(card);
   if (!video) return;
   loadCardVideo(card);
   applyPreviewVolume(video);
-  if (video.paused) {
+  if (shouldPlay) {
+    if (!video.paused && !video.ended) {
+      syncPreviewPlaybackState(card);
+      return;
+    }
     const playback = video.play();
-    if (playback && typeof playback.catch === "function") playback.catch(() => syncPreviewPlayButton(card));
+    if (playback && typeof playback.catch === "function") playback.catch(() => syncPreviewPlaybackState(card));
     return;
   }
-  video.pause();
+  if (!video.paused) video.pause();
+  else syncPreviewPlayButton(card);
+}
+function togglePreviewPlayback(card){
+  const video = primaryCameraVideo(card);
+  if (!video) return;
+  setPreviewPlayback(card, video.paused || video.ended);
+}
+function syncPreviewPlaybackState(card){
+  syncPreviewPlayButton(card);
+  syncLiveTimelinePlaybackState(card);
+}
+function syncLiveTimelinePlaybackState(card){
+  if (!card.__liveTimelineController || typeof card.__liveTimelineController.update !== "function") return;
+  card.__liveTimelineController.update(liveTimelineOptionsForCard(card));
 }
 function applyPreviewVolume(video){
   if (!video) return;
@@ -10759,6 +12378,7 @@ function syncPreviewVolumeButton(card){
   button.setAttribute("aria-label", "Volume");
   button.title = "Volume";
   if (slider) slider.value = String(value);
+  updateControlSurfaceForCard(card);
 }
 function openPreviewVolumePopover(card){
   const popover = card.querySelector("[data-preview-volume-popover]");
@@ -10807,6 +12427,8 @@ function loadCardVideo(card){
   syncPreviewVolumeButton(card);
 }
 function unloadCardVideo(card){
+  destroyLivePreviewCameraTimeline(card);
+  destroyControlSurfaceForCard(card);
   const video = card.querySelector("video:not(.camera-fit-bg)[data-src]");
   if (!video || !video.getAttribute("src")) return;
   video.pause();
@@ -11753,14 +13375,62 @@ async function finalizeVideos(){
     button.disabled = false;
   }
 }
-function renderFinalizeResults(files){
+function finalizeStorageKey(){
+  return `cutted-finalize-results:${currentGalleryPath()}`;
+}
+function storeFinalizeResults(files){
+  if (!Array.isArray(files) || !files.length) return;
+  try {
+    localStorage.setItem(finalizeStorageKey(), JSON.stringify(files));
+  } catch (error) {
+    console.warn("Nao foi possivel salvar os resultados renderizados.", error);
+  }
+}
+function storedFinalizeResults(){
+  try {
+    const raw = localStorage.getItem(finalizeStorageKey());
+    const files = raw ? JSON.parse(raw) : [];
+    return Array.isArray(files) ? files : [];
+  } catch (error) {
+    console.warn("Nao foi possivel restaurar os resultados renderizados.", error);
+    return [];
+  }
+}
+async function restoreFinalizeResults(){
+  const status = document.querySelector("[data-render-status]");
+  const cached = storedFinalizeResults();
+  if (cached.length) {
+    renderFinalizeResults(cached, { skipPersist: true });
+    if (status && !status.textContent) status.textContent = `${cached.length} video(s) restaurado(s) desta galeria.`;
+  }
+  try {
+    const response = await fetch(`/api/finalize-results?gallery_path=${encodeURIComponent(currentGalleryPath())}`, { cache: "no-store" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) return;
+    const files = Array.isArray(payload.files) ? payload.files : [];
+    if (!files.length) return;
+    renderFinalizeResults(files);
+    const exported = payload.export_dir ? ` Exportado em: ${payload.export_dir}` : "";
+    if (status) {
+      status.textContent = payload.ready
+        ? `${payload.count || files.length} video(s) renderizado(s) restaurado(s).${exported}`
+        : `${payload.count || files.length} video(s) ja pronto(s); render ainda pode estar finalizando.`;
+    }
+  } catch (error) {
+    if (cached.length || !status || status.textContent) return;
+    status.textContent = "Nao consegui restaurar a fila renderizada agora.";
+  }
+}
+function renderFinalizeResults(files, options = {}){
   const results = document.querySelector("[data-render-results]");
   if (!results) return;
-  if (!files.length) {
+  const safeFiles = Array.isArray(files) ? files : [];
+  if (!safeFiles.length) {
     results.innerHTML = '<div class="effect-empty">Nenhum video renderizado ainda.</div>';
     return;
   }
-  results.innerHTML = files.map((file, index) => {
+  if (!options.skipPersist) storeFinalizeResults(safeFiles);
+  results.innerHTML = safeFiles.map((file, index) => {
     const camera = normalizeCamera(file.camera);
     const effect = normalizeEffect(file.effect);
     const overlay = normalizeOverlay(file.overlay);
@@ -11949,6 +13619,11 @@ document.querySelectorAll(".card").forEach(card => {
   const summary = card.querySelector(".clip-summary");
   if (summary) {
     const toggleCard = event => {
+      if (card.open && event.target.closest("[data-preview-camera-timeline]")) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       event.preventDefault();
       card.open = !card.open;
       activateCard(card);
@@ -11962,6 +13637,7 @@ document.querySelectorAll(".card").forEach(card => {
   card.querySelectorAll("[data-card-format-preview]").forEach(button => {
     button.addEventListener("click", () => {
       card.dataset.previewTouched = "1";
+      setPreviewPlayback(card, false);
       setCardPreviewFormat(card, button.dataset.cardFormatPreview);
       closePreviewFormatMenus();
       updateCardTools(card);
@@ -12028,17 +13704,17 @@ document.querySelectorAll(".card").forEach(card => {
       if (Math.abs(video.currentTime - nextTime) > .05) video.currentTime = nextTime;
       startCameraFrameSync(video, () => updateCameraSurfaceForCard(card));
       syncCameraFitBackground(card);
-      syncPreviewPlayButton(card);
+      syncPreviewPlaybackState(card);
     });
     video.addEventListener("pause", () => {
       stopCameraFrameSync(video, () => updateCameraSurfaceForCard(card));
       syncCameraFitBackground(card);
-      syncPreviewPlayButton(card);
+      syncPreviewPlaybackState(card);
     });
     video.addEventListener("ended", () => {
       stopCameraFrameSync(video, () => updateCameraSurfaceForCard(card));
       syncCameraFitBackground(card);
-      syncPreviewPlayButton(card);
+      syncPreviewPlaybackState(card);
     });
     video.addEventListener("volumechange", () => {
       syncPreviewVolumeButton(card);
@@ -12057,7 +13733,7 @@ document.querySelectorAll(".card").forEach(card => {
       }
     });
   }
-  syncPreviewPlayButton(card);
+  syncPreviewPlaybackState(card);
   syncPreviewVolumeButton(card);
   card.querySelectorAll("[data-trim]").forEach(input => input.addEventListener("input", () => {
     const current = cardState(card.dataset.rank);
@@ -12077,6 +13753,7 @@ document.querySelectorAll(".card").forEach(card => {
   const scrubInput = card.querySelector("[data-trim-scrub]");
   if (scrubInput) {
     scrubInput.addEventListener("input", () => {
+      setPreviewPlayback(card, false);
       const duration = Number(card.dataset.duration);
       const current = clampNumber(Number(scrubInput.value), 0, Math.max(duration, .1));
       seekTimeline(card, current, { userInitiated: true, mode: "free" });

@@ -4,6 +4,7 @@ import importlib.util
 import json
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -73,6 +74,41 @@ class CuttedImportUiTests(unittest.TestCase):
 
         self.assertIn("window.location.assign(job.output_url)", html)
 
+    def test_render_results_are_restored_from_gallery(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("/api/finalize-results", html)
+        self.assertIn("finalizeStorageKey", html)
+        self.assertIn("restoreFinalizeResults", html)
+        self.assertIn('if (next === "final") restoreFinalizeResults();', html)
+
+    def test_partial_captioned_files_are_recovered_before_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery_dir = Path(tmp)
+            out_dir = gallery_dir / "captioned-clips"
+            out_dir.mkdir()
+            (out_dir / "clip-002-tiktok-captioned.mp4").write_bytes(b"video")
+            (out_dir / "clip-003-tiktok-captioned.mp4").write_bytes(b"")
+            (gallery_dir / "caption-queue.json").write_text(
+                json.dumps({
+                    "caption_queue": [{
+                        "rank": 2,
+                        "platform": "tiktok",
+                        "platform_label": "Vertical 9:16",
+                        "adjusted_duration": 91.2,
+                    }]
+                }),
+                encoding="utf-8",
+            )
+
+            result = CUTTED.finalized_results_from_gallery(gallery_dir)
+
+            self.assertFalse(result["ready"])
+            self.assertTrue(result["partial"])
+            self.assertEqual(result["count"], 1)
+            self.assertEqual(result["files"][0]["url"], "captioned-clips/clip-002-tiktok-captioned.mp4")
+            self.assertEqual(result["files"][0]["adjusted_duration"], 91.2)
+
     def test_camera_analysis_fetch_has_timeout(self) -> None:
         html = gallery_html()
 
@@ -97,6 +133,81 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("defaultCameraMotionMs = 700", html)
         self.assertIn("--camera-transition-ms", html)
         self.assertIn("setCameraMotionSpeed(card", html)
+
+    def test_page_can_inject_live_timeline_assets(self) -> None:
+        html = CUTTED.page_html(
+            "Teste",
+            "",
+            "{}",
+            "assets/brand/cuted-logo-transparent.png",
+            {"css": "assets/live-timeline/live-timeline.css", "js": "assets/live-timeline/live-timeline.js"},
+        )
+
+        self.assertIn('href="assets/live-timeline/live-timeline.css"', html)
+        self.assertIn('src="assets/live-timeline/live-timeline.js"', html)
+        self.assertLess(html.index("live-timeline.css"), html.index("<style>"))
+        self.assertLess(html.index("live-timeline.js"), html.index("window.CUTTED_DATA"))
+
+    def test_page_can_inject_control_bar_assets(self) -> None:
+        html = CUTTED.page_html(
+            "Teste",
+            "",
+            "{}",
+            "assets/brand/cuted-logo-transparent.png",
+            {},
+            {"css": "assets/control-bar/control-bar.css", "js": "assets/control-bar/control-bar.js"},
+        )
+
+        self.assertIn('href="assets/control-bar/control-bar.css"', html)
+        self.assertIn('src="assets/control-bar/control-bar.js"', html)
+        self.assertLess(html.index("control-bar.css"), html.index("<style>"))
+        self.assertLess(html.index("control-bar.js"), html.index("window.CUTTED_DATA"))
+
+    def test_live_timeline_assets_are_copied_when_available(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            assets = CUTTED.write_live_timeline_assets(Path(tmp))
+
+            self.assertRegex(assets["css"], r"^assets/live-timeline/live-timeline\.css\?v=[0-9a-f]{10}$")
+            self.assertRegex(assets["js"], r"^assets/live-timeline/live-timeline\.js\?v=[0-9a-f]{10}$")
+            self.assertTrue((Path(tmp) / "assets" / "live-timeline" / "live-timeline.css").exists())
+            self.assertTrue((Path(tmp) / "assets" / "live-timeline" / "live-timeline.js").exists())
+
+    def test_control_bar_assets_are_copied_when_available(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            assets = CUTTED.write_control_bar_assets(Path(tmp))
+
+            self.assertRegex(assets["css"], r"^assets/control-bar/control-bar\.css\?v=[0-9a-f]{10}$")
+            self.assertRegex(assets["js"], r"^assets/control-bar/control-bar\.js\?v=[0-9a-f]{10}$")
+            self.assertTrue((Path(tmp) / "assets" / "control-bar" / "control-bar.css").exists())
+            self.assertTrue((Path(tmp) / "assets" / "control-bar" / "control-bar.js").exists())
+
+    def test_cards_include_control_surface_slot(self) -> None:
+        html = CUTTED.card_html(
+            CUTTED.Moment(
+                rank=1,
+                start=0.0,
+                end=12.0,
+                peak=4.0,
+                score=90,
+                title="Teste",
+                reason="",
+                transcript="",
+                peak_text="Pico",
+                clip_file="clips/clip-001.mp4",
+                frame_file="frames/clip-001.jpg",
+            )
+        )
+
+        self.assertIn("data-cuted-control-surface", html)
+
+    def test_live_timeline_stops_at_trim_end_instead_of_looping(self) -> None:
+        source = (Path(__file__).resolve().parents[1] / "prototypes" / "live-timeline" / "src" / "liveTimeline.ts").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("state.playhead = state.trimEnd", source)
+        self.assertIn("activeCallbacks.onPlayToggle?.(false)", source)
+        self.assertNotIn('playUiTone("loop", state)', source)
 
     def test_ai_director_openai_timeout_is_shorter_than_general_request(self) -> None:
         self.assertEqual(CUTTED.AI_DIRECTOR_OPENAI_TIMEOUT_SECONDS, 45)
@@ -331,13 +442,62 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("anti-bot", message)
         self.assertNotIn("[cutted] Error", message)
 
+    def test_import_job_snapshot_includes_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            job = CUTTED.ImportJob(
+                "job123",
+                "running",
+                time.time() - 8,
+                time.time(),
+                Path(tmp),
+                Path(tmp),
+                "/projects/job123/index.html",
+                None,
+                "Importacao iniciada.",
+                "youtube",
+                "openai",
+            )
+
+            payload = CUTTED.import_job_to_dict(job)
+
+        self.assertIn("progress", payload)
+        self.assertIn("message", payload["progress"])
+        self.assertGreaterEqual(payload["progress"]["percent"], 8)
+        self.assertIn(payload["progress"]["label"], {"Preparando", "Midia", "Audio", "Analise", "Sugestoes", "Editor"})
+
     def test_import_request_metadata_requires_source(self) -> None:
         with self.assertRaisesRegex(ValueError, "link ou caminho local"):
             CUTTED.import_request_metadata({"output_path": "C:\\videos"})
 
-    def test_import_request_metadata_requires_destination(self) -> None:
-        with self.assertRaisesRegex(ValueError, "pasta onde os videos finais"):
-            CUTTED.import_request_metadata({"source_path": "video.mp4"})
+    def test_import_request_metadata_uses_automatic_render_destination(self) -> None:
+        original_provider = CUTTED.configured_ai_provider
+        CUTTED.configured_ai_provider = lambda: "local"
+        try:
+            metadata = CUTTED.import_request_metadata({"source_path": "video.mp4", "preview_count": 20})
+        finally:
+            CUTTED.configured_ai_provider = original_provider
+
+        self.assertEqual(metadata["output_path"], "")
+        self.assertEqual(metadata["preview_count"], 10)
+
+    def test_next_import_output_dir_uses_projects_folder(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = CUTTED.next_import_output_dir(Path(tmp), "video.mp4")
+
+            self.assertEqual(output_dir.parent.name, CUTTED.PROJECTS_DIR_NAME)
+            self.assertEqual(output_dir.parent.parent, Path(tmp))
+
+    def test_render_export_dir_prefers_project_render_output_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery_dir = Path(tmp) / "projects" / "demo"
+            render_dir = gallery_dir / "renders"
+            gallery_dir.mkdir(parents=True)
+            (gallery_dir / "import-request.json").write_text(
+                json.dumps({"render_output_path": str(render_dir), "output_path": "C:\\legacy"}),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(CUTTED.render_export_dir(gallery_dir), render_dir)
 
 
 class CuttedLaunchTests(unittest.TestCase):
@@ -355,8 +515,10 @@ class CuttedLaunchTests(unittest.TestCase):
             index_path = workspace / "index.html"
             self.assertTrue(index_path.exists())
             html = index_path.read_text(encoding="utf-8")
+            self.assertIn("data-project-home", html)
+            self.assertIn("Novo projeto", html)
             self.assertIn("data-import-form", html)
-            self.assertIn('{"moments": []}', html)
+            self.assertNotIn('data-tab="edit"', html)
 
     def test_bootstrap_workspace_gallery_preserves_existing_index(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -377,8 +539,9 @@ class CuttedLaunchTests(unittest.TestCase):
             CUTTED.bootstrap_workspace_gallery(workspace)
 
             html = index_path.read_text(encoding="utf-8")
+            self.assertIn("data-project-home", html)
             self.assertIn('name="source_path"', html)
-            self.assertIn('{"moments": []}', html)
+            self.assertNotIn('data-tab="edit"', html)
 
     def test_find_free_port_returns_port_in_launch_range(self) -> None:
         port = CUTTED.find_free_port("127.0.0.1")

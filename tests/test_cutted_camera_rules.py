@@ -273,7 +273,10 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIn(">Horizontal 16:9</button>", html)
         self.assertNotIn("data-card-format-preview=\"shorts\"", html)
         self.assertNotIn("data-card-format-preview=\"instagram\"", html)
+        self.assertNotIn("Timeline do preview", html)
         self.assertIn("data-preview-camera-timeline", html)
+        self.assertIn("data-card-row-timeline", html)
+        self.assertLess(html.index("data-preview-camera-timeline"), html.index("</summary>"))
         self.assertIn("data-preview-audio-waveform", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("data-preview-volume", html)
         self.assertIn("data-preview-volume-popover", html)
@@ -287,6 +290,21 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertNotIn("data-preview-volume-up", html)
         self.assertNotIn("data-preview-volume-zero", html)
         self.assertNotIn("data-preview-volume-value", html)
+
+    def test_page_mounts_live_timeline_with_legacy_fallback(self) -> None:
+        html = CUTTED.page_html(
+            "Teste",
+            "",
+            "{}",
+            "assets/brand/cuted-logo-transparent.png",
+            {"css": "assets/live-timeline/live-timeline.css", "js": "assets/live-timeline/live-timeline.js"},
+        )
+
+        self.assertIn("function renderLivePreviewCameraTimeline", html)
+        self.assertIn("window.CuttedLiveTimeline", html)
+        self.assertIn("renderLegacyPreviewCameraTimeline", html)
+        self.assertIn("showVolume: false", html)
+        self.assertIn("function renderCardRowTimeline", html)
 
     def test_export_buttons_use_resolution_formats(self) -> None:
         moment = CUTTED.Moment(
@@ -523,9 +541,11 @@ class CuttedCameraRuleTests(unittest.TestCase):
 
         self.assertIn("data-preview-camera-popover-intent", html)
         self.assertIn("data-preview-camera-popover-add", html)
-        self.assertIn("data-preview-camera-popover-move", html)
+        self.assertIn("data-preview-camera-popover-continue", html)
         self.assertIn("data-preview-camera-popover-delete", html)
         self.assertIn("data-preview-camera-popover-close", html)
+        self.assertIn("preview-camera-popover-aura", html)
+        self.assertNotIn("data-preview-camera-popover-move", html)
         self.assertIn("preview-camera-popover-close", html)
         self.assertIn("updateCameraPathFrameIntentForCard", html)
         self.assertIn("addCameraIntentFrameForCard", html)

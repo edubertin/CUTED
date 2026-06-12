@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CUTED Control Bar API Spike</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="cuted-control-demo">
+    <main class="workspace">
+      <div id="cuted-control-bar-demo"></div>
+    </main>
+
+    <script src="./script.js"></script>
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const demoOptions = {
+        aiStatus: params.get("ai") || "idle",
+        aspectRatio: params.get("format") || "9:16",
+        captionsEnabled: params.get("cc") === "on",
+        effectMenuOpen: params.get("fx") === "open",
+        effectStyle: params.get("effect") || "clean",
+        formatMenuOpen: params.get("formatMenu") === "open",
+        insertMenuOpen: params.get("insert") === "open",
+        bumpers: {
+          intro: params.get("intro") === "on" ? { label: "start-bumper.mp4", duration: 1.8 } : null,
+          outro: params.get("outro") === "on" ? { label: "end-bumper.mp4", duration: 2.4 } : null
+        },
+        muted: params.get("muted") === "on",
+        ready: params.get("ready") === "on",
+        status: demoStatus(params),
+        volume: params.get("muted") === "on" ? 0 : 75
+      };
+
+      function demoStatus(params) {
+        if (params.get("status") === "ready" || params.get("ready") === "on") {
+          return { kind: "ready", label: "Ready", tone: "green" };
+        }
+        if (params.get("status") === "error") {
+          return { kind: "error", label: "Use a 1080x1920 bumper for this format", tone: "red" };
+        }
+        if (params.get("status") === "ai" || params.get("ai") === "loading") {
+          return { kind: "ai", label: "AI analyzing frame safety...", progress: 42, tone: "blue" };
+        }
+        return null;
+      }
+
+      window.cutedControlBar = window.createCutedControlBar(
+        document.getElementById("cuted-control-bar-demo"),
+        demoOptions
+      );
+    </script>
+  </body>
+</html>
