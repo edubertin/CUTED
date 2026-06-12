@@ -67,9 +67,26 @@ class CuttedProjectHomeTests(unittest.TestCase):
             self.assertIn("Novo projeto", html)
             self.assertIn("data-home-import", html)
             self.assertIn("data-project-list", html)
+            self.assertIn("project-table-head", html)
+            self.assertIn("project-row", html)
             self.assertIn("Sample", html)
             self.assertNotIn("data-tab=\"edit\"", html)
             self.assertNotIn("1. Importar", html)
+            self.assertNotIn("project-intro", html)
+
+    def test_project_home_shows_mock_rows_without_real_projects(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+
+            html = CUTTED.project_home_html(workspace, "assets/brand/cuted-logo-transparent.png", [])
+
+            self.assertIn("home-brand-logo", html)
+            self.assertIn("data-project-mock=\"true\"", html)
+            self.assertEqual(html.count('data-project-id="mock-'), 4)
+            self.assertIn("Podcast cortes virais", html)
+            self.assertIn("data-new-project", html)
+            self.assertIn("data-open-workspace", html)
+            self.assertIn("mockProjects", html)
 
     def test_bootstrap_workspace_writes_project_home(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -79,6 +96,8 @@ class CuttedProjectHomeTests(unittest.TestCase):
             html = (workspace / "index.html").read_text(encoding="utf-8")
 
             self.assertIn("data-project-home", html)
+            self.assertIn("home-logo-spark-left", html)
+            self.assertIn("data-project-mock=\"true\"", html)
             self.assertTrue(CUTTED.workspace_index_is_empty_shell(workspace / "index.html"))
 
     def test_project_delete_can_forget_or_remove_workspace_files(self) -> None:
