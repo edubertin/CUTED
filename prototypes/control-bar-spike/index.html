@@ -28,11 +28,15 @@
         },
         muted: params.get("muted") === "on",
         ready: params.get("ready") === "on",
+        discarded: params.get("discarded") === "on",
         status: demoStatus(params),
         volume: params.get("muted") === "on" ? 0 : 75
       };
 
       function demoStatus(params) {
+        if (params.get("status") === "discarded" || params.get("discarded") === "on") {
+          return { kind: "discarded", label: "Cut discarded", tone: "red" };
+        }
         if (params.get("status") === "ready" || params.get("ready") === "on") {
           return { kind: "ready", label: "Ready", tone: "green" };
         }

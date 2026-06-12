@@ -77,7 +77,8 @@ body.cuted-control-demo #cuted-control-bar-demo {
   backdrop-filter: blur(24px) saturate(1.22);
 }
 
-.cuted-control-bar.is-ready {
+.cuted-control-bar.is-ready,
+.cuted-control-bar.is-locked {
   --cuted-ready-action-width: 46px;
 }
 
@@ -128,10 +129,27 @@ body.cuted-control-demo #cuted-control-bar-demo {
     linear-gradient(90deg, transparent 18%, rgba(255, 132, 132, 0.08) 52%, transparent 92%);
 }
 
+.cuted-control-bar.is-discarded::after {
+  background:
+    radial-gradient(circle at 58% 50%, rgba(255, 132, 132, 0.18), transparent 27%),
+    linear-gradient(90deg, rgba(255, 80, 80, 0.08), transparent 24%, rgba(255, 132, 132, 0.12) 58%, transparent 94%);
+}
+
 .cuted-control-bar[data-status-tone="neutral"]::after {
   background:
     radial-gradient(circle at 55% 50%, rgba(231, 231, 232, 0.09), transparent 28%),
     linear-gradient(90deg, transparent 20%, rgba(231, 231, 232, 0.06) 58%, transparent 92%);
+}
+
+.cuted-control-bar.is-discarded .cuted-audio-group,
+.cuted-control-bar.is-discarded .cuted-format-group,
+.cuted-control-bar.is-discarded > .cuted-divider:not(.cuted-ready-divider) {
+  opacity: 0.28;
+  filter: grayscale(1) saturate(0.42) blur(0.3px);
+  pointer-events: none;
+  transition:
+    opacity 260ms ease,
+    filter 260ms ease;
 }
 
 .cuted-bar-status-layer {
@@ -174,7 +192,7 @@ body.cuted-control-demo #cuted-control-bar-demo {
 .cuted-bar-status-layer::after {
   position: absolute;
   right: 34px;
-  bottom: 31px;
+  bottom: 6px;
   left: 34px;
   z-index: 0;
   height: 2px;
@@ -224,8 +242,21 @@ body.cuted-control-demo #cuted-control-bar-demo {
   white-space: nowrap;
 }
 
+.cuted-control-bar.is-status-transient .cuted-bar-status-layer > span {
+  right: 34px;
+  left: clamp(390px, 42%, 560px);
+}
+
 .cuted-bar-status-layer[data-kind="ready"] > span {
   font-size: 30px;
+}
+
+.cuted-bar-status-layer[data-kind="discarded"] > span {
+  font-size: 28px;
+  color: #ff9b9b;
+  text-shadow:
+    0 0 14px rgba(255, 155, 155, 0.92),
+    0 0 34px rgba(255, 80, 80, 0.34);
 }
 
 .cuted-bar-status-layer [data-cuted-status-letter] {
@@ -241,7 +272,7 @@ body.cuted-control-demo #cuted-control-bar-demo {
   --status-progress: 0%;
   position: absolute;
   right: 34px;
-  bottom: 28px;
+  bottom: 3px;
   left: 34px;
   z-index: 1;
   height: 3px;
@@ -423,7 +454,7 @@ body.cuted-control-demo #cuted-control-bar-demo {
 
 .cuted-render-zone {
   display: flex;
-  flex: 0 0 655px;
+  flex: 0 0 607px;
   align-items: center;
   min-width: 0;
   min-height: 88px;
@@ -435,7 +466,8 @@ body.cuted-control-demo #cuted-control-bar-demo {
     box-shadow 280ms ease;
 }
 
-.cuted-render-zone.is-ready {
+.cuted-render-zone.is-ready,
+.cuted-render-zone.is-locked {
   padding-right: 10px;
   flex: 1 1 auto;
   background: transparent;
@@ -444,7 +476,7 @@ body.cuted-control-demo #cuted-control-bar-demo {
 
 .cuted-tool-group {
   position: relative;
-  flex: 0 0 418px;
+  flex: 0 0 404px;
   min-width: 0;
   min-height: 88px;
   gap: 0;
@@ -454,7 +486,8 @@ body.cuted-control-demo #cuted-control-bar-demo {
     flex-grow 420ms cubic-bezier(0.2, 0.9, 0.2, 1);
 }
 
-.cuted-render-zone.is-ready .cuted-tool-group {
+.cuted-render-zone.is-ready .cuted-tool-group,
+.cuted-render-zone.is-locked .cuted-tool-group {
   flex: 1 1 0;
 }
 
@@ -673,7 +706,7 @@ body.cuted-control-demo #cuted-control-bar-demo {
   width: 1px;
   flex: 0 0 1px;
   height: 74px;
-  margin: 0 20px;
+  margin: 0 16px;
   background: linear-gradient(180deg, transparent, rgba(231, 231, 232, 0.42), transparent);
   opacity: 1;
   transform-origin: 50% 50%;
@@ -685,7 +718,8 @@ body.cuted-control-demo #cuted-control-bar-demo {
     transform 260ms cubic-bezier(0.2, 0.9, 0.2, 1);
 }
 
-.cuted-render-zone.is-ready .cuted-ready-divider {
+.cuted-render-zone.is-ready .cuted-ready-divider,
+.cuted-render-zone.is-locked .cuted-ready-divider {
   width: 0;
   flex-basis: 0;
   margin-right: 0;
@@ -1659,11 +1693,11 @@ body.cuted-control-demo #cuted-control-bar-demo {
   position: relative;
   z-index: 4;
   display: grid;
-  width: 184px;
-  flex: 0 0 184px;
+  width: 158px;
+  flex: 0 0 158px;
   min-width: var(--cuted-ready-action-width);
   min-height: 88px;
-  margin-left: 16px;
+  margin-left: 12px;
   place-items: center end;
   transition:
     flex-basis 420ms cubic-bezier(0.2, 0.9, 0.2, 1),
@@ -1671,7 +1705,8 @@ body.cuted-control-demo #cuted-control-bar-demo {
     margin-left 420ms cubic-bezier(0.2, 0.9, 0.2, 1);
 }
 
-.cuted-render-zone.is-ready .cuted-ready-region {
+.cuted-render-zone.is-ready .cuted-ready-region,
+.cuted-render-zone.is-locked .cuted-ready-region {
   width: var(--cuted-ready-action-width);
   flex-basis: var(--cuted-ready-action-width);
   margin-left: 0;
@@ -1690,6 +1725,18 @@ body.cuted-control-demo #cuted-control-bar-demo {
   filter: blur(8px) saturate(1.5);
   pointer-events: none;
   transform: scaleX(0.1) scaleY(0.45);
+}
+
+.cuted-control-bar.is-status-transient .cuted-action-group {
+  opacity: 0;
+  filter: blur(8px) saturate(1.35);
+  pointer-events: none;
+  transform: scaleX(0.1) scaleY(0.45);
+}
+
+.cuted-control-bar.is-status-transient .cuted-ready-divider {
+  opacity: 0;
+  transform: scaleY(0.32);
 }
 
 .cuted-ready-region[data-ready="true"] .cuted-discard-button {
@@ -1744,22 +1791,33 @@ body.cuted-control-demo #cuted-control-bar-demo {
   position: relative;
   z-index: 5;
   display: grid;
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   place-items: center;
   padding: 0;
-  border: 1px solid rgba(231, 231, 232, 0.18);
+  border: 0;
   border-radius: 999px;
-  background:
-    radial-gradient(circle at 36% 24%, rgba(255, 255, 255, 0.14), transparent 32%),
-    rgba(7, 8, 9, 0.34);
-  color: rgba(231, 231, 232, 0.72);
+  background: transparent;
+  color: rgba(231, 231, 232, 0.62);
   cursor: pointer;
   opacity: 0;
   transform: scale(0.82);
   transition:
-    border-color 160ms ease,
+    color 160ms ease,
     box-shadow 160ms ease,
+    opacity 160ms ease,
+    transform 180ms ease;
+}
+
+.cuted-ready-cancel::before {
+  position: absolute;
+  inset: 8px;
+  border-radius: 999px;
+  background: rgba(231, 231, 232, 0.06);
+  content: "";
+  opacity: 0;
+  transform: scale(0.72);
+  transition:
     opacity 160ms ease,
     transform 180ms ease;
 }
@@ -1772,19 +1830,20 @@ body.cuted-control-demo #cuted-control-bar-demo {
 }
 
 .cuted-ready-cancel:hover {
-  border-color: rgba(255, 132, 132, 0.5);
-  color: rgba(255, 170, 170, 0.9);
-  background:
-    radial-gradient(circle at 36% 24%, rgba(255, 255, 255, 0.14), transparent 32%),
-    rgba(255, 80, 80, 0.08);
-  box-shadow:
-    inset 0 1px rgba(255, 255, 255, 0.08),
-    0 0 16px rgba(255, 80, 80, 0.22);
+  color: rgba(255, 190, 190, 0.92);
+  box-shadow: 0 0 14px rgba(255, 80, 80, 0.16);
+}
+
+.cuted-ready-cancel:hover::before {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .cuted-ready-cancel svg {
-  width: 15px;
-  height: 15px;
+  position: relative;
+  z-index: 1;
+  width: 13px;
+  height: 13px;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
