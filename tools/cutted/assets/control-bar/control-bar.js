@@ -233,7 +233,21 @@
       syncView(elements, state);
       emitStateChange(container, callbacks, subscribers, state);
     };
+    const insertAutoCloseClock = { id: null };
+    const clearInsertAutoClose = () => {
+      window.clearTimeout(insertAutoCloseClock.id);
+      insertAutoCloseClock.id = null;
+    };
+    const scheduleInsertAutoClose = () => {
+      clearInsertAutoClose();
+      insertAutoCloseClock.id = window.setTimeout(() => {
+        if (!state.insertMenuOpen || isLocked()) return;
+        state.insertMenuOpen = false;
+        sync();
+      }, 2200);
+    };
     const closeMenus = () => {
+      clearInsertAutoClose();
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
@@ -398,6 +412,11 @@
       state.formatMenuOpen = false;
       state.volumeMenuOpen = false;
       setStatus({ kind: "insert", label: state.insertMenuOpen ? "Insert bumper: Start or End" : "Insert menu closed", tone: "blue" });
+      if (state.insertMenuOpen) {
+        scheduleInsertAutoClose();
+      } else {
+        clearInsertAutoClose();
+      }
       sync();
       callbacks.onInsertClick?.({ insertMenuOpen: state.insertMenuOpen, bumpers: { ...state.bumpers } });
     });
@@ -409,6 +428,7 @@
         if (!state.bumpers[slot] && settings.mockBumpers) {
           state.bumpers[slot] = mockBumper(slot);
         }
+        clearInsertAutoClose();
         setStatus({ kind: "insert", label: `${slot === "intro" ? "Start" : "End"} bumper attached`, tone: "green" });
         sync();
         callbacks.onBumperClick?.({ slot, bumper: state.bumpers[slot] });
@@ -430,6 +450,7 @@
     });
 
     return () => {
+      clearInsertAutoClose();
       window.clearTimeout(statusClock.id);
       document.removeEventListener("click", dismissClick, true);
       document.removeEventListener("keydown", dismissKey);
@@ -470,7 +491,7 @@
     elements.effectMenu.dataset.open = String(state.effectMenuOpen);
     syncInsert(elements, state);
     syncStatus(elements, state);
-    elements.approveButton.closest("[data-cuted-ready-region]").dataset.ready = String(locked);
+    elements.approveButton.closest("[data-cuted-ready-region]").dataset.ready = String(state.ready || state.discarded);
 
     elements.effectOptions.forEach((button) => {
       button.classList.toggle("is-active", button.dataset.cutedEffectStyle === state.effectStyle);

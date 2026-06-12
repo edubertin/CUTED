@@ -1282,10 +1282,10 @@ body.cuted-control-demo #cuted-control-bar-demo {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  width: 160px;
+  width: 148px;
   height: 80px;
-  gap: 12px;
-  padding: 13px 14px;
+  gap: 10px;
+  padding: 13px 12px;
   border-radius: 14px;
   color: var(--cuted-white);
   text-align: left;
@@ -1328,7 +1328,7 @@ body.cuted-control-demo #cuted-control-bar-demo {
 
 .cuted-format-copy strong {
   color: currentColor;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 900;
   line-height: 1;
 }
@@ -1346,24 +1346,24 @@ body.cuted-control-demo #cuted-control-bar-demo {
 
 .cuted-ratio-icon {
   display: block;
-  border: 3px solid currentColor;
+  border: 2px solid currentColor;
   border-radius: 4px;
   box-shadow: 0 0 16px rgba(231, 231, 232, 0.16);
 }
 
 .cuted-ratio-vertical {
-  width: 25px;
-  height: 52px;
+  width: 20px;
+  height: 42px;
 }
 
 .cuted-ratio-feed {
-  width: 34px;
-  height: 43px;
+  width: 28px;
+  height: 36px;
 }
 
 .cuted-ratio-wide {
-  width: 52px;
-  height: 27px;
+  width: 42px;
+  height: 22px;
 }
 
 .cuted-format-menu {
