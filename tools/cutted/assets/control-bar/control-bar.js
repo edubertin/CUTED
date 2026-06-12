@@ -6,6 +6,7 @@
     effectStyle: "clean",
     formatMenuOpen: false,
     insertMenuOpen: false,
+    volumeMenuOpen: false,
     aspectRatio: "9:16",
     bumpers: { intro: null, outro: null },
     busy: false,
@@ -155,6 +156,7 @@
       effectStyle,
       formatMenuOpen: Boolean(state.formatMenuOpen),
       insertMenuOpen: Boolean(state.insertMenuOpen),
+      volumeMenuOpen: Boolean(state.volumeMenuOpen),
       aspectRatio: FORMAT_OPTIONS.some((option) => option.value === state.aspectRatio) ? state.aspectRatio : "9:16",
       bumpers: normalizeBumpers(state.bumpers),
       muted: Boolean(state.muted),
@@ -207,6 +209,8 @@
       statusBar: container.querySelector("[data-cuted-bar-status]"),
       statusLabel: container.querySelector("[data-cuted-status-label]"),
       statusMeter: container.querySelector("[data-cuted-status-meter]"),
+      volumeMuteButton: container.querySelector("[data-cuted-control='volume-mute']"),
+      volumePopover: container.querySelector("[data-cuted-volume-popover]"),
       volumeSlider: container.querySelector("[data-cuted-control='volume']"),
       volumeValue: container.querySelector("[data-cuted-value='volume']")
     };
@@ -233,6 +237,7 @@
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
+      state.volumeMenuOpen = false;
       sync();
     };
     const isLocked = () => state.ready || state.discarded || state.busy;
@@ -242,6 +247,7 @@
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
+      state.volumeMenuOpen = false;
       setStatus(buildReadyStatus(), 0);
       sync();
     };
@@ -251,6 +257,7 @@
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
+      state.volumeMenuOpen = false;
       setStatus(buildDiscardedStatus(), 0);
       sync();
     };
@@ -262,34 +269,37 @@
       if (event.key === "Escape") closeMenus();
     };
 
-    document.addEventListener("click", dismissClick);
+    document.addEventListener("click", dismissClick, true);
     document.addEventListener("keydown", dismissKey);
 
     elements.volumeSlider.addEventListener("input", () => {
       if (isLocked()) return;
       state.volume = Number(elements.volumeSlider.value);
       state.muted = state.volume === 0;
-      setStatus({ kind: "volume", label: `Volume ${state.volume}%`, progress: state.volume, tone: "blue" });
       sync();
       callbacks.onVolumeChange?.({ muted: state.muted, volume: state.volume });
     });
 
     elements.soundButton.addEventListener("click", () => {
       if (isLocked()) return;
+      state.volumeMenuOpen = !state.volumeMenuOpen;
+      state.effectMenuOpen = false;
+      state.formatMenuOpen = false;
+      state.insertMenuOpen = false;
+      sync();
+    });
+
+    elements.volumeMuteButton.addEventListener("click", () => {
+      if (isLocked()) return;
       state.muted = !state.muted;
       state.volume = state.muted ? 0 : Math.max(state.volume, 75);
-      setStatus({
-        kind: "volume",
-        label: state.muted ? "Audio muted" : `Volume ${state.volume}%`,
-        progress: state.volume,
-        tone: state.muted ? "neutral" : "blue"
-      });
       sync();
       callbacks.onVolumeChange?.({ muted: state.muted, volume: state.volume });
     });
 
     elements.aiButton.addEventListener("click", () => {
       if (isLocked()) return;
+      state.volumeMenuOpen = false;
       callbacks.onAiClick?.({ ...state });
       if (state.aiStatus === "idle") {
         state.aiStatus = "loading";
@@ -311,6 +321,7 @@
       state.effectMenuOpen = !state.effectMenuOpen;
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
+      state.volumeMenuOpen = false;
       setStatus({
         kind: "effect",
         label: state.effectMenuOpen ? "Choose a visual effect" : "Effect menu closed",
@@ -325,6 +336,7 @@
         if (isLocked()) return;
         state.effectStyle = button.dataset.cutedEffectStyle;
         state.effectMenuOpen = false;
+        state.volumeMenuOpen = false;
         setStatus({ kind: "effect", label: `Effect preview: ${button.textContent.trim()}`, tone: "green" });
         sync();
         callbacks.onEffectStyleChange?.({ effectStyle: state.effectStyle });
@@ -334,6 +346,7 @@
     elements.captionButton.addEventListener("click", () => {
       if (isLocked()) return;
       state.captionsEnabled = !state.captionsEnabled;
+      state.volumeMenuOpen = false;
       setStatus({ kind: "caption", label: state.captionsEnabled ? "Captions on" : "Captions off", tone: state.captionsEnabled ? "blue" : "neutral" });
       sync();
       callbacks.onCaptionToggle?.({ captionsEnabled: state.captionsEnabled });
@@ -361,6 +374,7 @@
       state.formatMenuOpen = !state.formatMenuOpen;
       state.effectMenuOpen = false;
       state.insertMenuOpen = false;
+      state.volumeMenuOpen = false;
       setStatus({ kind: "format", label: state.formatMenuOpen ? "Choose output format" : "Format menu closed", tone: "blue" });
       sync();
     });
@@ -370,6 +384,7 @@
         if (isLocked()) return;
         state.aspectRatio = button.dataset.cutedFormat;
         state.formatMenuOpen = false;
+        state.volumeMenuOpen = false;
         setStatus({ kind: "format", label: `Format selected: ${state.aspectRatio}`, tone: "blue" });
         sync();
         callbacks.onFormatChange?.({ aspectRatio: state.aspectRatio });
@@ -381,6 +396,7 @@
       state.insertMenuOpen = !state.insertMenuOpen;
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
+      state.volumeMenuOpen = false;
       setStatus({ kind: "insert", label: state.insertMenuOpen ? "Insert bumper: Start or End" : "Insert menu closed", tone: "blue" });
       sync();
       callbacks.onInsertClick?.({ insertMenuOpen: state.insertMenuOpen, bumpers: { ...state.bumpers } });
@@ -415,7 +431,7 @@
 
     return () => {
       window.clearTimeout(statusClock.id);
-      document.removeEventListener("click", dismissClick);
+      document.removeEventListener("click", dismissClick, true);
       document.removeEventListener("keydown", dismissKey);
     };
   }
@@ -430,7 +446,12 @@
     elements.renderZone.classList.toggle("is-discarded", state.discarded);
     elements.renderZone.classList.toggle("is-locked", locked);
     elements.soundButton.classList.toggle("is-muted", state.muted);
+    elements.soundButton.classList.toggle("is-active", state.volumeMenuOpen);
+    elements.soundButton.setAttribute("aria-expanded", String(state.volumeMenuOpen));
+    elements.volumePopover.dataset.open = String(state.volumeMenuOpen);
     elements.sonicRail.classList.toggle("is-muted", state.muted);
+    elements.volumeMuteButton.classList.toggle("is-muted", state.muted);
+    elements.volumeMuteButton.textContent = state.muted ? "Unmute" : "Mute";
     elements.sonicRail.style.setProperty("--volume", `${state.volume}%`);
     elements.sonicRail.style.setProperty("--volume-num", String(state.volume / 100));
     elements.volumeSlider.value = String(state.volume);
@@ -444,6 +465,7 @@
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
+      state.volumeMenuOpen = false;
     }
     elements.effectMenu.dataset.open = String(state.effectMenuOpen);
     syncInsert(elements, state);
@@ -536,7 +558,7 @@
         </div>
 
         <div class="cuted-control-group cuted-audio-group">
-          <button class="cuted-icon-button cuted-sound-button" type="button" aria-label="Volume" data-cuted-control="sound">
+          <button class="cuted-icon-button cuted-sound-button" type="button" aria-label="Volume" aria-haspopup="true" aria-expanded="false" data-cuted-control="sound">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 9v6h4l5 4V5L8 9z"></path>
               <path class="cuted-volume-voice voice-one" d="M17 8a5 5 0 0 1 0 8"></path>
@@ -548,14 +570,20 @@
             <span class="cuted-sound-wave wave-two"></span>
             <span class="cuted-sound-wave wave-three"></span>
           </button>
-          <div class="cuted-sonic-rail" data-cuted-sonic-rail>
-            <div class="cuted-sonic-fill"></div>
-            <div class="cuted-sonic-bars" aria-hidden="true">
-              ${renderSonicBars()}
+          <div class="cuted-volume-popover" data-open="false" data-cuted-volume-popover>
+            <div class="cuted-volume-popover-head">
+              <span>Volume</span>
+              <button class="cuted-volume-mute-button" type="button" data-cuted-control="volume-mute">Mute</button>
             </div>
-            <input class="cuted-volume-slider" type="range" min="0" max="100" value="75" aria-label="Volume" data-cuted-control="volume" />
+            <div class="cuted-sonic-rail" data-cuted-sonic-rail>
+              <div class="cuted-sonic-fill"></div>
+              <div class="cuted-sonic-bars" aria-hidden="true">
+                ${renderSonicBars()}
+              </div>
+              <input class="cuted-volume-slider" type="range" min="0" max="100" value="75" aria-label="Volume" data-cuted-control="volume" />
+            </div>
+            <span class="cuted-volume-value" data-cuted-value="volume">75%</span>
           </div>
-          <span class="cuted-volume-value" data-cuted-value="volume">75%</span>
         </div>
 
         <div class="cuted-divider" aria-hidden="true"></div>
@@ -577,7 +605,7 @@
                 <span>FX</span>
               </button>
               <button class="cuted-tile-button cuted-insert-button" type="button" aria-label="Insert" data-cuted-control="insert">
-                <span>Insert</span>
+                <span>INS</span>
                 <i data-cuted-insert-dot="intro"></i>
                 <i data-cuted-insert-dot="outro"></i>
               </button>
