@@ -8304,7 +8304,7 @@ def project_home_html(workspace: Path, logo_src: str, recent: list[dict[str, obj
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CUTED</title>
-  <style>{css()}{project_home_css()}</style>
+  <style>{css()}{project_home_css()}{project_home_compact_import_css()}</style>
 </head>
 <body data-project-home>
   <main class="project-home">
@@ -8437,36 +8437,45 @@ def project_import_form_html() -> str:
         <div class="import-key-banner" data-import-key-banner hidden>
           <span>Adicione sua chave OpenAI nas configuracoes antes de importar com IA.</span>
         </div>
-        <div class="source-toggle" role="group" aria-label="Origem do projeto">
-          <label><input name="source_mode" type="radio" value="local" checked><span>Video local</span></label>
-          <label><input name="source_mode" type="radio" value="youtube"><span>YouTube</span></label>
-        </div>
-        <div class="source-panel" data-source-panel="local">
-          <input name="source_path" type="text" value="" placeholder="Nenhum video selecionado" autocomplete="off" readonly>
-          <button type="button" data-select-video-file>Selecionar video</button>
-        </div>
-        <div class="source-panel" data-source-panel="youtube" hidden>
-          <input name="source_url" type="url" placeholder="Cole o link do YouTube" autocomplete="off">
-        </div>
-        <div class="new-project-grid">
-          <label class="suggestion-field">Sugestoes
-            <select name="preview_count">
-              {suggestion_count_options()}
-            </select>
-          </label>
-          <fieldset class="duration-profile duration-size-toggle">
-            <legend>Duracao</legend>
-            <label><input name="duration_profile" type="radio" value="short"><span><strong>S</strong><small>20-45s</small></span></label>
-            <label><input name="duration_profile" type="radio" value="medium" checked><span><strong>M</strong><small>30-70s</small></span></label>
-            <label><input name="duration_profile" type="radio" value="long"><span><strong>L</strong><small>60-120s</small></span></label>
-          </fieldset>
+        <div class="new-project-config-grid">
+          <section class="new-project-config-block source-config-block" aria-label="Midia de origem">
+            <div class="new-project-block-title"><strong>Midia</strong><span>Arquivo ou link</span></div>
+            <div class="source-toggle icon-source-toggle" role="group" aria-label="Origem do projeto">
+              <label title="Video local"><input name="source_mode" type="radio" value="local" aria-label="Video local" checked><span>{project_home_icon_svg("local-video")}<strong>Local</strong></span></label>
+              <label title="YouTube"><input name="source_mode" type="radio" value="youtube" aria-label="YouTube"><span>{project_home_icon_svg("youtube")}<strong>YouTube</strong></span></label>
+            </div>
+            <div class="source-panel" data-source-panel="local">
+              <input name="source_path" type="text" value="" placeholder="Nenhum video selecionado" autocomplete="off" readonly>
+              <button class="icon-action-button" type="button" data-select-video-file aria-label="Selecionar video" title="Selecionar video">{project_home_icon_svg("folder-video")}</button>
+            </div>
+            <div class="source-panel" data-source-panel="youtube" hidden>
+              <input name="source_url" type="url" placeholder="Cole o link do YouTube" autocomplete="off">
+            </div>
+          </section>
+          <section class="new-project-config-block tuning-config-block" aria-label="Ajustes do projeto">
+            <div class="new-project-block-title"><strong>Cortes</strong><span>Sugestoes e duracao</span></div>
+            <label class="suggestion-field icon-select-field" title="Quantidade de sugestoes">
+              <span class="field-icon" aria-hidden="true">{project_home_icon_svg("sparkles")}</span>
+              <span class="tuning-copy">Sugestoes</span>
+              <select name="preview_count" aria-label="Sugestoes">
+                {suggestion_count_options()}
+              </select>
+            </label>
+            <fieldset class="duration-profile duration-size-toggle" aria-label="Duracao dos cortes">
+              <legend class="sr-only">Duracao dos cortes</legend>
+              <span class="tuning-copy" aria-hidden="true">Duracao</span>
+              <label title="Curto: 20 a 45 segundos"><input name="duration_profile" type="radio" value="short" aria-label="Curto"><span>{project_home_icon_svg("clock")}<strong>S</strong></span></label>
+              <label title="Medio: 30 a 70 segundos"><input name="duration_profile" type="radio" value="medium" aria-label="Medio" checked><span>{project_home_icon_svg("clock")}<strong>M</strong></span></label>
+              <label title="Longo: 60 a 120 segundos"><input name="duration_profile" type="radio" value="long" aria-label="Longo"><span>{project_home_icon_svg("clock")}<strong>L</strong></span></label>
+            </fieldset>
+          </section>
         </div>
         <input name="language" type="hidden" value="pt">
         <input name="preset" type="hidden" value="tiktok">
         <section class="ai-context-box" aria-label="Contexto para IA">
           <div class="ai-context-head">
             <strong>Contexto IA</strong>
-            <button type="button" data-context-audio title="Transcrever por audio">Audio</button>
+            <button class="icon-action-button context-audio-button" type="button" data-context-audio aria-label="Transcrever por audio" title="Transcrever por audio">{project_home_icon_svg("mic")}</button>
           </div>
           <textarea name="context_prompt" rows="5" placeholder="Direcao, publico, ganchos e cortes que a IA deve priorizar."></textarea>
         </section>
@@ -8474,7 +8483,7 @@ def project_import_form_html() -> str:
         <div class="import-result" data-import-result></div>
         <footer class="new-project-footer">
           <span>Renders salvos automaticamente no projeto.</span>
-          <button type="submit">Importar</button>
+          <button class="import-submit-button" type="submit">Importar</button>
         </footer>
       </form>"""
 
@@ -8545,6 +8554,18 @@ def control_bar_asset_source_dir() -> Path:
 
 def brand_logo_path() -> Path:
     return Path(__file__).resolve().parents[3] / "assets" / "brand" / BRAND_LOGO_FILE
+
+
+def project_home_icon_svg(name: str) -> str:
+    icons = {
+        "clock": '<svg data-cuted-icon="clock" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>',
+        "folder-video": '<svg data-cuted-icon="folder-video" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5Z"/><path d="m10 11 5 3-5 3Z"/></svg>',
+        "local-video": '<svg data-cuted-icon="local-video" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="4" y="5" width="12" height="14" rx="2"/><path d="m16 10 4-2v8l-4-2M8 9h4M8 13h3"/></svg>',
+        "mic": '<svg data-cuted-icon="mic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></svg>',
+        "sparkles": '<svg data-cuted-icon="sparkles" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 1.4 4.1L17 9l-3.6 1.9L12 15l-1.4-4.1L7 9l3.6-1.9Z"/><path d="m5 14 .9 2.6L8 18l-2.1 1.4L5 22l-.9-2.6L2 18l2.1-1.4ZM19 13l.8 2.2L22 16l-2.2.8L19 19l-.8-2.2L16 16l2.2-.8Z"/></svg>',
+        "youtube": '<svg data-cuted-icon="youtube" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="6" width="18" height="12" rx="4"/><path d="m10 9 5 3-5 3Z"/></svg>',
+    }
+    return icons.get(name, "")
 
 
 def suggestion_count_options() -> str:
@@ -8930,6 +8951,43 @@ def static_assets_html(assets: dict[str, str], kind: str) -> str:
 def project_home_css() -> str:
     return """
 body[data-project-home]{overflow-x:hidden}body[data-project-home] header{display:none}.project-home{width:min(1080px,calc(100vw - 36px));max-width:none;min-height:100vh;padding:30px 0 34px;align-content:start;gap:12px}.home-brand-stage{display:grid;place-items:center;min-height:164px;padding:4px 0 0}.home-logo-orbit{position:relative;display:grid;place-items:center;width:min(620px,84vw);isolation:isolate}.home-logo-orbit:before{position:absolute;inset:18% 12%;z-index:-1;border-radius:999px;background:radial-gradient(circle at 26% 50%,rgba(17,162,207,.28),transparent 34%),radial-gradient(circle at 74% 50%,rgba(175,207,42,.24),transparent 34%);filter:blur(24px);content:"";animation:home-logo-aura 5.2s ease-in-out infinite}.home-brand-logo{display:block;width:min(520px,80vw);height:104px;object-fit:contain;filter:drop-shadow(0 0 12px rgba(17,162,207,.18)) drop-shadow(0 0 12px rgba(175,207,42,.12));animation:home-logo-breathe 5.8s ease-in-out infinite}.project-library{display:grid;align-content:start;gap:0;border:1px solid var(--glass-border);border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,.052),rgba(255,255,255,.016)),rgba(7,7,7,.76);box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(22px) saturate(1.22);overflow:hidden}.project-section-head{display:flex;justify-content:space-between;gap:12px;align-items:center;min-height:52px;padding:9px 16px;border-bottom:1px solid rgba(231,231,232,.1)}.project-section-head strong{font-size:17px;letter-spacing:0}.project-toolbar{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.project-toolbar button,.project-row-actions button,.project-row-actions a{min-height:32px;padding:6px 11px}.project-icon-button{display:inline-grid!important;place-items:center;width:36px;min-width:36px;padding:0!important;font-size:17px;font-weight:900}.project-primary{border-color:rgba(175,207,42,.58)!important;background:linear-gradient(180deg,rgba(175,207,42,.26),rgba(17,162,207,.1)),rgba(23,32,14,.78)!important;color:var(--color-text)!important}.project-table{display:grid;max-height:min(456px,calc(100vh - 304px));overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(175,207,42,.55) rgba(255,255,255,.055)}.project-table::-webkit-scrollbar{width:10px}.project-table::-webkit-scrollbar-track{background:rgba(255,255,255,.04);border-left:1px solid rgba(231,231,232,.06)}.project-table::-webkit-scrollbar-thumb{border:2px solid rgba(7,7,7,.76);border-radius:999px;background:linear-gradient(180deg,rgba(17,162,207,.72),rgba(175,207,42,.72));box-shadow:0 0 12px rgba(17,162,207,.22)}.project-table::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,var(--color-brand-blue),var(--color-brand-green))}.project-table-head,.project-row{display:grid;grid-template-columns:minmax(230px,1fr) minmax(245px,.82fr) 100px minmax(214px,.58fr);gap:14px;align-items:center}.project-table-head{position:sticky;top:0;z-index:2;min-height:34px;padding:0 16px;border-bottom:1px solid rgba(231,231,232,.08);background:rgba(11,11,11,.92);color:var(--color-text-muted);font-size:11px;text-transform:uppercase;backdrop-filter:blur(12px)}.project-row{min-height:76px;padding:12px 16px;border-bottom:1px solid rgba(231,231,232,.075);animation:home-row-in .42s ease both}.project-row:last-child{border-bottom:0}.project-row:nth-child(2){animation-delay:.03s}.project-row:nth-child(3){animation-delay:.08s}.project-row:nth-child(4){animation-delay:.13s}.project-row:nth-child(5){animation-delay:.18s}.project-row:hover{background:linear-gradient(90deg,rgba(17,162,207,.085),rgba(175,207,42,.045),transparent)}.project-row[data-project-mock=true]{background:rgba(255,255,255,.018)}.project-name-cell{display:grid;gap:3px;min-width:0}.project-name-cell strong{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-name-cell p{margin:0;color:rgba(175,207,42,.82);font-size:12px}.project-name-cell small{display:block;color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-meta-cell{display:flex;gap:10px;margin:0}.project-meta-cell div{display:grid;gap:2px;min-width:62px}.project-meta-cell dt{color:var(--color-text-muted);font-size:11px}.project-meta-cell dd{margin:0;color:var(--color-text);font-weight:800}.project-updated-cell{color:var(--color-text-muted);font-size:12px}.project-row-actions{display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap}.project-row-actions a{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--glass-border);border-radius:999px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.project-row-actions button[data-delete-project]{color:var(--color-danger)}.project-row-actions button:disabled{opacity:.38;cursor:not-allowed}.project-import{margin-top:12px}.project-import[hidden],.project-library[hidden]{display:none}.project-import .import-panel{animation:home-row-in .28s ease both}.new-project-panel{gap:14px;border-color:var(--glass-border);background:linear-gradient(180deg,rgba(255,255,255,.052),rgba(255,255,255,.016)),rgba(7,7,7,.76);box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(22px) saturate(1.22)}.new-project-head,.new-project-footer,.ai-context-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.new-project-head{min-height:38px;padding-bottom:10px;border-bottom:1px solid rgba(231,231,232,.1)}.new-project-head strong{font-size:17px}.source-toggle{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.source-toggle label,.duration-size-toggle label{position:relative;display:grid}.source-toggle input,.duration-size-toggle input{position:absolute;opacity:0;pointer-events:none}.source-toggle span,.duration-size-toggle span{display:grid;place-items:center;min-height:48px;padding:8px 12px;border:1px solid var(--glass-border);border-radius:8px;background:rgba(231,231,232,.055);box-shadow:inset 0 1px rgba(255,255,255,.14);color:var(--color-text-soft);font-weight:800}.source-toggle input:checked+span,.duration-size-toggle input:checked+span{border-color:rgba(175,207,42,.72);background:linear-gradient(180deg,rgba(175,207,42,.2),rgba(17,162,207,.08)),rgba(13,18,12,.84);color:var(--color-text);box-shadow:inset 0 1px rgba(255,255,255,.18),0 0 22px rgba(175,207,42,.12)}.source-panel{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}.source-panel[hidden]{display:none}.new-project-grid{display:grid;grid-template-columns:minmax(140px,.32fr) minmax(0,1fr);gap:12px;align-items:end}.suggestion-field{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.duration-size-toggle{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0}.duration-size-toggle legend{grid-column:1/-1;color:var(--color-text-muted);font-size:12px}.duration-size-toggle span{min-height:58px}.duration-size-toggle strong{font-size:22px;line-height:1}.duration-size-toggle small{color:var(--color-text-muted);font-size:11px}.ai-context-box{display:grid;gap:8px;padding:12px;border:1px solid rgba(17,162,207,.28);border-radius:8px;background:linear-gradient(135deg,rgba(17,162,207,.09),rgba(175,207,42,.035)),rgba(0,0,0,.18)}.ai-context-box textarea{min-height:126px;border-color:rgba(17,162,207,.28);background:rgba(0,0,0,.44)}.new-project-footer{padding-top:4px}.new-project-footer span{color:var(--color-text-muted);font-size:12px}@keyframes home-logo-aura{0%,100%{opacity:.56;transform:scale(.98)}50%{opacity:.84;transform:scale(1.03)}}@keyframes home-logo-breathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-1px) scale(1.006)}}@keyframes home-row-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@media(max-width:900px){.project-home{width:min(100vw - 20px,760px);padding-top:26px}.home-brand-stage{min-height:138px}.home-brand-logo{height:78px}.project-section-head{align-items:flex-start;flex-direction:column}.project-toolbar{justify-content:flex-start}.project-table{max-height:none}.project-table-head{display:none}.project-row,.new-project-grid,.source-panel{grid-template-columns:1fr;gap:10px}.project-meta-cell{justify-content:space-between}.project-row-actions{justify-content:flex-start}.project-updated-cell{display:none}}
+"""
+
+
+def project_home_compact_import_css() -> str:
+    return """
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.new-project-config-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+.new-project-config-block{display:grid;gap:8px;justify-self:center;width:min(100%,390px);min-height:170px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.018)}
+.new-project-block-title{display:flex;align-items:baseline;justify-content:space-between;gap:10px;min-height:18px}
+.new-project-block-title strong{color:var(--color-text);font-size:12px;text-transform:uppercase}
+.new-project-block-title span,.tuning-copy{color:var(--color-text-muted);font-size:11px}
+.icon-source-toggle{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%}
+.icon-source-toggle span,.duration-size-toggle label span,.icon-action-button,.field-icon{display:grid;place-items:center;border:1px solid var(--glass-border);border-radius:8px;background:rgba(231,231,232,.055);box-shadow:inset 0 1px rgba(255,255,255,.14);color:var(--color-text-soft)}
+.icon-source-toggle span{grid-template-rows:auto auto;gap:4px;min-height:68px;padding:9px 8px}
+.icon-source-toggle span strong{font-size:11px;letter-spacing:0;text-transform:uppercase}
+.icon-source-toggle input:checked+span,.duration-size-toggle input:checked+span{border-color:rgba(175,207,42,.72);background:rgba(25,33,18,.9);color:var(--color-text);box-shadow:inset 0 1px rgba(255,255,255,.18),0 0 18px rgba(175,207,42,.13)}
+.icon-source-toggle svg,.duration-size-toggle svg,.icon-action-button svg,.field-icon svg{display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.icon-source-toggle svg{width:30px;height:30px}
+.source-panel{grid-template-columns:minmax(0,1fr) 52px;gap:8px;width:100%}
+.source-panel[data-source-panel=youtube]{grid-template-columns:minmax(0,1fr)}
+.source-panel input,.suggestion-field select{min-height:44px}
+.icon-action-button{width:52px;min-width:52px;min-height:44px;padding:0!important}
+.icon-action-button svg,.field-icon svg{width:19px;height:19px}
+.icon-action-button:hover{border-color:rgba(17,162,207,.52);color:var(--color-text);background:rgba(17,162,207,.1)}
+.icon-select-field{position:relative;display:grid;grid-template-columns:44px minmax(0,1fr) 96px;gap:8px;align-items:center;width:100%;color:inherit;font-size:inherit}
+.icon-select-field .field-icon{width:44px;height:44px}
+.icon-select-field select{width:96px;padding-left:12px}
+.duration-size-toggle{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,62px);gap:8px;align-items:center;margin:0;padding:0;border:0}
+.duration-size-toggle legend.sr-only{position:absolute;grid-column:auto;color:inherit;font-size:inherit}
+.duration-size-toggle>.tuning-copy{display:flex!important;align-items:center;min-height:auto!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;color:var(--color-text-muted)!important;font-weight:600}
+.duration-size-toggle label span{grid-template-columns:15px auto;gap:5px;min-width:62px;min-height:44px;padding:0 8px}
+.duration-size-toggle svg{width:14px;height:14px;opacity:.72}
+.duration-size-toggle strong{font-size:17px;line-height:1}
+.context-audio-button{border-radius:999px}
+.import-submit-button{min-width:116px;min-height:42px!important;border-color:var(--color-brand-white)!important;background:var(--color-brand-white)!important;color:var(--color-brand-black)!important;font-weight:900;box-shadow:0 10px 24px rgba(0,0,0,.32)}
+.import-submit-button:hover{transform:translateY(-1px);border-color:var(--color-brand-green)!important;background:var(--color-brand-green)!important;color:var(--color-brand-black)!important;box-shadow:0 12px 26px rgba(0,0,0,.36),0 0 16px rgba(175,207,42,.16)}
+@media(max-width:900px){.new-project-config-grid{grid-template-columns:1fr}.new-project-config-block{width:100%}.source-panel,.source-panel[data-source-panel=youtube]{grid-template-columns:minmax(0,1fr) 52px}.source-panel[data-source-panel=youtube]{grid-template-columns:minmax(0,1fr)}.duration-size-toggle{grid-template-columns:minmax(0,1fr) repeat(3,minmax(54px,1fr))}.duration-size-toggle span{min-width:0}}
 """
 
 
