@@ -741,8 +741,11 @@ function updatePlayback(now: number, state: TimelineState): void {
   if (!state.playing) return;
   state.playhead += elapsed;
   if (state.playhead >= state.trimEnd) {
-    state.playhead = state.trimStart;
-    playUiTone("loop", state);
+    state.playhead = state.trimEnd;
+    state.playing = false;
+    state.mode = "idle";
+    activeCallbacks.onPlayToggle?.(false);
+    playUiTone("pause", state);
   }
 }
 
