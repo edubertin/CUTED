@@ -8060,8 +8060,7 @@ def card_html(moment: Moment) -> str:
           <div class="preview-frame">
             <div class="preview-bar">
               <div class="preview-topbar">
-                <div class="preview-transport-group" aria-label="Player e volume">
-                  <button class="preview-icon preview-play" data-preview-play type="button" aria-label="Reproduzir" title="Reproduzir"></button>
+                <div class="preview-transport-group" aria-label="Controles do preview">
                   <div class="preview-volume-group" aria-label="Volume do preview">
                     <button class="preview-icon preview-volume" data-preview-volume type="button" aria-label="Volume" title="Volume"></button>
                     <div class="preview-volume-popover" data-preview-volume-popover hidden>
@@ -8447,7 +8446,7 @@ button[data-action=discard],.result-actions a.secondary,.result-actions button.s
 .duration-profile input:checked+span,.layer-chip.is-selected{border-color:rgba(17,162,207,.72);background:var(--control-active);color:var(--color-text)}
 .camera-path-rail{background:linear-gradient(90deg,rgba(17,162,207,.28),rgba(231,231,232,.1),rgba(175,207,42,.18))}.camera-path-marker{border-color:var(--glass-border);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.035)),rgba(231,231,232,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.32),0 6px 14px rgba(0,0,0,.26)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:rgba(17,162,207,.88);box-shadow:0 0 0 4px rgba(17,162,207,.16),0 0 24px rgba(17,162,207,.26)}
 .preview-camera-marker span,.camera-path-marker span{position:absolute;left:50%;bottom:calc(100% + 4px);max-width:72px;padding:2px 5px;border:1px solid rgba(231,231,232,.2);border-radius:999px;background:rgba(5,5,5,.82);color:var(--color-text-soft);font-size:10px;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform:translateX(-50%);pointer-events:none}.camera-path-marker{overflow:visible}.preview-camera-marker{overflow:visible}.camera-path-marker span{bottom:calc(100% + 5px)}.preview-camera-marker.active span,.camera-path-marker.active span{border-color:rgba(17,162,207,.7);color:#fff}
-.preview-camera-popover-head{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center}.preview-camera-popover-head strong{font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.preview-camera-popover-head span,.preview-camera-popover small{color:var(--color-text-muted);font-size:11px}.preview-camera-popover-close{display:inline-grid!important;place-items:center;width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;padding:0!important;border-radius:999px!important}.preview-camera-popover-actions{display:grid;grid-template-columns:1fr auto;gap:8px}.preview-camera-popover [data-preview-camera-popover-delete]{color:var(--color-danger)!important}
+.preview-camera-popover-head{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center}.preview-camera-popover-head strong{font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.preview-camera-popover-head span,.preview-camera-popover small{color:var(--color-text-muted);font-size:11px}.preview-camera-popover-close{display:inline-grid!important;place-items:center;width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;padding:0!important;border-radius:999px!important}.preview-camera-popover-actions{display:grid;grid-template-columns:1fr auto;gap:8px}.preview-camera-popover [data-preview-camera-popover-delete]{color:var(--color-danger)!important}.preview-camera-popover--portal{position:fixed!important;z-index:3200!important;width:min(260px,calc(100vw - 16px))!important;max-width:calc(100vw - 16px);transform:none!important}
 .preview-volume-group{z-index:2300}.preview-volume-popover{z-index:2600!important;width:44px!important;min-width:44px!important;height:120px!important;padding:10px 6px!important;overflow:visible}.preview-volume-slider{width:92px!important;max-width:92px}.preview-ai-button{display:inline-grid;place-items:center;min-width:42px;height:32px;padding:0 12px;border:1px solid rgba(17,162,207,.72);border-radius:999px;background:linear-gradient(180deg,rgba(17,162,207,.28),rgba(17,162,207,.1));color:var(--color-text);font-weight:900;letter-spacing:0}.preview-ai-button:disabled{opacity:.62;cursor:progress}.preview-ai-status{min-height:16px;width:100%;color:rgba(231,231,232,.62);font-size:12px;line-height:1.25;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .overlay-menu button,.overlay-layer-row button{background:rgba(231,231,232,.08);color:rgba(231,231,232,.8);border-color:var(--glass-border)}
 .overlay-danger{background:rgba(80,20,20,.72)!important;border-color:rgba(255,120,120,.46)!important;color:#ffd2d2!important}
@@ -8987,7 +8986,7 @@ function cameraPathFrameWithPreset(frame, key, strength){
 }
 function setCameraPathForRank(rank, path, platform = activePlatformForRank(rank), rerender = true){
   const normalized = normalizeCameraPath(path);
-  const duration = cardForRank(rank) ? cameraContextForCard(cardForRank(rank)).duration : 0;
+  const duration = cardForRank(rank) ? cameraTimelineDurationForCard(cardForRank(rank)) : 0;
   setPlatformEditForRank(rank, platform, { camera_path: normalized, director_plan: directorPlanFromCameraPath(normalized, duration, platform) });
   const card = cardForRank(rank);
   if (card) {
@@ -9002,11 +9001,11 @@ function setCameraPathForRank(rank, path, platform = activePlatformForRank(rank)
 function addCameraPathFrameForCard(card){
   const rank = card.dataset.rank;
   const platform = activePlatformForRank(rank);
-  const context = cameraContextForCard(card);
+  const duration = cameraTimelineDurationForCard(card);
+  const position = cameraTimelinePositionForCard(card);
   const edit = platformEditForRank(rank, platform);
-  const sourcePath = cameraPathForEdit(edit, context.duration);
-  const position = clampNumber(context.position, 0, Math.max(context.duration, .3));
-  const frame = cameraFrameForTime(edit.camera, sourcePath, position, context.duration);
+  const sourcePath = cameraPathForEdit(edit, duration);
+  const frame = cameraFrameForTime(edit.camera, sourcePath, position, duration);
   const next = Object.assign({}, frame, { time: Number(position.toFixed(3)), source: "manual-path" });
   const path = cameraPathWithFrame(sourcePath, next);
   const index = path.findIndex(item => Math.abs(item.time - next.time) < .01);
@@ -9016,10 +9015,10 @@ function addCameraPathFrameForCard(card){
 function addCenterCameraFrameForCard(card){
   const rank = card.dataset.rank;
   const platform = activePlatformForRank(rank);
-  const context = cameraContextForCard(card);
+  const duration = cameraTimelineDurationForCard(card);
+  const position = cameraTimelinePositionForCard(card);
   const edit = platformEditForRank(rank, platform);
-  const sourcePath = cameraPathForEdit(edit, context.duration);
-  const position = clampNumber(context.position, 0, Math.max(context.duration, .3));
+  const sourcePath = cameraPathForEdit(edit, duration);
   const next = normalizeCameraPathFrame({
     time: Number(position.toFixed(3)),
     key: "center",
@@ -9035,10 +9034,11 @@ function updateCameraPathFrameForCard(card, patch, rerender = true){
   const rank = card.dataset.rank;
   const platform = activePlatformForRank(rank);
   const edit = platformEditForRank(rank, platform);
-  const context = cameraContextForCard(card);
-  const path = cameraPathForEdit(edit, context.duration);
+  const duration = cameraTimelineDurationForCard(card);
+  const position = cameraTimelinePositionForCard(card);
+  const path = cameraPathForEdit(edit, duration);
   const index = selectedCameraPathIndex(card, path);
-  const current = path[index] || cameraFrameForTime(edit.camera, path, context.position, context.duration);
+  const current = path[index] || cameraFrameForTime(edit.camera, path, position, duration);
   let frame = Object.assign({}, current, patch);
   if (patch.key || patch.strength !== undefined) {
     frame = cameraPathFrameWithPreset(frame, patch.key || current.key || "center", patch.strength ?? current.strength ?? 60);
@@ -9051,10 +9051,11 @@ function updateCameraPathFrameIntentForCard(card, intent){
   const rank = card.dataset.rank;
   const platform = activePlatformForRank(rank);
   const edit = platformEditForRank(rank, platform);
-  const context = cameraContextForCard(card);
-  const path = cameraPathForEdit(edit, context.duration);
+  const duration = cameraTimelineDurationForCard(card);
+  const position = cameraTimelinePositionForCard(card);
+  const path = cameraPathForEdit(edit, duration);
   const index = selectedCameraPathIndex(card, path);
-  const current = path[index] || cameraFrameForTime(edit.camera, path, context.position, context.duration);
+  const current = path[index] || cameraFrameForTime(edit.camera, path, position, duration);
   const frame = cameraFramePatchForIntent(intent, current);
   const nextPath = cameraPathWithFrame(path, frame, index);
   setSelectedCameraPathIndex(card, Math.min(index, nextPath.length - 1));
@@ -9063,11 +9064,11 @@ function updateCameraPathFrameIntentForCard(card, intent){
 function addCameraIntentFrameForCard(card, intent){
   const rank = card.dataset.rank;
   const platform = activePlatformForRank(rank);
-  const context = cameraContextForCard(card);
+  const duration = cameraTimelineDurationForCard(card);
+  const position = cameraTimelinePositionForCard(card);
   const edit = platformEditForRank(rank, platform);
-  const sourcePath = cameraPathForEdit(edit, context.duration);
-  const position = clampNumber(context.position, 0, Math.max(context.duration, .3));
-  const base = cameraFrameForTime(edit.camera, sourcePath, position, context.duration);
+  const sourcePath = cameraPathForEdit(edit, duration);
+  const base = cameraFrameForTime(edit.camera, sourcePath, position, duration);
   const frame = cameraFramePatchForIntent(intent, Object.assign({}, base, { time: Number(position.toFixed(3)) }));
   const path = cameraPathWithFrame(sourcePath, frame);
   const index = path.findIndex(item => Math.abs(item.time - frame.time) < .01);
@@ -9075,15 +9076,15 @@ function addCameraIntentFrameForCard(card, intent){
   setCameraPathForRank(rank, path, platform);
 }
 function moveCameraPathFrameToPlayhead(card){
-  const context = cameraContextForCard(card);
-  updateCameraPathFrameForCard(card, { time: Number(context.position.toFixed(3)) });
+  const position = cameraTimelinePositionForCard(card);
+  updateCameraPathFrameForCard(card, { time: Number(position.toFixed(3)) });
 }
 function deleteCameraPathFrameForCard(card){
   const rank = card.dataset.rank;
   const platform = activePlatformForRank(rank);
   const edit = platformEditForRank(rank, platform);
-  const context = cameraContextForCard(card);
-  const path = cameraPathForEdit(edit, context.duration);
+  const duration = cameraTimelineDurationForCard(card);
+  const path = cameraPathForEdit(edit, duration);
   if (path.length <= 1) return;
   const index = selectedCameraPathIndex(card, path);
   path.splice(index, 1);
@@ -9399,10 +9400,21 @@ function cameraContextForCard(card, time = null){
     duration: Math.max(values.endPos - values.trimStart, .3)
   };
 }
+function cameraTimelineDurationForCard(card){
+  const values = trimValues(card);
+  return Math.max(Number(values.duration) || Number(card?.dataset?.duration) || 0, .3);
+}
+function cameraTimelinePositionForCard(card, time = null){
+  const values = trimValues(card);
+  const video = primaryCameraVideo(card);
+  const raw = time === null && video && Number.isFinite(video.currentTime) ? video.currentTime : time;
+  return clampPreviewTime(values, Number(raw ?? values.trimStart));
+}
 function updateCameraSurfaceForCard(card, time = null){
-  const context = cameraContextForCard(card, time);
+  const duration = cameraTimelineDurationForCard(card);
+  const position = cameraTimelinePositionForCard(card, time);
   const edit = platformEditForRank(card.dataset.rank, activePlatformForRank(card.dataset.rank));
-  applyCameraSurface(card.querySelector(".camera-surface"), edit.camera, context.position, context.duration, cameraPathForEdit(edit, context.duration));
+  applyCameraSurface(card.querySelector(".camera-surface"), edit.camera, position, duration, cameraPathForEdit(edit, duration));
 }
 function startCameraFrameSync(video, update){
   if (!video || typeof requestAnimationFrame !== "function") return;
@@ -10451,7 +10463,7 @@ function updateTimelinePlayhead(card, time = null){
 function previewCameraTimelineContext(card){
   const values = trimValues(card);
   const context = cameraContextForCard(card);
-  const duration = Math.max(context.duration, .3);
+  const duration = cameraTimelineDurationForCard(card);
   const platform = activePlatformForRank(card.dataset.rank);
   const edit = platformEditForRank(card.dataset.rank, platform);
   const path = cameraPathForEdit(edit, duration);
@@ -10510,16 +10522,16 @@ function destroyLivePreviewCameraTimeline(card){
 }
 function liveTimelineOptionsForCard(card){
   const values = trimValues(card);
-  const context = cameraContextForCard(card);
+  const duration = cameraTimelineDurationForCard(card);
   const platform = activePlatformForRank(card.dataset.rank);
   const edit = platformEditForRank(card.dataset.rank, platform);
-  const path = cameraPathForEdit(edit, context.duration);
+  const path = cameraPathForEdit(edit, duration);
   const video = primaryCameraVideo(card);
   const pending = Number(card.dataset.pendingSeek);
-  const playhead = Number.isFinite(pending) ? pending : video && Number.isFinite(video.currentTime) ? video.currentTime : context.position;
+  const playhead = Number.isFinite(pending) ? pending : cameraTimelinePositionForCard(card);
   const model = {
     cameraPath: path,
-    duration: context.duration,
+    duration,
     effectKeyframes: liveTimelineEffectKeyframesForCard(card),
     muted: video ? video.muted : false,
     playhead,
@@ -10536,6 +10548,7 @@ function liveTimelineOptionsForCard(card){
   return Object.assign(options, {
     callbacks: liveTimelineCallbacksForCard(card),
     logoUrl: "assets/brand/cuted-logo-transparent.png",
+    playing: video ? !video.paused && !video.ended : false,
     showInspector: false,
     showVolume: false
   });
@@ -10568,13 +10581,17 @@ function liveTimelineEffectKeyframesForCard(card){
 }
 function liveTimelineCallbacksForCard(card){
   return {
-    onSeek: time => seekTimeline(card, time, { userInitiated: true, mode: "free" }),
+    onSeek: time => {
+      setPreviewPlayback(card, false);
+      seekTimeline(card, time, { userInitiated: true, mode: "free" });
+    },
     onTrimChange: trim => applyLiveTimelineTrim(card, trim),
     onKeyframeOpen: keyframe => openLiveTimelineKeyframe(card, keyframe),
-    onPlayToggle: () => togglePreviewPlayback(card)
+    onPlayToggle: playing => setPreviewPlayback(card, playing)
   };
 }
 function applyLiveTimelineTrim(card, trim){
+  setPreviewPlayback(card, false);
   const duration = Number(card.dataset.duration) || 0;
   const start = clampNumber(Number(trim.start || 0), 0, Math.max(duration - 1, 0));
   const end = clampNumber(Number(trim.end || duration), start + 1, Math.max(duration, start + 1));
@@ -10585,6 +10602,7 @@ function applyLiveTimelineTrim(card, trim){
 }
 function openLiveTimelineKeyframe(card, keyframe){
   if (!keyframe || keyframe.layer !== "camera") return;
+  setPreviewPlayback(card, false);
   const match = String(keyframe.id || "").match(/camera-(\\d+)/);
   if (match) setSelectedCameraPathIndex(card, Number(match[1]));
   ensureLivePreviewCameraPopover(card);
@@ -10592,18 +10610,27 @@ function openLiveTimelineKeyframe(card, keyframe){
   openPreviewCameraPopover(card, "edit");
 }
 function ensureLivePreviewCameraPopover(card){
-  const container = card.querySelector("[data-preview-camera-timeline]");
-  if (!container) return null;
-  let popover = container.querySelector("[data-preview-camera-popover]");
+  const rank = String(card?.dataset?.rank || "");
+  if (!rank) return null;
+  let popover = livePreviewCameraPopoverForRank(rank);
   if (!popover) {
     popover = document.createElement("div");
-    popover.className = "preview-camera-popover preview-camera-popover--live";
+    popover.className = "preview-camera-popover preview-camera-popover--live preview-camera-popover--portal";
     popover.dataset.previewCameraPopover = "";
+    popover.dataset.previewCameraPopoverRank = rank;
     popover.hidden = true;
-    container.appendChild(popover);
+    document.body.appendChild(popover);
+    bindPreviewCameraPopover(card, popover);
   }
   bindPreviewCameraTimeline(card);
   return popover;
+}
+function livePreviewCameraPopoverForRank(rank){
+  return Array.from(document.querySelectorAll(".preview-camera-popover--portal"))
+    .find(popover => String(popover.dataset.previewCameraPopoverRank || "") === String(rank)) || null;
+}
+function previewCameraPopoverForCard(card){
+  return livePreviewCameraPopoverForRank(card?.dataset?.rank) || card.querySelector("[data-preview-camera-popover]");
 }
 function loadLiveTimelineWaveform(card){
   if (parsePreviewWaveform(card.dataset.previewWaveformPeaks).length) return;
@@ -10709,8 +10736,9 @@ function previewWaveformBarsHtml(peaks){
 function updatePreviewCameraTimelinePlayhead(card, time = null){
   const playhead = card.querySelector("[data-preview-camera-playhead]");
   if (!playhead) return;
-  const context = cameraContextForCard(card, time);
-  const left = clampNumber((context.position / Math.max(context.duration, .3)) * 100, 0, 100);
+  const duration = cameraTimelineDurationForCard(card);
+  const position = cameraTimelinePositionForCard(card, time);
+  const left = clampNumber((position / Math.max(duration, .3)) * 100, 0, 100);
   playhead.style.left = `${left.toFixed(2)}%`;
 }
 function bindPreviewCameraTimeline(card){
@@ -10737,95 +10765,134 @@ function bindPreviewCameraTimeline(card){
     openPreviewCameraPopover(card, "insert", position);
   });
   container.addEventListener("change", event => {
-    if (event.target.matches("[data-preview-camera-popover-intent]")) {
-      event.preventDefault();
-      const mode = event.target.closest("[data-preview-camera-popover]")?.dataset.previewCameraPopoverMode || "edit";
-      if (mode === "edit") {
-        const index = selectedCameraPathIndex(card, previewCameraTimelineContext(card).path);
-        updateCameraPathFrameIntentForCard(card, event.target.value);
-        setSelectedCameraPathIndex(card, index);
-        renderPreviewCameraTimeline(card);
-        openPreviewCameraPopover(card, "edit");
-      }
-      return;
-    }
-    if (event.target.matches("[data-preview-camera-popover-key]")) {
-      event.preventDefault();
-      const index = selectedCameraPathIndex(card, previewCameraTimelineContext(card).path);
-      updateCameraPathFrameForCard(card, { key: event.target.value });
-      setSelectedCameraPathIndex(card, index);
-      renderPreviewCameraTimeline(card);
-      openPreviewCameraPopover(card);
-    }
+    handlePreviewCameraPopoverChange(card, event);
   });
   container.addEventListener("input", event => {
-    if (event.target.matches("[data-preview-camera-popover-strength]")) {
-      const index = selectedCameraPathIndex(card, previewCameraTimelineContext(card).path);
-      updateCameraPathFrameForCard(card, { strength: Number(event.target.value) }, false);
-      setSelectedCameraPathIndex(card, index);
-      renderPreviewCameraTimeline(card);
-      openPreviewCameraPopover(card);
-    }
+    handlePreviewCameraPopoverInput(card, event);
   });
   container.addEventListener("click", event => {
-    const close = event.target.closest("[data-preview-camera-popover-close]");
-    if (close) {
-      event.preventDefault();
-      event.stopPropagation();
-      closePreviewCameraPopover(card);
-      return;
-    }
-    const add = event.target.closest("[data-preview-camera-popover-add]");
-    if (add) {
-      event.preventDefault();
-      event.stopPropagation();
-      const intent = card.querySelector("[data-preview-camera-popover-intent]")?.value || "speaker_hold";
-      addCameraIntentFrameForCard(card, intent);
+    handlePreviewCameraPopoverClick(card, event);
+  });
+}
+function bindPreviewCameraPopover(card, popover){
+  if (!popover || popover.dataset.previewCameraPopoverBound) return;
+  const rank = String(card?.dataset?.rank || "");
+  const currentCard = () => cardForRank(rank) || card;
+  popover.dataset.previewCameraPopoverBound = "1";
+  popover.addEventListener("change", event => handlePreviewCameraPopoverChange(currentCard(), event));
+  popover.addEventListener("input", event => handlePreviewCameraPopoverInput(currentCard(), event));
+  popover.addEventListener("click", event => handlePreviewCameraPopoverClick(currentCard(), event));
+  popover.addEventListener("contextmenu", event => {
+    event.stopPropagation();
+  });
+}
+function handlePreviewCameraPopoverChange(card, event){
+  if (event.target.matches("[data-preview-camera-popover-intent]")) {
+    event.preventDefault();
+    const mode = event.target.closest("[data-preview-camera-popover]")?.dataset.previewCameraPopoverMode || "edit";
+    if (mode === "edit") {
+      const index = selectedCameraPathIndex(card, previewCameraTimelineContext(card).path);
+      updateCameraPathFrameIntentForCard(card, event.target.value);
+      setSelectedCameraPathIndex(card, index);
       renderPreviewCameraTimeline(card);
       openPreviewCameraPopover(card, "edit");
-      return;
     }
-    const move = event.target.closest("[data-preview-camera-popover-move]");
-    if (move) {
-      event.preventDefault();
-      event.stopPropagation();
-      moveCameraPathFrameToPlayhead(card);
-      renderPreviewCameraTimeline(card);
-      openPreviewCameraPopover(card, "edit");
-      return;
-    }
-    const remove = event.target.closest("[data-preview-camera-popover-delete]");
-    if (!remove) return;
+    return;
+  }
+  if (event.target.matches("[data-preview-camera-popover-key]")) {
+    event.preventDefault();
+    const index = selectedCameraPathIndex(card, previewCameraTimelineContext(card).path);
+    updateCameraPathFrameForCard(card, { key: event.target.value });
+    setSelectedCameraPathIndex(card, index);
+    renderPreviewCameraTimeline(card);
+    openPreviewCameraPopover(card);
+  }
+}
+function handlePreviewCameraPopoverInput(card, event){
+  if (!event.target.matches("[data-preview-camera-popover-strength]")) return;
+  const index = selectedCameraPathIndex(card, previewCameraTimelineContext(card).path);
+  updateCameraPathFrameForCard(card, { strength: Number(event.target.value) }, false);
+  setSelectedCameraPathIndex(card, index);
+  renderPreviewCameraTimeline(card);
+  openPreviewCameraPopover(card);
+}
+function handlePreviewCameraPopoverClick(card, event){
+  const close = event.target.closest("[data-preview-camera-popover-close]");
+  if (close) {
     event.preventDefault();
     event.stopPropagation();
-    deleteCameraPathFrameForCard(card);
     closePreviewCameraPopover(card);
-  });
+    return;
+  }
+  const add = event.target.closest("[data-preview-camera-popover-add]");
+  if (add) {
+    event.preventDefault();
+    event.stopPropagation();
+    const popover = event.target.closest("[data-preview-camera-popover]");
+    const intent = popover?.querySelector("[data-preview-camera-popover-intent]")?.value || "speaker_hold";
+    addCameraIntentFrameForCard(card, intent);
+    renderPreviewCameraTimeline(card);
+    openPreviewCameraPopover(card, "edit");
+    return;
+  }
+  const move = event.target.closest("[data-preview-camera-popover-move]");
+  if (move) {
+    event.preventDefault();
+    event.stopPropagation();
+    moveCameraPathFrameToPlayhead(card);
+    renderPreviewCameraTimeline(card);
+    openPreviewCameraPopover(card, "edit");
+    return;
+  }
+  const remove = event.target.closest("[data-preview-camera-popover-delete]");
+  if (!remove) return;
+  event.preventDefault();
+  event.stopPropagation();
+  deleteCameraPathFrameForCard(card);
+  closePreviewCameraPopover(card);
 }
 function seekPreviewCameraTimeline(card, event, rail){
   const rect = rail.getBoundingClientRect();
   const ratio = rect.width ? clampNumber((event.clientX - rect.left) / rect.width, 0, 1) : 0;
   const values = trimValues(card);
-  const duration = Math.max(values.endPos - values.trimStart, .3);
+  const duration = Math.max(values.duration, .3);
   const position = ratio * duration;
-  seekTimeline(card, values.trimStart + position, { userInitiated: true, mode: "free" });
+  seekTimeline(card, position, { userInitiated: true, mode: "free" });
   return position;
 }
 function openPreviewCameraPopover(card, mode = "edit", positionOverride = null){
-  const popover = card.querySelector("[data-preview-camera-popover]");
+  const popover = previewCameraPopoverForCard(card) || ensureLivePreviewCameraPopover(card);
   if (!popover) return;
   closePreviewVolumePopover(card);
   const state = previewCameraTimelineContext(card);
   const index = selectedCameraPathIndex(card, state.path);
   const frame = state.path[index] || state.path[0] || normalizeCameraPathFrame({ time: 0, key: "center", strength: 60 });
-  const context = cameraContextForCard(card);
-  const position = mode === "insert" ? Number(positionOverride ?? context.position) : Number(frame.time || 0);
+  const position = mode === "insert" ? Number(positionOverride ?? cameraTimelinePositionForCard(card)) : Number(frame.time || 0);
   const left = clampNumber((position / state.duration) * 100, 6, 94);
   const intent = mode === "insert" ? "speaker_hold" : directorIntentFromFrame(frame);
-  popover.style.left = `${left.toFixed(2)}%`;
+  positionPreviewCameraPopover(card, popover, left);
   popover.dataset.previewCameraPopoverMode = mode;
   popover.innerHTML = mode === "insert" ? previewCameraInsertPopoverHtml(position, intent) : previewCameraEditPopoverHtml(state, frame, intent);
   popover.hidden = false;
+}
+function positionPreviewCameraPopover(card, popover, leftPercent){
+  if (!popover.classList.contains("preview-camera-popover--portal")) {
+    popover.style.left = `${leftPercent.toFixed(2)}%`;
+    return;
+  }
+  const container = card.querySelector("[data-preview-camera-timeline]");
+  const rect = container?.getBoundingClientRect();
+  if (!rect) return;
+  const width = Math.min(260, Math.max(window.innerWidth - 16, 0));
+  const rawLeft = rect.left + rect.width * (leftPercent / 100) - width / 2;
+  const left = clampNumber(rawLeft, 8, Math.max(window.innerWidth - width - 8, 8));
+  const below = rect.bottom + 8;
+  const height = 260;
+  const top = below + height < window.innerHeight - 8 ? below : clampNumber(rect.top - height - 8, 8, Math.max(window.innerHeight - height - 8, 8));
+  popover.style.left = `${left.toFixed(1)}px`;
+  popover.style.top = `${top.toFixed(1)}px`;
+  popover.style.right = "auto";
+  popover.style.bottom = "auto";
 }
 function previewCameraInsertPopoverHtml(position, intent){
   return `<div class="preview-camera-popover-head">
@@ -10863,7 +10930,7 @@ function previewCameraEditPopoverHtml(state, frame, intent){
   </div>`;
 }
 function closePreviewCameraPopover(card){
-  const popover = card.querySelector("[data-preview-camera-popover]");
+  const popover = previewCameraPopoverForCard(card);
   if (popover) popover.hidden = true;
 }
 function applyTimelineSeek(card, video, current){
@@ -10944,17 +11011,35 @@ function pauseAtTrimEnd(card, video, values){
   updateTimelinePlayhead(card, endPos);
   return true;
 }
-function togglePreviewPlayback(card){
+function setPreviewPlayback(card, shouldPlay){
   const video = primaryCameraVideo(card);
   if (!video) return;
   loadCardVideo(card);
   applyPreviewVolume(video);
-  if (video.paused) {
+  if (shouldPlay) {
+    if (!video.paused && !video.ended) {
+      syncPreviewPlaybackState(card);
+      return;
+    }
     const playback = video.play();
-    if (playback && typeof playback.catch === "function") playback.catch(() => syncPreviewPlayButton(card));
+    if (playback && typeof playback.catch === "function") playback.catch(() => syncPreviewPlaybackState(card));
     return;
   }
-  video.pause();
+  if (!video.paused) video.pause();
+  else syncPreviewPlayButton(card);
+}
+function togglePreviewPlayback(card){
+  const video = primaryCameraVideo(card);
+  if (!video) return;
+  setPreviewPlayback(card, video.paused || video.ended);
+}
+function syncPreviewPlaybackState(card){
+  syncPreviewPlayButton(card);
+  syncLiveTimelinePlaybackState(card);
+}
+function syncLiveTimelinePlaybackState(card){
+  if (!card.__liveTimelineController || typeof card.__liveTimelineController.update !== "function") return;
+  card.__liveTimelineController.update(liveTimelineOptionsForCard(card));
 }
 function applyPreviewVolume(video){
   if (!video) return;
@@ -12209,6 +12294,7 @@ document.querySelectorAll(".card").forEach(card => {
   card.querySelectorAll("[data-card-format-preview]").forEach(button => {
     button.addEventListener("click", () => {
       card.dataset.previewTouched = "1";
+      setPreviewPlayback(card, false);
       setCardPreviewFormat(card, button.dataset.cardFormatPreview);
       closePreviewFormatMenus();
       updateCardTools(card);
@@ -12275,17 +12361,17 @@ document.querySelectorAll(".card").forEach(card => {
       if (Math.abs(video.currentTime - nextTime) > .05) video.currentTime = nextTime;
       startCameraFrameSync(video, () => updateCameraSurfaceForCard(card));
       syncCameraFitBackground(card);
-      syncPreviewPlayButton(card);
+      syncPreviewPlaybackState(card);
     });
     video.addEventListener("pause", () => {
       stopCameraFrameSync(video, () => updateCameraSurfaceForCard(card));
       syncCameraFitBackground(card);
-      syncPreviewPlayButton(card);
+      syncPreviewPlaybackState(card);
     });
     video.addEventListener("ended", () => {
       stopCameraFrameSync(video, () => updateCameraSurfaceForCard(card));
       syncCameraFitBackground(card);
-      syncPreviewPlayButton(card);
+      syncPreviewPlaybackState(card);
     });
     video.addEventListener("volumechange", () => {
       syncPreviewVolumeButton(card);
@@ -12304,7 +12390,7 @@ document.querySelectorAll(".card").forEach(card => {
       }
     });
   }
-  syncPreviewPlayButton(card);
+  syncPreviewPlaybackState(card);
   syncPreviewVolumeButton(card);
   card.querySelectorAll("[data-trim]").forEach(input => input.addEventListener("input", () => {
     const current = cardState(card.dataset.rank);
@@ -12324,6 +12410,7 @@ document.querySelectorAll(".card").forEach(card => {
   const scrubInput = card.querySelector("[data-trim-scrub]");
   if (scrubInput) {
     scrubInput.addEventListener("input", () => {
+      setPreviewPlayback(card, false);
       const duration = Number(card.dataset.duration);
       const current = clampNumber(Number(scrubInput.value), 0, Math.max(duration, .1));
       seekTimeline(card, current, { userInitiated: true, mode: "free" });
