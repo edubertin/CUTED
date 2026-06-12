@@ -4,6 +4,7 @@ import importlib.util
 import json
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -440,6 +441,29 @@ class CuttedImportUiTests(unittest.TestCase):
 
         self.assertIn("anti-bot", message)
         self.assertNotIn("[cutted] Error", message)
+
+    def test_import_job_snapshot_includes_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            job = CUTTED.ImportJob(
+                "job123",
+                "running",
+                time.time() - 8,
+                time.time(),
+                Path(tmp),
+                Path(tmp),
+                "/projects/job123/index.html",
+                None,
+                "Importacao iniciada.",
+                "youtube",
+                "openai",
+            )
+
+            payload = CUTTED.import_job_to_dict(job)
+
+        self.assertIn("progress", payload)
+        self.assertIn("message", payload["progress"])
+        self.assertGreaterEqual(payload["progress"]["percent"], 8)
+        self.assertIn(payload["progress"]["label"], {"Preparando", "Midia", "Audio", "Analise", "Sugestoes", "Editor"})
 
     def test_import_request_metadata_requires_source(self) -> None:
         with self.assertRaisesRegex(ValueError, "link ou caminho local"):

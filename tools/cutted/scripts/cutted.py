@@ -309,6 +309,8 @@ class ImportJob:
     output_url: str
     process: subprocess.Popen[str] | None
     message: str = ""
+    source_kind: str = "local"
+    ai_provider: str = "local"
     return_code: int | None = None
     stdout: str = ""
     stderr: str = ""
@@ -5265,7 +5267,20 @@ def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path
     job_id = uuid.uuid4().hex[:12]
     output_url = import_output_url(base_dir, out_dir)
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
-    job = ImportJob(job_id, "running", time.time(), time.time(), out_dir, base_dir, output_url, process, "Importacao iniciada.")
+    source_kind = "youtube" if source_url else "local"
+    job = ImportJob(
+        job_id,
+        "running",
+        time.time(),
+        time.time(),
+        out_dir,
+        base_dir,
+        output_url,
+        process,
+        "Importacao iniciada.",
+        source_kind,
+        str(metadata["ai_provider"]),
+    )
     with IMPORT_JOBS_LOCK:
         IMPORT_JOBS[job_id] = job
     thread = threading.Thread(target=wait_for_import_job, args=(job_id,), daemon=True)
@@ -5352,10 +5367,12 @@ def import_job_snapshot(job_id: str) -> dict[str, object] | None:
 
 
 def import_job_to_dict(job: ImportJob) -> dict[str, object]:
+    progress = import_job_progress(job)
     return {
         "id": job.id,
         "status": job.status,
-        "message": job.message,
+        "message": progress["message"],
+        "progress": progress,
         "created_at": job.created_at,
         "updated_at": job.updated_at,
         "output_url": job.output_url,
@@ -5363,6 +5380,34 @@ def import_job_to_dict(job: ImportJob) -> dict[str, object]:
         "return_code": job.return_code,
         "stderr": job.stderr,
     }
+
+
+def import_job_progress(job: ImportJob) -> dict[str, object]:
+    if job.status == "ready":
+        return {"percent": 100, "label": "Pronto", "message": "Projeto importado. Abrindo editor..."}
+    if job.status == "failed":
+        return {"percent": 100, "label": "Falha", "message": job.message or "Falha ao importar projeto."}
+    if job.status == "cancelled":
+        return {"percent": 100, "label": "Cancelado", "message": job.message or "Importacao cancelada."}
+    elapsed = max(0.0, time.time() - job.created_at)
+    stages = import_job_running_stages(job.source_kind, job.ai_provider)
+    index = min(int(elapsed // 7), len(stages) - 1)
+    percent = min(92, int(8 + elapsed * 4))
+    label, message = stages[index]
+    return {"percent": percent, "label": label, "message": message}
+
+
+def import_job_running_stages(source_kind: str, ai_provider: str) -> list[tuple[str, str]]:
+    media_message = "Baixando video..." if source_kind == "youtube" else "Lendo video local..."
+    ai_message = "Consultando IA..." if ai_provider == "openai" else "Analisando cortes..."
+    return [
+        ("Preparando", "Preparando projeto..."),
+        ("Midia", media_message),
+        ("Audio", "Transcrevendo audio..."),
+        ("Analise", ai_message),
+        ("Sugestoes", "Gerando sugestoes de cortes..."),
+        ("Editor", "Montando area de edicao..."),
+    ]
 
 
 def import_job_error_message(stderr: str) -> str:
@@ -8308,6 +8353,7 @@ def project_home_html(workspace: Path, logo_src: str, recent: list[dict[str, obj
 </head>
 <body data-project-home>
   <main class="project-home">
+    <button id="open-settings" class="home-settings-button icon-button" type="button" aria-label="Configuracoes OpenAI" title="Configuracoes OpenAI">{gear_icon_svg()}</button>
     <section class="home-brand-stage" aria-label="CUTED">
       <div class="home-logo-orbit">
         <img class="home-brand-logo" src="{html.escape(logo_src)}" alt="CUTED">
@@ -8336,6 +8382,8 @@ def project_home_html(workspace: Path, logo_src: str, recent: list[dict[str, obj
       {project_import_form_html()}
     </section>
   </main>
+  {project_home_import_loading_html(logo_src)}
+  {settings_modal_html()}
   <script>{project_home_js(workspace, mock_projects)}</script>
 </body>
 </html>"""
@@ -8436,6 +8484,7 @@ def project_import_form_html() -> str:
         </div>
         <div class="import-key-banner" data-import-key-banner hidden>
           <span>Adicione sua chave OpenAI nas configuracoes antes de importar com IA.</span>
+          <button type="button" data-import-key-open>Configurar</button>
         </div>
         <div class="new-project-config-grid">
           <section class="new-project-config-block source-config-block" aria-label="Midia de origem">
@@ -8454,20 +8503,20 @@ def project_import_form_html() -> str:
           </section>
           <section class="new-project-config-block tuning-config-block" aria-label="Ajustes do projeto">
             <div class="new-project-block-title"><strong>Cortes</strong><span>Sugestoes e duracao</span></div>
-            <label class="suggestion-field icon-select-field" title="Quantidade de sugestoes">
-              <span class="field-icon" aria-hidden="true">{project_home_icon_svg("sparkles")}</span>
-              <span class="tuning-copy">Sugestoes</span>
-              <select name="preview_count" aria-label="Sugestoes">
-                {suggestion_count_options()}
-              </select>
-            </label>
-            <fieldset class="duration-profile duration-size-toggle" aria-label="Duracao dos cortes">
-              <legend class="sr-only">Duracao dos cortes</legend>
-              <span class="tuning-copy" aria-hidden="true">Duracao</span>
-              <label title="Curto: 20 a 45 segundos"><input name="duration_profile" type="radio" value="short" aria-label="Curto"><span>{project_home_icon_svg("clock")}<strong>S</strong></span></label>
-              <label title="Medio: 30 a 70 segundos"><input name="duration_profile" type="radio" value="medium" aria-label="Medio" checked><span>{project_home_icon_svg("clock")}<strong>M</strong></span></label>
-              <label title="Longo: 60 a 120 segundos"><input name="duration_profile" type="radio" value="long" aria-label="Longo"><span>{project_home_icon_svg("clock")}<strong>L</strong></span></label>
-            </fieldset>
+            <div class="cuts-control-grid">
+              <label class="cut-count-field" title="Quantidade de cortes">
+                <span class="tuning-copy">Quantidade</span>
+                <select name="preview_count" aria-label="Quantidade de cortes">
+                  {suggestion_count_options()}
+                </select>
+              </label>
+              <fieldset class="duration-profile duration-size-toggle duration-tile-grid" aria-label="Duracao dos cortes">
+                <legend class="sr-only">Duracao dos cortes</legend>
+                <label class="duration-option-short" title="Curto: 20 a 45 segundos"><input name="duration_profile" type="radio" value="short" aria-label="Curto"><span><strong>S</strong><small>20-45s</small></span></label>
+                <label class="duration-option-medium" title="Medio: 30 a 70 segundos"><input name="duration_profile" type="radio" value="medium" aria-label="Medio" checked><span><strong>M</strong><small>30-70s</small></span></label>
+                <label class="duration-option-long" title="Longo: 60 a 120 segundos"><input name="duration_profile" type="radio" value="long" aria-label="Longo"><span><strong>L</strong><small>60-120s</small></span></label>
+              </fieldset>
+            </div>
           </section>
         </div>
         <input name="language" type="hidden" value="pt">
@@ -8486,6 +8535,67 @@ def project_import_form_html() -> str:
           <button class="import-submit-button" type="submit">Importar</button>
         </footer>
       </form>"""
+
+
+def project_home_import_loading_html(logo_src: str) -> str:
+    return f"""
+  <section class="home-import-loading" data-import-loading hidden aria-live="polite" aria-label="Importando projeto">
+    <div class="home-import-loading-inner">
+      <img src="{html.escape(logo_src)}" alt="CUTED">
+      <div class="home-import-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="8">
+        <span data-import-loading-bar></span>
+        <strong data-import-loading-message>Preparando projeto...</strong>
+      </div>
+      <small data-import-loading-label>Importacao</small>
+      <button type="button" data-import-loading-back hidden>Voltar</button>
+    </div>
+  </section>"""
+
+
+def settings_modal_html() -> str:
+    return f"""
+  <div class="settings-backdrop" data-settings-modal hidden>
+    <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="settings-head">
+        <div>
+          <strong id="settings-title">Configuracoes</strong>
+          <p>OpenAI local, sem salvar token no navegador.</p>
+        </div>
+        <button type="button" data-settings-close>Fechar</button>
+      </div>
+      <form data-settings-form class="settings-form">
+        <div class="settings-status" data-settings-status>Carregando...</div>
+        <label>Token OpenAI
+          <input name="api_key" type="password" autocomplete="off" placeholder="Cole aqui apenas se quiser trocar o token">
+        </label>
+        <div class="settings-grid">
+          <label>Provedor IA
+            <select name="ai_provider">
+              <option value="openai">OpenAI</option>
+              <option value="auto">Auto</option>
+              <option value="local">Local</option>
+            </select>
+          </label>
+          <label>Modelo de analise
+            <select name="openai_model">
+              {openai_model_options()}
+            </select>
+          </label>
+          <label>Transcricao
+            <select name="transcribe_model">
+              {transcribe_model_options()}
+            </select>
+          </label>
+        </div>
+        <div class="settings-usage" data-settings-usage>Sem uso registrado nesta maquina.</div>
+        <div class="settings-actions">
+          <button type="button" data-settings-test>Testar conexao</button>
+          <button type="submit">Salvar</button>
+        </div>
+        <small>Estimativa local. Confira o valor oficial no painel da OpenAI.</small>
+      </form>
+    </section>
+  </div>"""
 
 
 def file_size_label(size_bytes: int) -> str:
@@ -8957,8 +9067,11 @@ body[data-project-home]{overflow-x:hidden}body[data-project-home] header{display
 def project_home_compact_import_css() -> str:
     return """
 .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.home-settings-button{position:fixed;top:18px;right:22px;z-index:20;border-color:var(--glass-border);background:rgba(231,231,232,.055);color:var(--color-text-soft);box-shadow:inset 0 1px rgba(255,255,255,.14)}
+.home-settings-button:hover{border-color:rgba(17,162,207,.5);color:var(--color-text);background:rgba(17,162,207,.1)}
+.home-settings-button svg{display:block;width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .new-project-config-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
-.new-project-config-block{display:grid;gap:8px;justify-self:center;width:min(100%,390px);min-height:170px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.018)}
+.new-project-config-block{display:grid;gap:8px;justify-self:stretch;width:100%;min-height:170px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.018)}
 .new-project-block-title{display:flex;align-items:baseline;justify-content:space-between;gap:10px;min-height:18px}
 .new-project-block-title strong{color:var(--color-text);font-size:12px;text-transform:uppercase}
 .new-project-block-title span,.tuning-copy{color:var(--color-text-muted);font-size:11px}
@@ -8975,19 +9088,36 @@ def project_home_compact_import_css() -> str:
 .icon-action-button{width:52px;min-width:52px;min-height:44px;padding:0!important}
 .icon-action-button svg,.field-icon svg{width:19px;height:19px}
 .icon-action-button:hover{border-color:rgba(17,162,207,.52);color:var(--color-text);background:rgba(17,162,207,.1)}
-.icon-select-field{position:relative;display:grid;grid-template-columns:44px minmax(0,1fr) 96px;gap:8px;align-items:center;width:100%;color:inherit;font-size:inherit}
-.icon-select-field .field-icon{width:44px;height:44px}
-.icon-select-field select{width:96px;padding-left:12px}
+.cuts-control-grid{display:grid;grid-template-columns:minmax(128px,.42fr) minmax(0,.58fr);gap:10px;align-items:stretch}
+.cut-count-field{display:grid!important;grid-template-rows:auto 1fr;gap:8px;min-width:0;color:inherit;font-size:inherit}
+.cut-count-field .tuning-copy{align-self:end;font-weight:800;text-transform:uppercase}
+.cut-count-field select{width:100%;min-height:96px;padding:0 14px;border:1px solid var(--glass-border);border-radius:8px;background:#202020;color:var(--color-text);font-weight:900;text-align:center}
+.cut-count-field select option{background:#111;color:var(--color-text)}
 .duration-size-toggle{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,62px);gap:8px;align-items:center;margin:0;padding:0;border:0}
 .duration-size-toggle legend.sr-only{position:absolute;grid-column:auto;color:inherit;font-size:inherit}
 .duration-size-toggle>.tuning-copy{display:flex!important;align-items:center;min-height:auto!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;color:var(--color-text-muted)!important;font-weight:600}
-.duration-size-toggle label span{grid-template-columns:15px auto;gap:5px;min-width:62px;min-height:44px;padding:0 8px}
+.duration-size-toggle label span{gap:2px;min-width:62px;min-height:44px;padding:6px 8px}
+.duration-size-toggle label small{color:var(--color-text-muted);font-size:10px;line-height:1}
+.duration-tile-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));align-items:stretch}
+.duration-tile-grid label span{width:100%;min-width:0;min-height:44px}
+.duration-option-long{grid-column:1/-1}
 .duration-size-toggle svg{width:14px;height:14px;opacity:.72}
 .duration-size-toggle strong{font-size:17px;line-height:1}
 .context-audio-button{border-radius:999px}
 .import-submit-button{min-width:116px;min-height:42px!important;border-color:var(--color-brand-white)!important;background:var(--color-brand-white)!important;color:var(--color-brand-black)!important;font-weight:900;box-shadow:0 10px 24px rgba(0,0,0,.32)}
 .import-submit-button:hover{transform:translateY(-1px);border-color:var(--color-brand-green)!important;background:var(--color-brand-green)!important;color:var(--color-brand-black)!important;box-shadow:0 12px 26px rgba(0,0,0,.36),0 0 16px rgba(175,207,42,.16)}
-@media(max-width:900px){.new-project-config-grid{grid-template-columns:1fr}.new-project-config-block{width:100%}.source-panel,.source-panel[data-source-panel=youtube]{grid-template-columns:minmax(0,1fr) 52px}.source-panel[data-source-panel=youtube]{grid-template-columns:minmax(0,1fr)}.duration-size-toggle{grid-template-columns:minmax(0,1fr) repeat(3,minmax(54px,1fr))}.duration-size-toggle span{min-width:0}}
+.home-import-loading{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:radial-gradient(circle at 50% 42%,rgba(17,162,207,.12),transparent 30%),radial-gradient(circle at 56% 52%,rgba(175,207,42,.09),transparent 34%),rgba(5,5,5,.88);backdrop-filter:blur(18px) saturate(1.25)}
+.home-import-loading[hidden]{display:none}
+.home-import-loading-inner{display:grid;justify-items:center;gap:14px;width:min(520px,calc(100vw - 44px));animation:home-row-in .28s ease both}
+.home-import-loading img{display:block;width:min(360px,76vw);height:96px;object-fit:contain;filter:drop-shadow(0 0 14px rgba(17,162,207,.16)) drop-shadow(0 0 12px rgba(175,207,42,.12))}
+.home-import-progress{position:relative;width:100%;height:42px;border:1px solid var(--glass-border);border-radius:999px;background:rgba(231,231,232,.055);box-shadow:inset 0 1px rgba(255,255,255,.14),0 18px 44px rgba(0,0,0,.34);overflow:hidden}
+.home-import-progress span{position:absolute;inset:0 auto 0 0;width:8%;border-radius:999px;background:linear-gradient(90deg,var(--color-brand-blue),var(--color-brand-green));transition:width .5s ease}
+.home-import-progress strong{position:relative;z-index:1;display:grid;place-items:center;height:100%;padding:0 18px;color:var(--color-text);font-size:13px;text-align:center;text-shadow:0 1px 8px rgba(0,0,0,.6)}
+.home-import-loading small{color:var(--color-text-muted);font-size:12px;text-transform:uppercase}
+.home-import-loading[data-state=failed] .home-import-progress span{background:linear-gradient(90deg,#7f1d1d,var(--color-danger))}
+.home-import-loading button{min-height:38px;padding:8px 14px;border-color:var(--glass-border);background:var(--color-brand-white);color:var(--color-brand-black)}
+body[data-importing=true] .project-home{opacity:0;pointer-events:none;transition:opacity .24s ease}
+@media(max-width:900px){.new-project-config-grid{grid-template-columns:1fr}.new-project-config-block{width:100%}.source-panel,.source-panel[data-source-panel=youtube]{grid-template-columns:minmax(0,1fr) 52px}.source-panel[data-source-panel=youtube]{grid-template-columns:minmax(0,1fr)}.cuts-control-grid{grid-template-columns:1fr}.cut-count-field select{min-height:54px}.duration-tile-grid{grid-template-columns:repeat(2,minmax(54px,1fr))}.duration-size-toggle span{min-width:0}}
 """
 
 
@@ -9037,6 +9167,43 @@ async function postJson(url, payload){
   if (!response.ok || !data.ok) throw new Error(data.error || "Operacao local falhou.");
   return data;
 }
+let importOpenaiState = { provider: "local", keyConfigured: true };
+function importNeedsOpenaiKey(){
+  return importOpenaiState.provider === "openai" && !importOpenaiState.keyConfigured;
+}
+function setImportLoading(message, label = "Importacao", percent = 8){
+  const loading = document.querySelector("[data-import-loading]");
+  if (!loading) return;
+  const value = Math.max(0, Math.min(100, Number(percent || 0)));
+  loading.hidden = false;
+  loading.dataset.state = "running";
+  document.body.dataset.importing = "true";
+  loading.querySelector("[data-import-loading-message]").textContent = message || "Processando...";
+  loading.querySelector("[data-import-loading-label]").textContent = label || "Importacao";
+  loading.querySelector("[data-import-loading-bar]").style.width = `${value}%`;
+  loading.querySelector("[role=progressbar]").setAttribute("aria-valuenow", String(value));
+  loading.querySelector("[data-import-loading-back]").hidden = true;
+}
+function updateImportLoading(job){
+  const progress = job.progress || {};
+  setImportLoading(progress.message || job.message || "Processando importacao...", progress.label || job.status || "Importacao", progress.percent || 35);
+}
+function failImportLoading(message){
+  const loading = document.querySelector("[data-import-loading]");
+  if (!loading) return;
+  loading.hidden = false;
+  loading.dataset.state = "failed";
+  loading.querySelector("[data-import-loading-message]").textContent = message || "Nao consegui importar este projeto.";
+  loading.querySelector("[data-import-loading-label]").textContent = "Importacao interrompida";
+  loading.querySelector("[data-import-loading-bar]").style.width = "100%";
+  loading.querySelector("[role=progressbar]").setAttribute("aria-valuenow", "100");
+  loading.querySelector("[data-import-loading-back]").hidden = false;
+}
+function hideImportLoading(){
+  const loading = document.querySelector("[data-import-loading]");
+  if (loading) loading.hidden = true;
+  delete document.body.dataset.importing;
+}
 async function startImport(form){
   const button = form.querySelector("button[type=submit]");
   const payload = projectPayload(form);
@@ -9045,15 +9212,23 @@ async function startImport(form){
     form.querySelector(form.dataset.sourceMode === "youtube" ? "[name=source_url]" : "[name=source_path]")?.focus();
     return;
   }
+  if (importNeedsOpenaiKey()) {
+    setStatus("Adicione sua chave OpenAI nas configuracoes para importar com IA.");
+    openSettingsPanel();
+    return;
+  }
   setResult("");
+  setImportLoading("Preparando projeto...", "Preparando", 8);
   setStatus("Criando job de importacao...");
   if (button) button.disabled = true;
   try {
     const data = await postJson("/api/import-jobs", payload);
     setStatus(data.job?.message || "Importacao iniciada.");
+    updateImportLoading(data.job || {});
     pollImport(data.job.id, button);
   } catch (error) {
     if (button) button.disabled = false;
+    failImportLoading(error.message || "Nao consegui iniciar a importacao.");
     setStatus("Nao consegui iniciar a importacao.");
     setResult(`<code>${escapeHtml(error.message || String(error))}</code>`);
   }
@@ -9065,20 +9240,23 @@ async function pollImport(jobId, button){
     if (!response.ok || !data.ok) throw new Error(data.error || "Job nao encontrado.");
     const job = data.job || {};
     setStatus(`${job.message || "Processando..."} (${job.status || "running"})`);
+    updateImportLoading(job);
     if (job.status === "ready") {
       if (button) button.disabled = false;
       setResult(`<a href="${escapeAttr(job.output_url)}">Abrir projeto importado</a>`);
-      if (job.output_url) window.location.assign(job.output_url);
+      if (job.output_url) window.setTimeout(() => window.location.assign(job.output_url), 450);
       return;
     }
     if (job.status === "failed" || job.status === "cancelled") {
       if (button) button.disabled = false;
+      failImportLoading(job.stderr || job.message || "Importacao encerrada.");
       setResult(`<code>${escapeHtml(job.stderr || job.message || "Importacao encerrada.")}</code>`);
       return;
     }
     window.setTimeout(() => pollImport(jobId, button), 1200);
   } catch (error) {
     if (button) button.disabled = false;
+    failImportLoading(error.message || "Nao consegui acompanhar a importacao.");
     setStatus("Nao consegui acompanhar a importacao.");
     setResult(`<code>${escapeHtml(error.message || String(error))}</code>`);
   }
@@ -9093,6 +9271,7 @@ function bindImportForm(){
   });
   form.querySelector("[data-select-video-file]")?.addEventListener("click", () => selectPath("/api/select-video-file", "[name=source_path]", "Video local selecionado."));
   form.querySelector("[data-context-audio]")?.addEventListener("click", () => setStatus("Transcricao por audio entra na proxima fase."));
+  document.querySelector("[data-import-loading-back]")?.addEventListener("click", () => hideImportLoading());
 }
 function bindSourceMode(form){
   const inputs = form.querySelectorAll("[name=source_mode]");
@@ -9116,6 +9295,157 @@ async function selectPath(url, selector, message){
   } catch (error) {
     setStatus(error.message || "Seletor local indisponivel.");
   }
+}
+function setupHomeSettingsPanel(){
+  const modal = document.querySelector("[data-settings-modal]");
+  const form = document.querySelector("[data-settings-form]");
+  const open = document.getElementById("open-settings");
+  const close = document.querySelector("[data-settings-close]");
+  const test = document.querySelector("[data-settings-test]");
+  if (!modal || !form || !open) return;
+  open.addEventListener("click", () => openSettingsPanel());
+  close?.addEventListener("click", () => closeSettingsPanel());
+  modal.addEventListener("click", event => { if (event.target === modal) closeSettingsPanel(); });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !modal.hidden) closeSettingsPanel();
+  });
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    saveSettingsForm(form);
+  });
+  test?.addEventListener("click", () => testSettingsConnection(form));
+  loadOpenaiSettings();
+}
+function openSettingsPanel(){
+  const modal = document.querySelector("[data-settings-modal]");
+  if (!modal) return;
+  modal.hidden = false;
+  loadOpenaiSettings();
+  modal.querySelector("[name=api_key]")?.focus();
+}
+function closeSettingsPanel(){
+  const modal = document.querySelector("[data-settings-modal]");
+  if (modal) modal.hidden = true;
+}
+async function loadOpenaiSettings(){
+  const form = document.querySelector("[data-settings-form]");
+  const status = document.querySelector("[data-settings-status]");
+  if (!form) return;
+  try {
+    const response = await fetch("/api/settings/openai");
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao carregar configuracoes.");
+    applySettingsPayload(form, payload.settings || {}, payload.usage || {});
+  } catch (error) {
+    if (status) status.textContent = error.message || "Nao consegui carregar configuracoes.";
+  }
+}
+function applySettingsPayload(form, settings, usage){
+  form.elements.ai_provider.value = settings.ai_provider || "local";
+  form.elements.openai_model.value = settings.openai_model || "gpt-5-mini";
+  form.elements.transcribe_model.value = settings.transcribe_model || "whisper-1";
+  form.elements.api_key.value = "";
+  importOpenaiState = {
+    provider: String(settings.ai_provider || "local"),
+    keyConfigured: Boolean(settings.key_configured)
+  };
+  const status = document.querySelector("[data-settings-status]");
+  if (status) {
+    const key = settings.key_configured ? "Token configurado" : "Token nao configurado";
+    status.textContent = `${key} - ${settings.openai_model || "gpt-5-mini"} / ${settings.transcribe_model || "whisper-1"}`;
+  }
+  renderSettingsUsage(usage);
+  refreshImportKeyBannerFromState();
+}
+function settingsPayloadFromForm(form){
+  const data = new FormData(form);
+  const payload = {
+    ai_provider: String(data.get("ai_provider") || "local"),
+    openai_model: String(data.get("openai_model") || "gpt-5-mini"),
+    transcribe_model: String(data.get("transcribe_model") || "whisper-1")
+  };
+  const apiKey = String(data.get("api_key") || "").trim();
+  if (apiKey) payload.api_key = apiKey;
+  return payload;
+}
+async function saveSettingsForm(form){
+  const status = document.querySelector("[data-settings-status]");
+  if (status) status.textContent = "Salvando...";
+  try {
+    const response = await fetch("/api/settings/openai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settingsPayloadFromForm(form))
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao salvar configuracoes.");
+    applySettingsPayload(form, payload.settings || {}, payload.usage || {});
+    if (status) status.textContent = `Salvo. ${status.textContent}`;
+  } catch (error) {
+    if (status) status.textContent = error.message || "Nao consegui salvar.";
+  }
+}
+async function testSettingsConnection(form){
+  const status = document.querySelector("[data-settings-status]");
+  const button = document.querySelector("[data-settings-test]");
+  if (status) status.textContent = "Testando conexao...";
+  if (button) button.disabled = true;
+  try {
+    const response = await fetch("/api/settings/openai/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settingsPayloadFromForm(form))
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || "Falha ao testar conexao.");
+    if (status) status.textContent = data.message || "Conexao OpenAI validada.";
+  } catch (error) {
+    if (status) status.textContent = error.message || "Nao consegui validar a conexao.";
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+function renderSettingsUsage(usage){
+  const target = document.querySelector("[data-settings-usage]");
+  if (!target) return;
+  const total = Number(usage?.estimated_total_usd || 0);
+  const count = Number(usage?.event_count || 0);
+  const last = usage?.last_event || {};
+  const lastText = last.operation
+    ? `Ultimo: ${escapeHtml(last.operation)} em ${escapeHtml(last.model || "-")} - ${formatUsd(last.estimated_usd || 0)}`
+    : "Ultimo: sem registro.";
+  target.innerHTML = `<strong>Total local estimado: ${formatUsd(total)}</strong><span>${count} evento(s) registrado(s).</span><span>${lastText}</span>`;
+}
+function formatUsd(value){
+  return `$${Number(value || 0).toFixed(4)}`;
+}
+async function refreshImportKeyBanner(){
+  const banner = document.querySelector("[data-import-key-banner]");
+  if (!banner) return;
+  try {
+    const response = await fetch("/api/settings/openai");
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao carregar configuracoes.");
+    const settings = payload.settings || {};
+    importOpenaiState = {
+      provider: String(settings.ai_provider || "local"),
+      keyConfigured: Boolean(settings.key_configured)
+    };
+  } catch (error) {
+    console.warn("Nao consegui checar a chave OpenAI:", error);
+    importOpenaiState = { provider: "local", keyConfigured: true };
+  }
+  refreshImportKeyBannerFromState();
+}
+function refreshImportKeyBannerFromState(){
+  const banner = document.querySelector("[data-import-key-banner]");
+  if (banner) banner.hidden = !importNeedsOpenaiKey();
+}
+function setupImportKeyBanner(){
+  const banner = document.querySelector("[data-import-key-banner]");
+  if (!banner) return;
+  banner.querySelector("[data-import-key-open]")?.addEventListener("click", () => openSettingsPanel());
+  refreshImportKeyBanner();
 }
 function projectCard(project){
   const isMock = Boolean(project.is_mock);
@@ -9174,6 +9504,8 @@ projectList?.addEventListener("click", event => {
   if (event.target.closest("[data-forget-project]")) deleteProject(card, false);
   if (event.target.closest("[data-delete-project]")) deleteProject(card, true);
 });
+setupHomeSettingsPanel();
+setupImportKeyBanner();
 bindImportForm();
 """
     return script.replace("__WORKSPACE_PATH__", json.dumps(str(workspace))).replace("__MOCK_PROJECTS__", json.dumps(mock_projects, ensure_ascii=False))
