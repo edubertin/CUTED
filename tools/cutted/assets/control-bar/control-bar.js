@@ -16,6 +16,7 @@
     discarded: false,
     renderQueued: false,
     status: null,
+    trimMode: false,
     volume: 75
   };
 
@@ -133,6 +134,7 @@
       onStateChange: options.onStateChange || nested.onStateChange,
       onReadyCancel: options.onReadyCancel || nested.onReadyCancel,
       onSendRender: options.onSendRender || nested.onSendRender,
+      onTrimToggle: options.onTrimToggle || nested.onTrimToggle,
       onVolumeChange: options.onVolumeChange || nested.onVolumeChange
     };
   }
@@ -168,6 +170,7 @@
       discarded: Boolean(state.discarded),
       renderQueued: Boolean(state.renderQueued),
       status: normalizeStatus(state.status),
+      trimMode: Boolean(state.trimMode),
       volume: clamp(Number(state.volume), 0, 100)
     };
   }
@@ -224,6 +227,7 @@
       sonicRail: container.querySelector("[data-cuted-sonic-rail]"),
       soundButton: container.querySelector("[data-cuted-control='sound']"),
       toolGroup: container.querySelector("[data-cuted-tool-group]"),
+      trimButton: container.querySelector("[data-cuted-control='trim']"),
       statusBar: container.querySelector("[data-cuted-bar-status]"),
       statusAction: container.querySelector("[data-cuted-status-action]"),
       statusLabel: container.querySelector("[data-cuted-status-label]"),
@@ -273,6 +277,11 @@
       state.volumeMenuOpen = false;
       sync();
     };
+    const closeToolModes = () => {
+      const wasTrimMode = state.trimMode;
+      state.trimMode = false;
+      if (wasTrimMode) callbacks.onTrimToggle?.({ trimMode: false });
+    };
     const isLocked = () => state.ready || state.discarded || state.busy;
     const lockReady = () => {
       state.ready = true;
@@ -281,6 +290,7 @@
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
       state.volumeMenuOpen = false;
+      closeToolModes();
       setStatus(buildReadyStatus(), 0);
       sync();
     };
@@ -291,6 +301,7 @@
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
       state.volumeMenuOpen = false;
+      closeToolModes();
       setStatus(buildDiscardedStatus(), 0);
       sync();
     };
@@ -332,6 +343,7 @@
 
     elements.aiButton.addEventListener("click", () => {
       if (isLocked()) return;
+      closeToolModes();
       state.volumeMenuOpen = false;
       callbacks.onAiClick?.({ ...state });
       if (state.aiStatus === "idle") {
@@ -351,6 +363,7 @@
 
     elements.effectButton.addEventListener("click", () => {
       if (isLocked()) return;
+      closeToolModes();
       state.effectMenuOpen = !state.effectMenuOpen;
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
@@ -367,6 +380,7 @@
     elements.effectOptions.forEach((button) => {
       button.addEventListener("click", () => {
         if (isLocked()) return;
+        closeToolModes();
         state.effectStyle = button.dataset.cutedEffectStyle;
         state.effectMenuOpen = false;
         state.volumeMenuOpen = false;
@@ -378,6 +392,7 @@
 
     elements.captionButton.addEventListener("click", () => {
       if (isLocked()) return;
+      closeToolModes();
       state.captionsEnabled = !state.captionsEnabled;
       state.volumeMenuOpen = false;
       setStatus({ kind: "caption", label: state.captionsEnabled ? "Captions on" : "Captions off", tone: state.captionsEnabled ? "blue" : "neutral" });
@@ -398,6 +413,7 @@
       state.ready = false;
       state.discarded = false;
       state.renderQueued = false;
+      closeToolModes();
       setStatus({ kind: "editing", label: "Back to editing", tone: "neutral" }, 1800);
       sync();
       callbacks.onReadyCancel?.(snapshotState(state));
@@ -409,6 +425,7 @@
       if (!state.ready || state.discarded || state.busy || state.renderQueued) return;
       state.renderQueued = true;
       state.ready = false;
+      closeToolModes();
       setStatus({ kind: "render", label: "Enviado ao render", tone: "green" }, 1400);
       sync();
       callbacks.onSendRender?.(snapshotState(state));
@@ -446,6 +463,7 @@
 
     elements.insertButton.addEventListener("click", () => {
       if (isLocked()) return;
+      closeToolModes();
       state.insertMenuOpen = !state.insertMenuOpen;
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
@@ -458,6 +476,23 @@
       }
       sync();
       callbacks.onInsertClick?.({ insertMenuOpen: state.insertMenuOpen, bumpers: { ...state.bumpers } });
+    });
+
+    elements.trimButton.addEventListener("click", () => {
+      if (isLocked()) return;
+      state.trimMode = !state.trimMode;
+      state.effectMenuOpen = false;
+      state.formatMenuOpen = false;
+      state.insertMenuOpen = false;
+      state.volumeMenuOpen = false;
+      clearInsertAutoClose();
+      setStatus({
+        kind: "trim",
+        label: state.trimMode ? "TRIM" : "Trim fechado",
+        tone: state.trimMode ? "blue" : "neutral"
+      }, state.trimMode ? 1200 : 900);
+      sync();
+      callbacks.onTrimToggle?.({ trimMode: state.trimMode });
     });
 
     elements.bumperButtons.forEach((button) => {
@@ -520,6 +555,8 @@
     elements.aiButton.dataset.aiStatus = state.aiStatus;
     elements.aiButton.classList.toggle("is-loading", state.aiStatus === "loading");
     elements.aiButton.classList.toggle("is-active", state.aiStatus === "loading" || state.aiStatus === "active");
+    elements.trimButton.classList.toggle("is-active", state.trimMode);
+    elements.trimButton.setAttribute("aria-pressed", String(state.trimMode));
     elements.captionButton.classList.toggle("is-active", state.captionsEnabled);
     elements.effectButton.classList.toggle("is-active", true);
     if (locked) {
@@ -527,6 +564,7 @@
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
       state.volumeMenuOpen = false;
+      state.trimMode = false;
     }
     elements.effectMenu.dataset.open = String(state.effectMenuOpen);
     syncInsert(elements, state);
@@ -681,6 +719,15 @@
         <div class="cuted-render-zone" data-cuted-render-zone>
           <div class="cuted-control-group cuted-tool-group" data-cuted-tool-group>
             <div class="cuted-tool-buttons">
+              <button class="cuted-tile-button cuted-trim-button" type="button" aria-label="Trim" aria-pressed="false" data-cuted-control="trim">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="6" cy="7" r="2.4"></circle>
+                  <circle cx="6" cy="17" r="2.4"></circle>
+                  <path d="M8.2 8.7 19 4"></path>
+                  <path d="M8.2 15.3 19 20"></path>
+                  <path d="M9 12h5"></path>
+                </svg>
+              </button>
               <button class="cuted-tile-button cuted-ai-button" type="button" aria-label="IA" data-cuted-control="ai">
                 <span>IA</span>
                 <i class="cuted-ai-loader" aria-hidden="true"></i>

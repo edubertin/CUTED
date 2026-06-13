@@ -570,7 +570,7 @@ body.cuted-control-demo #cuted-control-bar-demo {
 
 .cuted-tool-group {
   position: relative;
-  flex: 0 0 404px;
+  flex: 0 0 484px;
   min-width: 0;
   min-height: 82px;
   gap: 0;
@@ -1270,6 +1270,43 @@ body.cuted-control-demo #cuted-control-bar-demo {
 
 .cuted-ai-button.is-loading span {
   animation: cuted-ai-pulse 920ms ease-in-out infinite;
+}
+
+.cuted-trim-button {
+  color: rgba(231, 231, 232, 0.72);
+  text-shadow: none;
+}
+
+.cuted-trim-button svg {
+  position: relative;
+  z-index: 1;
+  width: 34px;
+  height: 34px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.9;
+  filter: drop-shadow(0 0 12px rgba(17, 162, 207, 0.18));
+}
+
+.cuted-trim-button.is-active {
+  border-color: rgba(17, 162, 207, 0.78);
+  color: var(--cuted-white);
+  text-shadow: 0 0 18px rgba(17, 162, 207, 0.58);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.16),
+    inset 0 0 22px rgba(17, 162, 207, 0.12),
+    0 0 20px rgba(17, 162, 207, 0.44);
+}
+
+.cuted-trim-button.is-active::after {
+  color: var(--cuted-blue-hot);
+  opacity: 1;
+}
+
+.cuted-trim-button.is-active svg {
+  animation: cuted-trim-snip 1.4s ease-in-out infinite;
 }
 
 .cuted-fx-button {
@@ -2201,6 +2238,23 @@ body.cuted-control-demo #cuted-control-bar-demo {
 
   100% {
     background-position: 110px 0, 0 0;
+  }
+}
+
+@keyframes cuted-trim-snip {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 12px rgba(17, 162, 207, 0.22));
+    transform: rotate(0deg) scale(1);
+  }
+
+  42% {
+    filter: drop-shadow(0 0 18px rgba(36, 220, 255, 0.5));
+    transform: rotate(-4deg) scale(1.04);
+  }
+
+  62% {
+    transform: rotate(3deg) scale(0.98);
   }
 }
 

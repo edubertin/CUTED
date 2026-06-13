@@ -380,6 +380,27 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("top: calc(100% + 14px)", styles)
         self.assertIn("flex: 0 0 58px", styles)
 
+    def test_control_bar_trim_tool_toggles_live_timeline_handles(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        script = (root / "tools" / "cutted" / "assets" / "control-bar" / "control-bar.js").read_text(
+            encoding="utf-8"
+        )
+        source = (root / "tools" / "cutted" / "scripts" / "cutted.py").read_text(encoding="utf-8")
+        timeline = (root / "prototypes" / "live-timeline" / "src" / "liveTimeline.ts").read_text(encoding="utf-8")
+        timeline_styles = (root / "prototypes" / "live-timeline" / "src" / "timeline.css").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('data-cuted-control="trim"', script)
+        self.assertIn("onTrimToggle", script)
+        self.assertIn('label: state.trimMode ? "TRIM" : "Trim fechado"', script)
+        self.assertIn('trimMode: !busy && card.dataset.trimMode === "1"', source)
+        self.assertIn("setControlSurfaceTrimMode(card, payload.trimMode)", source)
+        self.assertIn('trimEnabled: card.dataset.trimMode === "1"', source)
+        self.assertIn("trimEnabled?: boolean", timeline)
+        self.assertIn("state.trimEnabled", timeline)
+        self.assertIn('[data-trim-enabled="false"] .trim-handle', timeline_styles)
+
     def test_cards_include_control_surface_slot(self) -> None:
         html = CUTTED.card_html(
             CUTTED.Moment(
