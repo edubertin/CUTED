@@ -3,6 +3,7 @@
     aiStatus: "idle",
     captionsEnabled: false,
     captionMenuOpen: false,
+    captionPaletteOpen: null,
     captionStyle: { size: 72, width: 28, textColor: "#ffffff", backgroundColor: "transparent" },
     effectMenuOpen: false,
     effectStyle: "clean",
@@ -163,6 +164,7 @@
       busy: Boolean(state.busy),
       captionsEnabled: Boolean(state.captionsEnabled),
       captionMenuOpen: Boolean(state.captionMenuOpen),
+      captionPaletteOpen: ["text", "background"].includes(state.captionPaletteOpen) ? state.captionPaletteOpen : null,
       captionStyle: normalizeCaptionStyle(state.captionStyle),
       effectMenuOpen: Boolean(state.effectMenuOpen),
       effectStyle,
@@ -238,7 +240,10 @@
       captionWidthInput: container.querySelector("[data-cuted-caption-width]"),
       captionSteps: Array.from(container.querySelectorAll("[data-cuted-caption-step]")),
       captionColorInputs: Array.from(container.querySelectorAll("[data-cuted-caption-color]")),
+      captionPalette: container.querySelector("[data-cuted-caption-palette]"),
+      captionPaletteTitle: container.querySelector("[data-cuted-caption-palette-title]"),
       captionPickers: Array.from(container.querySelectorAll("[data-cuted-caption-picker]")),
+      captionSwatches: Array.from(container.querySelectorAll("[data-cuted-caption-swatch]")),
       clipInfo: container.querySelector("[data-cuted-clip-info]"),
       clipRank: container.querySelector("[data-cuted-clip-rank]"),
       clipSummary: container.querySelector("[data-cuted-clip-summary]"),
@@ -304,6 +309,9 @@
       sync();
       emitCaptionChange();
     };
+    const closeCaptionPalette = () => {
+      state.captionPaletteOpen = null;
+    };
     const insertAutoCloseClock = { id: null };
     const clearInsertAutoClose = () => {
       window.clearTimeout(insertAutoCloseClock.id);
@@ -323,6 +331,7 @@
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
       state.captionMenuOpen = false;
+      closeCaptionPalette();
       state.volumeMenuOpen = false;
       sync();
     };
@@ -356,6 +365,7 @@
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
       state.captionMenuOpen = false;
+      closeCaptionPalette();
       state.volumeMenuOpen = false;
       closeToolModes();
       setStatus(buildReadyStatus(), 0);
@@ -368,6 +378,7 @@
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
       state.captionMenuOpen = false;
+      closeCaptionPalette();
       state.volumeMenuOpen = false;
       closeToolModes();
       setStatus(buildDiscardedStatus(), 0);
@@ -400,6 +411,7 @@
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
       state.captionMenuOpen = false;
+      closeCaptionPalette();
       sync();
     });
 
@@ -417,6 +429,7 @@
       closeToolModes();
       state.volumeMenuOpen = false;
       state.captionMenuOpen = false;
+      closeCaptionPalette();
       callbacks.onAiClick?.({ ...state });
       if (state.aiStatus === "idle") {
         state.aiStatus = "loading";
@@ -441,6 +454,7 @@
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
       state.captionMenuOpen = false;
+      closeCaptionPalette();
       state.volumeMenuOpen = false;
       setStatus({
         kind: "effect",
@@ -458,6 +472,7 @@
         state.effectStyle = button.dataset.cutedEffectStyle;
         state.effectMenuOpen = false;
         state.captionMenuOpen = false;
+        closeCaptionPalette();
         state.volumeMenuOpen = false;
         setStatus({ kind: "effect", label: `Effect preview: ${button.textContent.trim()}`, tone: "green" });
         sync();
@@ -469,6 +484,7 @@
       if (isLocked()) return;
       if (restoreTrimStatus()) return;
       state.captionMenuOpen = !state.captionMenuOpen;
+      if (!state.captionMenuOpen) closeCaptionPalette();
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
@@ -486,7 +502,8 @@
     elements.captionOkButton.addEventListener("click", () => {
       if (isLocked()) return;
       state.captionMenuOpen = false;
-      setStatus({ kind: "caption", label: "Caption saved", tone: "green" }, 1200);
+      closeCaptionPalette();
+      setStatus({ kind: "caption", label: "Caption saved", tone: "neutral" }, 1200);
       sync();
     });
     elements.captionSteps.forEach((button) => {
@@ -509,8 +526,25 @@
     elements.captionColorInputs.forEach((input) => {
       input.addEventListener("input", () => {
         if (isLocked()) return;
-        const key = input.dataset.cutedCaptionColor === "background" ? "backgroundColor" : "textColor";
+        const key = state.captionPaletteOpen === "background" ? "backgroundColor" : "textColor";
         updateCaptionStyle({ [key]: input.value }, key === "backgroundColor" ? "Background color" : "Text color");
+      });
+    });
+    elements.captionPickers.forEach((picker) => {
+      picker.addEventListener("click", () => {
+        if (isLocked()) return;
+        const target = picker.dataset.cutedCaptionPicker === "background" ? "background" : "text";
+        state.captionPaletteOpen = state.captionPaletteOpen === target ? null : target;
+        setStatus({ kind: "caption", label: target === "background" ? "Background palette" : "Text palette", tone: "blue" });
+        sync();
+      });
+    });
+    elements.captionSwatches.forEach((button) => {
+      button.addEventListener("click", () => {
+        if (isLocked()) return;
+        const key = state.captionPaletteOpen === "background" ? "backgroundColor" : "textColor";
+        const value = button.dataset.cutedCaptionValue || "transparent";
+        updateCaptionStyle({ [key]: value }, key === "backgroundColor" ? "Background color" : "Text color");
       });
     });
     elements.approveButton.addEventListener("click", () => {
@@ -570,6 +604,7 @@
       state.effectMenuOpen = false;
       state.insertMenuOpen = false;
       state.captionMenuOpen = false;
+      closeCaptionPalette();
       state.volumeMenuOpen = false;
       setStatus({ kind: "format", label: state.formatMenuOpen ? "Choose output format" : "Format menu closed", tone: "blue" });
       sync();
@@ -581,6 +616,7 @@
         state.aspectRatio = button.dataset.cutedFormat;
         state.formatMenuOpen = false;
         state.captionMenuOpen = false;
+        closeCaptionPalette();
         state.volumeMenuOpen = false;
         setStatus({ kind: "format", label: `Format selected: ${state.aspectRatio}`, tone: "blue" });
         sync();
@@ -596,6 +632,7 @@
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
       state.captionMenuOpen = false;
+      closeCaptionPalette();
       state.volumeMenuOpen = false;
       setStatus({ kind: "insert", label: state.insertMenuOpen ? "Insert bumper: Start or End" : "Insert menu closed", tone: "blue" });
       if (state.insertMenuOpen) {
@@ -618,6 +655,7 @@
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
       state.captionMenuOpen = false;
+      closeCaptionPalette();
       state.volumeMenuOpen = false;
       clearInsertAutoClose();
       setStatus(buildTrimStatus(), 0);
@@ -729,7 +767,7 @@
     elements.captionSizeInput.value = String(Math.round(state.captionStyle.size));
     elements.captionWidthInput.value = String(Math.round(state.captionStyle.width));
     elements.captionColorInputs.forEach((input) => {
-      const key = input.dataset.cutedCaptionColor === "background" ? "backgroundColor" : "textColor";
+      const key = state.captionPaletteOpen === "background" ? "backgroundColor" : "textColor";
       input.value = state.captionStyle[key] === "transparent" ? "#000000" : state.captionStyle[key];
     });
     elements.captionPickers.forEach((picker) => {
@@ -737,6 +775,16 @@
       const value = state.captionStyle[key];
       picker.style.setProperty("--caption-picker-color", value === "transparent" ? "transparent" : value);
       picker.dataset.transparent = String(value === "transparent");
+      picker.classList.toggle("is-active", state.captionPaletteOpen === picker.dataset.cutedCaptionPicker);
+    });
+    elements.captionPalette.dataset.open = String(Boolean(state.captionPaletteOpen));
+    elements.captionPalette.dataset.kind = state.captionPaletteOpen || "text";
+    elements.captionPaletteTitle.textContent = state.captionPaletteOpen === "background" ? "BG COLOR" : "FONT COLOR";
+    elements.captionSwatches.forEach((button) => {
+      const isTransparent = button.dataset.cutedCaptionValue === "transparent";
+      const key = state.captionPaletteOpen === "background" ? "backgroundColor" : "textColor";
+      button.hidden = !state.captionPaletteOpen || (state.captionPaletteOpen === "text" && isTransparent);
+      button.classList.toggle("is-active", button.dataset.cutedCaptionValue === state.captionStyle[key]);
     });
   }
 
@@ -979,13 +1027,14 @@
           <button class="cuted-caption-ok" type="button" data-cuted-caption-ok>OK</button>
         </div>
         <div class="cuted-caption-number-grid">
-          ${renderCaptionStepper("size", "SIZE", 72)}
+          ${renderCaptionStepper("size", "FONT", 72)}
           ${renderCaptionStepper("width", "WIDTH", 28)}
         </div>
         <div class="cuted-caption-color-grid">
           ${renderCaptionColorPicker("text", "A", "#ffffff")}
           ${renderCaptionColorPicker("background", "BG", "#000000")}
         </div>
+        ${renderCaptionPalette()}
       </div>
     `;
   }
@@ -1005,11 +1054,46 @@
 
   function renderCaptionColorPicker(kind, label, value) {
     return `
-      <label class="cuted-caption-picker cuted-caption-picker-${kind}" data-cuted-caption-picker="${kind}" style="--caption-picker-color:${value}">
+      <div class="cuted-caption-picker cuted-caption-picker-${kind}" data-cuted-caption-picker="${kind}" style="--caption-picker-color:${value}">
         <span>${label}</span>
         <i aria-hidden="true"></i>
-        <input type="color" value="${value}" aria-label="${kind === "text" ? "Cor da fonte" : "Cor do fundo"}" data-cuted-caption-color="${kind}" />
-      </label>
+      </div>
+    `;
+  }
+
+  function renderCaptionPalette() {
+    const colors = captionPaletteColors();
+    return `
+      <div class="cuted-caption-palette" data-open="false" data-kind="text" data-cuted-caption-palette>
+        <div class="cuted-caption-palette-head">
+          <span data-cuted-caption-palette-title>FONT COLOR</span>
+          <label class="cuted-caption-custom-color" aria-label="Cor customizada">
+            <input type="color" value="#ffffff" data-cuted-caption-color="text" />
+          </label>
+        </div>
+        <div class="cuted-caption-palette-grid">
+          ${renderCaptionSwatch("transparent")}
+          ${colors.map(renderCaptionSwatch).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function captionPaletteColors() {
+    return [
+      "#ffffff", "#d7dde5", "#9aa4b2", "#111318",
+      "#ffcc00", "#ff8a00", "#ef4444", "#ec4899",
+      "#afcf2a", "#46d66f", "#11a2cf", "#2563eb",
+      "#7c3aed", "#14b8a6", "#f5f0dc", "#8b5cf6",
+      "#ffe066", "#fb7185", "#38bdf8", "#a3e635",
+      "#0f172a", "#20242a", "#08212b", "#24330c"
+    ];
+  }
+
+  function renderCaptionSwatch(color) {
+    const isTransparent = color === "transparent";
+    return `
+      <button class="cuted-caption-swatch${isTransparent ? " is-transparent" : ""}" type="button" aria-label="${isTransparent ? "Transparente" : color}" data-cuted-caption-swatch data-cuted-caption-value="${color}" style="--swatch-color:${isTransparent ? "#000000" : color}"></button>
     `;
   }
 

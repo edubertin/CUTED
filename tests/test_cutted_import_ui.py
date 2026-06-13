@@ -143,15 +143,21 @@ class CuttedImportUiTests(unittest.TestCase):
         styles = (asset_dir / "control-bar.css").read_text(encoding="utf-8")
 
         self.assertIn("captionMenuOpen", script)
+        self.assertIn("captionPaletteOpen", script)
         self.assertIn("renderCaptionMenu", script)
         self.assertIn("data-cuted-caption-toggle", script)
         self.assertIn("data-cuted-caption-size", script)
         self.assertIn("data-cuted-caption-width", script)
         self.assertIn('renderCaptionColorPicker("text", "A", "#ffffff")', script)
         self.assertIn('renderCaptionColorPicker("background", "BG", "#000000")', script)
+        self.assertIn("renderCaptionPalette", script)
+        self.assertIn("data-cuted-caption-swatch", script)
+        self.assertIn("renderCaptionSwatch", script)
         self.assertIn("onCaptionStyleChange", script)
         self.assertIn(".cuted-caption-menu", styles)
+        self.assertIn(".cuted-caption-palette", styles)
         self.assertIn(".cuted-caption-switch", styles)
+        self.assertIn(".cuted-caption-swatch", styles)
 
     def test_caption_ass_style_accepts_control_bar_style(self) -> None:
         preset = CUTTED.PLATFORM_PRESETS["tiktok"]
