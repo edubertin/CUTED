@@ -1518,9 +1518,10 @@ body.cuted-control-demo #cuted-control-bar-demo {
 
 .cuted-effect-menu {
   position: absolute;
-  right: 238px;
-  bottom: 106px;
-  z-index: 4;
+  right: 206px;
+  top: calc(100% + 12px);
+  bottom: auto;
+  z-index: 70;
   display: grid;
   grid-template-columns: repeat(4, minmax(106px, 1fr));
   gap: 20px;
@@ -1547,9 +1548,10 @@ body.cuted-control-demo #cuted-control-bar-demo {
 
 .cuted-insert-menu {
   position: absolute;
-  right: 276px;
-  bottom: 106px;
-  z-index: 4;
+  right: 176px;
+  top: calc(100% + 12px);
+  bottom: auto;
+  z-index: 70;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
@@ -1583,12 +1585,13 @@ body.cuted-control-demo #cuted-control-bar-demo {
 
 .cuted-insert-menu::after {
   position: absolute;
-  right: 108px;
-  bottom: -24px;
+  top: -17px;
+  right: 180px;
+  bottom: auto;
   width: 34px;
   height: 34px;
-  border-right: 1px solid rgba(231, 231, 232, 0.46);
-  border-bottom: 1px solid rgba(231, 231, 232, 0.46);
+  border-left: 1px solid rgba(231, 231, 232, 0.46);
+  border-top: 1px solid rgba(231, 231, 232, 0.46);
   background: rgba(7, 8, 9, 0.9);
   content: "";
   transform: rotate(45deg);
@@ -2011,12 +2014,13 @@ body.cuted-control-demo #cuted-control-bar-demo {
 
 .cuted-effect-menu::after {
   position: absolute;
-  bottom: -24px;
-  left: 42%;
+  top: -17px;
+  left: 76%;
+  bottom: auto;
   width: 34px;
   height: 34px;
-  border-right: 1px solid rgba(231, 231, 232, 0.48);
-  border-bottom: 1px solid rgba(231, 231, 232, 0.48);
+  border-left: 1px solid rgba(231, 231, 232, 0.48);
+  border-top: 1px solid rgba(231, 231, 232, 0.48);
   background: rgba(7, 8, 9, 0.88);
   content: "";
   transform: rotate(45deg);
@@ -2376,7 +2380,8 @@ body.cuted-control-demo #cuted-control-bar-demo {
 
   .cuted-effect-menu {
     right: 0;
-    bottom: 146px;
+    top: calc(100% + 12px);
+    bottom: auto;
     grid-template-columns: repeat(2, minmax(120px, 1fr));
     width: 100%;
   }
