@@ -563,7 +563,7 @@
     const hasStatus = Boolean(status && status.label);
     window.clearTimeout(elements.statusBar._cutedHideTimer);
     elements.controlBar.classList.toggle("has-status", hasStatus);
-    elements.controlBar.classList.toggle("is-status-transient", hasStatus && status.kind !== "ready" && status.kind !== "discarded");
+    elements.controlBar.classList.toggle("is-status-transient", Boolean(transientStatus));
     elements.controlBar.dataset.statusKind = hasStatus ? status.kind : "idle";
     elements.controlBar.dataset.statusTone = hasStatus ? status.tone : "neutral";
     elements.toolGroup.classList.toggle("is-ready", state.ready);
