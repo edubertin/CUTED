@@ -82,6 +82,35 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("restoreFinalizeResults", html)
         self.assertIn('if (next === "final") restoreFinalizeResults();', html)
 
+    def test_render_queue_modal_and_controls_are_available(self) -> None:
+        html = gallery_html()
+        script = (Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar" / "control-bar.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("data-render-queue-modal", html)
+        self.assertIn('data-render-profile="eco"', html)
+        self.assertIn('data-render-profile="medium"', html)
+        self.assertIn('data-render-profile="high"', html)
+        self.assertIn("/api/render-jobs", html)
+        self.assertIn("openRenderQueuePanel", html)
+        self.assertIn("sendCardToRenderQueue", html)
+        self.assertIn('data-cuted-control="send-render"', script)
+        self.assertIn("Send to Render", script)
+
+    def test_render_resource_profiles_apply_threads_and_priority(self) -> None:
+        rows = [{"rank": 1}, {"rank": 2}]
+
+        CUTTED.apply_render_resource_to_rows(rows, "eco")
+        self.assertEqual(rows[0]["_render_threads"], 1)
+        self.assertEqual(rows[0]["_render_priority"], "idle")
+        self.assertIn("-threads", CUTTED.ffmpeg_codec_thread_args(rows[0]))
+
+        rows = [{"rank": 1}]
+        CUTTED.apply_render_resource_to_rows(rows, "high")
+        self.assertGreaterEqual(rows[0]["_render_threads"], 1)
+        self.assertEqual(rows[0]["_render_priority"], "below_normal")
+
     def test_partial_captioned_files_are_recovered_before_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             gallery_dir = Path(tmp)
