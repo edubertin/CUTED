@@ -394,6 +394,7 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn(".settings-backdrop.is-open{opacity:1;pointer-events:auto}", source)
         self.assertIn(".settings-backdrop.is-closing{opacity:0;pointer-events:none}", source)
         self.assertIn(".settings-backdrop.is-open .settings-panel{transform:translateY(0) scale(1);opacity:1}", source)
+        self.assertIn(".settings-panel{scrollbar-width:none}.settings-panel::-webkit-scrollbar{width:0;height:0}", source)
         self.assertIn("@keyframes settings-aura-drift{to{transform:rotate(360deg)}}", source)
         self.assertIn("let settingsLastFocus = null;", source)
         self.assertIn('requestAnimationFrame(() => modal.classList.add("is-open"))', source)
