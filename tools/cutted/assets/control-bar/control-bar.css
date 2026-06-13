@@ -80,7 +80,7 @@ body.cuted-control-demo #cuted-control-bar-demo {
 
 .cuted-control-bar.is-ready,
 .cuted-control-bar.is-locked {
-  --cuted-ready-action-width: 178px;
+  --cuted-ready-action-width: 46px;
 }
 
 .cuted-control-bar::before {
@@ -166,6 +166,11 @@ body.cuted-control-demo #cuted-control-bar-demo {
   color: rgba(231, 231, 232, 0.88);
   pointer-events: none;
   animation: cuted-bar-status-in 320ms cubic-bezier(0.2, 0.95, 0.18, 1);
+}
+
+.cuted-control-bar[data-status-kind="ready"] .cuted-bar-status-layer {
+  cursor: pointer;
+  pointer-events: auto;
 }
 
 .cuted-bar-status-layer[hidden] {
@@ -521,6 +526,21 @@ body.cuted-control-demo #cuted-control-bar-demo {
   transition:
     background 280ms ease,
     box-shadow 280ms ease;
+}
+
+.cuted-control-bar[data-status-kind="ready"] .cuted-bar-status-layer:hover > span,
+.cuted-control-bar[data-status-kind="ready"] .cuted-bar-status-layer:focus-visible > span {
+  text-shadow:
+    0 0 18px currentColor,
+    0 0 42px color-mix(in srgb, currentColor 54%, transparent),
+    0 0 72px rgba(36, 220, 255, 0.34);
+  transform: translateY(-50%) scale(1.025);
+}
+
+.cuted-control-bar[data-status-kind="ready"] .cuted-bar-status-layer:hover::before,
+.cuted-control-bar[data-status-kind="ready"] .cuted-bar-status-layer:focus-visible::before {
+  opacity: 0.34;
+  animation-duration: 1.25s;
 }
 
 .cuted-render-zone.is-ready,
@@ -1907,12 +1927,12 @@ body.cuted-control-demo #cuted-control-bar-demo {
   top: 50%;
   right: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto;
   align-items: center;
   justify-items: center;
   width: 0;
   min-height: 42px;
-  gap: 8px;
+  gap: 0;
   overflow: visible;
   padding: 0;
   border: 0;
@@ -1927,7 +1947,7 @@ body.cuted-control-demo #cuted-control-bar-demo {
 
 .cuted-ready-region[data-ready="true"] .cuted-ready-pill {
   width: var(--cuted-ready-action-width);
-  padding: 0 0 0 10px;
+  padding: 0;
   box-shadow: none;
   opacity: 1;
   pointer-events: auto;
@@ -1939,43 +1959,6 @@ body.cuted-control-demo #cuted-control-bar-demo {
     border-color 180ms ease 230ms,
     box-shadow 220ms ease 260ms,
     transform 360ms cubic-bezier(0.2, 0.9, 0.2, 1) 190ms;
-}
-
-.cuted-send-render {
-  min-height: 36px;
-  min-width: 0;
-  padding: 0 12px;
-  border: 1px solid rgba(175, 207, 42, 0.46);
-  border-radius: 999px;
-  background:
-    linear-gradient(90deg, rgba(175, 207, 42, 0.18), rgba(36, 220, 255, 0.08)),
-    rgba(8, 12, 8, 0.76);
-  color: var(--cuted-green-hot);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0;
-  text-transform: uppercase;
-  white-space: nowrap;
-  box-shadow: 0 0 18px rgba(175, 207, 42, 0.16);
-  cursor: pointer;
-  opacity: 0;
-  transform: translateX(10px) scale(0.94);
-  transition:
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    opacity 180ms ease,
-    transform 220ms ease;
-}
-
-.cuted-ready-region[data-ready="true"] .cuted-send-render {
-  opacity: 1;
-  transform: translateX(0) scale(1);
-  transition-delay: 560ms;
-}
-
-.cuted-send-render:hover {
-  border-color: rgba(175, 207, 42, 0.72);
-  box-shadow: 0 0 22px rgba(175, 207, 42, 0.24);
 }
 
 .cuted-ready-cancel {

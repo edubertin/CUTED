@@ -220,7 +220,6 @@
       insertDots: Array.from(container.querySelectorAll("[data-cuted-insert-dot]")),
       insertMenu: container.querySelector("[data-cuted-insert-menu]"),
       readyCancelButton: container.querySelector("[data-cuted-control='ready-cancel']"),
-      sendRenderButton: container.querySelector("[data-cuted-control='send-render']"),
       renderZone: container.querySelector("[data-cuted-render-zone]"),
       sonicRail: container.querySelector("[data-cuted-sonic-rail]"),
       soundButton: container.querySelector("[data-cuted-control='sound']"),
@@ -403,12 +402,20 @@
       callbacks.onReadyCancel?.(snapshotState(state));
     });
 
-    elements.sendRenderButton.addEventListener("click", () => {
+    elements.statusBar.addEventListener("click", () => {
       if (!state.ready || state.discarded || state.busy) return;
       state.renderQueued = true;
-      setStatus({ kind: "ready", label: "SENT", persistent: true, tone: "green" });
+      state.ready = false;
+      setStatus({ kind: "ready", label: "SENT", tone: "green" }, 1400);
       sync();
       callbacks.onSendRender?.(snapshotState(state));
+    });
+
+    elements.statusBar.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (!state.ready || state.discarded || state.busy) return;
+      event.preventDefault();
+      elements.statusBar.click();
     });
 
     elements.formatButton.addEventListener("click", () => {
@@ -578,6 +585,10 @@
     }
     elements.statusBar.dataset.tone = hasStatus ? status.tone : "neutral";
     elements.statusBar.dataset.kind = hasStatus ? status.kind : "idle";
+    const canSendRender = Boolean(state.ready && !state.discarded && !state.busy);
+    elements.statusBar.setAttribute("role", canSendRender ? "button" : "status");
+    elements.statusBar.setAttribute("aria-label", canSendRender ? "Enviar para render" : status?.label || "Status");
+    elements.statusBar.tabIndex = canSendRender ? 0 : -1;
     if (hasStatus && (status.kind === "ready" || status.kind === "discarded")) {
       elements.statusLabel.innerHTML = renderReadyLetters(status.label);
     } else if (hasStatus) {
@@ -698,7 +709,6 @@
               </button>
             </div>
             <div class="cuted-ready-pill" aria-live="polite">
-              <button class="cuted-send-render" type="button" data-cuted-control="send-render">Send to Render</button>
               <button class="cuted-ready-cancel" type="button" aria-label="Back to editing" data-cuted-control="ready-cancel">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M18 6 6 18"></path>
@@ -824,7 +834,7 @@
   function buildReadyStatus() {
     return {
       kind: "ready",
-      label: "READY",
+      label: "SEND TO RENDER",
       persistent: true,
       tone: "green"
     };
