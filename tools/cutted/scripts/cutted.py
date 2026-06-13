@@ -8705,6 +8705,28 @@ def gear_icon_svg() -> str:
     )
 
 
+def header_action_icon_svg(name: str) -> str:
+    icons = {
+        "new-project": (
+            '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+            '<rect x="4" y="5" width="13" height="14" rx="2.4"/>'
+            '<path d="m17 10 3-1.8v7.6L17 14"/>'
+            '<path d="M10.5 8.8v6.4M7.3 12h6.4"/>'
+            '</svg>'
+        ),
+        "render": (
+            '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+            '<rect x="3.5" y="5.5" width="13" height="13" rx="2.6"/>'
+            '<path d="m9.2 9.2 4.6 2.8-4.6 2.8Z"/>'
+            '<path d="M17.5 7.5h2.8M18.9 6.1v2.8"/>'
+            '<path d="m17.8 15.7 2.7 2.7M20.5 15.7l-2.7 2.7"/>'
+            '<path d="M5.8 3.8 4.6 2.5M7.9 3.2 8.4 1.5"/>'
+            '</svg>'
+        ),
+    }
+    return icons.get(name, gear_icon_svg())
+
+
 def clean_clip_title(value: str) -> str:
     cleaned = re.sub(r"^[\s>»:\-]+", "", str(value or "")).strip()
     return cleaned or str(value or "").strip() or "Corte sem titulo"
@@ -8799,9 +8821,9 @@ def page_html(
       <p>{html.escape(source_label)}</p>
     </div>
     <div class="header-actions">
-      <button id="reset-ui">Novo projeto</button>
-      <button id="finalize-videos" type="button">Renderizar</button>
-      <button id="open-settings" class="icon-button" type="button" aria-label="Configuracoes OpenAI" title="Configuracoes OpenAI">{gear_icon_svg()}</button>
+      <button id="reset-ui" class="header-icon-button header-new-project" type="button" aria-label="Novo projeto" title="Novo projeto">{header_action_icon_svg("new-project")}</button>
+      <button id="finalize-videos" class="header-icon-button header-render-button" type="button" aria-label="Renderizar" title="Renderizar">{header_action_icon_svg("render")}</button>
+      <button id="open-settings" class="header-icon-button header-settings-button" type="button" aria-label="Configuracoes OpenAI" title="Configuracoes OpenAI">{gear_icon_svg()}</button>
     </div>
   </header>
   <section class="import-stage" aria-label="Importar projeto">
@@ -9486,7 +9508,10 @@ button[data-action=discard],.result-actions a.secondary,.result-actions button.s
 @supports not (backdrop-filter:blur(1px)){.preview-bar,.preview-controls,.tool-section,.export-dock,.overlay-menu,header,.tabs{background:#111}}
 @media(max-width:860px){.brand-logo{width:min(360px,86vw);height:58px}.tabs{justify-content:flex-start}.tabs button{min-width:auto}.preview-bar{padding:8px}.preview-controls{grid-template-columns:1fr;max-width:100%;justify-content:stretch}.preview-transport-group{justify-self:center}.preview-camera-timeline{width:100%}.preview-volume-group{flex-wrap:nowrap}}
 @media(max-width:860px){body{overflow-x:hidden}.brand-logo{width:min(420px,90vw);height:70px}.card[open] .clip-row-timeline{grid-row:3}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:100%;margin:6px 0 0}.clip-control-surface .cuted-format-menu{left:auto;right:0;width:min(300px,calc(100vw - 48px))}.clip-control-surface .cuted-format-option{width:100%}}
-.clip-summary,.card[open] .clip-summary{grid-template-columns:1fr;align-items:stretch;gap:8px;min-height:0;padding:14px 18px 16px}.clip-control-surface{grid-column:1/-1;grid-row:1;display:block!important;width:100%;min-width:0;margin:0!important}.clip-control-surface:empty{display:none!important}.clip-control-surface .cuted-control-bar{width:100%;max-width:none;min-width:0;min-height:88px;margin:0;padding:7px 12px 7px 18px;border-radius:16px}.clip-control-surface .cuted-clip-info{flex:1 1 auto;min-width:0}.clip-control-surface .cuted-render-zone{flex:0 0 auto;min-height:64px;justify-content:flex-end;overflow:visible}.clip-control-surface .cuted-tool-group{flex:0 1 294px;min-height:64px}.clip-control-surface .cuted-tile-button{flex:0 0 58px;width:58px;height:54px;font-size:26px}.clip-control-surface .cuted-format-trigger{flex:0 0 104px;width:104px;height:54px}.clip-control-surface .cuted-audio-group{flex:0 0 52px;min-width:52px}.clip-control-surface .cuted-divider{height:42px;margin:0 6px}.clip-row-timeline,.clip-row-timeline.preview-camera-timeline{display:none!important}.card[open] .clip-row-timeline,.card[open] .clip-row-timeline.preview-camera-timeline{display:block!important;grid-column:1/-1;grid-row:2;margin-top:0}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:calc(100% + 36px);margin:6px -18px 0}@media(max-width:1120px){.clip-control-surface .cuted-control-bar{flex-wrap:wrap;gap:10px}.clip-control-surface .cuted-clip-info{flex-basis:100%}.clip-control-surface .cuted-render-zone{flex:1 1 auto}.card[open] .clip-row-timeline{grid-row:2}}@media(max-width:860px){.clip-control-surface .cuted-control-bar{min-height:80px;padding:10px}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:100%;margin:6px 0 0}}
+body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,#050505 100%);background-attachment:fixed}body::before{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(circle at 16% 8%,rgba(17,162,207,.22),transparent 30%),radial-gradient(circle at 88% 38%,rgba(175,207,42,.19),transparent 34%);content:"";opacity:.72;animation:cuted-edit-bg-breathe 22s ease-in-out infinite}header,main,.empty-project-stage,.settings-backdrop,.app-notice{position:relative;z-index:1}@keyframes cuted-edit-bg-breathe{0%,100%{opacity:.5}50%{opacity:.82}}header{padding:18px 26px 2px!important;background:transparent!important;border-bottom:0!important;box-shadow:none!important}.brand-lockup{gap:1px}.brand-logo{width:min(672px,62vw);height:101px;transform:translateY(4px)}.brand-lockup p{display:none!important}.tabs{border-bottom:0!important}main{padding-top:0}.card,.card[open]{border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible}.clip-summary,.card[open] .clip-summary{grid-template-columns:1fr;align-items:stretch;gap:0;min-height:0;padding:0;overflow:visible}.clip-control-surface{grid-column:1/-1;grid-row:1;display:block!important;width:100%;min-width:0;margin:0!important}.clip-control-surface:empty{display:none!important}.clip-control-surface .cuted-control-bar{width:100%;max-width:none;min-width:0;min-height:88px;margin:0;padding:7px 12px 7px 18px;border-radius:16px}.clip-control-surface .cuted-clip-info{flex:0 1 30%;max-width:30%;min-width:0;padding-right:10px}.clip-control-surface .cuted-clip-copy,.clip-control-surface .cuted-clip-copy strong,.clip-control-surface .cuted-clip-copy small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.clip-control-surface .cuted-render-zone{flex:1 1 auto;min-width:0;min-height:64px;justify-content:flex-end;overflow:visible}.clip-control-surface .cuted-tool-group{flex:0 1 294px;min-height:64px}.clip-control-surface .cuted-tile-button{flex:0 0 58px;width:58px;height:54px;font-size:26px}.clip-control-surface .cuted-format-trigger{flex:0 0 104px;width:104px;height:54px}.clip-control-surface .cuted-audio-group{flex:0 0 52px;min-width:52px}.clip-control-surface .cuted-divider{height:42px;margin:0 6px}.clip-row-timeline,.clip-row-timeline.preview-camera-timeline{display:none!important}.card[open] .clip-row-timeline,.card[open] .clip-row-timeline.preview-camera-timeline{display:block!important;grid-column:1/-1;grid-row:2;margin-top:0}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:100%;margin:-12px 0 0}.editor-shell{display:grid;grid-template-columns:1fr;padding:0 0 16px;margin-top:-18px}.editor-preview{gap:0}.preview-frame{gap:0}@media(max-width:1120px){.clip-control-surface .cuted-control-bar{flex-wrap:wrap;gap:10px}.clip-control-surface .cuted-clip-info{flex:0 1 100%;max-width:100%}.clip-control-surface .cuted-render-zone{flex:1 1 auto}.card[open] .clip-row-timeline{grid-row:2}}@media(max-width:860px){.clip-control-surface .cuted-control-bar{min-height:80px;padding:10px}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:100%;margin:-12px 0 0}}
+.brand-logo{transform:translateY(-6px)}.clip-control-surface .cuted-render-zone{justify-content:flex-end;padding-left:clamp(96px,12vw,190px);gap:14px}.clip-control-surface .cuted-ready-region{flex:0 0 116px;width:116px;min-height:54px;margin-left:14px}.clip-control-surface .cuted-tool-group{flex:0 0 294px}.clip-control-surface .cuted-tool-buttons{justify-content:flex-end}.clip-control-surface .cuted-format-trigger{flex:0 0 132px;width:132px;height:58px;gap:8px;padding:6px 10px}.clip-control-surface .cuted-format-copy small{display:block;font-size:10px;line-height:1.05}.clip-control-surface .cuted-format-copy strong{font-size:18px}.clip-control-surface .cuted-ratio-vertical{width:14px;height:30px}.clip-control-surface .cuted-ratio-feed{width:20px;height:26px}.clip-control-surface .cuted-ratio-wide{width:29px;height:16px}
+.clip-control-surface{position:relative;z-index:2600}.clip-control-surface .cuted-control-bar{position:relative;z-index:2600;overflow:visible}.clip-control-surface .cuted-effect-menu,.clip-control-surface .cuted-insert-menu,.clip-control-surface .cuted-format-menu,.clip-control-surface .cuted-volume-popover{z-index:3200}.card[open] .clip-row-timeline.preview-camera-timeline--live{position:relative;z-index:1}
+.header-actions{gap:10px;align-items:center}.header-actions .header-icon-button,#reset-ui.header-icon-button,#finalize-videos.header-icon-button,#open-settings.header-icon-button{position:relative;display:inline-grid;place-items:center;width:52px;height:52px;min-width:52px;padding:0!important;border:1px solid rgba(231,231,232,.18)!important;border-radius:16px;background:linear-gradient(180deg,rgba(255,255,255,.11),rgba(255,255,255,.025)),rgba(8,9,10,.52)!important;color:rgba(231,231,232,.8)!important;box-shadow:inset 0 1px rgba(255,255,255,.15),0 14px 34px rgba(0,0,0,.3);backdrop-filter:blur(18px) saturate(1.2);overflow:hidden}.header-actions .header-icon-button:before{position:absolute;inset:7px;border-radius:12px;background:radial-gradient(circle at 50% 22%,rgba(17,162,207,.16),transparent 62%);opacity:.64;content:"";transition:opacity .18s ease,transform .18s ease}.header-actions .header-icon-button svg{position:relative;z-index:1;width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}.header-actions .header-icon-button:hover,.header-actions .header-icon-button:focus-visible{border-color:rgba(17,162,207,.58)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(17,162,207,.22),0 16px 38px rgba(0,0,0,.34)}.header-actions .header-icon-button:hover:before,.header-actions .header-icon-button:focus-visible:before{opacity:1;transform:scale(1.08)}.header-actions .header-render-button,#finalize-videos.header-render-button{width:58px;height:58px;min-width:58px;border-color:rgba(175,207,42,.48)!important;color:var(--color-brand-green)!important;background:linear-gradient(180deg,rgba(175,207,42,.18),rgba(17,162,207,.065)),rgba(12,14,9,.7)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(175,207,42,.22),0 16px 38px rgba(0,0,0,.36)}.header-actions .header-render-button:before{background:radial-gradient(circle at 58% 25%,rgba(175,207,42,.28),transparent 60%),radial-gradient(circle at 32% 70%,rgba(17,162,207,.12),transparent 56%)}.header-actions .header-render-button svg{width:32px;height:32px;stroke-width:1.85}.header-actions .header-settings-button svg{width:26px;height:26px}.header-actions .header-new-project svg{width:29px;height:29px}
 """
 
 
@@ -10168,7 +10193,7 @@ function scheduleAiReadinessRefresh(card){
 }
 async function refreshAiReadinessForCard(card){
   const button = card.querySelector("[data-camera-ai]");
-  if (!button || card.dataset.aiApplying === "1") return;
+  if (card.dataset.aiApplying === "1") return;
   if (card.dataset.aiStatusLoading === "1") return;
   card.dataset.aiStatusLoading = "1";
   try {
@@ -10177,8 +10202,10 @@ async function refreshAiReadinessForCard(card){
     if (!response.ok || !payload.ok) throw new Error(payload.error || "status indisponivel");
     card.dataset.aiReady = payload.ready ? "1" : "0";
     card.dataset.aiCacheReady = payload.cache_ready ? "1" : "0";
-    button.disabled = !payload.ready;
-    button.textContent = payload.ready ? "IA" : "...";
+    if (button) {
+      button.disabled = !payload.ready;
+      button.textContent = payload.ready ? "IA" : "...";
+    }
     if (payload.cache_ready) setCameraAutoStatus(card, "IA pronta do cache");
     else if (payload.ready) setCameraAutoStatus(card, "IA pronta");
     else {
@@ -10187,12 +10214,15 @@ async function refreshAiReadinessForCard(card){
     }
   } catch (_error) {
     card.dataset.aiReady = "0";
-    button.disabled = true;
-    button.textContent = "...";
+    if (button) {
+      button.disabled = true;
+      button.textContent = "...";
+    }
     setCameraAutoStatus(card, "Mapeando video...");
     scheduleAiReadinessRefresh(card);
   } finally {
     delete card.dataset.aiStatusLoading;
+    updateControlSurfaceForCard(card);
   }
 }
 async function analyzeCameraForCard(card, mode = "auto-director"){
@@ -13561,6 +13591,7 @@ document.querySelectorAll(".card").forEach(card => {
   updatePlatformUi(card);
   updateCardTools(card);
   applyCameraMotionSpeed(card);
+  refreshAiReadinessForCard(card);
   const summary = card.querySelector(".clip-summary");
   if (summary) {
     const isSummaryTimelineTarget = target => target instanceof Element && !target.closest(".cuted-clip-info") && Boolean(target.closest("[data-cuted-control-surface], .cuted-control-bar, .cuted-menu, .cuted-volume-popover, [data-preview-camera-timeline], .timeline-shell, .timeline-canvas, .playhead-control, .trim-handle, .volume-popover, .preview-camera-popover"));
