@@ -8705,56 +8705,30 @@ def gear_icon_svg() -> str:
     )
 
 
+def clean_clip_title(value: str) -> str:
+    cleaned = re.sub(r"^[\s>»:\-]+", "", str(value or "")).strip()
+    return cleaned or str(value or "").strip() or "Corte sem titulo"
+
+
 def card_html(moment: Moment) -> str:
     video_tag = media_html(moment)
     duration = max(0.0, moment.end - moment.start)
     open_attr = " open" if moment.rank == 1 else ""
+    title = html.escape(clean_clip_title(moment.title))
     return f"""
     <details class="card" data-rank="{moment.rank}" data-start="{moment.start:.3f}" data-end="{moment.end:.3f}" data-duration="{duration:.3f}" data-preview-format="tiktok"{open_attr}>
       <summary class="clip-summary">
         <span class="clip-rank">#{moment.rank:02d}</span>
         <span class="clip-title">
-          <strong>{html.escape(moment.title)}</strong>
+          <strong>{title}</strong>
           <small data-card-summary>{moment.start:.1f}s - {moment.end:.1f}s ({duration:.1f}s)</small>
         </span>
+        <span class="clip-control-surface cuted-control-surface-slot" data-cuted-control-surface aria-label="Control surface do corte"></span>
         <span class="clip-row-timeline preview-camera-timeline" data-card-row-timeline data-preview-camera-timeline aria-label="Timeline do corte"></span>
-        <span class="clip-status">
-          <span data-platform-summary>Sem destino</span>
-          <span data-status-pill>Em edicao</span>
-        </span>
       </summary>
-      <div class="cuted-control-surface-slot" data-cuted-control-surface aria-label="Control surface do corte"></div>
       <div class="editor-shell">
         <div class="editor-preview">
           <div class="preview-frame">
-            <div class="preview-bar">
-              <div class="preview-topbar">
-                <div class="preview-transport-group" aria-label="Controles do preview">
-                  <div class="preview-volume-group" aria-label="Volume do preview">
-                    <button class="preview-icon preview-volume" data-preview-volume type="button" aria-label="Volume" title="Volume"></button>
-                    <div class="preview-volume-popover" data-preview-volume-popover hidden>
-                      <input class="preview-volume-slider" data-preview-volume-slider type="range" min="0" max="100" step="5" value="70" aria-label="Volume do preview">
-                    </div>
-                  </div>
-                  <button class="preview-ai-button" data-camera-ai type="button" aria-label="Rodar IA" title="Rodar direcao com IA">IA</button>
-                </div>
-                <div class="preview-format-menu" data-preview-format-menu>
-                  <button class="preview-format-trigger" data-preview-format-trigger type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Formato do preview">
-                    <span data-preview-format-current>Vertical 9:16</span>
-                  </button>
-                  <div class="preview-format-options" data-preview-format-options role="listbox" aria-label="Formato do preview" hidden>
-                    <button data-card-format-preview="tiktok" class="active" role="option" aria-selected="true">Vertical 9:16</button>
-                    <button data-card-format-preview="facebook" role="option" aria-selected="false">Vertical 4:5</button>
-                    <button data-card-format-preview="youtube" role="option" aria-selected="false">Horizontal 16:9</button>
-                  </div>
-                </div>
-                <label class="preview-motion-control" title="Velocidade da transicao da camera no preview">
-                  <span>Movimento</span>
-                  <input data-camera-motion-speed type="range" min="350" max="1400" step="50" value="700" aria-label="Velocidade da transicao da camera">
-                </label>
-              </div>
-              <div class="preview-ai-status" data-camera-auto-status aria-live="polite"></div>
-            </div>
             <div class="media camera-surface" data-overlay-surface>
               {video_tag}
               <video class="camera-fit-bg" data-camera-fit-bg playsinline muted preload="none" aria-hidden="true" tabindex="-1"></video>
@@ -8766,86 +8740,13 @@ def card_html(moment: Moment) -> str:
             </div>
             <div class="layer-strip" data-layer-strip></div>
             <div class="bumper-sequence" data-bumper-sequence></div>
+            <div class="edit-hidden-hooks" aria-hidden="true">
+              <input data-bumper-video="intro" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-m4v" hidden tabindex="-1">
+              <input data-bumper-video="outro" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-m4v" hidden tabindex="-1">
+            </div>
           </div>
         </div>
-        <div class="editor-tools">
-          <div class="tool-stack" aria-label="Ferramentas do corte">
-          <details class="tool-section" data-panel="cut" open>
-            <summary><span>Ajuste fino</span><small data-trim-summary>{moment.start:.1f}s - {moment.end:.1f}s ({duration:.1f}s)</small></summary>
-            <div class="timeline-editor">
-              <div class="timeline-head">
-                <span>Ajuste fino</span>
-              </div>
-              <div class="timeline-timebar">
-                <span>Agora <output data-output="current">{moment.start:.1f}s</output></span>
-                <span data-timeline-window>Janela selecionada</span>
-              </div>
-              <div class="timeline-scrub" aria-label="Timeline do video">
-                <div class="timeline-scrub-track">
-                  <div class="timeline-selected" data-timeline-selected></div>
-                  <div class="timeline-playhead" data-timeline-playhead></div>
-                </div>
-                <input aria-label="Navegar no video" data-trim-scrub type="range" min="0" max="{duration:.1f}" step="0.1" value="0">
-              </div>
-              <div class="timeline" aria-label="Ajuste visual de corte">
-                <div class="timeline-track">
-                  <div class="timeline-fill" data-trim-fill></div>
-                </div>
-                <input aria-label="Inicio do corte" data-trim="start" type="range" min="0" max="{duration:.1f}" step="0.1" value="0">
-                <input aria-label="Fim do corte" data-trim="end" type="range" min="0" max="{duration:.1f}" step="0.1" value="{duration:.1f}">
-              </div>
-              <div class="timeline-values">
-                <span>Inicio +<output data-output="start">0.0s</output></span>
-                <span>Fim -<output data-output="end">0.0s</output></span>
-              </div>
-            </div>
-            <div class="actions">
-              <button data-action="like">Gostei</button>
-              <button data-action="discard">Descartar</button>
-            </div>
-          </details>
-          <details class="tool-section" data-panel="effects">
-            <summary><span>Efeitos</span><small data-effect-current>Sem efeito</small></summary>
-            <div data-card-effect></div>
-          </details>
-          <details class="tool-section" data-panel="captions">
-            <summary><span>Legenda</span><small data-caption-current>Ativada</small></summary>
-            <div class="caption-settings" aria-label="Configuracao de legenda">
-              <label class="caption-toggle"><span>Legendas ativadas</span>
-                <input data-caption-enabled type="checkbox" checked>
-              </label>
-              <label>Linhas
-                <select data-caption-lines>
-                  <option value="2" selected>2 linhas</option>
-                  <option value="1">1 linha</option>
-                  <option value="3">3 linhas</option>
-                </select>
-              </label>
-              <label>Largura
-                <input data-caption-width type="number" min="18" max="42" value="28">
-              </label>
-            </div>
-          </details>
-          <details class="tool-section transcript-panel" data-panel="transcript">
-            <summary><span>Transcript</span><small>{moment.score} pts</small></summary>
-            <p class="peak">{html.escape(moment.peak_text)}</p>
-            <dl><dt>Score</dt><dd>{moment.score}</dd><dt>Inicio</dt><dd>{moment.start:.1f}s</dd><dt>Fim</dt><dd>{moment.end:.1f}s</dd></dl>
-            <div class="transcript-copy"><p>{html.escape(moment.transcript)}</p></div>
-          </details>
-          </div>
-          <footer class="export-dock" aria-label="Fila de exportacao do corte">
-            <div>
-              <strong>Export</strong>
-              <span data-platform-summary>Sem destino</span>
-            </div>
-            <div class="platform-tags" role="group" aria-label="Adicionar destino na fila final">
-              <button data-platform="tiktok">Vertical 9:16</button>
-              <button data-platform="facebook">Vertical 4:5</button>
-              <button data-platform="youtube">Horizontal 16:9</button>
-            </div>
-          </footer>
-          </div>
-        </div>
+      </div>
     </details>"""
 
 
@@ -8901,15 +8802,11 @@ def page_html(
       <p>{html.escape(source_label)}</p>
     </div>
     <div class="header-actions">
-      <button id="open-settings" class="icon-button" type="button" aria-label="Configuracoes OpenAI" title="Configuracoes OpenAI">{gear_icon_svg()}</button>
       <button id="reset-ui">Novo projeto</button>
+      <button id="finalize-videos" type="button">Renderizar</button>
+      <button id="open-settings" class="icon-button" type="button" aria-label="Configuracoes OpenAI" title="Configuracoes OpenAI">{gear_icon_svg()}</button>
     </div>
   </header>
-  <nav class="tabs" aria-label="Fluxo">
-    <button data-tab="import">1. Importar</button>
-    <button data-tab="edit" class="active">2. Editar</button>
-    <button data-tab="final">3. Renderizar</button>
-  </nav>
   <section class="import-stage" aria-label="Importar projeto">
     <form class="import-panel" data-import-form>
       <div class="stage-head">
@@ -8976,9 +8873,6 @@ def page_html(
       <div>
         <strong>Fila</strong>
         <p data-final-summary>Nada na fila.</p>
-      </div>
-      <div class="header-actions">
-        <button id="finalize-videos">Renderizar</button>
       </div>
     </div>
     <div class="render-status" data-render-status></div>
@@ -9591,8 +9485,10 @@ button[data-action=discard],.result-actions a.secondary,.result-actions button.s
 .settings-status,.settings-usage{border-color:var(--glass-border);background:rgba(231,231,232,.05)}.settings-backdrop{backdrop-filter:blur(14px)}
 .result-item{border-color:var(--glass-border);background:rgba(9,9,9,.82)}.result-item[open]{border-color:rgba(231,231,232,.25)}
 .result-body video{border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-panel)}
+.tabs{display:none!important}header{grid-template-columns:minmax(120px,1fr) auto minmax(240px,1fr);padding:14px 26px 16px}.brand-logo{width:min(560px,52vw);height:84px}.header-actions{align-items:center}.header-actions #finalize-videos{padding-inline:18px}.clip-summary{grid-template-columns:auto minmax(220px,1fr) minmax(560px,760px);align-items:center;gap:10px 14px;min-height:104px;padding:12px 18px;overflow:visible}.clip-rank{align-self:center;font-size:13px;letter-spacing:.08em}.clip-title strong{font-size:16px;letter-spacing:0}.clip-title small{font-size:12px}.clip-control-surface{grid-column:3;grid-row:1;display:flex!important;justify-content:flex-end;width:100%;min-width:0;margin:0!important}.clip-control-surface:empty{display:none!important}.clip-control-surface .cuted-control-bar{width:min(100%,760px);min-width:0;min-height:82px;padding:7px 12px;border-radius:16px}.clip-control-surface .cuted-render-zone{min-height:64px;justify-content:flex-end;overflow:visible}.clip-control-surface .cuted-tool-group{flex:0 1 294px;min-height:64px}.clip-control-surface .cuted-tile-button{flex:0 0 58px;width:58px;height:54px;font-size:26px}.clip-control-surface .cuted-insert-button span{font-size:18px}.clip-control-surface .cuted-format-trigger{flex:0 0 104px;width:104px;height:54px;gap:7px;padding:6px 8px}.clip-control-surface .cuted-format-copy small{display:none}.clip-control-surface .cuted-format-copy strong{font-size:18px}.clip-control-surface .cuted-ratio-vertical{width:14px;height:30px}.clip-control-surface .cuted-ratio-feed{width:20px;height:26px}.clip-control-surface .cuted-ratio-wide{width:29px;height:16px}.clip-control-surface .cuted-divider{height:42px;margin:0 6px}.clip-control-surface .cuted-audio-group{flex:0 0 52px;min-width:52px}.clip-control-surface .cuted-ready-region{flex:0 0 116px;width:116px;min-height:54px;margin-left:auto}.clip-control-surface .cuted-approve-button{width:52px;height:52px}.clip-control-surface .cuted-approve-button svg{width:31px;height:31px}.clip-control-surface .cuted-discard-button{width:40px;height:40px}.clip-row-timeline{grid-column:1/-1;grid-row:2;width:100%;min-width:0;height:34px;min-height:34px;margin-top:2px}.card[open] .clip-summary{grid-template-columns:auto minmax(220px,1fr) minmax(560px,760px);align-items:center;padding:14px 18px 16px}.card[open] .clip-row-timeline{grid-column:1/-1;grid-row:2}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:calc(100% + 36px);margin:6px -18px 0}.editor-shell{display:grid;grid-template-columns:1fr;padding:0 18px 22px}.editor-preview{justify-items:center}.preview-frame{width:100%;justify-items:center;max-width:100%}.card[data-preview-format=tiktok] .preview-frame,.card[data-preview-format=shorts] .preview-frame,.card[data-preview-format=instagram] .preview-frame{max-width:100%}.card[data-preview-format=facebook] .preview-frame,.card[data-preview-format=youtube] .preview-frame{max-width:100%}.media{width:min(100%,calc(72vh * 9 / 16));max-width:520px;max-height:72vh}.card[data-preview-format=facebook] .media{width:min(100%,calc(72vh * 4 / 5));max-width:560px}.card[data-preview-format=youtube] .media{width:min(100%,920px);max-width:920px}.edit-hidden-hooks{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.preview-bar,.editor-tools,.tool-stack,.tool-section,.export-dock,.clip-status{display:none!important}@media(max-width:1120px){.clip-summary,.card[open] .clip-summary{grid-template-columns:auto minmax(0,1fr);align-items:start}.clip-control-surface{grid-column:1/-1;grid-row:2;justify-content:center}.clip-row-timeline{grid-row:3}.clip-control-surface .cuted-control-bar{width:min(100%,760px)}}@media(max-width:860px){header{grid-template-columns:1fr;padding:12px}.brand-logo{width:min(420px,90vw);height:70px}.clip-summary,.card[open] .clip-summary{grid-template-columns:auto minmax(0,1fr);padding:12px}.clip-control-surface{grid-column:1/-1;grid-row:2}.clip-row-timeline{grid-column:1/-1;grid-row:3}.clip-control-surface .cuted-control-bar{width:100%;min-height:80px;padding:7px 9px}.editor-shell{padding:0 12px 16px}.media{max-height:none;width:100%;max-width:min(100%,520px)}}
 @supports not (backdrop-filter:blur(1px)){.preview-bar,.preview-controls,.tool-section,.export-dock,.overlay-menu,header,.tabs{background:#111}}
 @media(max-width:860px){.brand-logo{width:min(360px,86vw);height:58px}.tabs{justify-content:flex-start}.tabs button{min-width:auto}.preview-bar{padding:8px}.preview-controls{grid-template-columns:1fr;max-width:100%;justify-content:stretch}.preview-transport-group{justify-self:center}.preview-camera-timeline{width:100%}.preview-volume-group{flex-wrap:nowrap}}
+@media(max-width:860px){body{overflow-x:hidden}.brand-logo{width:min(420px,90vw);height:70px}.card[open] .clip-row-timeline{grid-row:3}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:100%;margin:6px 0 0}.clip-control-surface .cuted-format-menu{left:auto;right:0;width:min(300px,calc(100vw - 48px))}.clip-control-surface .cuted-format-option{width:100%}}
 """
 
 
@@ -10869,10 +10765,7 @@ function updateCardTools(card){
   updateControlSurfaceForCard(card);
 }
 function updateControlSurfaceForCard(card){
-  if (!card || !card.open) {
-    destroyControlSurfaceForCard(card);
-    return;
-  }
+  if (!card) return;
   const slot = card.querySelector("[data-cuted-control-surface]");
   if (!slot || typeof window.createCutedControlBar !== "function") return;
   const next = controlSurfaceStateForCard(card);
@@ -11089,9 +10982,10 @@ function updateEffectUi(card){
   card.style.setProperty("--effect-opacity", effectOpacity(effect));
   const summary = card.querySelector("[data-effect-current]");
   if (summary) summary.textContent = `${effectLabel(effect)} | ${bumperSummary(bumpers)}`;
+  renderBumperSequence(card, bumpers);
+  bindBumperInputs(card);
   const container = card.querySelector("[data-card-effect]");
   if (!container) return;
-  renderBumperSequence(card, bumpers);
   container.innerHTML = `<div class="effect-card-controls">
     <div class="effect-split">
       <section class="effect-subpanel">
@@ -11114,6 +11008,18 @@ function updateEffectUi(card){
     </div>
   </div>`;
   bindCardEffectControls(card);
+}
+function bindBumperInputs(card){
+  card.querySelectorAll("[data-bumper-video]").forEach(input => {
+    if (input.dataset.bumperBound === "1") return;
+    input.dataset.bumperBound = "1";
+    input.addEventListener("change", () => addBumperFromInput(card, input));
+  });
+  card.querySelectorAll("[data-bumper-remove]").forEach(button => {
+    if (button.dataset.bumperBound === "1") return;
+    button.dataset.bumperBound = "1";
+    button.addEventListener("click", () => removeBumperForRank(card.dataset.rank, button.dataset.bumperRemove));
+  });
 }
 function renderBumperSequence(card, bumpers){
   const target = card.querySelector("[data-bumper-sequence]");
@@ -11161,12 +11067,7 @@ function bindCardEffectControls(card){
     intensity.addEventListener("input", () => setEffectForRank(rank, { intensity: Number(intensity.value) }));
     intensity.addEventListener("change", () => setEffectForRank(rank, { intensity: Number(intensity.value) }));
   }
-  card.querySelectorAll("[data-bumper-video]").forEach(input => {
-    input.addEventListener("change", () => addBumperFromInput(card, input));
-  });
-  card.querySelectorAll("[data-bumper-remove]").forEach(button => {
-    button.addEventListener("click", () => removeBumperForRank(rank, button.dataset.bumperRemove));
-  });
+  bindBumperInputs(card);
 }
 function setBumperStatus(card, message = ""){
   card.dataset.bumperStatus = message;
@@ -11711,23 +11612,32 @@ function updateTrimUi(card){
   const startInput = card.querySelector("[data-trim=start]");
   const endInput = card.querySelector("[data-trim=end]");
   const scrubInput = card.querySelector("[data-trim-scrub]");
-  startInput.max = values.duration.toFixed(1);
-  endInput.max = values.duration.toFixed(1);
-  startInput.value = values.startPos;
-  endInput.value = values.endPos;
+  if (startInput) {
+    startInput.max = values.duration.toFixed(1);
+    startInput.value = values.startPos;
+  }
+  if (endInput) {
+    endInput.max = values.duration.toFixed(1);
+    endInput.value = values.endPos;
+  }
   if (scrubInput) scrubInput.max = values.duration.toFixed(1);
-  card.querySelector("[data-output=start]").textContent = fixed(values.trimStart);
-  card.querySelector("[data-output=end]").textContent = fixed(values.trimEnd);
+  const startOutput = card.querySelector("[data-output=start]");
+  const endOutput = card.querySelector("[data-output=end]");
+  if (startOutput) startOutput.textContent = fixed(values.trimStart);
+  if (endOutput) endOutput.textContent = fixed(values.trimEnd);
   const summary = `${fixed(values.adjustedStart)} - ${fixed(values.adjustedEnd)} (${fixed(values.adjustedEnd - values.adjustedStart)})`;
-  card.querySelector("[data-trim-summary]").textContent = summary;
+  const trimSummary = card.querySelector("[data-trim-summary]");
+  if (trimSummary) trimSummary.textContent = summary;
   const cardSummary = card.querySelector("[data-card-summary]");
   if (cardSummary) cardSummary.textContent = summary;
   const fill = card.querySelector("[data-trim-fill]");
   const duration = Math.max(values.duration, .1);
-  fill.style.left = `${(values.startPos / duration) * 100}%`;
-  fill.style.right = `${100 - ((values.endPos / duration) * 100)}%`;
+  if (fill) {
+    fill.style.left = `${(values.startPos / duration) * 100}%`;
+    fill.style.right = `${100 - ((values.endPos / duration) * 100)}%`;
+  }
   const selected = card.querySelector("[data-timeline-selected]");
-  if (selected) {
+  if (selected && fill) {
     selected.style.left = fill.style.left;
     selected.style.right = fill.style.right;
   }
@@ -12459,7 +12369,6 @@ function loadCardVideo(card){
 }
 function unloadCardVideo(card){
   destroyLivePreviewCameraTimeline(card);
-  destroyControlSurfaceForCard(card);
   const video = card.querySelector("video:not(.camera-fit-bg)[data-src]");
   if (!video || !video.getAttribute("src")) return;
   video.pause();
@@ -13628,7 +13537,7 @@ function escapeHtml(value){
 }
 function escapeAttr(value){ return escapeHtml(value); }
 syncProjectEmptyState();
-applyTab(localStorage.getItem("cutted-tab") || "edit");
+applyTab("edit");
 syncCaptionInputs();
 document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
   btn.addEventListener("click", () => { applyTab(btn.dataset.tab); renderCaptionQueue(); });
@@ -13649,13 +13558,13 @@ document.querySelectorAll(".card").forEach(card => {
   applyCameraMotionSpeed(card);
   const summary = card.querySelector(".clip-summary");
   if (summary) {
-    const isSummaryTimelineTarget = target => target instanceof Element && Boolean(target.closest("[data-preview-camera-timeline], .timeline-shell, .timeline-canvas, .playhead-control, .trim-handle, .volume-popover, .preview-camera-popover"));
+    const isSummaryTimelineTarget = target => target instanceof Element && Boolean(target.closest("[data-cuted-control-surface], .cuted-control-bar, .cuted-menu, .cuted-volume-popover, [data-preview-camera-timeline], .timeline-shell, .timeline-canvas, .playhead-control, .trim-handle, .volume-popover, .preview-camera-popover"));
     const stopSummaryTimelinePointer = event => {
-      if (!card.open || !isSummaryTimelineTarget(event.target)) return;
+      if (!isSummaryTimelineTarget(event.target)) return;
       event.stopPropagation();
     };
     const toggleCard = event => {
-      if (card.open && isSummaryTimelineTarget(event.target)) {
+      if (isSummaryTimelineTarget(event.target)) {
         event.preventDefault();
         event.stopPropagation();
         return;
@@ -13821,7 +13730,10 @@ document.querySelectorAll(".card").forEach(card => {
   if (card.open) activateCard(card);
 });
 document.getElementById("reset-ui").addEventListener("click", startNewProject);
-document.getElementById("finalize-videos").addEventListener("click", finalizeVideos);
+document.getElementById("finalize-videos").addEventListener("click", () => {
+  applyTab("final");
+  finalizeVideos();
+});
 document.querySelector("[data-render-results]")?.addEventListener("click", event => {
   const target = event.target instanceof Element ? event.target : null;
   const folderButton = target?.closest("[data-open-folder]");
