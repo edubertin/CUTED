@@ -111,7 +111,8 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("elements.statusAction.addEventListener(\"click\"", script)
         self.assertIn("event.stopPropagation();", script)
         self.assertIn("const transientStatus = state.status && !state.status.persistent ? state.status : null;", script)
-        self.assertIn('classList.toggle("is-status-transient", Boolean(transientStatus));', script)
+        self.assertIn("const statusIsTransient = !state.trimMode && Boolean(transientStatus);", script)
+        self.assertIn('classList.toggle("is-status-transient", statusIsTransient);', script)
         self.assertIn('.cuted-control-bar.is-status-transient[data-status-kind="ready"]', styles)
         self.assertIn("right: 108px;", styles)
         self.assertIn("state.renderQueued", script)
@@ -398,6 +399,9 @@ class CuttedImportUiTests(unittest.TestCase):
         script = (root / "tools" / "cutted" / "assets" / "control-bar" / "control-bar.js").read_text(
             encoding="utf-8"
         )
+        styles = (root / "tools" / "cutted" / "assets" / "control-bar" / "control-bar.css").read_text(
+            encoding="utf-8"
+        )
         source = (root / "tools" / "cutted" / "scripts" / "cutted.py").read_text(encoding="utf-8")
         timeline = (root / "prototypes" / "live-timeline" / "src" / "liveTimeline.ts").read_text(encoding="utf-8")
         timeline_styles = (root / "prototypes" / "live-timeline" / "src" / "timeline.css").read_text(
@@ -405,14 +409,28 @@ class CuttedImportUiTests(unittest.TestCase):
         )
 
         self.assertIn('data-cuted-control="trim"', script)
+        self.assertIn("trimApplied: false", script)
+        self.assertIn("onTrimConfirm", script)
+        self.assertIn("buildTrimStatus()", script)
+        self.assertIn("renderTrimStatus()", script)
+        self.assertIn("CONFIRMAR", script)
+        self.assertIn("is-trim-applied", script)
+        self.assertIn("restoreTrimStatus()", script)
+        self.assertIn("confirmTrimMode()", script)
         self.assertIn("onTrimToggle", script)
-        self.assertIn('label: state.trimMode ? "TRIM" : "Trim fechado"', script)
+        self.assertIn('label: "TRIM"', script)
+        self.assertIn("state.trimMode = true", script)
+        self.assertIn("state.trimMode = false", script)
         self.assertIn('trimMode: !busy && card.dataset.trimMode === "1"', source)
+        self.assertIn("trimApplied: trimRangeActive(trim)", source)
         self.assertIn("setControlSurfaceTrimMode(card, payload.trimMode)", source)
         self.assertIn('trimEnabled: card.dataset.trimMode === "1"', source)
         self.assertIn("trimEnabled?: boolean", timeline)
         self.assertIn("state.trimEnabled", timeline)
         self.assertIn('[data-trim-enabled="false"] .trim-handle', timeline_styles)
+        self.assertIn('[data-status-kind="trim"]', styles)
+        self.assertIn("cuted-trim-blade-top", styles)
+        self.assertIn(".cuted-trim-button.is-trim-applied", styles)
 
     def test_cards_include_control_surface_slot(self) -> None:
         html = CUTTED.card_html(

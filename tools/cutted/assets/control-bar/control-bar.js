@@ -16,6 +16,7 @@
     discarded: false,
     renderQueued: false,
     status: null,
+    trimApplied: false,
     trimMode: false,
     volume: 75
   };
@@ -134,6 +135,7 @@
       onStateChange: options.onStateChange || nested.onStateChange,
       onReadyCancel: options.onReadyCancel || nested.onReadyCancel,
       onSendRender: options.onSendRender || nested.onSendRender,
+      onTrimConfirm: options.onTrimConfirm || nested.onTrimConfirm,
       onTrimToggle: options.onTrimToggle || nested.onTrimToggle,
       onVolumeChange: options.onVolumeChange || nested.onVolumeChange
     };
@@ -170,6 +172,7 @@
       discarded: Boolean(state.discarded),
       renderQueued: Boolean(state.renderQueued),
       status: normalizeStatus(state.status),
+      trimApplied: Boolean(state.trimApplied),
       trimMode: Boolean(state.trimMode),
       volume: clamp(Number(state.volume), 0, 100)
     };
@@ -282,6 +285,23 @@
       state.trimMode = false;
       if (wasTrimMode) callbacks.onTrimToggle?.({ trimMode: false });
     };
+    const restoreTrimStatus = () => {
+      if (!state.trimMode) return false;
+      window.clearTimeout(statusClock.id);
+      state.status = buildTrimStatus();
+      sync();
+      return true;
+    };
+    const confirmTrimMode = () => {
+      if (!state.trimMode) return false;
+      window.clearTimeout(statusClock.id);
+      state.trimMode = false;
+      state.status = null;
+      callbacks.onTrimToggle?.({ trimMode: false });
+      sync();
+      callbacks.onTrimConfirm?.(snapshotState(state));
+      return true;
+    };
     const isLocked = () => state.ready || state.discarded || state.busy;
     const lockReady = () => {
       state.ready = true;
@@ -326,6 +346,7 @@
 
     elements.soundButton.addEventListener("click", () => {
       if (isLocked()) return;
+      if (restoreTrimStatus()) return;
       state.volumeMenuOpen = !state.volumeMenuOpen;
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
@@ -343,6 +364,7 @@
 
     elements.aiButton.addEventListener("click", () => {
       if (isLocked()) return;
+      if (restoreTrimStatus()) return;
       closeToolModes();
       state.volumeMenuOpen = false;
       callbacks.onAiClick?.({ ...state });
@@ -363,6 +385,7 @@
 
     elements.effectButton.addEventListener("click", () => {
       if (isLocked()) return;
+      if (restoreTrimStatus()) return;
       closeToolModes();
       state.effectMenuOpen = !state.effectMenuOpen;
       state.formatMenuOpen = false;
@@ -401,11 +424,13 @@
     });
     elements.approveButton.addEventListener("click", () => {
       if (isLocked()) return;
+      if (restoreTrimStatus()) return;
       lockReady();
       callbacks.onApproveClick?.(snapshotState(state));
     });
     elements.discardButton.addEventListener("click", () => {
       if (isLocked()) return;
+      if (restoreTrimStatus()) return;
       lockDiscarded();
       callbacks.onDiscardClick?.(snapshotState(state));
     });
@@ -422,6 +447,7 @@
     elements.statusAction.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
+      if (confirmTrimMode()) return;
       if (!state.ready || state.discarded || state.busy || state.renderQueued) return;
       state.renderQueued = true;
       state.ready = false;
@@ -433,7 +459,7 @@
 
     elements.statusAction.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
-      if (!state.ready || state.discarded || state.busy || state.renderQueued) return;
+      if (!state.trimMode && (!state.ready || state.discarded || state.busy || state.renderQueued)) return;
       event.preventDefault();
       event.stopPropagation();
       elements.statusAction.click();
@@ -441,6 +467,7 @@
 
     elements.formatButton.addEventListener("click", () => {
       if (isLocked()) return;
+      if (restoreTrimStatus()) return;
       state.formatMenuOpen = !state.formatMenuOpen;
       state.effectMenuOpen = false;
       state.insertMenuOpen = false;
@@ -463,6 +490,7 @@
 
     elements.insertButton.addEventListener("click", () => {
       if (isLocked()) return;
+      if (restoreTrimStatus()) return;
       closeToolModes();
       state.insertMenuOpen = !state.insertMenuOpen;
       state.effectMenuOpen = false;
@@ -480,19 +508,19 @@
 
     elements.trimButton.addEventListener("click", () => {
       if (isLocked()) return;
-      state.trimMode = !state.trimMode;
+      if (state.trimMode) {
+        restoreTrimStatus();
+        return;
+      }
+      state.trimMode = true;
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
       state.volumeMenuOpen = false;
       clearInsertAutoClose();
-      setStatus({
-        kind: "trim",
-        label: state.trimMode ? "TRIM" : "Trim fechado",
-        tone: state.trimMode ? "blue" : "neutral"
-      }, state.trimMode ? 1200 : 900);
+      setStatus(buildTrimStatus(), 0);
       sync();
-      callbacks.onTrimToggle?.({ trimMode: state.trimMode });
+      callbacks.onTrimToggle?.({ trimMode: true });
     });
 
     elements.bumperButtons.forEach((button) => {
@@ -555,10 +583,6 @@
     elements.aiButton.dataset.aiStatus = state.aiStatus;
     elements.aiButton.classList.toggle("is-loading", state.aiStatus === "loading");
     elements.aiButton.classList.toggle("is-active", state.aiStatus === "loading" || state.aiStatus === "active");
-    elements.trimButton.classList.toggle("is-active", state.trimMode);
-    elements.trimButton.setAttribute("aria-pressed", String(state.trimMode));
-    elements.captionButton.classList.toggle("is-active", state.captionsEnabled);
-    elements.effectButton.classList.toggle("is-active", true);
     if (locked) {
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
@@ -566,6 +590,11 @@
       state.volumeMenuOpen = false;
       state.trimMode = false;
     }
+    elements.trimButton.classList.toggle("is-active", state.trimMode || state.trimApplied);
+    elements.trimButton.classList.toggle("is-trim-applied", !state.trimMode && state.trimApplied);
+    elements.trimButton.setAttribute("aria-pressed", String(state.trimMode));
+    elements.captionButton.classList.toggle("is-active", state.captionsEnabled);
+    elements.effectButton.classList.toggle("is-active", true);
     elements.effectMenu.dataset.open = String(state.effectMenuOpen);
     syncInsert(elements, state);
     syncStatus(elements, state);
@@ -597,11 +626,12 @@
 
   function syncStatus(elements, state) {
     const transientStatus = state.status && !state.status.persistent ? state.status : null;
-    const status = state.discarded ? buildDiscardedStatus() : transientStatus || (state.ready ? buildReadyStatus() : state.status);
+    const status = state.trimMode ? buildTrimStatus() : state.discarded ? buildDiscardedStatus() : transientStatus || (state.ready ? buildReadyStatus() : state.status);
     const hasStatus = Boolean(status && status.label);
+    const statusIsTransient = !state.trimMode && Boolean(transientStatus);
     window.clearTimeout(elements.statusBar._cutedHideTimer);
     elements.controlBar.classList.toggle("has-status", hasStatus);
-    elements.controlBar.classList.toggle("is-status-transient", Boolean(transientStatus));
+    elements.controlBar.classList.toggle("is-status-transient", statusIsTransient);
     elements.controlBar.dataset.statusKind = hasStatus ? status.kind : "idle";
     elements.controlBar.dataset.statusTone = hasStatus ? status.tone : "neutral";
     elements.toolGroup.classList.toggle("is-ready", state.ready);
@@ -628,14 +658,17 @@
     }
     elements.statusBar.dataset.tone = hasStatus ? status.tone : "neutral";
     elements.statusBar.dataset.kind = hasStatus ? status.kind : "idle";
+    const canConfirmTrim = Boolean(state.trimMode && !state.discarded && !state.busy);
     const canSendRender = Boolean(state.ready && !state.discarded && !state.busy && !state.renderQueued);
     elements.statusBar.setAttribute("role", "status");
     elements.statusBar.removeAttribute("tabindex");
-    elements.statusAction.setAttribute("role", canSendRender ? "button" : "presentation");
-    elements.statusAction.setAttribute("aria-label", canSendRender ? "Enviar para render" : status?.label || "Status");
-    elements.statusAction.tabIndex = canSendRender ? 0 : -1;
+    elements.statusAction.setAttribute("role", canConfirmTrim || canSendRender ? "button" : "presentation");
+    elements.statusAction.setAttribute("aria-label", canConfirmTrim ? "Confirmar trim" : canSendRender ? "Enviar para render" : status?.label || "Status");
+    elements.statusAction.tabIndex = canConfirmTrim || canSendRender ? 0 : -1;
     if (hasStatus && (status.kind === "ready" || status.kind === "discarded")) {
       elements.statusLabel.innerHTML = renderReadyLetters(status.label);
+    } else if (hasStatus && status.kind === "trim") {
+      elements.statusLabel.innerHTML = renderTrimStatus();
     } else if (hasStatus) {
       elements.statusLabel.textContent = status.label;
     }
@@ -721,11 +754,12 @@
             <div class="cuted-tool-buttons">
               <button class="cuted-tile-button cuted-trim-button" type="button" aria-label="Trim" aria-pressed="false" data-cuted-control="trim">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="6" cy="7" r="2.4"></circle>
-                  <circle cx="6" cy="17" r="2.4"></circle>
-                  <path d="M8.2 8.7 19 4"></path>
-                  <path d="M8.2 15.3 19 20"></path>
-                  <path d="M9 12h5"></path>
+                  <circle class="cuted-trim-ring cuted-trim-ring-top" cx="6.1" cy="6.8" r="2.55"></circle>
+                  <circle class="cuted-trim-ring cuted-trim-ring-bottom" cx="6.1" cy="17.2" r="2.55"></circle>
+                  <path class="cuted-trim-hinge" d="M8.5 12h3.2"></path>
+                  <path class="cuted-trim-blade cuted-trim-blade-top" d="M8.3 8.5 19.3 4.2"></path>
+                  <path class="cuted-trim-blade cuted-trim-blade-bottom" d="M8.3 15.5 19.3 19.8"></path>
+                  <path class="cuted-trim-spark" d="M15.5 12h4.2"></path>
                 </svg>
               </button>
               <button class="cuted-tile-button cuted-ai-button" type="button" aria-label="IA" data-cuted-control="ai">
@@ -903,6 +937,15 @@
     };
   }
 
+  function buildTrimStatus() {
+    return {
+      kind: "trim",
+      label: "TRIM",
+      persistent: true,
+      tone: "blue"
+    };
+  }
+
   function reconcileReadyStatus(state) {
     if (state.discarded) {
       state.ready = false;
@@ -937,6 +980,10 @@
         return `<span data-cuted-status-letter style="--i:${index}">${content}</span>`;
       })
       .join("");
+  }
+
+  function renderTrimStatus() {
+    return '<span class="cuted-trim-status-main">TRIM</span><span class="cuted-trim-status-confirm">CONFIRMAR</span>';
   }
 
   function clamp(value, min, max) {
