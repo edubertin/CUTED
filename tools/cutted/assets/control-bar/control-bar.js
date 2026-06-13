@@ -10,6 +10,7 @@
     aspectRatio: "9:16",
     bumpers: { intro: null, outro: null },
     busy: false,
+    clipInfo: { rank: "", title: "", summary: "" },
     muted: false,
     ready: false,
     discarded: false,
@@ -159,6 +160,7 @@
       volumeMenuOpen: Boolean(state.volumeMenuOpen),
       aspectRatio: FORMAT_OPTIONS.some((option) => option.value === state.aspectRatio) ? state.aspectRatio : "9:16",
       bumpers: normalizeBumpers(state.bumpers),
+      clipInfo: normalizeClipInfo(state.clipInfo),
       muted: Boolean(state.muted),
       ready: Boolean(state.ready),
       discarded: Boolean(state.discarded),
@@ -180,11 +182,24 @@
     };
   }
 
+  function normalizeClipInfo(value) {
+    const input = value && typeof value === "object" ? value : {};
+    return {
+      rank: String(input.rank || "").trim(),
+      title: String(input.title || "").trim(),
+      summary: String(input.summary || "").trim()
+    };
+  }
+
   function readElements(container) {
     return {
       aiButton: container.querySelector("[data-cuted-control='ai']"),
       approveButton: container.querySelector("[data-cuted-control='approve']"),
       captionButton: container.querySelector("[data-cuted-control='caption']"),
+      clipInfo: container.querySelector("[data-cuted-clip-info]"),
+      clipRank: container.querySelector("[data-cuted-clip-rank]"),
+      clipSummary: container.querySelector("[data-cuted-clip-summary]"),
+      clipTitle: container.querySelector("[data-cuted-clip-title]"),
       discardButton: container.querySelector("[data-cuted-control='discard']"),
       effectButton: container.querySelector("[data-cuted-control='effect']"),
       effectMenu: container.querySelector("[data-cuted-effect-menu]"),
@@ -477,6 +492,7 @@
     elements.sonicRail.style.setProperty("--volume-num", String(state.volume / 100));
     elements.volumeSlider.value = String(state.volume);
     elements.volumeValue.textContent = `${state.volume}%`;
+    syncClipInfo(elements, state);
     elements.aiButton.dataset.aiStatus = state.aiStatus;
     elements.aiButton.classList.toggle("is-loading", state.aiStatus === "loading");
     elements.aiButton.classList.toggle("is-active", state.aiStatus === "loading" || state.aiStatus === "active");
@@ -507,6 +523,14 @@
     elements.formatOptions.forEach((button) => {
       button.classList.toggle("is-active", button.dataset.cutedFormat === state.aspectRatio);
     });
+  }
+
+  function syncClipInfo(elements, state) {
+    const hasInfo = Boolean(state.clipInfo.rank || state.clipInfo.title || state.clipInfo.summary);
+    elements.clipInfo.hidden = !hasInfo;
+    elements.clipRank.textContent = state.clipInfo.rank;
+    elements.clipTitle.textContent = state.clipInfo.title;
+    elements.clipSummary.textContent = state.clipInfo.summary;
   }
 
   function syncStatus(elements, state) {
@@ -576,6 +600,14 @@
         <div class="cuted-bar-status-layer" data-kind="idle" data-tone="neutral" data-cuted-bar-status hidden>
           <span data-cuted-status-label></span>
           <i data-cuted-status-meter></i>
+        </div>
+
+        <div class="cuted-clip-info" data-cuted-clip-info hidden>
+          <span class="cuted-clip-rank" data-cuted-clip-rank></span>
+          <span class="cuted-clip-copy">
+            <strong data-cuted-clip-title></strong>
+            <small data-cuted-clip-summary></small>
+          </span>
         </div>
 
         <div class="cuted-control-group cuted-audio-group">
@@ -815,6 +847,7 @@
         intro: state.bumpers.intro ? { ...state.bumpers.intro } : null,
         outro: state.bumpers.outro ? { ...state.bumpers.outro } : null
       },
+      clipInfo: { ...state.clipInfo },
       status: state.discarded ? buildDiscardedStatus() : state.ready ? buildReadyStatus() : state.status ? { ...state.status } : null
     };
   }
