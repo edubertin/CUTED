@@ -403,11 +403,13 @@
       callbacks.onReadyCancel?.(snapshotState(state));
     });
 
-    elements.statusAction.addEventListener("click", () => {
+    elements.statusAction.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
       if (!state.ready || state.discarded || state.busy || state.renderQueued) return;
       state.renderQueued = true;
       state.ready = false;
-      setStatus({ kind: "ready", label: "SENT", tone: "green" }, 1400);
+      setStatus({ kind: "render", label: "Enviado ao render", tone: "green" }, 1400);
       sync();
       callbacks.onSendRender?.(snapshotState(state));
     });
@@ -416,6 +418,7 @@
       if (event.key !== "Enter" && event.key !== " ") return;
       if (!state.ready || state.discarded || state.busy || state.renderQueued) return;
       event.preventDefault();
+      event.stopPropagation();
       elements.statusAction.click();
     });
 
@@ -555,7 +558,8 @@
   }
 
   function syncStatus(elements, state) {
-    const status = state.discarded ? buildDiscardedStatus() : state.ready ? buildReadyStatus() : state.status;
+    const transientStatus = state.status && !state.status.persistent ? state.status : null;
+    const status = state.discarded ? buildDiscardedStatus() : transientStatus || (state.ready ? buildReadyStatus() : state.status);
     const hasStatus = Boolean(status && status.label);
     window.clearTimeout(elements.statusBar._cutedHideTimer);
     elements.controlBar.classList.toggle("has-status", hasStatus);
