@@ -261,6 +261,15 @@ body.cuted-control-demo #cuted-control-bar-demo {
   left: clamp(390px, 42%, 560px);
 }
 
+.cuted-control-bar.is-status-transient[data-status-kind="ready"] .cuted-bar-status-layer > span {
+  top: 50%;
+  right: 108px;
+  left: auto;
+  width: max-content;
+  max-width: min(520px, calc(100% - 520px));
+  transform: translateY(-50%);
+}
+
 .cuted-bar-status-layer[data-kind="ready"] > span {
   font-size: 30px;
 }

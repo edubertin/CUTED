@@ -87,6 +87,9 @@ class CuttedImportUiTests(unittest.TestCase):
         script = (Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar" / "control-bar.js").read_text(
             encoding="utf-8"
         )
+        styles = (Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar" / "control-bar.css").read_text(
+            encoding="utf-8"
+        )
 
         self.assertIn("data-render-queue-modal", html)
         self.assertIn('data-render-profile="eco"', html)
@@ -100,13 +103,17 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("/api/render-jobs/${encodeURIComponent(jobId)}/remove", html)
         self.assertIn("SEND TO RENDER", script)
         self.assertIn("Enviado ao render", script)
-        self.assertIn("Ja estava na fila", html)
+        self.assertIn("Ja esta renderizando", html)
+        self.assertIn("}, 2600);", html)
         self.assertIn("if (payload.duplicate)", html)
-        self.assertIn("updateControlSurfaceForCard(card);", html)
+        self.assertIn("cancelControlSurfaceReady(card);", html)
         self.assertIn("update?.({ renderQueued: false });", html)
         self.assertIn("elements.statusAction.addEventListener(\"click\"", script)
         self.assertIn("event.stopPropagation();", script)
         self.assertIn("const transientStatus = state.status && !state.status.persistent ? state.status : null;", script)
+        self.assertIn('classList.toggle("is-status-transient", Boolean(transientStatus));', script)
+        self.assertIn('.cuted-control-bar.is-status-transient[data-status-kind="ready"]', styles)
+        self.assertIn("right: 108px;", styles)
         self.assertIn("state.renderQueued", script)
         self.assertIn("data-cuted-status-action", script)
         self.assertNotIn('data-cuted-control="send-render"', script)
