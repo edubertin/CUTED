@@ -11326,6 +11326,7 @@ function controlSurfaceStateForCard(card){
   const video = primaryCameraVideo(card);
   const platforms = uniquePlatforms(current.platforms);
   const busy = controlSurfaceBusy(card);
+  const trim = trimValues(card);
   return {
     aiStatus: busy ? "loading" : controlSurfaceAiStatus(card),
     aspectRatio: controlSurfaceAspectRatio(platform),
@@ -11338,6 +11339,7 @@ function controlSurfaceStateForCard(card){
     ready: current.status === "liked" && platforms.includes(platform),
     discarded: current.status === "discarded",
     status: controlSurfaceStatus(card),
+    trimApplied: trimRangeActive(trim),
     trimMode: !busy && card.dataset.trimMode === "1",
     volume: video ? Math.round((video.muted ? 0 : video.volume) * 100) : Math.round(defaultPreviewVolume * 100)
   };
