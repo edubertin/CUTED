@@ -168,11 +168,6 @@ body.cuted-control-demo #cuted-control-bar-demo {
   animation: cuted-bar-status-in 320ms cubic-bezier(0.2, 0.95, 0.18, 1);
 }
 
-.cuted-control-bar[data-status-kind="ready"] .cuted-bar-status-layer {
-  cursor: pointer;
-  pointer-events: auto;
-}
-
 .cuted-bar-status-layer[hidden] {
   display: none;
 }
@@ -246,6 +241,19 @@ body.cuted-control-demo #cuted-control-bar-demo {
   text-transform: uppercase;
   transform: translateY(-50%);
   white-space: nowrap;
+}
+
+.cuted-control-bar[data-status-kind="ready"] .cuted-bar-status-layer > span {
+  left: auto;
+  display: inline-flex;
+  width: max-content;
+  max-width: min(420px, calc(100% - 520px));
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  pointer-events: auto;
 }
 
 .cuted-control-bar.is-status-transient .cuted-bar-status-layer > span {
@@ -528,8 +536,8 @@ body.cuted-control-demo #cuted-control-bar-demo {
     box-shadow 280ms ease;
 }
 
-.cuted-control-bar[data-status-kind="ready"] .cuted-bar-status-layer:hover > span,
-.cuted-control-bar[data-status-kind="ready"] .cuted-bar-status-layer:focus-visible > span {
+.cuted-control-bar[data-status-kind="ready"] .cuted-bar-status-layer > span:hover,
+.cuted-control-bar[data-status-kind="ready"] .cuted-bar-status-layer > span:focus-visible {
   text-shadow:
     0 0 18px currentColor,
     0 0 42px color-mix(in srgb, currentColor 54%, transparent),
@@ -537,8 +545,8 @@ body.cuted-control-demo #cuted-control-bar-demo {
   transform: translateY(-50%) scale(1.025);
 }
 
-.cuted-control-bar[data-status-kind="ready"] .cuted-bar-status-layer:hover::before,
-.cuted-control-bar[data-status-kind="ready"] .cuted-bar-status-layer:focus-visible::before {
+.cuted-control-bar[data-status-kind="ready"]:has(.cuted-bar-status-layer > span:hover) .cuted-bar-status-layer::before,
+.cuted-control-bar[data-status-kind="ready"]:has(.cuted-bar-status-layer > span:focus-visible) .cuted-bar-status-layer::before {
   opacity: 0.34;
   animation-duration: 1.25s;
 }

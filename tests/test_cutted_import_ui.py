@@ -95,9 +95,15 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("/api/render-jobs", html)
         self.assertIn("openRenderQueuePanel", html)
         self.assertIn("sendCardToRenderQueue", html)
+        self.assertIn("data-render-cancel", html)
+        self.assertIn("data-render-remove", html)
+        self.assertIn("/api/render-jobs/${encodeURIComponent(jobId)}/remove", html)
         self.assertIn("SEND TO RENDER", script)
-        self.assertIn("elements.statusBar.addEventListener(\"click\"", script)
+        self.assertIn("elements.statusAction.addEventListener(\"click\"", script)
+        self.assertIn("state.renderQueued", script)
+        self.assertIn("data-cuted-status-action", script)
         self.assertNotIn('data-cuted-control="send-render"', script)
+        self.assertNotIn("openRenderQueuePanel();\n    await loadRenderQueue();", html)
 
     def test_render_resource_profiles_apply_threads_and_priority(self) -> None:
         rows = [{"rank": 1}, {"rank": 2}]
@@ -111,6 +117,16 @@ class CuttedImportUiTests(unittest.TestCase):
         CUTTED.apply_render_resource_to_rows(rows, "high")
         self.assertGreaterEqual(rows[0]["_render_threads"], 1)
         self.assertEqual(rows[0]["_render_priority"], "below_normal")
+
+    def test_render_jobs_support_cancel_remove_and_process_cancel(self) -> None:
+        source = MODULE_PATH.read_text(encoding="utf-8")
+
+        self.assertIn('"/api/render-jobs/[^/]+/remove"', source)
+        self.assertIn("def remove_render_job(job_id: str, gallery_dir: Path)", source)
+        self.assertIn("def render_job_cancelled(job_id: object)", source)
+        self.assertIn("process = subprocess.Popen(", source)
+        self.assertIn("process.terminate()", source)
+        self.assertIn('raise RuntimeError("Render cancelado.")', source)
 
     def test_partial_captioned_files_are_recovered_before_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
