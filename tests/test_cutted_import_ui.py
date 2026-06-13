@@ -373,6 +373,33 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn(".header-actions .header-render-button,#finalize-videos.header-render-button{width:58px;height:58px", source)
         self.assertIn("border-color:rgba(175,207,42,.48)!important", source)
         self.assertIn(".header-actions .header-icon-button svg{position:relative;z-index:1;width:28px;height:28px", source)
+        self.assertIn("#open-settings.header-settings-button.is-openai-ready", source)
+        self.assertIn("animation:cuted-openai-gear-spin 5.8s linear infinite", source)
+        self.assertIn("@keyframes cuted-openai-gear-spin{to{transform:rotate(360deg)}}", source)
+        self.assertIn("function updateOpenaiSettingsIndicator(settings)", source)
+        self.assertIn('button.classList.toggle("is-openai-ready", ready)', source)
+        self.assertIn('const ready = Boolean(settings?.key_configured) && provider !== "local";', source)
+        self.assertIn('updateOpenaiSettingsIndicator({ ...settingsPayloadFromForm(form), key_configured: true });', source)
+
+    def test_openai_settings_uses_centered_animated_dialog(self) -> None:
+        source = MODULE_PATH.read_text(encoding="utf-8")
+        html = CUTTED.page_html("Projeto", "", "{}", "assets/brand/cuted-logo-transparent.png")
+
+        self.assertIn("data-settings-panel", html)
+        self.assertIn('aria-describedby="settings-description"', html)
+        self.assertIn('class="settings-aura"', html)
+        self.assertIn('class="settings-title-row"', html)
+        self.assertIn('class="settings-close-button"', html)
+        self.assertIn(".settings-backdrop{position:fixed!important;inset:0!important;z-index:5000!important", source)
+        self.assertIn(".settings-backdrop.is-open{opacity:1;pointer-events:auto}", source)
+        self.assertIn(".settings-backdrop.is-closing{opacity:0;pointer-events:none}", source)
+        self.assertIn(".settings-backdrop.is-open .settings-panel{transform:translateY(0) scale(1);opacity:1}", source)
+        self.assertIn("@keyframes settings-aura-drift{to{transform:rotate(360deg)}}", source)
+        self.assertIn("let settingsLastFocus = null;", source)
+        self.assertIn('requestAnimationFrame(() => modal.classList.add("is-open"))', source)
+        self.assertIn('modal.querySelector("[data-settings-panel]")?.focus();', source)
+        self.assertIn("function trapSettingsFocus(event)", source)
+        self.assertIn("settingsLastFocus?.focus?.();", source)
 
     def test_live_timeline_stops_at_trim_end_instead_of_looping(self) -> None:
         source = (Path(__file__).resolve().parents[1] / "prototypes" / "live-timeline" / "src" / "liveTimeline.ts").read_text(

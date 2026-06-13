@@ -8555,33 +8555,37 @@ def project_home_import_loading_html(logo_src: str) -> str:
 def settings_modal_html() -> str:
     return f"""
   <div class="settings-backdrop" data-settings-modal hidden>
-    <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <section class="settings-panel" data-settings-panel role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-describedby="settings-description" tabindex="-1">
+      <div class="settings-aura" aria-hidden="true"></div>
       <div class="settings-head">
-        <div>
-          <strong id="settings-title">Configuracoes</strong>
-          <p>OpenAI local, sem salvar token no navegador.</p>
+        <div class="settings-title-row">
+          <span class="settings-orb" aria-hidden="true">{gear_icon_svg()}</span>
+          <div>
+            <strong id="settings-title">OpenAI</strong>
+            <p id="settings-description">Chave, modelos e teste de conexao do CUTED.</p>
+          </div>
         </div>
-        <button type="button" data-settings-close>Fechar</button>
+        <button class="settings-close-button" type="button" data-settings-close aria-label="Fechar configuracoes">X</button>
       </div>
       <form data-settings-form class="settings-form">
         <div class="settings-status" data-settings-status>Carregando...</div>
-        <label>Token OpenAI
+        <label class="settings-field settings-token-field">Token OpenAI
           <input name="api_key" type="password" autocomplete="off" placeholder="Cole aqui apenas se quiser trocar o token">
         </label>
         <div class="settings-grid">
-          <label>Provedor IA
+          <label class="settings-field">Provedor IA
             <select name="ai_provider">
               <option value="openai">OpenAI</option>
               <option value="auto">Auto</option>
               <option value="local">Local</option>
             </select>
           </label>
-          <label>Modelo de analise
+          <label class="settings-field">Modelo de analise
             <select name="openai_model">
               {openai_model_options()}
             </select>
           </label>
-          <label>Transcricao
+          <label class="settings-field">Transcricao
             <select name="transcribe_model">
               {transcribe_model_options()}
             </select>
@@ -8905,33 +8909,37 @@ def page_html(
     </div>
   </section>
   <div class="settings-backdrop" data-settings-modal hidden>
-    <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <section class="settings-panel" data-settings-panel role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-describedby="settings-description" tabindex="-1">
+      <div class="settings-aura" aria-hidden="true"></div>
       <div class="settings-head">
-        <div>
-          <strong id="settings-title">Configuracoes</strong>
-          <p>OpenAI local, sem salvar token no navegador.</p>
+        <div class="settings-title-row">
+          <span class="settings-orb" aria-hidden="true">{gear_icon_svg()}</span>
+          <div>
+            <strong id="settings-title">OpenAI</strong>
+            <p id="settings-description">Chave, modelos e teste de conexao do CUTED.</p>
+          </div>
         </div>
-        <button type="button" data-settings-close>Fechar</button>
+        <button class="settings-close-button" type="button" data-settings-close aria-label="Fechar configuracoes">X</button>
       </div>
       <form data-settings-form class="settings-form">
         <div class="settings-status" data-settings-status>Carregando...</div>
-        <label>Token OpenAI
+        <label class="settings-field settings-token-field">Token OpenAI
           <input name="api_key" type="password" autocomplete="off" placeholder="Cole aqui apenas se quiser trocar o token">
         </label>
         <div class="settings-grid">
-          <label>Provedor IA
+          <label class="settings-field">Provedor IA
             <select name="ai_provider">
               <option value="openai">OpenAI</option>
               <option value="auto">Auto</option>
               <option value="local">Local</option>
             </select>
           </label>
-          <label>Modelo de analise
+          <label class="settings-field">Modelo de analise
             <select name="openai_model">
               {openai_model_options()}
             </select>
           </label>
-          <label>Transcricao
+          <label class="settings-field">Transcricao
             <select name="transcribe_model">
               {transcribe_model_options()}
             </select>
@@ -9209,6 +9217,7 @@ async function selectPath(url, selector, message){
     setStatus(error.message || "Seletor local indisponivel.");
   }
 }
+let settingsLastFocus = null;
 function setupHomeSettingsPanel(){
   const modal = document.querySelector("[data-settings-modal]");
   const form = document.querySelector("[data-settings-form]");
@@ -9220,7 +9229,9 @@ function setupHomeSettingsPanel(){
   close?.addEventListener("click", () => closeSettingsPanel());
   modal.addEventListener("click", event => { if (event.target === modal) closeSettingsPanel(); });
   document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && !modal.hidden) closeSettingsPanel();
+    if (modal.hidden) return;
+    if (event.key === "Escape") closeSettingsPanel();
+    if (event.key === "Tab") trapSettingsFocus(event);
   });
   form.addEventListener("submit", event => {
     event.preventDefault();
@@ -9232,13 +9243,43 @@ function setupHomeSettingsPanel(){
 function openSettingsPanel(){
   const modal = document.querySelector("[data-settings-modal]");
   if (!modal) return;
+  settingsLastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   modal.hidden = false;
+  modal.classList.remove("is-closing");
+  requestAnimationFrame(() => modal.classList.add("is-open"));
   loadOpenaiSettings();
-  modal.querySelector("[name=api_key]")?.focus();
+  modal.querySelector("[data-settings-panel]")?.focus();
 }
 function closeSettingsPanel(){
   const modal = document.querySelector("[data-settings-modal]");
-  if (modal) modal.hidden = true;
+  if (!modal || modal.hidden) return;
+  modal.classList.remove("is-open");
+  modal.classList.add("is-closing");
+  window.setTimeout(() => {
+    modal.hidden = true;
+    modal.classList.remove("is-closing");
+    settingsLastFocus?.focus?.();
+    settingsLastFocus = null;
+  }, 190);
+}
+function settingsFocusableElements(modal){
+  return Array.from(modal.querySelectorAll("button,input,select,textarea,a[href],[tabindex]:not([tabindex='-1'])"))
+    .filter(element => !element.disabled && !element.hidden && element.offsetParent !== null);
+}
+function trapSettingsFocus(event){
+  const modal = document.querySelector("[data-settings-modal]");
+  if (!modal || modal.hidden) return;
+  const focusable = settingsFocusableElements(modal);
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 async function loadOpenaiSettings(){
   const form = document.querySelector("[data-settings-form]");
@@ -9511,7 +9552,8 @@ button[data-action=discard],.result-actions a.secondary,.result-actions button.s
 body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,#050505 100%);background-attachment:fixed}body::before{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(circle at 16% 8%,rgba(17,162,207,.22),transparent 30%),radial-gradient(circle at 88% 38%,rgba(175,207,42,.19),transparent 34%);content:"";opacity:.72;animation:cuted-edit-bg-breathe 22s ease-in-out infinite}header,main,.empty-project-stage,.settings-backdrop,.app-notice{position:relative;z-index:1}@keyframes cuted-edit-bg-breathe{0%,100%{opacity:.5}50%{opacity:.82}}header{padding:18px 26px 2px!important;background:transparent!important;border-bottom:0!important;box-shadow:none!important}.brand-lockup{gap:1px}.brand-logo{width:min(672px,62vw);height:101px;transform:translateY(4px)}.brand-lockup p{display:none!important}.tabs{border-bottom:0!important}main{padding-top:0}.card,.card[open]{border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible}.clip-summary,.card[open] .clip-summary{grid-template-columns:1fr;align-items:stretch;gap:0;min-height:0;padding:0;overflow:visible}.clip-control-surface{grid-column:1/-1;grid-row:1;display:block!important;width:100%;min-width:0;margin:0!important}.clip-control-surface:empty{display:none!important}.clip-control-surface .cuted-control-bar{width:100%;max-width:none;min-width:0;min-height:88px;margin:0;padding:7px 12px 7px 18px;border-radius:16px}.clip-control-surface .cuted-clip-info{flex:0 1 30%;max-width:30%;min-width:0;padding-right:10px}.clip-control-surface .cuted-clip-copy,.clip-control-surface .cuted-clip-copy strong,.clip-control-surface .cuted-clip-copy small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.clip-control-surface .cuted-render-zone{flex:1 1 auto;min-width:0;min-height:64px;justify-content:flex-end;overflow:visible}.clip-control-surface .cuted-tool-group{flex:0 1 294px;min-height:64px}.clip-control-surface .cuted-tile-button{flex:0 0 58px;width:58px;height:54px;font-size:26px}.clip-control-surface .cuted-format-trigger{flex:0 0 104px;width:104px;height:54px}.clip-control-surface .cuted-audio-group{flex:0 0 52px;min-width:52px}.clip-control-surface .cuted-divider{height:42px;margin:0 6px}.clip-row-timeline,.clip-row-timeline.preview-camera-timeline{display:none!important}.card[open] .clip-row-timeline,.card[open] .clip-row-timeline.preview-camera-timeline{display:block!important;grid-column:1/-1;grid-row:2;margin-top:0}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:100%;margin:-12px 0 0}.editor-shell{display:grid;grid-template-columns:1fr;padding:0 0 16px;margin-top:-18px}.editor-preview{gap:0}.preview-frame{gap:0}@media(max-width:1120px){.clip-control-surface .cuted-control-bar{flex-wrap:wrap;gap:10px}.clip-control-surface .cuted-clip-info{flex:0 1 100%;max-width:100%}.clip-control-surface .cuted-render-zone{flex:1 1 auto}.card[open] .clip-row-timeline{grid-row:2}}@media(max-width:860px){.clip-control-surface .cuted-control-bar{min-height:80px;padding:10px}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:100%;margin:-12px 0 0}}
 .brand-logo{transform:translateY(-6px)}.clip-control-surface .cuted-render-zone{justify-content:flex-end;padding-left:clamp(96px,12vw,190px);gap:14px}.clip-control-surface .cuted-ready-region{flex:0 0 116px;width:116px;min-height:54px;margin-left:14px}.clip-control-surface .cuted-tool-group{flex:0 0 294px}.clip-control-surface .cuted-tool-buttons{justify-content:flex-end}.clip-control-surface .cuted-format-trigger{flex:0 0 132px;width:132px;height:58px;gap:8px;padding:6px 10px}.clip-control-surface .cuted-format-copy small{display:block;font-size:10px;line-height:1.05}.clip-control-surface .cuted-format-copy strong{font-size:18px}.clip-control-surface .cuted-ratio-vertical{width:14px;height:30px}.clip-control-surface .cuted-ratio-feed{width:20px;height:26px}.clip-control-surface .cuted-ratio-wide{width:29px;height:16px}
 .clip-control-surface{position:relative;z-index:2600}.clip-control-surface .cuted-control-bar{position:relative;z-index:2600;overflow:visible}.clip-control-surface .cuted-effect-menu,.clip-control-surface .cuted-insert-menu,.clip-control-surface .cuted-format-menu,.clip-control-surface .cuted-volume-popover{z-index:3200}.card[open] .clip-row-timeline.preview-camera-timeline--live{position:relative;z-index:1}
-.header-actions{gap:10px;align-items:center}.header-actions .header-icon-button,#reset-ui.header-icon-button,#finalize-videos.header-icon-button,#open-settings.header-icon-button{position:relative;display:inline-grid;place-items:center;width:52px;height:52px;min-width:52px;padding:0!important;border:1px solid rgba(231,231,232,.18)!important;border-radius:16px;background:linear-gradient(180deg,rgba(255,255,255,.11),rgba(255,255,255,.025)),rgba(8,9,10,.52)!important;color:rgba(231,231,232,.8)!important;box-shadow:inset 0 1px rgba(255,255,255,.15),0 14px 34px rgba(0,0,0,.3);backdrop-filter:blur(18px) saturate(1.2);overflow:hidden}.header-actions .header-icon-button:before{position:absolute;inset:7px;border-radius:12px;background:radial-gradient(circle at 50% 22%,rgba(17,162,207,.16),transparent 62%);opacity:.64;content:"";transition:opacity .18s ease,transform .18s ease}.header-actions .header-icon-button svg{position:relative;z-index:1;width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}.header-actions .header-icon-button:hover,.header-actions .header-icon-button:focus-visible{border-color:rgba(17,162,207,.58)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(17,162,207,.22),0 16px 38px rgba(0,0,0,.34)}.header-actions .header-icon-button:hover:before,.header-actions .header-icon-button:focus-visible:before{opacity:1;transform:scale(1.08)}.header-actions .header-render-button,#finalize-videos.header-render-button{width:58px;height:58px;min-width:58px;border-color:rgba(175,207,42,.48)!important;color:var(--color-brand-green)!important;background:linear-gradient(180deg,rgba(175,207,42,.18),rgba(17,162,207,.065)),rgba(12,14,9,.7)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(175,207,42,.22),0 16px 38px rgba(0,0,0,.36)}.header-actions .header-render-button:before{background:radial-gradient(circle at 58% 25%,rgba(175,207,42,.28),transparent 60%),radial-gradient(circle at 32% 70%,rgba(17,162,207,.12),transparent 56%)}.header-actions .header-render-button svg{width:32px;height:32px;stroke-width:1.85}.header-actions .header-settings-button svg{width:26px;height:26px}.header-actions .header-new-project svg{width:29px;height:29px}
+.header-actions{gap:10px;align-items:center}.header-actions .header-icon-button,#reset-ui.header-icon-button,#finalize-videos.header-icon-button,#open-settings.header-icon-button{position:relative;display:inline-grid;place-items:center;width:52px;height:52px;min-width:52px;padding:0!important;border:1px solid rgba(231,231,232,.18)!important;border-radius:16px;background:linear-gradient(180deg,rgba(255,255,255,.11),rgba(255,255,255,.025)),rgba(8,9,10,.52)!important;color:rgba(231,231,232,.8)!important;box-shadow:inset 0 1px rgba(255,255,255,.15),0 14px 34px rgba(0,0,0,.3);backdrop-filter:blur(18px) saturate(1.2);overflow:hidden}.header-actions .header-icon-button:before{position:absolute;inset:7px;border-radius:12px;background:radial-gradient(circle at 50% 22%,rgba(17,162,207,.16),transparent 62%);opacity:.64;content:"";transition:opacity .18s ease,transform .18s ease}.header-actions .header-icon-button svg{position:relative;z-index:1;width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}.header-actions .header-icon-button:hover,.header-actions .header-icon-button:focus-visible{border-color:rgba(17,162,207,.58)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(17,162,207,.22),0 16px 38px rgba(0,0,0,.34)}.header-actions .header-icon-button:hover:before,.header-actions .header-icon-button:focus-visible:before{opacity:1;transform:scale(1.08)}.header-actions .header-render-button,#finalize-videos.header-render-button{width:58px;height:58px;min-width:58px;border-color:rgba(175,207,42,.48)!important;color:var(--color-brand-green)!important;background:linear-gradient(180deg,rgba(175,207,42,.18),rgba(17,162,207,.065)),rgba(12,14,9,.7)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(175,207,42,.22),0 16px 38px rgba(0,0,0,.36)}.header-actions .header-render-button:before{background:radial-gradient(circle at 58% 25%,rgba(175,207,42,.28),transparent 60%),radial-gradient(circle at 32% 70%,rgba(17,162,207,.12),transparent 56%)}.header-actions .header-render-button svg{width:32px;height:32px;stroke-width:1.85}.header-actions .header-settings-button svg{width:26px;height:26px}.header-actions .header-new-project svg{width:29px;height:29px}#open-settings.header-settings-button.is-openai-ready{border-color:rgba(175,207,42,.62)!important;color:var(--color-brand-green)!important;background:linear-gradient(180deg,rgba(175,207,42,.2),rgba(17,162,207,.055)),rgba(10,14,8,.7)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(175,207,42,.26),0 16px 38px rgba(0,0,0,.36)}#open-settings.header-settings-button.is-openai-ready:before{background:radial-gradient(circle at 50% 34%,rgba(175,207,42,.32),transparent 62%)}#open-settings.header-settings-button.is-openai-ready svg{animation:cuted-openai-gear-spin 5.8s linear infinite;filter:drop-shadow(0 0 8px rgba(175,207,42,.34))}@keyframes cuted-openai-gear-spin{to{transform:rotate(360deg)}}
+.settings-backdrop{position:fixed!important;inset:0!important;z-index:5000!important;display:grid!important;place-items:center!important;padding:32px;background:radial-gradient(circle at 50% 42%,rgba(17,162,207,.18),transparent 30%),radial-gradient(circle at 64% 58%,rgba(175,207,42,.12),transparent 26%),rgba(0,0,0,.68)!important;backdrop-filter:blur(18px) saturate(1.18)!important;opacity:0;pointer-events:none;transition:opacity 180ms ease}.settings-backdrop[hidden]{display:none!important}.settings-backdrop.is-open{opacity:1;pointer-events:auto}.settings-backdrop.is-closing{opacity:0;pointer-events:none}.settings-panel{position:relative!important;isolation:isolate;width:min(640px,calc(100vw - 48px))!important;max-height:min(760px,calc(100vh - 56px));overflow:hidden auto;padding:20px!important;border:1px solid rgba(17,162,207,.34)!important;border-radius:22px!important;background:linear-gradient(145deg,rgba(231,231,232,.11),rgba(5,5,5,.8) 46%,rgba(11,15,10,.88)),rgba(5,5,5,.92)!important;box-shadow:0 0 0 1px rgba(255,255,255,.055),0 0 42px rgba(17,162,207,.2),0 0 58px rgba(175,207,42,.12),0 32px 86px rgba(0,0,0,.72)!important;transform:translateY(18px) scale(.965);opacity:0;outline:none;transition:transform 210ms cubic-bezier(.2,.9,.2,1),opacity 180ms ease}.settings-backdrop.is-open .settings-panel{transform:translateY(0) scale(1);opacity:1}.settings-backdrop.is-closing .settings-panel{transform:translateY(12px) scale(.975);opacity:0}.settings-aura{position:absolute;inset:-46px;z-index:-1;background:conic-gradient(from 130deg,transparent,rgba(17,162,207,.22),transparent 32%,rgba(175,207,42,.18),transparent 62%);opacity:.54;filter:blur(12px);animation:settings-aura-drift 8s linear infinite}.settings-head{position:relative;display:flex!important;align-items:flex-start!important;justify-content:space-between!important;gap:18px;padding:0 0 16px;border-bottom:1px solid rgba(231,231,232,.1)}.settings-title-row{display:flex;align-items:center;gap:14px;min-width:0}.settings-orb{display:grid;place-items:center;width:52px;height:52px;min-width:52px;border:1px solid rgba(175,207,42,.44);border-radius:16px;background:radial-gradient(circle at 50% 32%,rgba(175,207,42,.22),transparent 62%),rgba(8,11,8,.78);color:var(--color-brand-green);box-shadow:inset 0 1px rgba(255,255,255,.16),0 0 26px rgba(175,207,42,.18)}.settings-orb svg{width:27px;height:27px;fill:none;stroke:currentColor;stroke-width:1.9;animation:cuted-openai-gear-spin 7.2s linear infinite}.settings-head strong{display:block;color:var(--color-text);font-size:22px;line-height:1.05}.settings-head p{margin:5px 0 0!important;color:rgba(231,231,232,.62)!important;font-size:13px;line-height:1.25}.settings-close-button{display:grid!important;place-items:center;width:40px!important;height:40px!important;min-width:40px!important;padding:0!important;border:1px solid rgba(231,231,232,.16)!important;border-radius:14px!important;background:rgba(231,231,232,.06)!important;color:rgba(231,231,232,.75)!important;font-weight:900!important}.settings-close-button:hover,.settings-close-button:focus-visible{border-color:rgba(255,111,111,.42)!important;color:#ff9d9d!important;box-shadow:0 0 22px rgba(255,111,111,.18)}.settings-form{display:grid!important;gap:14px!important;margin-top:16px!important}.settings-status{padding:12px 14px!important;border:1px solid rgba(17,162,207,.26)!important;border-radius:14px!important;background:linear-gradient(90deg,rgba(17,162,207,.12),rgba(175,207,42,.065)),rgba(0,0,0,.3)!important;color:rgba(231,231,232,.82)!important;font-size:13px}.settings-field{display:grid!important;gap:7px!important;color:rgba(231,231,232,.68)!important;font-size:12px!important;font-weight:800;letter-spacing:.01em}.settings-form input,.settings-form select{min-height:44px!important;border:1px solid rgba(231,231,232,.14)!important;border-radius:14px!important;background:rgba(0,0,0,.52)!important;color:var(--color-text)!important;padding:10px 12px!important;box-shadow:inset 0 1px rgba(255,255,255,.05)!important}.settings-form input:focus,.settings-form select:focus{border-color:rgba(17,162,207,.62)!important;outline:none;box-shadow:0 0 0 3px rgba(17,162,207,.16),inset 0 1px rgba(255,255,255,.07)!important}.settings-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important}.settings-usage{display:grid!important;gap:5px!important;padding:12px 14px!important;border:1px solid rgba(231,231,232,.12)!important;border-radius:14px!important;background:rgba(231,231,232,.045)!important;color:rgba(231,231,232,.6)!important;font-size:12px!important}.settings-usage strong{color:rgba(231,231,232,.86)}.settings-actions{display:flex!important;justify-content:flex-end!important;gap:10px!important;flex-wrap:wrap!important;padding-top:2px}.settings-actions button{min-height:42px!important;border-radius:999px!important;padding:0 18px!important}.settings-actions button[type=submit]{border-color:rgba(175,207,42,.56)!important;background:linear-gradient(90deg,rgba(175,207,42,.95),rgba(17,162,207,.88))!important;color:#050505!important;font-weight:900!important}.settings-actions [data-settings-test]{border-color:rgba(17,162,207,.36)!important;background:rgba(17,162,207,.08)!important;color:var(--color-text)!important}.settings-form small{color:rgba(231,231,232,.5)!important;font-size:11px!important}@keyframes settings-aura-drift{to{transform:rotate(360deg)}}@media(max-width:760px){.settings-backdrop{padding:18px}.settings-panel{width:calc(100vw - 28px)!important;padding:16px!important}.settings-grid{grid-template-columns:1fr!important}.settings-head strong{font-size:20px}}
 """
 
 
@@ -13041,6 +13083,7 @@ function importFormPayload(form){
     render_previews: true
   };
 }
+let settingsLastFocus = null;
 function setupSettingsPanel(){
   const modal = document.querySelector("[data-settings-modal]");
   const form = document.querySelector("[data-settings-form]");
@@ -13052,7 +13095,9 @@ function setupSettingsPanel(){
   close?.addEventListener("click", () => closeSettingsPanel());
   modal.addEventListener("click", event => { if (event.target === modal) closeSettingsPanel(); });
   document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && !modal.hidden) closeSettingsPanel();
+    if (modal.hidden) return;
+    if (event.key === "Escape") closeSettingsPanel();
+    if (event.key === "Tab") trapSettingsFocus(event);
   });
   form.addEventListener("submit", event => {
     event.preventDefault();
@@ -13064,13 +13109,43 @@ function setupSettingsPanel(){
 function openSettingsPanel(){
   const modal = document.querySelector("[data-settings-modal]");
   if (!modal) return;
+  settingsLastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   modal.hidden = false;
+  modal.classList.remove("is-closing");
+  requestAnimationFrame(() => modal.classList.add("is-open"));
   loadOpenaiSettings();
-  modal.querySelector("[name=api_key]")?.focus();
+  modal.querySelector("[data-settings-panel]")?.focus();
 }
 function closeSettingsPanel(){
   const modal = document.querySelector("[data-settings-modal]");
-  if (modal) modal.hidden = true;
+  if (!modal || modal.hidden) return;
+  modal.classList.remove("is-open");
+  modal.classList.add("is-closing");
+  window.setTimeout(() => {
+    modal.hidden = true;
+    modal.classList.remove("is-closing");
+    settingsLastFocus?.focus?.();
+    settingsLastFocus = null;
+  }, 190);
+}
+function settingsFocusableElements(modal){
+  return Array.from(modal.querySelectorAll("button,input,select,textarea,a[href],[tabindex]:not([tabindex='-1'])"))
+    .filter(element => !element.disabled && !element.hidden && element.offsetParent !== null);
+}
+function trapSettingsFocus(event){
+  const modal = document.querySelector("[data-settings-modal]");
+  if (!modal || modal.hidden) return;
+  const focusable = settingsFocusableElements(modal);
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 async function loadOpenaiSettings(){
   const form = document.querySelector("[data-settings-form]");
@@ -13095,7 +13170,17 @@ function applySettingsPayload(form, settings, usage){
     const key = settings.key_configured ? "Token configurado" : "Token nao configurado";
     status.textContent = `${key} - ${settings.openai_model || "gpt-5-mini"} / ${settings.transcribe_model || "whisper-1"}`;
   }
+  updateOpenaiSettingsIndicator(settings);
   renderSettingsUsage(usage);
+}
+function updateOpenaiSettingsIndicator(settings){
+  const button = document.getElementById("open-settings");
+  if (!button) return;
+  const provider = String(settings?.ai_provider || "openai");
+  const ready = Boolean(settings?.key_configured) && provider !== "local";
+  button.classList.toggle("is-openai-ready", ready);
+  button.setAttribute("aria-label", ready ? "OpenAI configurada" : "Configuracoes OpenAI");
+  button.title = ready ? "OpenAI configurada" : "Configuracoes OpenAI";
 }
 function settingsPayloadFromForm(form){
   const data = new FormData(form);
@@ -13141,8 +13226,10 @@ async function testSettingsConnection(form){
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error(data.error || "Falha ao testar conexao.");
     if (status) status.textContent = data.message || "Conexao OpenAI validada.";
+    updateOpenaiSettingsIndicator({ ...settingsPayloadFromForm(form), key_configured: true });
   } catch (error) {
     if (status) status.textContent = error.message || "Nao consegui validar a conexao.";
+    updateOpenaiSettingsIndicator({ ...settingsPayloadFromForm(form), key_configured: false });
   } finally {
     if (button) button.disabled = false;
   }
@@ -13220,9 +13307,11 @@ async function refreshImportKeyBanner(){
       provider: String(settings.ai_provider || "openai"),
       keyConfigured: Boolean(settings.key_configured)
     };
+    updateOpenaiSettingsIndicator(settings);
   } catch (error) {
     console.warn("Nao consegui checar a chave OpenAI:", error);
     importOpenaiState = { provider: "openai", keyConfigured: true };
+    updateOpenaiSettingsIndicator({ ai_provider: "openai", key_configured: false });
   }
   banner.hidden = !importNeedsOpenaiKey();
 }
