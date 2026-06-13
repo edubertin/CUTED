@@ -303,6 +303,21 @@ class CuttedImportUiTests(unittest.TestCase):
         )
 
         self.assertIn("data-cuted-control-surface", html)
+        self.assertIn("clip-control-surface", html)
+        self.assertNotIn("clip-status", html)
+        self.assertNotIn("Ajuste fino", html)
+        self.assertNotIn("data-panel=\"effects\"", html)
+
+    def test_edit_page_header_uses_single_surface_without_flow_tabs(self) -> None:
+        html = CUTTED.page_html("Projeto", "", "{}", "assets/brand/cuted-logo-transparent.png")
+
+        self.assertIn('<button id="finalize-videos" type="button">Renderizar</button>', html)
+        self.assertIn('<button id="reset-ui">Novo projeto</button>', html)
+        self.assertNotIn('<nav class="tabs"', html)
+        self.assertNotIn('data-tab="import">1. Importar', html)
+        self.assertNotIn('data-tab="edit" class="active"', html)
+        self.assertNotIn('data-tab="final">3. Renderizar', html)
+        self.assertIn('applyTab("edit");', html)
 
     def test_live_timeline_stops_at_trim_end_instead_of_looping(self) -> None:
         source = (Path(__file__).resolve().parents[1] / "prototypes" / "live-timeline" / "src" / "liveTimeline.ts").read_text(
