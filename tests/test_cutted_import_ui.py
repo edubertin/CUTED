@@ -121,6 +121,20 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertNotIn("openRenderQueuePanel();\n    await loadRenderQueue();", html)
         self.assertNotIn("showAppNotice(label);\n    await loadRenderQueue();", html)
 
+    def test_closed_captions_can_render_in_preview(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("data-preview-caption-layer", html)
+        self.assertIn(".preview-caption-layer", html)
+        self.assertIn("function syncPreviewCaptions", html)
+        self.assertIn("function previewCaptionEventsFromSegments", html)
+        self.assertIn("function previewCaptionEventForCard", html)
+        self.assertIn("syncPreviewCaptionsForOpenCards();", html)
+        self.assertIn("syncPreviewCaptions(card, current);", html)
+        self.assertIn("caption_segments: moment.caption_segments || []", html)
+        self.assertIn("onCaptionToggle: payload => setControlSurfaceCaptions(payload.captionsEnabled)", html)
+        self.assertIn("captionEnabled() ? \"Ativada\" : \"Desligada\"", html)
+
     def test_render_resource_profiles_apply_threads_and_priority(self) -> None:
         rows = [{"rank": 1}, {"rank": 2}]
 

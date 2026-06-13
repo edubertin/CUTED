@@ -9182,6 +9182,7 @@ def card_html(moment: Moment) -> str:
               <video class="camera-fit-bg" data-camera-fit-bg playsinline muted preload="none" aria-hidden="true" tabindex="-1"></video>
               <img class="camera-fit-logo" src="{html.escape('assets/brand/' + BRAND_LOGO_FILE)}" alt="" aria-hidden="true">
               <div class="camera-reticle"></div>
+              <div class="preview-caption-layer" data-preview-caption-layer aria-live="off"></div>
               <div data-overlay-layer-list></div>
               <div class="overlay-menu" data-overlay-menu hidden></div>
               <input data-overlay-image type="file" accept="image/png,image/webp,image/jpeg" hidden>
@@ -9927,7 +9928,7 @@ main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-stack{display:grid;gap:10px}.tool-section{border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:0;overflow:hidden}.tool-section>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:10px 12px;cursor:pointer;list-style:none;color:var(--color-text);font-weight:800}.tool-section>summary::-webkit-details-marker{display:none}.tool-section>summary:after{content:"";width:8px;height:8px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg);opacity:.62;transition:transform .16s ease}.tool-section[open]>summary:after{transform:rotate(225deg)}.tool-section>summary small{color:var(--color-text-muted);font-size:12px;font-weight:600;text-align:right}.tool-section[open]>summary{border-bottom:1px solid rgba(231,231,232,.08)}.tool-section>*:not(summary){margin:12px}.timeline-editor{padding:0}.timeline-head,.timeline-timebar,.timeline-values{display:flex;justify-content:space-between;gap:12px;color:var(--color-text-muted);font-size:12px}.timeline-head output,.timeline-timebar output{color:var(--color-text);text-align:right}.timeline-timebar{margin-top:10px}.timeline-timebar span:last-child{color:#777;text-align:right}.timeline-scrub{position:relative;height:42px;margin-top:8px}.timeline-scrub-track{position:absolute;left:0;right:0;top:17px;height:8px;border:1px solid #343434;border-radius:999px;background:linear-gradient(90deg,var(--color-surface-muted),#252525);overflow:hidden}.timeline-selected{position:absolute;top:0;bottom:0;background:rgba(175,207,42,.22);border-left:1px solid var(--color-brand-green);border-right:1px solid var(--color-brand-green)}.timeline-playhead{position:absolute;top:-8px;bottom:-8px;width:2px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7)}.timeline-playhead:before{content:"";position:absolute;left:50%;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--color-brand-white);transform:translateX(-50%)}.timeline-scrub input{position:absolute;inset:0;width:100%;height:42px;margin:0;background:transparent;opacity:0;cursor:pointer}.timeline{position:relative;height:38px;margin-top:6px}.timeline-track{position:absolute;left:0;right:0;top:16px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:var(--color-brand-white);border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:38px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{margin-top:6px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .export-dock{display:grid;gap:8px;margin-top:2px;padding:12px;border:1px solid #303030;border-radius:8px;background:#111}.export-dock strong{display:block;font-size:13px}.export-dock span{color:#a8a8a8;font-size:12px}
 .platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:var(--color-text);border-color:var(--color-brand-green)}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.effect-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.75fr);gap:10px}.effect-subpanel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.effect-subpanel strong{font-size:12px}.bumper-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.bumper-upload{display:grid;gap:6px;align-content:start;min-height:64px;padding:9px;border:1px dashed var(--color-border-strong);border-radius:8px;background:var(--color-surface-control);cursor:pointer}.bumper-upload input{font-size:11px}.bumper-strip{display:flex;gap:6px;flex-wrap:wrap;min-height:28px}.bumper-empty{color:var(--color-text-muted);font-size:12px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:var(--color-brand-blue)}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.camera-path-editor,.camera-manual-panel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-path-head,.camera-panel-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.camera-path-head strong,.camera-panel-title strong{font-size:12px}.camera-path-head span,.camera-panel-title span{color:var(--color-text-muted);font-size:12px}.camera-smart-panel{display:grid;gap:9px;padding:10px;border:1px solid rgba(17,162,207,.28);border-radius:8px;background:linear-gradient(135deg,rgba(17,162,207,.12),rgba(175,207,42,.06))}.camera-smart-row,.camera-smart-ai{display:grid;gap:8px}.camera-smart-row{grid-template-columns:repeat(3,minmax(0,1fr))}.camera-smart-ai{grid-template-columns:repeat(5,minmax(0,1fr))}.camera-smart-panel button{display:grid;gap:3px;justify-items:center;background:rgba(17,162,207,.1);color:var(--color-text);border:1px solid rgba(17,162,207,.34);text-align:center}.camera-smart-panel button:hover{border-color:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.14)}.camera-path-track{position:relative;height:34px}.camera-path-rail{position:absolute;left:0;right:0;top:15px;height:5px;border-radius:999px;background:#292929}.camera-path-marker{position:absolute;top:7px;width:20px;height:20px;min-width:20px;padding:0;border-radius:999px;transform:translateX(-50%);background:var(--color-surface-control);border:1px solid var(--color-border-strong)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:var(--color-brand-blue);box-shadow:0 0 0 4px rgba(17,162,207,.18)}.camera-path-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-keyframe-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}.camera-auto-status{min-height:18px;color:var(--color-text-muted);font-size:12px}.camera-path-delete{color:var(--color-danger)!important}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:minmax(160px,1fr) 120px 150px;gap:12px;max-width:none}.caption-toggle{align-content:center}.caption-toggle input{justify-self:start;width:auto;min-height:20px;accent-color:var(--color-brand-blue)}
-.camera-smart-panel p{margin:0;color:var(--color-text-muted);font-size:12px}.camera-smart-panel button span{color:var(--color-text-muted);font-size:11px}.camera-director-action{min-height:72px;background:linear-gradient(135deg,rgba(17,162,207,.32),rgba(231,231,232,.08))!important;border-color:rgba(17,162,207,.72)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 34px rgba(17,162,207,.1)}.camera-director-action strong{font-size:15px}.camera-smart-row button{min-height:54px}.camera-smart-ai button{min-height:50px}.camera-advanced{display:grid;gap:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.025)}.camera-advanced summary{display:flex;justify-content:space-between;gap:10px;align-items:center;cursor:pointer;color:var(--color-text-soft)}.camera-advanced summary small{color:var(--color-text-muted);font-size:12px}.camera-advanced[open] summary{padding-bottom:8px;border-bottom:1px solid rgba(231,231,232,.08)}.camera-advanced .camera-manual-panel{padding:0;border:0;background:transparent}.camera-surface video{position:relative;z-index:1;object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1),transform var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1)}.camera-surface[data-camera-cut=hard] video:not(.camera-fit-bg){transition:none}.camera-surface .camera-fit-bg{position:absolute!important;inset:-7%;z-index:0!important;width:114%!important;height:114%!important;display:none!important;object-fit:cover!important;object-position:center!important;transform:none!important;filter:blur(22px) saturate(.88) brightness(.62)!important;pointer-events:none}.camera-surface .camera-fit-logo{position:absolute;top:11%;left:50%;z-index:1;width:38%!important;max-width:240px;height:auto!important;display:none!important;object-fit:contain!important;object-position:center;background:transparent!important;transform:translateX(-50%);opacity:.9;pointer-events:none}.camera-surface[data-camera-fit=contain]{background:#050505}.camera-surface[data-camera-fit=contain] .camera-fit-bg{display:block!important}.camera-surface[data-camera-fit=contain] .camera-fit-logo{display:block!important}.camera-surface[data-camera-fit=contain] video:not(.camera-fit-bg){z-index:2;object-fit:contain;object-position:center;transform:none;transform-origin:center;background:transparent}.camera-reticle{position:absolute;inset:14% 22%;z-index:3;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}
+.camera-smart-panel p{margin:0;color:var(--color-text-muted);font-size:12px}.camera-smart-panel button span{color:var(--color-text-muted);font-size:11px}.camera-director-action{min-height:72px;background:linear-gradient(135deg,rgba(17,162,207,.32),rgba(231,231,232,.08))!important;border-color:rgba(17,162,207,.72)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 34px rgba(17,162,207,.1)}.camera-director-action strong{font-size:15px}.camera-smart-row button{min-height:54px}.camera-smart-ai button{min-height:50px}.camera-advanced{display:grid;gap:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.025)}.camera-advanced summary{display:flex;justify-content:space-between;gap:10px;align-items:center;cursor:pointer;color:var(--color-text-soft)}.camera-advanced summary small{color:var(--color-text-muted);font-size:12px}.camera-advanced[open] summary{padding-bottom:8px;border-bottom:1px solid rgba(231,231,232,.08)}.camera-advanced .camera-manual-panel{padding:0;border:0;background:transparent}.camera-surface video{position:relative;z-index:1;object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1),transform var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1)}.camera-surface[data-camera-cut=hard] video:not(.camera-fit-bg){transition:none}.camera-surface .camera-fit-bg{position:absolute!important;inset:-7%;z-index:0!important;width:114%!important;height:114%!important;display:none!important;object-fit:cover!important;object-position:center!important;transform:none!important;filter:blur(22px) saturate(.88) brightness(.62)!important;pointer-events:none}.camera-surface .camera-fit-logo{position:absolute;top:11%;left:50%;z-index:1;width:38%!important;max-width:240px;height:auto!important;display:none!important;object-fit:contain!important;object-position:center;background:transparent!important;transform:translateX(-50%);opacity:.9;pointer-events:none}.camera-surface[data-camera-fit=contain]{background:#050505}.camera-surface[data-camera-fit=contain] .camera-fit-bg{display:block!important}.camera-surface[data-camera-fit=contain] .camera-fit-logo{display:block!important}.camera-surface[data-camera-fit=contain] video:not(.camera-fit-bg){z-index:2;object-fit:contain;object-position:center;transform:none;transform-origin:center;background:transparent}.camera-reticle{position:absolute;inset:14% 22%;z-index:3;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}.preview-caption-layer{position:absolute;left:6%;right:6%;bottom:clamp(28px,13%,112px);z-index:4;display:grid;justify-items:center;pointer-events:none;opacity:0;transform:translateY(8px);transition:opacity 120ms ease,transform 120ms ease}.preview-caption-layer[data-visible=true]{opacity:1;transform:translateY(0)}.preview-caption-layer span{display:block;max-width:92%;color:#fff;font-family:Arial,sans-serif;font-size:clamp(18px,5.3vw,48px);font-weight:900;line-height:1.05;text-align:center;text-shadow:0 2px 0 #000,0 -2px 0 #000,2px 0 0 #000,-2px 0 0 #000,0 0 12px rgba(0,0,0,.92),0 8px 22px rgba(0,0,0,.66);text-transform:none;white-space:normal}.card[data-preview-format=youtube] .preview-caption-layer{bottom:clamp(18px,9%,86px)}.card[data-preview-format=youtube] .preview-caption-layer span{font-size:clamp(18px,3.2vw,42px)}.card[data-preview-format=facebook] .preview-caption-layer span{font-size:clamp(18px,4.3vw,44px)}
 .card[data-effect=light-grain] .media video,.card[data-effect=light-grain] .media img{filter:contrast(1.08) brightness(1.02)}.card[data-effect=old-film] .media video,.card[data-effect=old-film] .media img{filter:sepia(.48) contrast(1.2) saturate(.62) brightness(.92)}.card[data-effect=vhs] .media video,.card[data-effect=vhs] .media img{filter:saturate(.62) contrast(1.22) brightness(.9) hue-rotate(-7deg)}.card[data-effect=bw-old] .media video,.card[data-effect=bw-old] .media img{filter:grayscale(1) contrast(1.22) brightness(.9)}.card[data-effect=light-grain] .media:after,.card[data-effect=old-film] .media:after,.card[data-effect=vhs] .media:after,.card[data-effect=bw-old] .media:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--effect-opacity,.24);background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 70% 65%,rgba(0,0,0,.95) 0 1px,transparent 1.8px);background-size:4px 4px,6px 6px;mix-blend-mode:overlay}.card[data-effect=old-film] .media:before,.card[data-effect=bw-old] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at center,transparent 44%,rgba(0,0,0,.46) 100%)}.card[data-effect=vhs] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 4px);mix-blend-mode:overlay}
 .overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,var(--color-brand-green));border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none;pointer-events:auto}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-text-box{display:grid;align-items:center;min-width:96px;min-height:34px;padding:8px 12px;border-left:0;background:rgba(var(--overlay-bg-rgb,0,0,0),var(--overlay-bg-opacity,.7));box-shadow:none;color:var(--overlay-color,#fff);font-weight:700;font-size:clamp(13px,var(--overlay-font-size,20px),36px);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.overlay-text-box[data-overlay-bg=off]{background:transparent;box-shadow:none}.overlay-text-box span{opacity:var(--overlay-opacity,1);overflow:hidden;text-overflow:ellipsis}.overlay-box.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.overlay-image-box{display:grid;place-items:center;min-width:72px;min-height:72px;padding:6px;border:1px dashed rgba(255,255,255,.42);background:rgba(0,0,0,.12);box-shadow:0 8px 24px rgba(0,0,0,.22)}.overlay-image-box img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none;background:transparent}.overlay-resize{position:absolute;right:3px;bottom:3px;z-index:4;width:22px;height:22px;padding:0;border:1px solid rgba(255,255,255,.52);border-radius:5px;background:rgba(255,255,255,.2);cursor:nwse-resize;touch-action:none;pointer-events:auto}.overlay-menu{position:absolute;z-index:6;display:grid;gap:8px;width:min(360px,94%);padding:8px;border:1px solid var(--color-border-strong);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel);touch-action:none}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px;cursor:move}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-inspector{display:grid;gap:8px}.overlay-inspector label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.overlay-inspector input[type=text],.overlay-inspector input[type=number]{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.overlay-inspector input[type=color]{width:42px;height:32px;padding:2px;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black)}.overlay-inspector-row{display:flex;gap:8px;align-items:center}.overlay-inspector-row>*{flex:1}.overlay-inspector-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.overlay-inspector-check input{width:auto}.overlay-danger{color:var(--color-danger)!important;border-color:#5b2626!important;background:#251111!important}.image-upload{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-empty{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;color:var(--color-text-muted)}
 p{color:#bebebe}.peak{color:#fff;font-size:16px;line-height:1.35}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}.transcript-copy{max-height:220px;overflow:auto;margin-top:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(0,0,0,.18)}.transcript-copy p{margin:0;line-height:1.45}
@@ -11297,6 +11298,7 @@ function updateCardTools(card){
   updateCameraUi(card);
   updateEffectUi(card);
   updateOverlayUi(card);
+  syncPreviewCaptions(card);
   updateControlSurfaceForCard(card);
 }
 function updateControlSurfaceForCard(card){
@@ -11429,6 +11431,7 @@ function openControlSurfaceBumperInput(card, slot){
 function setControlSurfaceCaptions(enabled){
   localStorage.setItem("cutted-caption-enabled", enabled ? "1" : "0");
   syncCaptionInputs();
+  syncPreviewCaptionsForOpenCards();
   renderCaptionQueue();
   renderFinalStage();
   document.querySelectorAll(".card[open]").forEach(updateControlSurfaceForCard);
@@ -12202,6 +12205,7 @@ function updateTrimUi(card){
   if (windowLabel) windowLabel.textContent = `${fixed(values.startPos)} - ${fixed(values.endPos)} no clipe`;
   renderCardRowTimeline(card, values);
   updateTimelinePlayhead(card);
+  syncPreviewCaptions(card);
 }
 function renderCardRowTimeline(card, values = null){
   const container = card.querySelector("[data-card-row-timeline]");
@@ -12243,6 +12247,7 @@ function updateTimelinePlayhead(card, time = null){
   if (output) output.textContent = fixed(values.start + current);
   updateCameraSurfaceForCard(card, current);
   updatePreviewCameraTimelinePlayhead(card, current);
+  syncPreviewCaptions(card, current);
 }
 function previewCameraTimelineContext(card){
   const values = trimValues(card);
@@ -13873,6 +13878,143 @@ function captionWidth(){
 function captionEnabled(){
   return localStorage.getItem("cutted-caption-enabled") !== "0";
 }
+function syncPreviewCaptionsForOpenCards(){
+  document.querySelectorAll(".card[open]").forEach(card => syncPreviewCaptions(card));
+}
+function syncPreviewCaptions(card, time = null){
+  const layer = card?.querySelector("[data-preview-caption-layer]");
+  if (!layer) return;
+  if (!captionEnabled()) {
+    layer.dataset.visible = "false";
+    layer.innerHTML = "";
+    return;
+  }
+  const event = previewCaptionEventForCard(card, time);
+  if (!event) {
+    layer.dataset.visible = "false";
+    layer.innerHTML = "";
+    return;
+  }
+  const lines = wrapPreviewCaptionLines(event.text, captionWidth(), captionLines());
+  layer.innerHTML = `<span>${lines.map(escapeHtml).join("<br>")}</span>`;
+  layer.dataset.visible = "true";
+}
+function previewCaptionEventForCard(card, time = null){
+  const moment = previewMomentForCard(card);
+  if (!moment) return null;
+  const row = adjustedMoment(moment);
+  const events = previewCaptionEvents(row);
+  if (!events.length) return null;
+  const values = trimValues(card);
+  const video = primaryCameraVideo(card);
+  const raw = time === null && video && Number.isFinite(video.currentTime) ? video.currentTime : time;
+  const current = clampPreviewTime(values, Number(raw ?? values.trimStart));
+  const position = Math.max(0, current - values.trimStart);
+  return events.find(event => position >= event.start && position < event.end) || null;
+}
+function previewMomentForCard(card){
+  const rank = String(card?.dataset?.rank || "");
+  return (window.CUTTED_DATA.moments || []).find(item => String(item.rank) === rank) || null;
+}
+function previewCaptionEvents(row){
+  const duration = Math.max(Number(row.adjusted_duration || 0), .1);
+  const segmentEvents = previewCaptionEventsFromSegments(row);
+  if (segmentEvents.length) return normalizePreviewCaptionEvents(segmentEvents, duration);
+  const chunks = previewCaptionChunks(previewCaptionSourceText(row), captionWidth(), captionLines(), duration);
+  return normalizePreviewCaptionEvents(distributedPreviewCaptionEvents(chunks, duration), duration);
+}
+function previewCaptionEventsFromSegments(row){
+  const segments = Array.isArray(row.caption_segments) ? row.caption_segments : [];
+  const clipStart = Number(row.adjusted_start || row.start || 0);
+  const clipEnd = Number(row.adjusted_end || row.end || clipStart);
+  return segments.map(item => previewCaptionEventFromSegment(item, clipStart, clipEnd)).filter(Boolean);
+}
+function previewCaptionEventFromSegment(item, clipStart, clipEnd){
+  if (!item || typeof item !== "object") return null;
+  const start = Math.max(Number(item.start || 0), clipStart) - clipStart;
+  const end = Math.min(Number(item.end || 0), clipEnd) - clipStart;
+  const text = cleanPreviewCaptionText(String(item.text || ""));
+  if (!text || end <= start) return null;
+  return { start: Number(start.toFixed(3)), end: Number(Math.max(end, start + .35).toFixed(3)), text };
+}
+function normalizePreviewCaptionEvents(events, duration){
+  return events.slice().sort((a, b) => a.start - b.start || a.end - b.end).map((event, index, source) => {
+    const start = clampNumber(event.start, 0, duration);
+    let end = clampNumber(event.end, start, duration);
+    if (index + 1 < source.length) {
+      const nextStart = clampNumber(source[index + 1].start, 0, duration);
+      end = Math.min(end, Math.max(start, nextStart - .04));
+    }
+    return { start: Number(start.toFixed(3)), end: Number(end.toFixed(3)), text: event.text };
+  }).filter(event => event.end - event.start >= .12);
+}
+function distributedPreviewCaptionEvents(chunks, duration){
+  const slot = duration / Math.max(chunks.length, 1);
+  return chunks.map((text, index) => ({
+    start: Number((index * slot).toFixed(3)),
+    end: Number((index === chunks.length - 1 ? duration : (index + 1) * slot).toFixed(3)),
+    text
+  }));
+}
+function previewCaptionSourceText(row){
+  const transcript = String(row.transcript || "").trim();
+  if (transcript) return cleanPreviewCaptionText(transcript);
+  return cleanPreviewCaptionText(String(row.peak_text || row.title || "Legenda do corte"));
+}
+function cleanPreviewCaptionText(text){
+  return String(text || "")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/\u2026/g, "...")
+    .replace(/\ufeff/g, " ")
+    .replace(/(^|\\s)(>{1,3}|-{1,2})\\s*/g, " ")
+    .replace(/\\s+/g, " ")
+    .replace(/\\s+([,.;:!?])/g, "$1")
+    .replace(/([,.;:!?])([^\\s,.;:!?])/g, "$1 $2")
+    .replace(/^(ne\\??|aham|uhum|hum|entao|mas)\\s+/i, "")
+    .trim()
+    .replace(/^-+|-+$/g, "")
+    .trim();
+}
+function previewCaptionChunks(text, charsPerLine, maxLines, duration){
+  const lineWidth = Math.max(12, Number(charsPerLine) || 28);
+  const lineCount = Math.max(1, Number(maxLines) || 2);
+  const capacity = Math.max(18, lineWidth * lineCount);
+  const chunks = greedyPreviewCaptionChunks(String(text || "").split(/\\s+/).filter(Boolean), capacity);
+  const limit = Math.max(1, Math.floor(Math.max(duration, 1) / 1.35));
+  if (chunks.length > limit) {
+    const limited = chunks.slice(0, limit);
+    limited[limited.length - 1] = ellipsizePreviewCaption(limited[limited.length - 1]);
+    return limited;
+  }
+  return chunks.length ? chunks : ["Legenda do corte"];
+}
+function wrapPreviewCaptionLines(text, charsPerLine, maxLines){
+  const lineWidth = Math.max(12, Number(charsPerLine) || 28);
+  const lineCount = Math.max(1, Number(maxLines) || 2);
+  const lines = greedyPreviewCaptionChunks(String(text || "").split(/\\s+/).filter(Boolean), lineWidth);
+  if (lines.length <= lineCount) return lines;
+  return lines.slice(0, lineCount - 1).concat(lines.slice(lineCount - 1).join(" "));
+}
+function greedyPreviewCaptionChunks(words, capacity){
+  const chunks = [];
+  let current = [];
+  words.forEach(word => {
+    const candidate = current.concat(word).join(" ");
+    if (current.length && candidate.length > capacity) {
+      chunks.push(current.join(" "));
+      current = [word];
+    } else {
+      current.push(word);
+    }
+  });
+  if (current.length) chunks.push(current.join(" "));
+  return chunks;
+}
+function ellipsizePreviewCaption(text){
+  const clean = String(text || "").replace(/[ .,;:]+$/g, "");
+  return clean ? `${clean}...` : "...";
+}
 function syncCaptionInputs(){
   document.querySelectorAll("[data-caption-lines]").forEach(input => { input.value = String(captionLines()); });
   document.querySelectorAll("[data-caption-width]").forEach(input => { input.value = String(captionWidth()); });
@@ -14590,6 +14732,7 @@ document.querySelectorAll("[data-caption-lines],[data-caption-width],[data-capti
     if (input.matches("[data-caption-width]")) localStorage.setItem("cutted-caption-width", input.value);
     if (input.matches("[data-caption-enabled]")) localStorage.setItem("cutted-caption-enabled", input.checked ? "1" : "0");
     syncCaptionInputs();
+    syncPreviewCaptionsForOpenCards();
     renderFinalStage();
   };
   input.addEventListener("input", update);
