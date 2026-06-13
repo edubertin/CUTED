@@ -95,8 +95,9 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("/api/render-jobs", html)
         self.assertIn("openRenderQueuePanel", html)
         self.assertIn("sendCardToRenderQueue", html)
-        self.assertIn('data-cuted-control="send-render"', script)
-        self.assertIn("Send to Render", script)
+        self.assertIn("SEND TO RENDER", script)
+        self.assertIn("elements.statusBar.addEventListener(\"click\"", script)
+        self.assertNotIn('data-cuted-control="send-render"', script)
 
     def test_render_resource_profiles_apply_threads_and_priority(self) -> None:
         rows = [{"rank": 1}, {"rank": 2}]
@@ -400,6 +401,9 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn('"render"', source)
         self.assertIn(".header-actions .header-icon-button,#reset-ui.header-icon-button,#finalize-videos.header-icon-button,#open-settings.header-icon-button", source)
         self.assertIn(".header-actions .header-render-button,#finalize-videos.header-render-button{width:58px;height:58px", source)
+        self.assertIn("#finalize-videos.header-render-button.is-rendering", source)
+        self.assertIn("cuted-render-icon-drift", source)
+        self.assertIn('button.classList.toggle("is-rendering", active)', source)
         self.assertIn("border-color:rgba(175,207,42,.48)!important", source)
         self.assertIn(".header-actions .header-icon-button svg{position:relative;z-index:1;width:28px;height:28px", source)
         self.assertIn("#open-settings.header-settings-button.is-openai-ready", source)
