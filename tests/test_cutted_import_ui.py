@@ -137,6 +137,15 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("storeCaptionStyle(style)", html)
         self.assertIn("captionEnabled() ? \"Ativada\" : \"Desligada\"", html)
 
+    def test_preview_caption_text_repairs_portuguese_mojibake(self) -> None:
+        html = gallery_html()
+        broken = "voc\u00c3\u00aa n\u00c3\u00a3o tem rela\u00c3\u00a7\u00c3\u00a3o com informa\u00c3\u00a7\u00c3\u00a3o"
+
+        self.assertEqual(CUTTED.clean_caption_text(broken), "você não tem relação com informação")
+        self.assertIn("function repairPreviewCaptionEncoding", html)
+        self.assertIn("replacePreviewCaptionMojibakeSequences", html)
+        self.assertIn("return repairPreviewCaptionEncoding(text)", html)
+
     def test_closed_caption_control_bar_menu_is_available(self) -> None:
         asset_dir = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar"
         script = (asset_dir / "control-bar.js").read_text(encoding="utf-8")
@@ -362,10 +371,12 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("updateControlSurfaceForCard(card);", source)
         self.assertIn('label: "Projeto sendo mapeado..."', source)
         self.assertIn('label: "IA ajustando keyframes..."', source)
+        self.assertIn('label: "AI camera already exists"', script)
         self.assertIn("state.ready || state.discarded || state.busy", script)
         self.assertIn("dataset.ready = String(state.ready || state.discarded)", script)
         self.assertIn('classList.toggle("is-busy"', script)
         self.assertIn(".cuted-control-bar.is-busy .cuted-audio-group", styles)
+        self.assertIn('.cuted-control-bar[data-status-kind="ai"] .cuted-ready-region', styles)
 
     def test_control_surface_timeline_click_does_not_toggle_card(self) -> None:
         source = MODULE_PATH.read_text(encoding="utf-8")
@@ -435,9 +446,11 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("data-cuted-control=\"volume-mute\"", script)
         self.assertIn("<span>INS</span>", script)
         self.assertIn("state.volumeMenuOpen = !state.volumeMenuOpen", script)
-        self.assertIn("insertAutoCloseClock", script)
-        self.assertIn("scheduleInsertAutoClose", script)
-        self.assertIn("}, 2200)", script)
+        self.assertIn("data-cuted-insert-exit", script)
+        self.assertIn("setInsertStatus", script)
+        self.assertIn("Start video inserted", script)
+        self.assertIn(".cuted-insert-options", styles)
+        self.assertNotIn("scheduleInsertAutoClose", script)
         self.assertIn('document.addEventListener("click", dismissClick, true)', script)
         self.assertIn('document.removeEventListener("click", dismissClick, true)', script)
         self.assertNotIn('kind: "volume"', script)

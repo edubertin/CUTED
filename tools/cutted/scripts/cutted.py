@@ -6552,10 +6552,74 @@ def clean_caption_text(text: str) -> str:
     return clean.strip(" -")
 
 
+CAPTION_MOJIBAKE_REPLACEMENTS = {
+    "\u00c3\u00a1": "\u00e1",
+    "\u00c3\u00a0": "\u00e0",
+    "\u00c3\u00a2": "\u00e2",
+    "\u00c3\u00a3": "\u00e3",
+    "\u00c3\u00a4": "\u00e4",
+    "\u00c3\u00a9": "\u00e9",
+    "\u00c3\u00aa": "\u00ea",
+    "\u00c3\u00ad": "\u00ed",
+    "\u00c3\u00b3": "\u00f3",
+    "\u00c3\u00b4": "\u00f4",
+    "\u00c3\u00b5": "\u00f5",
+    "\u00c3\u00ba": "\u00fa",
+    "\u00c3\u00bc": "\u00fc",
+    "\u00c3\u00a7": "\u00e7",
+    "\u00c3\u0081": "\u00c1",
+    "\u00c3\u0080": "\u00c0",
+    "\u00c3\u0082": "\u00c2",
+    "\u00c3\u0083": "\u00c3",
+    "\u00c3\u0089": "\u00c9",
+    "\u00c3\u008a": "\u00ca",
+    "\u00c3\u008d": "\u00cd",
+    "\u00c3\u0093": "\u00d3",
+    "\u00c3\u0094": "\u00d4",
+    "\u00c3\u0095": "\u00d5",
+    "\u00c3\u009a": "\u00da",
+    "\u00c3\u009c": "\u00dc",
+    "\u00c3\u0087": "\u00c7",
+    "\u00c2\u00ba": "\u00ba",
+    "\u00c2\u00aa": "\u00aa",
+    "\u00c2\u00b7": "\u00b7",
+    "\u00c2\u00b4": "\u00b4",
+}
+
+
+def repair_caption_encoding(text: str) -> str:
+    if not any(marker in text for marker in ("Ã", "Â", "â")):
+        return text
+    candidate = repair_caption_encoding_as_utf8(text)
+    mapped = replace_caption_mojibake_sequences(candidate)
+    return mapped if caption_mojibake_score(mapped) <= caption_mojibake_score(text) else text
+
+
+def repair_caption_encoding_as_utf8(text: str) -> str:
+    try:
+        repaired = text.encode("latin-1").decode("utf-8")
+    except UnicodeError:
+        return text
+    return repaired if caption_mojibake_score(repaired) < caption_mojibake_score(text) else text
+
+
+def replace_caption_mojibake_sequences(text: str) -> str:
+    clean = text
+    for source, target in CAPTION_MOJIBAKE_REPLACEMENTS.items():
+        clean = clean.replace(source, target)
+    return clean
+
+
+def caption_mojibake_score(text: str) -> int:
+    return sum(text.count(marker) for marker in ("Ã", "Â", "â€", "â™", "�"))
+
+
 def normalize_caption_symbols(text: str) -> str:
+    text = repair_caption_encoding(text)
     return (
         text.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
         .replace("…", "...").replace("♪", " ").replace("\ufeff", " ")
+        .replace("–", "-").replace("—", "-")
     )
 
 
@@ -14081,12 +14145,76 @@ function previewCaptionSourceText(row){
   if (transcript) return cleanPreviewCaptionText(transcript);
   return cleanPreviewCaptionText(String(row.peak_text || row.title || "Legenda do corte"));
 }
+const PREVIEW_CAPTION_MOJIBAKE_REPLACEMENTS = new Map([
+  ["\u00c3\u00a1", "\u00e1"],
+  ["\u00c3\u00a0", "\u00e0"],
+  ["\u00c3\u00a2", "\u00e2"],
+  ["\u00c3\u00a3", "\u00e3"],
+  ["\u00c3\u00a4", "\u00e4"],
+  ["\u00c3\u00a9", "\u00e9"],
+  ["\u00c3\u00aa", "\u00ea"],
+  ["\u00c3\u00ad", "\u00ed"],
+  ["\u00c3\u00b3", "\u00f3"],
+  ["\u00c3\u00b4", "\u00f4"],
+  ["\u00c3\u00b5", "\u00f5"],
+  ["\u00c3\u00ba", "\u00fa"],
+  ["\u00c3\u00bc", "\u00fc"],
+  ["\u00c3\u00a7", "\u00e7"],
+  ["\u00c3\u0081", "\u00c1"],
+  ["\u00c3\u0080", "\u00c0"],
+  ["\u00c3\u0082", "\u00c2"],
+  ["\u00c3\u0083", "\u00c3"],
+  ["\u00c3\u0089", "\u00c9"],
+  ["\u00c3\u008a", "\u00ca"],
+  ["\u00c3\u008d", "\u00cd"],
+  ["\u00c3\u0093", "\u00d3"],
+  ["\u00c3\u0094", "\u00d4"],
+  ["\u00c3\u0095", "\u00d5"],
+  ["\u00c3\u009a", "\u00da"],
+  ["\u00c3\u009c", "\u00dc"],
+  ["\u00c3\u0087", "\u00c7"],
+  ["\u00c2\u00ba", "\u00ba"],
+  ["\u00c2\u00aa", "\u00aa"],
+  ["\u00c2\u00b7", "\u00b7"],
+  ["\u00c2\u00b4", "\u00b4"]
+]);
+function repairPreviewCaptionEncoding(value){
+  const text = String(value || "");
+  if (!/[ÃÂâ]/.test(text)) return text;
+  const repaired = repairPreviewCaptionEncodingAsUtf8(text);
+  const mapped = replacePreviewCaptionMojibakeSequences(repaired);
+  return previewCaptionMojibakeScore(mapped) <= previewCaptionMojibakeScore(text) ? mapped : text;
+}
+function repairPreviewCaptionEncodingAsUtf8(text){
+  try {
+    const bytes = Array.from(text, char => {
+      const code = char.charCodeAt(0);
+      if (code > 255) throw new Error("Not latin-1 text");
+      return code;
+    });
+    const repaired = new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(bytes));
+    return previewCaptionMojibakeScore(repaired) < previewCaptionMojibakeScore(text) ? repaired : text;
+  } catch (_error) {
+    return text;
+  }
+}
+function replacePreviewCaptionMojibakeSequences(text){
+  let clean = String(text || "");
+  PREVIEW_CAPTION_MOJIBAKE_REPLACEMENTS.forEach((target, source) => {
+    clean = clean.split(source).join(target);
+  });
+  return clean;
+}
+function previewCaptionMojibakeScore(text){
+  return (String(text || "").match(/Ã|Â|â€|â™|�/g) || []).length;
+}
 function cleanPreviewCaptionText(text){
-  return String(text || "")
+  return repairPreviewCaptionEncoding(text)
     .replace(/[\u201c\u201d]/g, '"')
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/\u2026/g, "...")
     .replace(/\ufeff/g, " ")
+    .replace(/[\u2013\u2014]/g, "-")
     .replace(/(^|\\s)(>{1,3}|-{1,2})\\s*/g, " ")
     .replace(/\\s+/g, " ")
     .replace(/\\s+([,.;:!?])/g, "$1")
