@@ -195,15 +195,36 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertGreaterEqual(rows[0]["_render_threads"], 1)
         self.assertEqual(rows[0]["_render_priority"], "below_normal")
 
+    def test_ffmpeg_progress_parser_reports_render_percent(self) -> None:
+        self.assertEqual(CUTTED.parse_ffmpeg_progress_seconds("out_time_ms", "1234000"), 1.234)
+        self.assertEqual(CUTTED.parse_ffmpeg_progress_seconds("out_time", "00:01:30.500000"), 90.5)
+        self.assertEqual(CUTTED.parse_ffmpeg_speed("1.25x"), 1.25)
+        self.assertIn("Renderizando 50%", CUTTED.render_progress_message(5, 10, "1.25x", 4))
+        self.assertIn("-progress", CUTTED.ffmpeg_command_with_progress(["ffmpeg", "-y"]))
+
     def test_render_jobs_support_cancel_remove_and_process_cancel(self) -> None:
         source = MODULE_PATH.read_text(encoding="utf-8")
 
         self.assertIn('"/api/render-jobs/[^/]+/remove"', source)
+        self.assertIn('"/api/render-jobs/[^/]+/profile"', source)
         self.assertIn("def remove_render_job(job_id: str, gallery_dir: Path)", source)
+        self.assertIn("def update_render_job_profile(job_id: str, gallery_dir: Path, profile_value: object)", source)
         self.assertIn("def render_job_cancelled(job_id: object)", source)
         self.assertIn("process = subprocess.Popen(", source)
+        self.assertIn("update_render_job_progress(job_id, last_seconds, duration, last_speed)", source)
         self.assertIn("process.terminate()", source)
         self.assertIn('raise RuntimeError("Render cancelado.")', source)
+
+    def test_render_queue_profile_and_progress_ui_are_available(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("setRenderQueueProfile", html)
+        self.assertIn("updateRenderQueueProfileJob", html)
+        self.assertIn("/profile", html)
+        self.assertIn("job.speed", html)
+        self.assertIn("job.eta_seconds", html)
+        self.assertIn("formatRenderEta", html)
+        self.assertIn("Render atual mantem os threads atuais", html)
 
     def test_render_camera_path_is_rebased_after_trim(self) -> None:
         html = gallery_html()

@@ -330,6 +330,9 @@ class RenderJob:
     payload: dict[str, object]
     message: str = ""
     progress: int = 0
+    speed: str = ""
+    eta_seconds: float | None = None
+    processed_seconds: float = 0.0
     files: list[dict[str, object]] | None = None
     export_dir: str = ""
     error: str = ""
@@ -907,6 +910,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if re.fullmatch(r"/api/render-jobs/[^/]+/cancel", path):
                 self.handle_render_cancel(path)
                 return
+            if re.fullmatch(r"/api/render-jobs/[^/]+/profile", path):
+                self.handle_render_profile(base_dir, path)
+                return
             if re.fullmatch(r"/api/render-jobs/[^/]+/remove", path):
                 self.handle_render_remove(base_dir, path)
                 return
@@ -1041,6 +1047,16 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             job_id = path.split("/")[-2]
             result = cancel_render_job(job_id)
             send_json_response(self, 200 if result.get("ok") else 404, result)
+
+        def handle_render_profile(self, request_base_dir: Path, path: str) -> None:
+            try:
+                job_id = path.split("/")[-2]
+                payload = read_json_body(self)
+                gallery_dir = resolve_request_gallery_dir(request_base_dir, payload)
+                result = update_render_job_profile(job_id, gallery_dir, payload.get("resource_profile"))
+                send_json_response(self, 200 if result.get("ok") else 404, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
 
         def handle_render_remove(self, request_base_dir: Path, path: str) -> None:
             try:
@@ -1227,6 +1243,9 @@ def start_render_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path
         payload,
         "Na fila de render.",
         4,
+        "",
+        None,
+        0.0,
         [],
     )
     with RENDER_JOBS_LOCK:
@@ -1245,6 +1264,9 @@ def run_render_job(job_id: str) -> None:
         job.status = "rendering"
         job.message = "Renderizando em background."
         job.progress = 12
+        job.speed = ""
+        job.eta_seconds = None
+        job.processed_seconds = 0.0
         job.updated_at = time.time()
         persist_render_queue(job.gallery_dir)
     try:
@@ -1256,6 +1278,8 @@ def run_render_job(job_id: str) -> None:
             current.status = "ready"
             current.message = "Render pronto."
             current.progress = 100
+            current.speed = ""
+            current.eta_seconds = 0.0
             current.updated_at = time.time()
             current.files = list(result.get("files") or [])
             current.export_dir = str(result.get("export_dir") or "")
@@ -1303,6 +1327,57 @@ def remove_render_job(job_id: str, gallery_dir: Path) -> dict[str, object]:
         return {"ok": True, "jobs": render_queue_snapshot_without_lock(target_dir)}
 
 
+def update_render_job_profile(job_id: str, gallery_dir: Path, profile_value: object) -> dict[str, object]:
+    profile = clean_render_resource_profile(profile_value)
+    with RENDER_JOBS_LOCK:
+        job = RENDER_JOBS.get(job_id)
+        if job is not None:
+            if job.status != "queued":
+                return {
+                    "ok": True,
+                    "changed": False,
+                    "job": render_job_to_dict(job),
+                    "message": "Perfil salvo para proximos renders; este render ja iniciou.",
+                    "jobs": render_queue_snapshot_without_lock(job.gallery_dir),
+                }
+            job.resource_profile = profile
+            job.payload["resource_profile"] = profile
+            job.fingerprint = render_job_fingerprint(job.payload, profile)
+            job.updated_at = time.time()
+            job.message = f"Perfil alterado para {render_profile_label(profile)}."
+            persist_render_queue(job.gallery_dir)
+            return {
+                "ok": True,
+                "changed": True,
+                "job": render_job_to_dict(job),
+                "jobs": render_queue_snapshot_without_lock(job.gallery_dir),
+            }
+        manifest = read_render_queue_manifest(gallery_dir)
+        items = manifest.get("jobs") if isinstance(manifest, dict) else []
+        if not isinstance(items, list):
+            return {"ok": False, "error": "Render job not found."}
+        changed = False
+        for item in items:
+            if not isinstance(item, dict) or str(item.get("id")) != job_id:
+                continue
+            if item.get("status") != "queued":
+                return {
+                    "ok": True,
+                    "changed": False,
+                    "message": "Perfil salvo para proximos renders; este render ja iniciou.",
+                    "jobs": render_queue_snapshot_without_lock(gallery_dir),
+                }
+            item["resource_profile"] = profile
+            item["updated_at"] = time.time()
+            item["message"] = f"Perfil alterado para {render_profile_label(profile)}."
+            changed = True
+            break
+        if not changed:
+            return {"ok": False, "error": "Render job not found."}
+        write_render_queue_manifest(gallery_dir, items)
+        return {"ok": True, "changed": True, "jobs": render_queue_snapshot_without_lock(gallery_dir)}
+
+
 def render_job_cancelled(job_id: object) -> bool:
     if not job_id:
         return False
@@ -1342,6 +1417,9 @@ def render_job_to_dict(job: RenderJob) -> dict[str, object]:
         "status": job.status,
         "message": job.message,
         "progress": job.progress,
+        "speed": job.speed,
+        "eta_seconds": job.eta_seconds,
+        "processed_seconds": job.processed_seconds,
         "created_at": job.created_at,
         "updated_at": job.updated_at,
         "resource_profile": job.resource_profile,
@@ -1378,6 +1456,9 @@ def restore_render_jobs_from_manifest(gallery_dir: Path, base_dir: Path) -> None
                 {},
                 "Aguardando novo envio para retomar.",
                 0,
+                "",
+                None,
+                0.0,
                 [],
                 str(item.get("export_dir") or ""),
                 "Servidor reiniciado antes de concluir este render.",
@@ -1458,6 +1539,10 @@ def clean_render_resource_profile(value: object) -> str:
     aliases = {"medio": "medium", "médio": "medium", "alto": "high", "eco": "eco"}
     profile = aliases.get(profile, profile)
     return profile if profile in {"eco", "medium", "high"} else "medium"
+
+
+def render_profile_label(profile: str) -> str:
+    return {"eco": "Eco", "medium": "Medio", "high": "Alto"}.get(profile, "Medio")
 
 
 def finalized_results_from_gallery(gallery_dir: Path) -> dict[str, object]:
@@ -6419,32 +6504,141 @@ def ffmpeg_creation_flags(row: dict[str, object]) -> int:
     return flags | getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
 
 
+def ffmpeg_command_with_progress(command: list[str]) -> list[str]:
+    if not command:
+        return command
+    return [command[0], "-hide_banner", "-nostats", "-loglevel", "error", "-progress", "pipe:1", *command[1:]]
+
+
+def parse_ffmpeg_time(value: str) -> float | None:
+    text = value.strip()
+    if not text or text == "N/A":
+        return None
+    match = re.fullmatch(r"(\d+):(\d{2}):(\d{2})(?:\.(\d+))?", text)
+    if match:
+        hours, minutes, seconds, fraction = match.groups()
+        return int(hours) * 3600 + int(minutes) * 60 + int(seconds) + float(f"0.{fraction or '0'}")
+    try:
+        return max(float(text), 0.0)
+    except ValueError:
+        return None
+
+
+def parse_ffmpeg_progress_seconds(key: str, value: str) -> float | None:
+    if key in {"out_time_us", "out_time_ms"}:
+        try:
+            return max(float(value) / 1_000_000.0, 0.0)
+        except ValueError:
+            return None
+    if key == "out_time":
+        return parse_ffmpeg_time(value)
+    return None
+
+
+def parse_ffmpeg_speed(value: str) -> float | None:
+    text = value.strip().lower().removesuffix("x")
+    try:
+        speed = float(text)
+    except ValueError:
+        return None
+    return speed if speed > 0 else None
+
+
+def update_render_job_progress(job_id: object, processed: float, duration: float, speed_label: str = "") -> None:
+    if not job_id or duration <= 0:
+        return
+    progress = int(clamp((processed / duration) * 84 + 12, 12, 96))
+    speed = parse_ffmpeg_speed(speed_label) if speed_label else None
+    remaining = max(duration - processed, 0.0)
+    eta = (remaining / speed) if speed else None
+    with RENDER_JOBS_LOCK:
+        job = RENDER_JOBS.get(str(job_id))
+        if job is None or job.status != "rendering":
+            return
+        if progress < job.progress and job.progress < 96:
+            progress = job.progress
+        job.progress = progress
+        job.processed_seconds = round(max(processed, job.processed_seconds), 3)
+        job.speed = speed_label.strip()
+        job.eta_seconds = round(eta, 1) if eta is not None else None
+        job.message = render_progress_message(job.processed_seconds, duration, job.speed, job.eta_seconds)
+        job.updated_at = time.time()
+        persist_render_queue(job.gallery_dir)
+
+
+def render_progress_message(processed: float, duration: float, speed: str, eta: float | None) -> str:
+    parts = [f"Renderizando {int(clamp((processed / max(duration, 0.1)) * 100, 0, 99))}%"]
+    if speed:
+        parts.append(speed)
+    if eta is not None and eta >= 1:
+        parts.append(f"{format_eta_seconds(eta)} restantes")
+    return " - ".join(parts)
+
+
+def format_eta_seconds(value: float) -> str:
+    seconds = int(max(value, 0))
+    minutes, sec = divmod(seconds, 60)
+    if minutes:
+        return f"{minutes}m {sec:02d}s"
+    return f"{sec}s"
+
+
 def run_ffmpeg_command(command: list[str], row: dict[str, object], cwd: str | None = None) -> None:
+    duration = caption_duration(row)
+    job_id = row.get("_render_job_id")
     process = subprocess.Popen(
-        command,
+        ffmpeg_command_with_progress(command),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         cwd=cwd,
         creationflags=ffmpeg_creation_flags(row),
     )
-    job_id = row.get("_render_job_id")
+    stdout_lines: list[str] = []
+    stderr = ""
+    last_progress_update = 0.0
+    last_seconds = 0.0
+    last_speed = ""
     while True:
-        try:
-            stdout, stderr = process.communicate(timeout=0.25)
+        line = process.stdout.readline() if process.stdout else ""
+        if line:
+            stdout_lines.append(line)
+            key, separator, value = line.strip().partition("=")
+            if separator:
+                seconds = parse_ffmpeg_progress_seconds(key, value)
+                if seconds is not None:
+                    last_seconds = seconds
+                if key == "speed":
+                    last_speed = value.strip()
+                now = time.time()
+                if last_seconds > 0 and now - last_progress_update >= 0.8:
+                    update_render_job_progress(job_id, last_seconds, duration, last_speed)
+                    last_progress_update = now
+            continue
+        if process.poll() is not None:
             break
+        if not render_job_cancelled(job_id):
+            time.sleep(0.1)
+            continue
+        process.terminate()
+        try:
+            _, stderr = process.communicate(timeout=3)
         except subprocess.TimeoutExpired:
-            if not render_job_cancelled(job_id):
-                continue
-            process.terminate()
-            try:
-                stdout, stderr = process.communicate(timeout=3)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                stdout, stderr = process.communicate(timeout=3)
-            raise RuntimeError("Render cancelado.")
-    if process.returncode != 0:
-        raise subprocess.CalledProcessError(process.returncode, command, output=stdout, stderr=stderr)
+            process.kill()
+            _, stderr = process.communicate(timeout=3)
+        raise RuntimeError("Render cancelado.")
+    if process.stdout:
+        remaining_stdout = process.stdout.read()
+        if remaining_stdout:
+            stdout_lines.append(remaining_stdout)
+    if process.stderr:
+        stderr = process.stderr.read()
+    return_code = process.wait()
+    if last_seconds > 0:
+        update_render_job_progress(job_id, last_seconds, duration, last_speed)
+    stdout = "".join(stdout_lines)
+    if return_code != 0:
+        raise subprocess.CalledProcessError(return_code, command, output=stdout, stderr=stderr)
 
 
 def caption_input_path(row: dict[str, object], base_dir: Path) -> Path | None:
@@ -14416,17 +14610,13 @@ function renderFinalizeResults(files, options = {}){
     </details>`;
   }).join("");
 }
-const renderQueueState = { profile: localStorage.getItem("cuted-render-profile") || "medium", pollId: null, activityPollId: null, lastFocus: null };
+const renderQueueState = { profile: localStorage.getItem("cuted-render-profile") || "medium", pollId: null, activityPollId: null, lastFocus: null, lastJobs: [] };
 function setupRenderQueuePanel(){
   const modal = document.querySelector("[data-render-queue-modal]");
   if (!modal) return;
   document.querySelectorAll("[data-render-profile]").forEach(button => {
     button.classList.toggle("active", button.dataset.renderProfile === renderQueueState.profile);
-    button.addEventListener("click", () => {
-      renderQueueState.profile = button.dataset.renderProfile || "medium";
-      localStorage.setItem("cuted-render-profile", renderQueueState.profile);
-      document.querySelectorAll("[data-render-profile]").forEach(item => item.classList.toggle("active", item === button));
-    });
+    button.addEventListener("click", () => setRenderQueueProfile(button.dataset.renderProfile || "medium"));
   });
   document.querySelector("[data-render-queue-close]")?.addEventListener("click", () => closeRenderQueuePanel());
   modal.addEventListener("click", event => { if (event.target === modal) closeRenderQueuePanel(); });
@@ -14492,6 +14682,7 @@ function renderQueueJobs(jobs){
   const list = document.querySelector("[data-render-queue-list]");
   const status = document.querySelector("[data-render-queue-status]");
   const safeJobs = Array.isArray(jobs) ? jobs : [];
+  renderQueueState.lastJobs = safeJobs;
   const running = safeJobs.filter(job => job.status === "rendering" || job.status === "queued").length;
   const ready = safeJobs.filter(job => job.status === "ready").length;
   updateHeaderRenderActivity(safeJobs);
@@ -14523,7 +14714,14 @@ function renderQueueJobHtml(job){
   const summary = job.summary || {};
   const id = String(job.id || "");
   const title = `#${String(summary.rank || "").padStart(2, "0")} ${summary.title || "Render CUTED"}`;
-  const meta = [summary.platform || "", summary.duration ? fixed(summary.duration) : "", renderProfileLabel(job.resource_profile)].filter(Boolean).join(" - ");
+  const eta = Number(job.eta_seconds || 0);
+  const meta = [
+    summary.platform || "",
+    summary.duration ? fixed(summary.duration) : "",
+    renderProfileLabel(job.resource_profile),
+    job.speed || "",
+    eta > 0 && job.status === "rendering" ? `${formatRenderEta(eta)} restantes` : ""
+  ].filter(Boolean).join(" - ");
   const progress = Math.max(0, Math.min(100, Number(job.progress || 0)));
   const folder = job.export_dir || job.output_dir || "";
   const canOpen = job.status === "ready" && folder;
@@ -14534,6 +14732,7 @@ function renderQueueJobHtml(job){
       <div class="render-job-title"><span class="render-job-pill">${escapeHtml(renderStatusLabel(job.status))}</span><strong>${escapeHtml(title)}</strong></div>
       <div class="render-job-meta">${escapeHtml(job.message || meta || "Render local")}</div>
       <div class="render-job-progress" style="--progress:${progress}%"><span></span></div>
+      <div class="render-job-meta">${escapeHtml(`${Math.round(progress)}%${meta ? ` - ${meta}` : ""}`)}</div>
       ${job.error ? `<div class="render-job-meta">${escapeHtml(job.error)}</div>` : ""}
     </div>
     <div class="render-job-actions">
@@ -14551,6 +14750,51 @@ function renderStatusLabel(status){
 function renderProfileLabel(profile){
   const labels = { eco: "Eco", medium: "Medio", high: "Alto" };
   return labels[profile] || "Medio";
+}
+function formatRenderEta(value){
+  const seconds = Math.max(0, Math.round(Number(value) || 0));
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return minutes ? `${minutes}m ${String(rest).padStart(2, "0")}s` : `${rest}s`;
+}
+async function setRenderQueueProfile(profile){
+  renderQueueState.profile = profile || "medium";
+  localStorage.setItem("cuted-render-profile", renderQueueState.profile);
+  document.querySelectorAll("[data-render-profile]").forEach(item => {
+    item.classList.toggle("active", item.dataset.renderProfile === renderQueueState.profile);
+  });
+  const queued = renderQueueState.lastJobs.filter(job => job.status === "queued");
+  const rendering = renderQueueState.lastJobs.some(job => job.status === "rendering");
+  const status = document.querySelector("[data-render-queue-status]");
+  if (!queued.length) {
+    if (status && rendering) {
+      status.textContent = `${renderProfileLabel(renderQueueState.profile)} salvo para proximos renders. Render atual mantem os threads atuais.`;
+    }
+    return;
+  }
+  if (status) status.textContent = `Atualizando ${queued.length} render(es) em fila para ${renderProfileLabel(renderQueueState.profile)}...`;
+  try {
+    const results = await Promise.all(queued.map(job => updateRenderQueueProfileJob(String(job.id || ""), renderQueueState.profile)));
+    const changed = results.filter(item => item.changed).length;
+    if (status) status.textContent = changed
+      ? `${changed} render(es) em fila atualizados para ${renderProfileLabel(renderQueueState.profile)}.`
+      : `${renderProfileLabel(renderQueueState.profile)} salvo para proximos renders.`;
+    await loadRenderQueue();
+  } catch (error) {
+    if (status) status.textContent = error.message || "Nao consegui atualizar o perfil da fila.";
+  }
+}
+async function updateRenderQueueProfileJob(jobId, profile){
+  if (!jobId) return { changed: false };
+  const response = await fetch(`/api/render-jobs/${encodeURIComponent(jobId)}/profile`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ gallery_path: currentGalleryPath(), resource_profile: profile })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload.ok) throw new Error(payload.error || "Nao consegui atualizar o perfil da fila.");
+  if (Array.isArray(payload.jobs)) renderQueueState.lastJobs = payload.jobs;
+  return payload;
 }
 function renderQueuePayloadForCard(card){
   const data = buildExportData();
