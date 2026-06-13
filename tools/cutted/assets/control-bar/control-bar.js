@@ -14,6 +14,7 @@
     muted: false,
     ready: false,
     discarded: false,
+    renderQueued: false,
     status: null,
     volume: 75
   };
@@ -131,6 +132,7 @@
       onInsertClick: options.onInsertClick || nested.onInsertClick,
       onStateChange: options.onStateChange || nested.onStateChange,
       onReadyCancel: options.onReadyCancel || nested.onReadyCancel,
+      onSendRender: options.onSendRender || nested.onSendRender,
       onVolumeChange: options.onVolumeChange || nested.onVolumeChange
     };
   }
@@ -164,6 +166,7 @@
       muted: Boolean(state.muted),
       ready: Boolean(state.ready),
       discarded: Boolean(state.discarded),
+      renderQueued: Boolean(state.renderQueued),
       status: normalizeStatus(state.status),
       volume: clamp(Number(state.volume), 0, 100)
     };
@@ -217,6 +220,7 @@
       insertDots: Array.from(container.querySelectorAll("[data-cuted-insert-dot]")),
       insertMenu: container.querySelector("[data-cuted-insert-menu]"),
       readyCancelButton: container.querySelector("[data-cuted-control='ready-cancel']"),
+      sendRenderButton: container.querySelector("[data-cuted-control='send-render']"),
       renderZone: container.querySelector("[data-cuted-render-zone]"),
       sonicRail: container.querySelector("[data-cuted-sonic-rail]"),
       soundButton: container.querySelector("[data-cuted-control='sound']"),
@@ -393,9 +397,18 @@
     elements.readyCancelButton.addEventListener("click", () => {
       state.ready = false;
       state.discarded = false;
+      state.renderQueued = false;
       setStatus({ kind: "editing", label: "Back to editing", tone: "neutral" }, 1800);
       sync();
       callbacks.onReadyCancel?.(snapshotState(state));
+    });
+
+    elements.sendRenderButton.addEventListener("click", () => {
+      if (!state.ready || state.discarded || state.busy) return;
+      state.renderQueued = true;
+      setStatus({ kind: "ready", label: "SENT", persistent: true, tone: "green" });
+      sync();
+      callbacks.onSendRender?.(snapshotState(state));
     });
 
     elements.formatButton.addEventListener("click", () => {
@@ -685,6 +698,7 @@
               </button>
             </div>
             <div class="cuted-ready-pill" aria-live="polite">
+              <button class="cuted-send-render" type="button" data-cuted-control="send-render">Send to Render</button>
               <button class="cuted-ready-cancel" type="button" aria-label="Back to editing" data-cuted-control="ready-cancel">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M18 6 6 18"></path>

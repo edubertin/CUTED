@@ -316,8 +316,29 @@ class ImportJob:
     stderr: str = ""
 
 
+@dataclass
+class RenderJob:
+    id: str
+    fingerprint: str
+    status: str
+    created_at: float
+    updated_at: float
+    gallery_dir: Path
+    base_dir: Path
+    output_dir: Path
+    resource_profile: str
+    payload: dict[str, object]
+    message: str = ""
+    progress: int = 0
+    files: list[dict[str, object]] | None = None
+    export_dir: str = ""
+    error: str = ""
+
+
 IMPORT_JOBS: dict[str, ImportJob] = {}
 IMPORT_JOBS_LOCK = threading.Lock()
+RENDER_JOBS: dict[str, RenderJob] = {}
+RENDER_JOBS_LOCK = threading.Lock()
 VISUAL_MAP_TASKS: set[str] = set()
 VISUAL_MAP_TASKS_LOCK = threading.Lock()
 YOLO_MODEL_CACHE: dict[str, object | None] = {}
@@ -853,6 +874,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if path == "/api/import-jobs":
                 self.handle_import_job(base_dir)
                 return
+            if path == "/api/render-jobs":
+                self.handle_render_job(base_dir)
+                return
             if path == "/api/camera/analyze":
                 self.handle_camera_analyze(base_dir)
                 return
@@ -880,6 +904,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if re.fullmatch(r"/api/import-jobs/[^/]+/cancel", path):
                 self.handle_import_cancel(path)
                 return
+            if re.fullmatch(r"/api/render-jobs/[^/]+/cancel", path):
+                self.handle_render_cancel(path)
+                return
             if path != "/api/finalize":
                 self.send_error(404, "Not found")
                 return
@@ -888,6 +915,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             path = urllib.parse.urlparse(self.path).path
             if path == "/api/finalize-results":
                 self.handle_finalize_results(base_dir)
+                return
+            if path == "/api/render-jobs":
+                self.handle_render_jobs(base_dir)
                 return
             if path == "/api/projects":
                 self.handle_projects(base_dir)
@@ -903,6 +933,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
                 return
             if re.fullmatch(r"/api/import-jobs/[^/]+", path):
                 self.handle_import_status(path)
+                return
+            if re.fullmatch(r"/api/render-jobs/[^/]+", path):
+                self.handle_render_status(path)
                 return
             if self.handle_range_request():
                 return
@@ -977,6 +1010,33 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
         def handle_import_cancel(self, path: str) -> None:
             job_id = path.split("/")[-2]
             result = cancel_import_job(job_id)
+            send_json_response(self, 200 if result.get("ok") else 404, result)
+
+        def handle_render_job(self, request_base_dir: Path) -> None:
+            try:
+                result = start_render_job(self, request_base_dir)
+                send_json_response(self, 200, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
+
+        def handle_render_jobs(self, request_base_dir: Path) -> None:
+            try:
+                result = render_jobs_from_request(self, request_base_dir)
+                send_json_response(self, 200, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
+
+        def handle_render_status(self, path: str) -> None:
+            job_id = path.rsplit("/", 1)[-1]
+            job = render_job_snapshot(job_id)
+            if job is None:
+                send_json_response(self, 404, {"ok": False, "error": "Render job not found."})
+                return
+            send_json_response(self, 200, {"ok": True, "job": job})
+
+        def handle_render_cancel(self, path: str) -> None:
+            job_id = path.split("/")[-2]
+            result = cancel_render_job(job_id)
             send_json_response(self, 200 if result.get("ok") else 404, result)
 
         def handle_projects(self, request_base_dir: Path) -> None:
@@ -1078,28 +1138,36 @@ def parse_range_header(header: str, file_size: int) -> tuple[int, int] | None:
 
 def finalize_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
     payload = read_json_body(handler)
+    return finalize_payload(payload, base_dir)
+
+
+def finalize_payload(
+    payload: dict[str, object], base_dir: Path, out_dir: Path | None = None,
+    resource_profile: str = "medium",
+) -> dict[str, object]:
     queue = payload.get("queue") if isinstance(payload, dict) else None
     if not isinstance(queue, dict):
         raise ValueError("Missing queue data.")
     gallery_dir = resolve_request_gallery_dir(base_dir, payload)
     caption_path = gallery_dir / "caption-queue.json"
-    out_dir = gallery_dir / "captioned-clips"
-    out_dir.mkdir(parents=True, exist_ok=True)
+    target_dir = out_dir or gallery_dir / "captioned-clips"
+    target_dir.mkdir(parents=True, exist_ok=True)
     materialize_queue_image_assets(queue, gallery_dir / "overlay-assets")
     materialize_queue_bumper_assets(queue, gallery_dir / "bumper-assets")
     caption_path.write_text(json.dumps(queue, ensure_ascii=False, indent=2), encoding="utf-8")
     rows = caption_rows_from_data(queue)
+    apply_render_resource_to_rows(rows, resource_profile)
     options = SimpleNamespace(
         chars_per_line=int(payload.get("chars_per_line") or 28),
         max_lines=int(payload.get("max_lines") or 2),
         captions_enabled=bool(payload.get("captions_enabled", True)),
     )
-    captioned = caption_selected_rows(rows, gallery_dir, out_dir, find_ffmpeg(), options)
+    captioned = caption_selected_rows(rows, gallery_dir, target_dir, find_ffmpeg(), options)
     captioned, export_dir = export_captioned_rows(captioned, gallery_dir)
     manifest = {"source_caption_queue": str(caption_path), "captioned": captioned}
     if export_dir:
         manifest["export_dir"] = str(export_dir)
-    (out_dir / "captioned-clips.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    (target_dir / "captioned-clips.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"ok": True, "count": len(captioned), "files": finalized_file_urls(captioned, gallery_dir), "export_dir": str(export_dir) if export_dir else ""}
 
 
@@ -1108,6 +1176,248 @@ def finalize_results_from_request(handler: http.server.BaseHTTPRequestHandler, b
     query = urllib.parse.parse_qs(parsed.query)
     gallery_dir = resolve_request_gallery_dir(base_dir, {"gallery_path": query.get("gallery_path", [""])[0]})
     return finalized_results_from_gallery(gallery_dir)
+
+
+def render_jobs_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
+    parsed = urllib.parse.urlparse(handler.path)
+    query = urllib.parse.parse_qs(parsed.query)
+    gallery_dir = resolve_request_gallery_dir(base_dir, {"gallery_path": query.get("gallery_path", [""])[0]})
+    restore_render_jobs_from_manifest(gallery_dir, base_dir)
+    return {"ok": True, "jobs": render_queue_snapshot(gallery_dir)}
+
+
+def start_render_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
+    payload = read_json_body(handler)
+    queue = payload.get("queue") if isinstance(payload, dict) else None
+    if not isinstance(queue, dict) or not isinstance(queue.get("caption_queue"), list) or not queue.get("caption_queue"):
+        raise ValueError("Selecione ao menos um corte para enviar ao render.")
+    gallery_dir = resolve_request_gallery_dir(base_dir, payload)
+    profile = clean_render_resource_profile(payload.get("resource_profile"))
+    fingerprint = render_job_fingerprint(payload, profile)
+    restore_render_jobs_from_manifest(gallery_dir, base_dir)
+    existing = render_job_by_fingerprint(gallery_dir, fingerprint)
+    if existing is not None:
+        return {"ok": True, "job": existing, "duplicate": True}
+    job_id = f"render-{uuid.uuid4().hex[:10]}"
+    output_dir = render_job_output_dir(gallery_dir, job_id)
+    job = RenderJob(
+        job_id,
+        fingerprint,
+        "queued",
+        time.time(),
+        time.time(),
+        gallery_dir,
+        base_dir,
+        output_dir,
+        profile,
+        payload,
+        "Na fila de render.",
+        4,
+        [],
+    )
+    with RENDER_JOBS_LOCK:
+        RENDER_JOBS[job.id] = job
+    persist_render_queue(gallery_dir)
+    thread = threading.Thread(target=run_render_job, args=(job.id,), daemon=True)
+    thread.start()
+    return {"ok": True, "job": render_job_to_dict(job), "duplicate": False}
+
+
+def run_render_job(job_id: str) -> None:
+    with RENDER_JOBS_LOCK:
+        job = RENDER_JOBS.get(job_id)
+        if job is None:
+            return
+        job.status = "rendering"
+        job.message = "Renderizando em background."
+        job.progress = 12
+        job.updated_at = time.time()
+        persist_render_queue(job.gallery_dir)
+    try:
+        result = finalize_payload(job.payload, job.base_dir, job.output_dir, job.resource_profile)
+        with RENDER_JOBS_LOCK:
+            current = RENDER_JOBS.get(job_id)
+            if current is None or current.status == "cancelled":
+                return
+            current.status = "ready"
+            current.message = "Render pronto."
+            current.progress = 100
+            current.updated_at = time.time()
+            current.files = list(result.get("files") or [])
+            current.export_dir = str(result.get("export_dir") or "")
+            persist_render_queue(current.gallery_dir)
+            upsert_project_catalog_entry(project_entry_from_gallery(current.gallery_dir, current.base_dir))
+    except Exception as error:
+        with RENDER_JOBS_LOCK:
+            current = RENDER_JOBS.get(job_id)
+            if current is None or current.status == "cancelled":
+                return
+            current.status = "failed"
+            current.message = "Falha ao renderizar."
+            current.progress = 100
+            current.updated_at = time.time()
+            current.error = str(error)
+            persist_render_queue(current.gallery_dir)
+
+
+def cancel_render_job(job_id: str) -> dict[str, object]:
+    with RENDER_JOBS_LOCK:
+        job = RENDER_JOBS.get(job_id)
+        if job is None:
+            return {"ok": False, "error": "Render job not found."}
+        if job.status not in {"queued", "rendering"}:
+            return {"ok": True, "job": render_job_to_dict(job)}
+        job.status = "cancelled"
+        job.message = "Render cancelado."
+        job.progress = 100
+        job.updated_at = time.time()
+        persist_render_queue(job.gallery_dir)
+        return {"ok": True, "job": render_job_to_dict(job)}
+
+
+def render_job_snapshot(job_id: str) -> dict[str, object] | None:
+    with RENDER_JOBS_LOCK:
+        job = RENDER_JOBS.get(job_id)
+        return render_job_to_dict(job) if job else None
+
+
+def render_job_by_fingerprint(gallery_dir: Path, fingerprint: str) -> dict[str, object] | None:
+    for job in render_queue_snapshot(gallery_dir):
+        if job.get("fingerprint") == fingerprint and job.get("status") in {"queued", "rendering", "ready"}:
+            return job
+    return None
+
+
+def render_queue_snapshot(gallery_dir: Path) -> list[dict[str, object]]:
+    manifest_jobs = read_render_queue_manifest(gallery_dir).get("jobs", [])
+    jobs = [item for item in manifest_jobs if isinstance(item, dict)]
+    with RENDER_JOBS_LOCK:
+        live = [render_job_to_dict(job) for job in RENDER_JOBS.values() if job.gallery_dir == gallery_dir]
+    merged: dict[str, dict[str, object]] = {str(job.get("id")): job for job in jobs if job.get("id")}
+    for job in live:
+        merged[str(job["id"])] = job
+    return sorted(merged.values(), key=lambda item: float(item.get("created_at") or 0), reverse=True)
+
+
+def render_job_to_dict(job: RenderJob) -> dict[str, object]:
+    return {
+        "id": job.id,
+        "fingerprint": job.fingerprint,
+        "status": job.status,
+        "message": job.message,
+        "progress": job.progress,
+        "created_at": job.created_at,
+        "updated_at": job.updated_at,
+        "resource_profile": job.resource_profile,
+        "output_dir": str(job.output_dir),
+        "export_dir": job.export_dir,
+        "files": job.files or [],
+        "error": job.error,
+        "summary": render_job_summary(job.payload),
+    }
+
+
+def restore_render_jobs_from_manifest(gallery_dir: Path, base_dir: Path) -> None:
+    manifest = read_render_queue_manifest(gallery_dir)
+    items = manifest.get("jobs") if isinstance(manifest, dict) else []
+    if not isinstance(items, list):
+        return
+    with RENDER_JOBS_LOCK:
+        for item in items:
+            if not isinstance(item, dict) or not item.get("id") or item.get("id") in RENDER_JOBS:
+                continue
+            if item.get("status") not in {"queued", "rendering"}:
+                continue
+            item["status"] = "queued"
+            job = RenderJob(
+                str(item["id"]),
+                str(item.get("fingerprint") or ""),
+                "queued",
+                float(item.get("created_at") or time.time()),
+                time.time(),
+                gallery_dir,
+                base_dir,
+                Path(str(item.get("output_dir") or render_job_output_dir(gallery_dir, str(item["id"])))),
+                clean_render_resource_profile(item.get("resource_profile")),
+                {},
+                "Aguardando novo envio para retomar.",
+                0,
+                [],
+                str(item.get("export_dir") or ""),
+                "Servidor reiniciado antes de concluir este render.",
+            )
+            RENDER_JOBS[job.id] = job
+
+
+def render_job_fingerprint(payload: dict[str, object], profile: str) -> str:
+    relevant = {
+        "queue": payload.get("queue"),
+        "chars_per_line": payload.get("chars_per_line"),
+        "max_lines": payload.get("max_lines"),
+        "captions_enabled": payload.get("captions_enabled"),
+        "resource_profile": profile,
+        "renderer": "cuted-render-queue-v1",
+    }
+    raw = json.dumps(relevant, ensure_ascii=False, sort_keys=True, default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
+
+
+def render_job_summary(payload: dict[str, object]) -> dict[str, object]:
+    queue = payload.get("queue") if isinstance(payload, dict) else None
+    rows = queue.get("caption_queue") if isinstance(queue, dict) else []
+    first = rows[0] if isinstance(rows, list) and rows and isinstance(rows[0], dict) else {}
+    return {
+        "count": len(rows) if isinstance(rows, list) else 0,
+        "rank": first.get("rank", ""),
+        "title": first.get("title") or first.get("peak_text") or "Render CUTED",
+        "platform": first.get("platform_label") or first.get("platform") or "",
+        "duration": first.get("adjusted_duration") or "",
+    }
+
+
+def render_queue_manifest_path(gallery_dir: Path) -> Path:
+    return gallery_dir / PROJECT_RENDERS_DIR_NAME / "render-queue.json"
+
+
+def render_job_output_dir(gallery_dir: Path, job_id: str) -> Path:
+    return gallery_dir / PROJECT_RENDERS_DIR_NAME / "jobs" / job_id
+
+
+def read_render_queue_manifest(gallery_dir: Path) -> dict[str, object]:
+    path = render_queue_manifest_path(gallery_dir)
+    if not path.exists():
+        return {"version": 1, "jobs": []}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return {"version": 1, "jobs": []}
+    return data if isinstance(data, dict) else {"version": 1, "jobs": []}
+
+
+def persist_render_queue(gallery_dir: Path) -> None:
+    path = render_queue_manifest_path(gallery_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    jobs = render_queue_snapshot_without_lock(gallery_dir)
+    temp_path = path.with_suffix(".tmp")
+    temp_path.write_text(json.dumps({"version": 1, "jobs": jobs}, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp_path.replace(path)
+
+
+def render_queue_snapshot_without_lock(gallery_dir: Path) -> list[dict[str, object]]:
+    manifest_jobs = read_render_queue_manifest(gallery_dir).get("jobs", [])
+    jobs = [item for item in manifest_jobs if isinstance(item, dict)]
+    live = [render_job_to_dict(job) for job in RENDER_JOBS.values() if job.gallery_dir == gallery_dir]
+    merged: dict[str, dict[str, object]] = {str(job.get("id")): job for job in jobs if job.get("id")}
+    for job in live:
+        merged[str(job["id"])] = job
+    return sorted(merged.values(), key=lambda item: float(item.get("created_at") or 0), reverse=True)
+
+
+def clean_render_resource_profile(value: object) -> str:
+    profile = str(value or "medium").strip().lower()
+    aliases = {"medio": "medium", "médio": "medium", "alto": "high", "eco": "eco"}
+    profile = aliases.get(profile, profile)
+    return profile if profile in {"eco", "medium", "high"} else "medium"
 
 
 def finalized_results_from_gallery(gallery_dir: Path) -> dict[str, object]:
@@ -6026,6 +6336,53 @@ def caption_selected_rows(
     return captioned
 
 
+def apply_render_resource_to_rows(rows: list[dict[str, object]], profile: str) -> None:
+    settings = render_resource_settings(profile)
+    for row in rows:
+        row["_render_threads"] = settings["threads"]
+        row["_render_priority"] = settings["priority"]
+
+
+def render_resource_settings(profile: str) -> dict[str, object]:
+    cpus = max(os.cpu_count() or 2, 1)
+    if profile == "eco":
+        return {"threads": 1, "priority": "idle"}
+    if profile == "high":
+        return {"threads": max(cpus - 1, 1), "priority": "below_normal"}
+    return {"threads": max(cpus // 2, 1), "priority": "below_normal"}
+
+
+def ffmpeg_filter_thread_args(row: dict[str, object]) -> list[str]:
+    threads = int(row.get("_render_threads") or 0)
+    return ["-filter_complex_threads", str(max(threads, 1))] if threads > 0 else []
+
+
+def ffmpeg_codec_thread_args(row: dict[str, object]) -> list[str]:
+    threads = int(row.get("_render_threads") or 0)
+    return ["-threads", str(max(threads, 1))] if threads > 0 else []
+
+
+def ffmpeg_creation_flags(row: dict[str, object]) -> int:
+    if os.name != "nt":
+        return 0
+    priority = str(row.get("_render_priority") or "below_normal")
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    if priority == "idle":
+        return flags | getattr(subprocess, "IDLE_PRIORITY_CLASS", 0)
+    return flags | getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
+
+
+def run_ffmpeg_command(command: list[str], row: dict[str, object], cwd: str | None = None) -> None:
+    subprocess.run(
+        command,
+        check=True,
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+        creationflags=ffmpeg_creation_flags(row),
+    )
+
+
 def caption_input_path(row: dict[str, object], base_dir: Path) -> Path | None:
     rendered_file = row.get("file")
     clip_file = row.get("clip_file")
@@ -6236,7 +6593,7 @@ def render_captioned_clip(
     if overlay:
         filters.append(overlay)
     command = captioned_ffmpeg_command(input_path, output_path, row, preset, ffmpeg, filters)
-    subprocess.run(command, check=True, capture_output=True, text=True, cwd=str(out_dir))
+    run_ffmpeg_command(command, row, cwd=str(out_dir))
     return apply_bumpers_to_output(output_path, row, preset, base_dir, out_dir, ffmpeg)
 
 
@@ -6309,22 +6666,22 @@ def apply_bumpers_to_output(
         intro = resolve_bumper_asset_path(base_dir, bumpers["intro"])
         intro_duration = bumper_duration(bumpers["intro"], intro, ffmpeg)
         intro_segment = work_dir / "intro.mp4"
-        normalize_bumper_segment(intro, intro_segment, intro_duration, preset, ffmpeg)
+        normalize_bumper_segment(intro, intro_segment, intro_duration, preset, ffmpeg, row)
         segments.append(intro_segment)
     core_segment = work_dir / "core.mp4"
-    normalize_bumper_segment(core_source, core_segment, base_duration, preset, ffmpeg)
+    normalize_bumper_segment(core_source, core_segment, base_duration, preset, ffmpeg, row)
     segments.append(core_segment)
     if "outro" in bumpers:
         outro = resolve_bumper_asset_path(base_dir, bumpers["outro"])
         outro_duration = bumper_duration(bumpers["outro"], outro, ffmpeg)
         outro_segment = work_dir / "outro.mp4"
-        normalize_bumper_segment(outro, outro_segment, outro_duration, preset, ffmpeg)
+        normalize_bumper_segment(outro, outro_segment, outro_duration, preset, ffmpeg, row)
         segments.append(outro_segment)
     concat_path = work_dir / "concat.txt"
     concat_path.write_text("".join(concat_file_entry(path) for path in segments), encoding="utf-8")
     temp_output = work_dir / "final.mp4"
     command = [ffmpeg, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_path), "-c", "copy", "-movflags", "+faststart", str(temp_output)]
-    subprocess.run(command, check=True, capture_output=True, text=True)
+    run_ffmpeg_command(command, row)
     shutil.copy2(temp_output, output_path)
     shutil.rmtree(work_dir, ignore_errors=True)
     final_duration = base_duration + intro_duration + outro_duration
@@ -6337,7 +6694,9 @@ def apply_bumpers_to_output(
     }
 
 
-def normalize_bumper_segment(source: Path, output: Path, duration: float, preset: PlatformPreset, ffmpeg: str) -> None:
+def normalize_bumper_segment(
+    source: Path, output: Path, duration: float, preset: PlatformPreset, ffmpeg: str, row: dict[str, object]
+) -> None:
     safe_duration = max(float(duration or 0.0), 0.1)
     video_filter_arg = ",".join([
         f"scale={preset.width}:{preset.height}:force_original_aspect_ratio=increase",
@@ -6359,6 +6718,7 @@ def normalize_bumper_segment(source: Path, output: Path, duration: float, preset
         "-preset", "medium",
         "-profile:v", "main",
         "-level", "4.1",
+        *ffmpeg_codec_thread_args(row),
         "-pix_fmt", "yuv420p",
         "-r", "30",
         "-crf", FINAL_VIDEO_CRF,
@@ -6368,7 +6728,7 @@ def normalize_bumper_segment(source: Path, output: Path, duration: float, preset
         "-movflags", "+faststart",
         str(output),
     ])
-    subprocess.run(command, check=True, capture_output=True, text=True)
+    run_ffmpeg_command(command, row)
 
 
 def media_has_audio(path: Path, ffmpeg: str) -> bool:
@@ -6476,7 +6836,7 @@ def render_platform_clip(
         ffmpeg, "-y", "-ss", fmt_time(start), "-i", str(input_path), "-t", fmt_time(duration),
     ]
     command = render_command(base, output_path, row, preset, filters, duration)
-    subprocess.run(command, check=True, capture_output=True, text=True)
+    run_ffmpeg_command(command, row)
 
 
 def render_command(
@@ -6486,19 +6846,19 @@ def render_command(
     if image_overlay_layers_from_row(row):
         filter_arg = image_overlay_complex_filter(preset, row, duration, filters)
         return [
-            *base, "-filter_complex", filter_arg, "-map", "[vout]", "-map", "0:a?",
+            *base, *ffmpeg_filter_thread_args(row), "-filter_complex", filter_arg, "-map", "[vout]", "-map", "0:a?",
             *mp4_output_args(row), str(output_path),
         ]
     if camera_is_path(row):
         filter_arg = camera_path_filter(preset, row, duration, filters)
         return [
-            *base, "-filter_complex", filter_arg, "-map", "[vout]", "-map", "0:a?",
+            *base, *ffmpeg_filter_thread_args(row), "-filter_complex", filter_arg, "-map", "[vout]", "-map", "0:a?",
             *mp4_output_args(row), str(output_path),
         ]
     if camera_is_sequence(row):
         filter_arg = camera_sequence_filter(preset, row, duration, filters)
         return [
-            *base, "-filter_complex", filter_arg, "-map", "[vout]", "-map", "0:a?",
+            *base, *ffmpeg_filter_thread_args(row), "-filter_complex", filter_arg, "-map", "[vout]", "-map", "0:a?",
             *mp4_output_args(row), str(output_path),
         ]
     filter_arg = ",".join([camera_filter(preset, row), *filters])
@@ -6514,6 +6874,7 @@ def mp4_output_args(row: dict[str, object]) -> list[str]:
         "-preset", "medium",
         "-profile:v", "main",
         "-level", "4.1",
+        *ffmpeg_codec_thread_args(row),
         "-pix_fmt", "yuv420p",
         "-r", "30",
         "-crf", video_crf(row),
@@ -8954,6 +9315,25 @@ def page_html(
       </form>
     </section>
   </div>
+  <div class="render-queue-backdrop" data-render-queue-modal hidden>
+    <section class="render-queue-panel" data-render-queue-panel role="dialog" aria-modal="true" aria-labelledby="render-queue-title" tabindex="-1">
+      <div class="render-queue-aura" aria-hidden="true"></div>
+      <div class="render-queue-head">
+        <div>
+          <strong id="render-queue-title">Render</strong>
+          <p>Fila local, cache e arquivos prontos.</p>
+        </div>
+        <button class="render-queue-close" type="button" data-render-queue-close aria-label="Fechar render">X</button>
+      </div>
+      <div class="render-resource-switch" role="group" aria-label="Uso da maquina">
+        <button type="button" data-render-profile="eco">Eco</button>
+        <button type="button" data-render-profile="medium" class="active">Medio</button>
+        <button type="button" data-render-profile="high">Alto</button>
+      </div>
+      <div class="render-queue-status" data-render-queue-status>Nenhum render em andamento.</div>
+      <div class="render-queue-list" data-render-queue-list></div>
+    </section>
+  </div>
   <main>{cards}</main>
 {live_timeline_js}
 {control_bar_js}
@@ -9555,6 +9935,8 @@ body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,
 .header-actions{gap:10px;align-items:center}.header-actions .header-icon-button,#reset-ui.header-icon-button,#finalize-videos.header-icon-button,#open-settings.header-icon-button{position:relative;display:inline-grid;place-items:center;width:52px;height:52px;min-width:52px;padding:0!important;border:1px solid rgba(231,231,232,.18)!important;border-radius:16px;background:linear-gradient(180deg,rgba(255,255,255,.11),rgba(255,255,255,.025)),rgba(8,9,10,.52)!important;color:rgba(231,231,232,.8)!important;box-shadow:inset 0 1px rgba(255,255,255,.15),0 14px 34px rgba(0,0,0,.3);backdrop-filter:blur(18px) saturate(1.2);overflow:hidden}.header-actions .header-icon-button:before{position:absolute;inset:7px;border-radius:12px;background:radial-gradient(circle at 50% 22%,rgba(17,162,207,.16),transparent 62%);opacity:.64;content:"";transition:opacity .18s ease,transform .18s ease}.header-actions .header-icon-button svg{position:relative;z-index:1;width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}.header-actions .header-icon-button:hover,.header-actions .header-icon-button:focus-visible{border-color:rgba(17,162,207,.58)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(17,162,207,.22),0 16px 38px rgba(0,0,0,.34)}.header-actions .header-icon-button:hover:before,.header-actions .header-icon-button:focus-visible:before{opacity:1;transform:scale(1.08)}.header-actions .header-render-button,#finalize-videos.header-render-button{width:58px;height:58px;min-width:58px;border-color:rgba(175,207,42,.48)!important;color:var(--color-brand-green)!important;background:linear-gradient(180deg,rgba(175,207,42,.18),rgba(17,162,207,.065)),rgba(12,14,9,.7)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(175,207,42,.22),0 16px 38px rgba(0,0,0,.36)}.header-actions .header-render-button:before{background:radial-gradient(circle at 58% 25%,rgba(175,207,42,.28),transparent 60%),radial-gradient(circle at 32% 70%,rgba(17,162,207,.12),transparent 56%)}.header-actions .header-render-button svg{width:32px;height:32px;stroke-width:1.85}.header-actions .header-settings-button svg{width:26px;height:26px}.header-actions .header-new-project svg{width:29px;height:29px}#open-settings.header-settings-button.is-openai-ready{border-color:rgba(175,207,42,.62)!important;color:var(--color-brand-green)!important;background:linear-gradient(180deg,rgba(175,207,42,.2),rgba(17,162,207,.055)),rgba(10,14,8,.7)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(175,207,42,.26),0 16px 38px rgba(0,0,0,.36)}#open-settings.header-settings-button.is-openai-ready:before{background:radial-gradient(circle at 50% 34%,rgba(175,207,42,.32),transparent 62%)}#open-settings.header-settings-button.is-openai-ready svg{animation:cuted-openai-gear-spin 5.8s linear infinite;filter:drop-shadow(0 0 8px rgba(175,207,42,.34))}@keyframes cuted-openai-gear-spin{to{transform:rotate(360deg)}}
 .settings-backdrop{position:fixed!important;inset:0!important;z-index:5000!important;display:grid!important;place-items:center!important;padding:32px;background:radial-gradient(circle at 50% 42%,rgba(17,162,207,.18),transparent 30%),radial-gradient(circle at 64% 58%,rgba(175,207,42,.12),transparent 26%),rgba(0,0,0,.68)!important;backdrop-filter:blur(18px) saturate(1.18)!important;opacity:0;pointer-events:none;transition:opacity 180ms ease}.settings-backdrop[hidden]{display:none!important}.settings-backdrop.is-open{opacity:1;pointer-events:auto}.settings-backdrop.is-closing{opacity:0;pointer-events:none}.settings-panel{position:relative!important;isolation:isolate;width:min(640px,calc(100vw - 48px))!important;max-height:min(760px,calc(100vh - 56px));overflow:hidden auto;padding:20px!important;border:1px solid rgba(17,162,207,.34)!important;border-radius:22px!important;background:linear-gradient(145deg,rgba(231,231,232,.11),rgba(5,5,5,.8) 46%,rgba(11,15,10,.88)),rgba(5,5,5,.92)!important;box-shadow:0 0 0 1px rgba(255,255,255,.055),0 0 42px rgba(17,162,207,.2),0 0 58px rgba(175,207,42,.12),0 32px 86px rgba(0,0,0,.72)!important;transform:translateY(18px) scale(.965);opacity:0;outline:none;transition:transform 210ms cubic-bezier(.2,.9,.2,1),opacity 180ms ease}.settings-backdrop.is-open .settings-panel{transform:translateY(0) scale(1);opacity:1}.settings-backdrop.is-closing .settings-panel{transform:translateY(12px) scale(.975);opacity:0}.settings-aura{position:absolute;inset:-46px;z-index:-1;background:conic-gradient(from 130deg,transparent,rgba(17,162,207,.22),transparent 32%,rgba(175,207,42,.18),transparent 62%);opacity:.54;filter:blur(12px);animation:settings-aura-drift 8s linear infinite}.settings-head{position:relative;display:flex!important;align-items:flex-start!important;justify-content:space-between!important;gap:18px;padding:0 0 16px;border-bottom:1px solid rgba(231,231,232,.1)}.settings-title-row{display:flex;align-items:center;gap:14px;min-width:0}.settings-orb{display:grid;place-items:center;width:52px;height:52px;min-width:52px;border:1px solid rgba(175,207,42,.44);border-radius:16px;background:radial-gradient(circle at 50% 32%,rgba(175,207,42,.22),transparent 62%),rgba(8,11,8,.78);color:var(--color-brand-green);box-shadow:inset 0 1px rgba(255,255,255,.16),0 0 26px rgba(175,207,42,.18)}.settings-orb svg{width:27px;height:27px;fill:none;stroke:currentColor;stroke-width:1.9;animation:cuted-openai-gear-spin 7.2s linear infinite}.settings-head strong{display:block;color:var(--color-text);font-size:22px;line-height:1.05}.settings-head p{margin:5px 0 0!important;color:rgba(231,231,232,.62)!important;font-size:13px;line-height:1.25}.settings-close-button{display:grid!important;place-items:center;width:40px!important;height:40px!important;min-width:40px!important;padding:0!important;border:1px solid rgba(231,231,232,.16)!important;border-radius:14px!important;background:rgba(231,231,232,.06)!important;color:rgba(231,231,232,.75)!important;font-weight:900!important}.settings-close-button:hover,.settings-close-button:focus-visible{border-color:rgba(255,111,111,.42)!important;color:#ff9d9d!important;box-shadow:0 0 22px rgba(255,111,111,.18)}.settings-form{display:grid!important;gap:14px!important;margin-top:16px!important}.settings-status{padding:12px 14px!important;border:1px solid rgba(17,162,207,.26)!important;border-radius:14px!important;background:linear-gradient(90deg,rgba(17,162,207,.12),rgba(175,207,42,.065)),rgba(0,0,0,.3)!important;color:rgba(231,231,232,.82)!important;font-size:13px}.settings-field{display:grid!important;gap:7px!important;color:rgba(231,231,232,.68)!important;font-size:12px!important;font-weight:800;letter-spacing:.01em}.settings-form input,.settings-form select{min-height:44px!important;border:1px solid rgba(231,231,232,.14)!important;border-radius:14px!important;background:rgba(0,0,0,.52)!important;color:var(--color-text)!important;padding:10px 12px!important;box-shadow:inset 0 1px rgba(255,255,255,.05)!important}.settings-form input:focus,.settings-form select:focus{border-color:rgba(17,162,207,.62)!important;outline:none;box-shadow:0 0 0 3px rgba(17,162,207,.16),inset 0 1px rgba(255,255,255,.07)!important}.settings-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important}.settings-usage{display:grid!important;gap:5px!important;padding:12px 14px!important;border:1px solid rgba(231,231,232,.12)!important;border-radius:14px!important;background:rgba(231,231,232,.045)!important;color:rgba(231,231,232,.6)!important;font-size:12px!important}.settings-usage strong{color:rgba(231,231,232,.86)}.settings-actions{display:flex!important;justify-content:flex-end!important;gap:10px!important;flex-wrap:wrap!important;padding-top:2px}.settings-actions button{min-height:42px!important;border-radius:999px!important;padding:0 18px!important}.settings-actions button[type=submit]{border-color:rgba(175,207,42,.56)!important;background:linear-gradient(90deg,rgba(175,207,42,.95),rgba(17,162,207,.88))!important;color:#050505!important;font-weight:900!important}.settings-actions [data-settings-test]{border-color:rgba(17,162,207,.36)!important;background:rgba(17,162,207,.08)!important;color:var(--color-text)!important}.settings-form small{color:rgba(231,231,232,.5)!important;font-size:11px!important}@keyframes settings-aura-drift{to{transform:rotate(360deg)}}@media(max-width:760px){.settings-backdrop{padding:18px}.settings-panel{width:calc(100vw - 28px)!important;padding:16px!important}.settings-grid{grid-template-columns:1fr!important}.settings-head strong{font-size:20px}}
 .settings-panel{scrollbar-width:none}.settings-panel::-webkit-scrollbar{width:0;height:0}
+.render-queue-backdrop{position:fixed!important;inset:0!important;z-index:4900!important;display:grid!important;place-items:center!important;padding:32px;background:radial-gradient(circle at 46% 38%,rgba(17,162,207,.18),transparent 30%),radial-gradient(circle at 63% 62%,rgba(175,207,42,.12),transparent 28%),rgba(0,0,0,.7)!important;backdrop-filter:blur(18px) saturate(1.18)!important;opacity:0;pointer-events:none;transition:opacity 180ms ease}.render-queue-backdrop[hidden]{display:none!important}.render-queue-backdrop.is-open{opacity:1;pointer-events:auto}.render-queue-backdrop.is-closing{opacity:0;pointer-events:none}.render-queue-panel{position:relative;isolation:isolate;width:min(760px,calc(100vw - 56px));max-height:min(780px,calc(100vh - 56px));overflow:hidden;padding:20px;border:1px solid rgba(17,162,207,.34);border-radius:22px;background:linear-gradient(145deg,rgba(231,231,232,.11),rgba(5,5,5,.82) 46%,rgba(11,15,10,.9)),rgba(5,5,5,.94);box-shadow:0 0 0 1px rgba(255,255,255,.055),0 0 42px rgba(17,162,207,.2),0 0 58px rgba(175,207,42,.12),0 32px 86px rgba(0,0,0,.72);transform:translateY(18px) scale(.965);opacity:0;outline:none;transition:transform 210ms cubic-bezier(.2,.9,.2,1),opacity 180ms ease}.render-queue-backdrop.is-open .render-queue-panel{transform:translateY(0) scale(1);opacity:1}.render-queue-aura{position:absolute;inset:-46px;z-index:-1;background:conic-gradient(from 120deg,transparent,rgba(17,162,207,.2),transparent 34%,rgba(175,207,42,.18),transparent 64%);opacity:.48;filter:blur(12px);animation:settings-aura-drift 8.5s linear infinite}.render-queue-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;padding-bottom:16px;border-bottom:1px solid rgba(231,231,232,.1)}.render-queue-head strong{display:block;font-size:22px;line-height:1.05}.render-queue-head p{margin:5px 0 0;color:rgba(231,231,232,.62);font-size:13px}.render-queue-close{display:grid;place-items:center;width:40px;height:40px;min-width:40px;padding:0;border:1px solid rgba(231,231,232,.16);border-radius:14px;background:rgba(231,231,232,.06);color:rgba(231,231,232,.75);font-weight:900}.render-resource-switch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:16px 0}.render-resource-switch button{min-height:42px;border:1px solid rgba(231,231,232,.16);border-radius:14px;background:rgba(231,231,232,.055);color:rgba(231,231,232,.74);font-weight:900}.render-resource-switch button.active{border-color:rgba(175,207,42,.58);background:linear-gradient(90deg,rgba(175,207,42,.2),rgba(17,162,207,.08));color:var(--color-text);box-shadow:0 0 22px rgba(175,207,42,.14)}.render-queue-status{min-height:42px;padding:12px 14px;border:1px solid rgba(17,162,207,.26);border-radius:14px;background:linear-gradient(90deg,rgba(17,162,207,.12),rgba(175,207,42,.065)),rgba(0,0,0,.3);color:rgba(231,231,232,.82);font-size:13px}.render-queue-list{display:grid;gap:10px;max-height:min(486px,calc(100vh - 288px));margin-top:12px;overflow:auto;padding-right:4px;scrollbar-width:thin;scrollbar-color:rgba(175,207,42,.55) rgba(255,255,255,.055)}.render-queue-list::-webkit-scrollbar{width:8px}.render-queue-list::-webkit-scrollbar-thumb{border-radius:999px;background:linear-gradient(180deg,rgba(17,162,207,.72),rgba(175,207,42,.72))}.render-job-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:13px 14px;border:1px solid rgba(231,231,232,.12);border-radius:16px;background:linear-gradient(180deg,rgba(231,231,232,.07),rgba(231,231,232,.025)),rgba(0,0,0,.34)}.render-job-card[data-status=ready]{border-color:rgba(175,207,42,.38)}.render-job-card[data-status=failed]{border-color:rgba(255,111,111,.36)}.render-job-main{display:grid;gap:7px;min-width:0}.render-job-title{display:flex;gap:8px;align-items:center;min-width:0}.render-job-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.render-job-pill{display:inline-flex;align-items:center;min-height:22px;padding:3px 8px;border-radius:999px;background:rgba(17,162,207,.12);color:rgba(36,220,255,.9);font-size:11px;font-weight:900;text-transform:uppercase}.render-job-meta{color:rgba(231,231,232,.58);font-size:12px}.render-job-progress{position:relative;height:5px;overflow:hidden;border-radius:999px;background:rgba(231,231,232,.1)}.render-job-progress span{position:absolute;inset:0 auto 0 0;width:var(--progress);border-radius:inherit;background:linear-gradient(90deg,var(--color-brand-blue),var(--color-brand-green));box-shadow:0 0 14px rgba(17,162,207,.34)}.render-job-actions{display:flex;gap:8px;align-items:center}.render-job-actions button{min-height:34px;padding:7px 11px;border:1px solid rgba(231,231,232,.16);border-radius:999px;background:rgba(231,231,232,.07);color:rgba(231,231,232,.82);font-weight:800}.render-job-actions button.primary{border-color:rgba(175,207,42,.52);background:rgba(175,207,42,.14);color:var(--color-brand-green)}.render-empty{padding:18px;border:1px dashed rgba(231,231,232,.16);border-radius:16px;color:rgba(231,231,232,.58);text-align:center}
+.clip-control-surface .cuted-render-zone.is-ready .cuted-ready-region{flex:0 0 178px;width:178px;min-width:178px}.clip-control-surface .cuted-render-zone.is-ready .cuted-ready-pill{width:178px}
 """
 
 
@@ -10894,6 +11276,7 @@ function controlSurfaceCallbacksForCard(card){
     onEffectStyleChange: payload => setEffectForRank(card.dataset.rank, { key: appEffectKeyFromControlSurface(payload.effectStyle) }),
     onFormatChange: payload => setControlSurfaceFormat(card, payload.aspectRatio),
     onReadyCancel: () => cancelControlSurfaceReady(card),
+    onSendRender: () => sendCardToRenderQueue(card),
     onVolumeChange: payload => setPreviewVolume(card, payload.muted ? 0 : payload.volume / 100)
   };
 }
@@ -13542,6 +13925,151 @@ function renderFinalizeResults(files, options = {}){
     </details>`;
   }).join("");
 }
+const renderQueueState = { profile: localStorage.getItem("cuted-render-profile") || "medium", pollId: null, lastFocus: null };
+function setupRenderQueuePanel(){
+  const modal = document.querySelector("[data-render-queue-modal]");
+  if (!modal) return;
+  document.querySelectorAll("[data-render-profile]").forEach(button => {
+    button.classList.toggle("active", button.dataset.renderProfile === renderQueueState.profile);
+    button.addEventListener("click", () => {
+      renderQueueState.profile = button.dataset.renderProfile || "medium";
+      localStorage.setItem("cuted-render-profile", renderQueueState.profile);
+      document.querySelectorAll("[data-render-profile]").forEach(item => item.classList.toggle("active", item === button));
+    });
+  });
+  document.querySelector("[data-render-queue-close]")?.addEventListener("click", () => closeRenderQueuePanel());
+  modal.addEventListener("click", event => { if (event.target === modal) closeRenderQueuePanel(); });
+  document.addEventListener("keydown", event => {
+    if (!modal.hidden && event.key === "Escape") closeRenderQueuePanel();
+  });
+  document.querySelector("[data-render-queue-list]")?.addEventListener("click", event => {
+    const target = event.target instanceof Element ? event.target : null;
+    const folderButton = target?.closest("[data-open-folder]");
+    if (folderButton) openResultFolder(folderButton.dataset.openFolder || "", folderButton);
+  });
+}
+function openRenderQueuePanel(){
+  const modal = document.querySelector("[data-render-queue-modal]");
+  if (!modal) return;
+  renderQueueState.lastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  modal.hidden = false;
+  modal.classList.remove("is-closing");
+  requestAnimationFrame(() => modal.classList.add("is-open"));
+  modal.querySelector("[data-render-queue-panel]")?.focus();
+  loadRenderQueue();
+  scheduleRenderQueuePoll();
+}
+function closeRenderQueuePanel(){
+  const modal = document.querySelector("[data-render-queue-modal]");
+  if (!modal || modal.hidden) return;
+  window.clearTimeout(renderQueueState.pollId);
+  modal.classList.remove("is-open");
+  modal.classList.add("is-closing");
+  window.setTimeout(() => {
+    modal.hidden = true;
+    modal.classList.remove("is-closing");
+    renderQueueState.lastFocus?.focus?.();
+    renderQueueState.lastFocus = null;
+  }, 190);
+}
+function scheduleRenderQueuePoll(){
+  window.clearTimeout(renderQueueState.pollId);
+  renderQueueState.pollId = window.setTimeout(async () => {
+    const modal = document.querySelector("[data-render-queue-modal]");
+    if (!modal || modal.hidden) return;
+    await loadRenderQueue();
+    scheduleRenderQueuePoll();
+  }, 1800);
+}
+async function loadRenderQueue(){
+  const status = document.querySelector("[data-render-queue-status]");
+  try {
+    const response = await fetch(`/api/render-jobs?gallery_path=${encodeURIComponent(currentGalleryPath())}`, { cache: "no-store" });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao carregar fila.");
+    renderQueueJobs(payload.jobs || []);
+  } catch (error) {
+    if (status) status.textContent = error.message || "Nao consegui carregar a fila.";
+  }
+}
+function renderQueueJobs(jobs){
+  const list = document.querySelector("[data-render-queue-list]");
+  const status = document.querySelector("[data-render-queue-status]");
+  const safeJobs = Array.isArray(jobs) ? jobs : [];
+  const running = safeJobs.filter(job => job.status === "rendering" || job.status === "queued").length;
+  const ready = safeJobs.filter(job => job.status === "ready").length;
+  if (status) status.textContent = safeJobs.length ? `${running} em fila; ${ready} pronto(s).` : "Nenhum render em andamento.";
+  if (!list) return;
+  if (!safeJobs.length) {
+    list.innerHTML = '<div class="render-empty">Quando um corte for enviado, ele aparece aqui.</div>';
+    return;
+  }
+  list.innerHTML = safeJobs.map(renderQueueJobHtml).join("");
+}
+function renderQueueJobHtml(job){
+  const summary = job.summary || {};
+  const title = `#${String(summary.rank || "").padStart(2, "0")} ${summary.title || "Render CUTED"}`;
+  const meta = [summary.platform || "", summary.duration ? fixed(summary.duration) : "", renderProfileLabel(job.resource_profile)].filter(Boolean).join(" - ");
+  const progress = Math.max(0, Math.min(100, Number(job.progress || 0)));
+  const folder = job.export_dir || job.output_dir || "";
+  const canOpen = job.status === "ready" && folder;
+  return `<article class="render-job-card" data-status="${escapeAttr(job.status || "queued")}">
+    <div class="render-job-main">
+      <div class="render-job-title"><span class="render-job-pill">${escapeHtml(renderStatusLabel(job.status))}</span><strong>${escapeHtml(title)}</strong></div>
+      <div class="render-job-meta">${escapeHtml(job.message || meta || "Render local")}</div>
+      <div class="render-job-progress" style="--progress:${progress}%"><span></span></div>
+      ${job.error ? `<div class="render-job-meta">${escapeHtml(job.error)}</div>` : ""}
+    </div>
+    <div class="render-job-actions">
+      ${canOpen ? `<button class="primary" type="button" data-open-folder="${escapeAttr(folder)}">Abrir pasta</button>` : `<button type="button" disabled>${escapeHtml(renderStatusLabel(job.status))}</button>`}
+      <button type="button" disabled>Submit</button>
+    </div>
+  </article>`;
+}
+function renderStatusLabel(status){
+  const labels = { queued: "Fila", rendering: "Render", ready: "Pronto", failed: "Falha", cancelled: "Cancelado" };
+  return labels[status] || "Fila";
+}
+function renderProfileLabel(profile){
+  const labels = { eco: "Eco", medium: "Medio", high: "Alto" };
+  return labels[profile] || "Medio";
+}
+function renderQueuePayloadForCard(card){
+  const data = buildExportData();
+  const rank = String(card.dataset.rank || "");
+  const platform = activePlatformForRank(rank);
+  const row = (data.caption_queue || []).find(item => String(item.rank) === rank && item.platform === platform);
+  if (!row) throw new Error("Este corte ainda nao esta pronto para render.");
+  return Object.assign({}, data, { caption_queue: [row] });
+}
+async function sendCardToRenderQueue(card){
+  const status = card?.__cutedControlSurface;
+  try {
+    const queue = renderQueuePayloadForCard(card);
+    const response = await fetch("/api/render-jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        queue,
+        chars_per_line: captionWidth(),
+        max_lines: captionLines(),
+        captions_enabled: captionEnabled(),
+        gallery_path: currentGalleryPath(),
+        resource_profile: renderQueueState.profile
+      })
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao enviar para render.");
+    const label = payload.duplicate ? "Ja estava na fila" : "Enviado ao render";
+    status?.setStatus?.({ kind: "ready", label, persistent: true, tone: "green" });
+    showAppNotice(label);
+    openRenderQueuePanel();
+    renderQueueJobs([payload.job]);
+  } catch (error) {
+    status?.setStatus?.({ kind: "error", label: error.message || "Render falhou", tone: "red" }, 2200);
+    showAppNotice(error.message || "Nao consegui enviar para render.");
+  }
+}
 async function openResultFolder(path, button){
   if (!path) return;
   const previous = button?.textContent || "Abrir pasta";
@@ -13668,6 +14196,7 @@ document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
   btn.addEventListener("click", () => { applyTab(btn.dataset.tab); renderCaptionQueue(); });
 });
 setupSettingsPanel();
+setupRenderQueuePanel();
 setupImportPathButtons();
 setupImportKeyBanner();
 document.querySelector("[data-empty-import]")?.addEventListener("click", () => applyTab("import"));
@@ -13857,8 +14386,7 @@ document.querySelectorAll(".card").forEach(card => {
 });
 document.getElementById("reset-ui").addEventListener("click", startNewProject);
 document.getElementById("finalize-videos").addEventListener("click", () => {
-  applyTab("final");
-  finalizeVideos();
+  openRenderQueuePanel();
 });
 document.querySelector("[data-render-results]")?.addEventListener("click", event => {
   const target = event.target instanceof Element ? event.target : null;
