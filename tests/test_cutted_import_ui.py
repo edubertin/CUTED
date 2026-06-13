@@ -132,8 +132,40 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("syncPreviewCaptionsForOpenCards();", html)
         self.assertIn("syncPreviewCaptions(card, current);", html)
         self.assertIn("caption_segments: moment.caption_segments || []", html)
-        self.assertIn("onCaptionToggle: payload => setControlSurfaceCaptions(payload.captionsEnabled)", html)
+        self.assertIn("onCaptionToggle: payload => setControlSurfaceCaptions(payload.captionsEnabled, payload.captionStyle)", html)
+        self.assertIn("caption_style: captionStyle()", html)
+        self.assertIn("storeCaptionStyle(style)", html)
         self.assertIn("captionEnabled() ? \"Ativada\" : \"Desligada\"", html)
+
+    def test_closed_caption_control_bar_menu_is_available(self) -> None:
+        asset_dir = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar"
+        script = (asset_dir / "control-bar.js").read_text(encoding="utf-8")
+        styles = (asset_dir / "control-bar.css").read_text(encoding="utf-8")
+
+        self.assertIn("captionMenuOpen", script)
+        self.assertIn("renderCaptionMenu", script)
+        self.assertIn("data-cuted-caption-toggle", script)
+        self.assertIn("data-cuted-caption-size", script)
+        self.assertIn("data-cuted-caption-width", script)
+        self.assertIn('renderCaptionColorPicker("text", "A", "#ffffff")', script)
+        self.assertIn('renderCaptionColorPicker("background", "BG", "#000000")', script)
+        self.assertIn("onCaptionStyleChange", script)
+        self.assertIn(".cuted-caption-menu", styles)
+        self.assertIn(".cuted-caption-switch", styles)
+
+    def test_caption_ass_style_accepts_control_bar_style(self) -> None:
+        preset = CUTTED.PLATFORM_PRESETS["tiktok"]
+        style = CUTTED.caption_style_from_row(
+            {"caption_style": {"size": 88, "width": 34, "textColor": "#11a2cf", "backgroundColor": "#000000"}},
+            preset,
+        )
+        line = CUTTED.ass_style_line(preset, style)
+
+        self.assertIn("Arial,88,", line)
+        self.assertIn("&H00CFA211", line)
+        self.assertIn("&H66000000", line)
+        self.assertIn(",3,7,0,2,80,80,250,1", line)
+        self.assertEqual(style["width"], 34)
 
     def test_render_resource_profiles_apply_threads_and_priority(self) -> None:
         rows = [{"rank": 1}, {"rank": 2}]
@@ -371,7 +403,7 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn(".clip-control-surface .cuted-format-trigger{flex:0 0 132px;width:132px;height:58px", source)
         self.assertIn(".clip-control-surface .cuted-format-copy small{display:block;font-size:10px", source)
         self.assertIn(".clip-control-surface{position:relative;z-index:2600}", source)
-        self.assertIn(".clip-control-surface .cuted-effect-menu,.clip-control-surface .cuted-insert-menu,.clip-control-surface .cuted-format-menu,.clip-control-surface .cuted-volume-popover{z-index:3200}", source)
+        self.assertIn(".clip-control-surface .cuted-effect-menu,.clip-control-surface .cuted-insert-menu,.clip-control-surface .cuted-caption-menu,.clip-control-surface .cuted-format-menu,.clip-control-surface .cuted-volume-popover{z-index:3200}", source)
         self.assertIn(".cuted-effect-menu {\n  position: absolute;\n  right: 206px;\n  top: calc(100% + 12px);", styles)
         self.assertIn(".cuted-insert-menu {\n  position: absolute;\n  right: 176px;\n  top: calc(100% + 12px);", styles)
         self.assertNotIn("bottom: 106px", styles)

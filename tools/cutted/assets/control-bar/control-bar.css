@@ -511,6 +511,7 @@ body.cuted-control-demo #cuted-control-bar-demo {
 .cuted-format-trigger,
 .cuted-render-zone,
 .cuted-format-menu,
+.cuted-caption-menu,
 .cuted-effect-menu {
   position: relative;
   z-index: 1;
@@ -1747,6 +1748,256 @@ body.cuted-control-demo #cuted-control-bar-demo {
     transform 180ms ease,
     visibility 180ms ease;
   visibility: visible;
+}
+
+.cuted-caption-menu {
+  position: absolute;
+  right: 116px;
+  top: calc(100% + 12px);
+  bottom: auto;
+  z-index: 70;
+  display: grid;
+  gap: 10px;
+  width: min(330px, 42vw);
+  padding: 12px;
+  border: 1px solid rgba(231, 231, 232, 0.46);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(17, 162, 207, 0.16), transparent 34%),
+    rgba(7, 8, 9, 0.91);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.2),
+    0 0 26px rgba(17, 162, 207, 0.16),
+    0 24px 58px rgba(0, 0, 0, 0.56);
+  backdrop-filter: blur(24px) saturate(1.24);
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease,
+    visibility 180ms ease;
+  visibility: visible;
+}
+
+.cuted-caption-menu[data-open="false"] {
+  opacity: 0;
+  transform: translateY(8px);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.cuted-caption-menu::after {
+  position: absolute;
+  top: -17px;
+  right: 94px;
+  bottom: auto;
+  width: 34px;
+  height: 34px;
+  border-left: 1px solid rgba(231, 231, 232, 0.46);
+  border-top: 1px solid rgba(231, 231, 232, 0.46);
+  background: rgba(7, 8, 9, 0.91);
+  content: "";
+  transform: rotate(45deg);
+}
+
+.cuted-caption-menu-head,
+.cuted-caption-number-grid,
+.cuted-caption-color-grid {
+  position: relative;
+  z-index: 1;
+}
+
+.cuted-caption-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cuted-caption-switch {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 22px 1fr;
+  align-items: center;
+  width: 112px;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid rgba(231, 231, 232, 0.22);
+  border-radius: 999px;
+  background: rgba(231, 231, 232, 0.07);
+  color: rgba(231, 231, 232, 0.54);
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.cuted-caption-switch i {
+  position: absolute;
+  left: 6px;
+  width: 48px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(231, 231, 232, 0.18);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.16);
+  transition: transform 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.cuted-caption-switch.is-on {
+  color: var(--cuted-blue-hot);
+  border-color: rgba(17, 162, 207, 0.56);
+}
+
+.cuted-caption-switch.is-on i {
+  background: linear-gradient(135deg, rgba(17, 162, 207, 0.94), rgba(175, 207, 42, 0.74));
+  box-shadow: 0 0 16px rgba(17, 162, 207, 0.44);
+  transform: translateX(52px);
+}
+
+.cuted-caption-switch span {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+}
+
+.cuted-caption-ok {
+  min-height: 34px;
+  padding: 0 15px;
+  border: 1px solid rgba(175, 207, 42, 0.52);
+  border-radius: 999px;
+  background: rgba(175, 207, 42, 0.12);
+  color: var(--cuted-lime);
+  font-size: 12px;
+  font-weight: 950;
+  cursor: pointer;
+  box-shadow: 0 0 16px rgba(175, 207, 42, 0.18);
+}
+
+.cuted-caption-number-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cuted-caption-stepper {
+  display: grid;
+  gap: 5px;
+  color: rgba(231, 231, 232, 0.58);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.cuted-caption-stepper-row {
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr) 25px;
+  overflow: hidden;
+  border: 1px solid rgba(231, 231, 232, 0.2);
+  border-radius: 12px;
+  background: rgba(231, 231, 232, 0.055);
+}
+
+.cuted-caption-stepper button,
+.cuted-caption-stepper input {
+  min-width: 0;
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--cuted-white);
+  font: inherit;
+  text-align: center;
+}
+
+.cuted-caption-stepper button {
+  color: var(--cuted-blue-hot);
+  cursor: pointer;
+}
+
+.cuted-caption-stepper input {
+  font-size: 14px;
+  font-weight: 950;
+  -moz-appearance: textfield;
+}
+
+.cuted-caption-stepper input::-webkit-outer-spin-button,
+.cuted-caption-stepper input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.cuted-caption-color-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cuted-caption-picker {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 9px;
+  min-height: 50px;
+  overflow: hidden;
+  padding: 9px;
+  border: 1px solid rgba(231, 231, 232, 0.2);
+  border-radius: 13px;
+  background:
+    linear-gradient(135deg, rgba(231, 231, 232, 0.08), transparent 50%),
+    rgba(231, 231, 232, 0.052);
+  color: var(--cuted-white);
+  cursor: pointer;
+}
+
+.cuted-caption-picker span {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.54);
+  color: var(--caption-picker-color, #fff);
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.cuted-caption-picker-background span {
+  color: var(--cuted-white);
+  background: var(--caption-picker-color, rgba(0, 0, 0, 0.62));
+}
+
+.cuted-caption-picker[data-transparent="true"] span {
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.22) 25%, transparent 25% 75%, rgba(255, 255, 255, 0.22) 75%),
+    linear-gradient(45deg, rgba(255, 255, 255, 0.22) 25%, transparent 25% 75%, rgba(255, 255, 255, 0.22) 75%);
+  background-position: 0 0, 5px 5px;
+  background-size: 10px 10px;
+}
+
+.cuted-caption-picker i {
+  position: relative;
+  z-index: 1;
+  display: block;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--caption-picker-color, #fff);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.28), 0 0 14px color-mix(in srgb, var(--caption-picker-color, #fff), transparent 48%);
+}
+
+.cuted-caption-picker[data-transparent="true"] i {
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.18) 25%, transparent 25% 75%, rgba(255, 255, 255, 0.18) 75%),
+    rgba(0, 0, 0, 0.42);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.cuted-caption-picker input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .cuted-insert-menu[data-open="false"] {
