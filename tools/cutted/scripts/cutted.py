@@ -14168,12 +14168,20 @@ async function sendCardToRenderQueue(card){
     });
     const payload = await response.json();
     if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao enviar para render.");
-    const label = payload.duplicate ? "Ja estava na fila" : "Enviado ao render";
+    if (payload.duplicate) {
+      updateControlSurfaceForCard(card);
+      card?.__cutedControlSurface?.update?.({ renderQueued: false });
+      card?.__cutedControlSurface?.setStatus?.({ kind: "render", label: "Ja estava na fila", tone: "green" }, 1400);
+      await loadRenderQueue();
+      return;
+    }
     cancelControlSurfaceReady(card);
-    card?.__cutedControlSurface?.setStatus?.({ kind: "render", label, tone: "green" }, 1200);
-    showAppNotice(label);
+    card?.__cutedControlSurface?.update?.({ renderQueued: false });
+    card?.__cutedControlSurface?.setStatus?.({ kind: "render", label: "Enviado ao render", tone: "green" }, 1200);
     await loadRenderQueue();
   } catch (error) {
+    updateControlSurfaceForCard(card);
+    card?.__cutedControlSurface?.update?.({ renderQueued: false });
     status?.setStatus?.({ kind: "error", label: error.message || "Render falhou", tone: "red" }, 2200);
     showAppNotice(error.message || "Nao consegui enviar para render.");
   } finally {

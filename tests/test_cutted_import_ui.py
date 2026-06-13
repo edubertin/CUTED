@@ -99,11 +99,19 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("data-render-remove", html)
         self.assertIn("/api/render-jobs/${encodeURIComponent(jobId)}/remove", html)
         self.assertIn("SEND TO RENDER", script)
+        self.assertIn("Enviado ao render", script)
+        self.assertIn("Ja estava na fila", html)
+        self.assertIn("if (payload.duplicate)", html)
+        self.assertIn("updateControlSurfaceForCard(card);", html)
+        self.assertIn("update?.({ renderQueued: false });", html)
         self.assertIn("elements.statusAction.addEventListener(\"click\"", script)
+        self.assertIn("event.stopPropagation();", script)
+        self.assertIn("const transientStatus = state.status && !state.status.persistent ? state.status : null;", script)
         self.assertIn("state.renderQueued", script)
         self.assertIn("data-cuted-status-action", script)
         self.assertNotIn('data-cuted-control="send-render"', script)
         self.assertNotIn("openRenderQueuePanel();\n    await loadRenderQueue();", html)
+        self.assertNotIn("showAppNotice(label);\n    await loadRenderQueue();", html)
 
     def test_render_resource_profiles_apply_threads_and_priority(self) -> None:
         rows = [{"rank": 1}, {"rank": 2}]
