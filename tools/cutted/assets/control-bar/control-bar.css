@@ -428,6 +428,7 @@ body.cuted-control-demo #cuted-control-bar-demo {
 }
 
 .cuted-control-group,
+.cuted-clip-info,
 .cuted-divider,
 .cuted-icon-button,
 .cuted-action-button,
@@ -445,6 +446,58 @@ body.cuted-control-demo #cuted-control-bar-demo {
   display: flex;
   align-items: center;
   gap: 18px;
+}
+
+.cuted-clip-info {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-right: 14px;
+}
+
+.cuted-clip-info[hidden] {
+  display: none;
+}
+
+.cuted-clip-rank {
+  color: rgba(231, 231, 232, 0.52);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.cuted-clip-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cuted-clip-copy strong {
+  display: block;
+  overflow: hidden;
+  color: rgba(231, 231, 232, 0.96);
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1.12;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cuted-clip-copy small {
+  display: block;
+  overflow: hidden;
+  color: rgba(231, 231, 232, 0.58);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cuted-audio-group {

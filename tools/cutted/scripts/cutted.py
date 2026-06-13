@@ -8715,19 +8715,12 @@ def card_html(moment: Moment) -> str:
     duration = max(0.0, moment.end - moment.start)
     open_attr = " open" if moment.rank == 1 else ""
     title = html.escape(clean_clip_title(moment.title))
+    summary = f"{moment.start:.1f}s - {moment.end:.1f}s ({duration:.1f}s)"
     return f"""
-    <details class="card" data-rank="{moment.rank}" data-start="{moment.start:.3f}" data-end="{moment.end:.3f}" data-duration="{duration:.3f}" data-preview-format="tiktok"{open_attr}>
+    <details class="card" data-rank="{moment.rank}" data-clip-title="{title}" data-clip-summary="{html.escape(summary)}" data-start="{moment.start:.3f}" data-end="{moment.end:.3f}" data-duration="{duration:.3f}" data-preview-format="tiktok"{open_attr}>
       <summary class="clip-summary">
-        <span class="clip-control-row">
-          <span class="clip-control-meta">
-            <span class="clip-rank">#{moment.rank:02d}</span>
-            <span class="clip-title">
-              <strong>{title}</strong>
-              <small data-card-summary>{moment.start:.1f}s - {moment.end:.1f}s ({duration:.1f}s)</small>
-            </span>
-          </span>
-          <span class="clip-control-surface cuted-control-surface-slot" data-cuted-control-surface aria-label="Control surface do corte"></span>
-        </span>
+        <span class="clip-control-surface cuted-control-surface-slot" data-cuted-control-surface aria-label="Control surface do corte"></span>
+        <span data-card-summary hidden>{html.escape(summary)}</span>
         <span class="clip-row-timeline preview-camera-timeline" data-card-row-timeline data-preview-camera-timeline aria-label="Timeline do corte"></span>
       </summary>
       <div class="editor-shell">
@@ -9493,7 +9486,7 @@ button[data-action=discard],.result-actions a.secondary,.result-actions button.s
 @supports not (backdrop-filter:blur(1px)){.preview-bar,.preview-controls,.tool-section,.export-dock,.overlay-menu,header,.tabs{background:#111}}
 @media(max-width:860px){.brand-logo{width:min(360px,86vw);height:58px}.tabs{justify-content:flex-start}.tabs button{min-width:auto}.preview-bar{padding:8px}.preview-controls{grid-template-columns:1fr;max-width:100%;justify-content:stretch}.preview-transport-group{justify-self:center}.preview-camera-timeline{width:100%}.preview-volume-group{flex-wrap:nowrap}}
 @media(max-width:860px){body{overflow-x:hidden}.brand-logo{width:min(420px,90vw);height:70px}.card[open] .clip-row-timeline{grid-row:3}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:100%;margin:6px 0 0}.clip-control-surface .cuted-format-menu{left:auto;right:0;width:min(300px,calc(100vw - 48px))}.clip-control-surface .cuted-format-option{width:100%}}
-.clip-summary,.card[open] .clip-summary{grid-template-columns:1fr;align-items:stretch;gap:8px;min-height:0;padding:14px 18px 16px}.clip-control-row{grid-column:1/-1;grid-row:1;display:grid;grid-template-columns:minmax(250px,1fr) minmax(560px,760px);align-items:center;gap:14px;width:100%;min-width:0;min-height:88px;padding:7px 12px 7px 18px;border:1px solid var(--glass-border);border-radius:16px;background:linear-gradient(135deg,rgba(231,231,232,.16),rgba(231,231,232,.045) 36%,rgba(0,0,0,.12)),rgba(13,13,13,.72);box-shadow:0 20px 54px rgba(0,0,0,.34),inset 0 1px 0 var(--glass-edge),inset 0 -18px 36px rgba(0,0,0,.2);backdrop-filter:blur(26px) saturate(1.45);cursor:pointer}.clip-control-meta{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:12px;min-width:0}.clip-control-row .clip-rank{align-self:center;color:rgba(231,231,232,.52);font-size:13px;font-weight:900;letter-spacing:.08em}.clip-control-row .clip-title{min-width:0}.clip-control-row .clip-title strong{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:16px;letter-spacing:0}.clip-control-row .clip-title small{display:block;margin-top:3px;color:rgba(231,231,232,.58);font-size:12px}.clip-control-row .clip-control-surface{grid-column:2;grid-row:1;display:flex!important;justify-content:flex-end;width:100%;min-width:0;margin:0!important}.clip-control-row .clip-control-surface:empty{display:none!important}.clip-control-row .clip-control-surface .cuted-control-bar{width:100%;min-width:0;min-height:72px;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;backdrop-filter:none!important}.clip-control-row .clip-control-surface .cuted-render-zone{min-height:64px;justify-content:flex-end;overflow:visible}.clip-row-timeline,.card[open] .clip-row-timeline{grid-column:1/-1;grid-row:2;margin-top:0}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:calc(100% + 36px);margin:6px -18px 0}@media(max-width:1120px){.clip-control-row{grid-template-columns:1fr;gap:10px}.clip-control-row .clip-control-surface{grid-column:1;grid-row:2;justify-content:center}.clip-control-row .clip-control-surface .cuted-control-bar{width:min(100%,760px)}.clip-row-timeline,.card[open] .clip-row-timeline{grid-row:2}}@media(max-width:860px){.clip-control-row{padding:10px;min-height:0}.clip-control-row .clip-control-surface .cuted-control-bar{width:100%;min-height:80px;padding:7px 9px!important}.clip-row-timeline,.card[open] .clip-row-timeline{grid-row:2}}
+.clip-summary,.card[open] .clip-summary{grid-template-columns:1fr;align-items:stretch;gap:8px;min-height:0;padding:14px 18px 16px}.clip-control-surface{grid-column:1/-1;grid-row:1;display:block!important;width:100%;min-width:0;margin:0!important}.clip-control-surface:empty{display:none!important}.clip-control-surface .cuted-control-bar{width:100%;max-width:none;min-width:0;min-height:88px;margin:0;padding:7px 12px 7px 18px;border-radius:16px}.clip-control-surface .cuted-clip-info{flex:1 1 auto;min-width:0}.clip-control-surface .cuted-render-zone{flex:0 0 auto;min-height:64px;justify-content:flex-end;overflow:visible}.clip-control-surface .cuted-tool-group{flex:0 1 294px;min-height:64px}.clip-control-surface .cuted-tile-button{flex:0 0 58px;width:58px;height:54px;font-size:26px}.clip-control-surface .cuted-format-trigger{flex:0 0 104px;width:104px;height:54px}.clip-control-surface .cuted-audio-group{flex:0 0 52px;min-width:52px}.clip-control-surface .cuted-divider{height:42px;margin:0 6px}.clip-row-timeline,.clip-row-timeline.preview-camera-timeline{display:none!important}.card[open] .clip-row-timeline,.card[open] .clip-row-timeline.preview-camera-timeline{display:block!important;grid-column:1/-1;grid-row:2;margin-top:0}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:calc(100% + 36px);margin:6px -18px 0}@media(max-width:1120px){.clip-control-surface .cuted-control-bar{flex-wrap:wrap;gap:10px}.clip-control-surface .cuted-clip-info{flex-basis:100%}.clip-control-surface .cuted-render-zone{flex:1 1 auto}.card[open] .clip-row-timeline{grid-row:2}}@media(max-width:860px){.clip-control-surface .cuted-control-bar{min-height:80px;padding:10px}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:100%;margin:6px 0 0}}
 """
 
 
@@ -10802,6 +10795,7 @@ function controlSurfaceStateForCard(card){
     bumpers: bumpersForRank(rank, platform),
     busy,
     captionsEnabled: captionEnabled(),
+    clipInfo: controlSurfaceClipInfo(card),
     effectStyle: controlSurfaceEffectStyle(effect),
     muted: video ? video.muted || video.volume <= 0 : false,
     ready: current.status === "liked" && platforms.includes(platform),
@@ -10809,6 +10803,12 @@ function controlSurfaceStateForCard(card){
     status: controlSurfaceStatus(card),
     volume: video ? Math.round((video.muted ? 0 : video.volume) * 100) : Math.round(defaultPreviewVolume * 100)
   };
+}
+function controlSurfaceClipInfo(card){
+  const rank = String(card.dataset.rank || "").padStart(2, "0");
+  const title = card.dataset.clipTitle || card.querySelector(".clip-title strong")?.textContent || "Corte sem titulo";
+  const summary = card.querySelector("[data-card-summary]")?.textContent || card.dataset.clipSummary || "";
+  return { rank: `#${rank}`, title, summary };
 }
 function controlSurfaceCallbacksForCard(card){
   return {
@@ -13563,7 +13563,7 @@ document.querySelectorAll(".card").forEach(card => {
   applyCameraMotionSpeed(card);
   const summary = card.querySelector(".clip-summary");
   if (summary) {
-    const isSummaryTimelineTarget = target => target instanceof Element && Boolean(target.closest("[data-cuted-control-surface], .cuted-control-bar, .cuted-menu, .cuted-volume-popover, [data-preview-camera-timeline], .timeline-shell, .timeline-canvas, .playhead-control, .trim-handle, .volume-popover, .preview-camera-popover"));
+    const isSummaryTimelineTarget = target => target instanceof Element && !target.closest(".cuted-clip-info") && Boolean(target.closest("[data-cuted-control-surface], .cuted-control-bar, .cuted-menu, .cuted-volume-popover, [data-preview-camera-timeline], .timeline-shell, .timeline-canvas, .playhead-control, .trim-handle, .volume-popover, .preview-camera-popover"));
     const stopSummaryTimelinePointer = event => {
       if (!isSummaryTimelineTarget(event.target)) return;
       event.stopPropagation();
