@@ -907,6 +907,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if re.fullmatch(r"/api/render-jobs/[^/]+/cancel", path):
                 self.handle_render_cancel(path)
                 return
+            if re.fullmatch(r"/api/render-jobs/[^/]+/remove", path):
+                self.handle_render_remove(base_dir, path)
+                return
             if path != "/api/finalize":
                 self.send_error(404, "Not found")
                 return
@@ -1039,6 +1042,16 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             result = cancel_render_job(job_id)
             send_json_response(self, 200 if result.get("ok") else 404, result)
 
+        def handle_render_remove(self, request_base_dir: Path, path: str) -> None:
+            try:
+                job_id = path.split("/")[-2]
+                payload = read_json_body(self)
+                gallery_dir = resolve_request_gallery_dir(request_base_dir, payload)
+                result = remove_render_job(job_id, gallery_dir)
+                send_json_response(self, 200 if result.get("ok") else 404, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
+
         def handle_projects(self, request_base_dir: Path) -> None:
             send_json_response(self, 200, {"ok": True, "projects": project_catalog_recent(request_base_dir)})
 
@@ -1143,7 +1156,7 @@ def finalize_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir:
 
 def finalize_payload(
     payload: dict[str, object], base_dir: Path, out_dir: Path | None = None,
-    resource_profile: str = "medium",
+    resource_profile: str = "medium", render_job_id: str = "",
 ) -> dict[str, object]:
     queue = payload.get("queue") if isinstance(payload, dict) else None
     if not isinstance(queue, dict):
@@ -1157,6 +1170,7 @@ def finalize_payload(
     caption_path.write_text(json.dumps(queue, ensure_ascii=False, indent=2), encoding="utf-8")
     rows = caption_rows_from_data(queue)
     apply_render_resource_to_rows(rows, resource_profile)
+    apply_render_job_id_to_rows(rows, render_job_id)
     options = SimpleNamespace(
         chars_per_line=int(payload.get("chars_per_line") or 28),
         max_lines=int(payload.get("max_lines") or 2),
@@ -1234,7 +1248,7 @@ def run_render_job(job_id: str) -> None:
         job.updated_at = time.time()
         persist_render_queue(job.gallery_dir)
     try:
-        result = finalize_payload(job.payload, job.base_dir, job.output_dir, job.resource_profile)
+        result = finalize_payload(job.payload, job.base_dir, job.output_dir, job.resource_profile, job.id)
         with RENDER_JOBS_LOCK:
             current = RENDER_JOBS.get(job_id)
             if current is None or current.status == "cancelled":
@@ -1273,6 +1287,28 @@ def cancel_render_job(job_id: str) -> dict[str, object]:
         job.updated_at = time.time()
         persist_render_queue(job.gallery_dir)
         return {"ok": True, "job": render_job_to_dict(job)}
+
+
+def remove_render_job(job_id: str, gallery_dir: Path) -> dict[str, object]:
+    with RENDER_JOBS_LOCK:
+        job = RENDER_JOBS.pop(job_id, None)
+        target_dir = job.gallery_dir if job is not None else gallery_dir
+        manifest = read_render_queue_manifest(target_dir)
+        manifest_jobs = manifest.get("jobs") if isinstance(manifest, dict) else []
+        kept = [item for item in manifest_jobs if isinstance(item, dict) and str(item.get("id")) != job_id]
+        removed = job is not None or len(kept) != len(manifest_jobs if isinstance(manifest_jobs, list) else [])
+        if not removed:
+            return {"ok": False, "error": "Render job not found."}
+        write_render_queue_manifest(target_dir, kept)
+        return {"ok": True, "jobs": render_queue_snapshot_without_lock(target_dir)}
+
+
+def render_job_cancelled(job_id: object) -> bool:
+    if not job_id:
+        return False
+    with RENDER_JOBS_LOCK:
+        job = RENDER_JOBS.get(str(job_id))
+        return bool(job and job.status == "cancelled")
 
 
 def render_job_snapshot(job_id: str) -> dict[str, object] | None:
@@ -1395,9 +1431,13 @@ def read_render_queue_manifest(gallery_dir: Path) -> dict[str, object]:
 
 
 def persist_render_queue(gallery_dir: Path) -> None:
+    jobs = render_queue_snapshot_without_lock(gallery_dir)
+    write_render_queue_manifest(gallery_dir, jobs)
+
+
+def write_render_queue_manifest(gallery_dir: Path, jobs: list[dict[str, object]]) -> None:
     path = render_queue_manifest_path(gallery_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    jobs = render_queue_snapshot_without_lock(gallery_dir)
     temp_path = path.with_suffix(".tmp")
     temp_path.write_text(json.dumps({"version": 1, "jobs": jobs}, ensure_ascii=False, indent=2), encoding="utf-8")
     temp_path.replace(path)
@@ -6343,6 +6383,13 @@ def apply_render_resource_to_rows(rows: list[dict[str, object]], profile: str) -
         row["_render_priority"] = settings["priority"]
 
 
+def apply_render_job_id_to_rows(rows: list[dict[str, object]], job_id: str) -> None:
+    if not job_id:
+        return
+    for row in rows:
+        row["_render_job_id"] = job_id
+
+
 def render_resource_settings(profile: str) -> dict[str, object]:
     cpus = max(os.cpu_count() or 2, 1)
     if profile == "eco":
@@ -6373,14 +6420,31 @@ def ffmpeg_creation_flags(row: dict[str, object]) -> int:
 
 
 def run_ffmpeg_command(command: list[str], row: dict[str, object], cwd: str | None = None) -> None:
-    subprocess.run(
+    process = subprocess.Popen(
         command,
-        check=True,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
         cwd=cwd,
         creationflags=ffmpeg_creation_flags(row),
     )
+    job_id = row.get("_render_job_id")
+    while True:
+        try:
+            stdout, stderr = process.communicate(timeout=0.25)
+            break
+        except subprocess.TimeoutExpired:
+            if not render_job_cancelled(job_id):
+                continue
+            process.terminate()
+            try:
+                stdout, stderr = process.communicate(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                stdout, stderr = process.communicate(timeout=3)
+            raise RuntimeError("Render cancelado.")
+    if process.returncode != 0:
+        raise subprocess.CalledProcessError(process.returncode, command, output=stdout, stderr=stderr)
 
 
 def caption_input_path(row: dict[str, object], base_dir: Path) -> Path | None:
@@ -9935,7 +9999,7 @@ body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,
 .header-actions{gap:10px;align-items:center}.header-actions .header-icon-button,#reset-ui.header-icon-button,#finalize-videos.header-icon-button,#open-settings.header-icon-button{position:relative;display:inline-grid;place-items:center;width:52px;height:52px;min-width:52px;padding:0!important;border:1px solid rgba(231,231,232,.18)!important;border-radius:16px;background:linear-gradient(180deg,rgba(255,255,255,.11),rgba(255,255,255,.025)),rgba(8,9,10,.52)!important;color:rgba(231,231,232,.8)!important;box-shadow:inset 0 1px rgba(255,255,255,.15),0 14px 34px rgba(0,0,0,.3);backdrop-filter:blur(18px) saturate(1.2);overflow:hidden}.header-actions .header-icon-button:before{position:absolute;inset:7px;border-radius:12px;background:radial-gradient(circle at 50% 22%,rgba(17,162,207,.16),transparent 62%);opacity:.64;content:"";transition:opacity .18s ease,transform .18s ease}.header-actions .header-icon-button svg{position:relative;z-index:1;width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}.header-actions .header-icon-button:hover,.header-actions .header-icon-button:focus-visible{border-color:rgba(17,162,207,.58)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(17,162,207,.22),0 16px 38px rgba(0,0,0,.34)}.header-actions .header-icon-button:hover:before,.header-actions .header-icon-button:focus-visible:before{opacity:1;transform:scale(1.08)}.header-actions .header-render-button,#finalize-videos.header-render-button{width:58px;height:58px;min-width:58px;border-color:rgba(175,207,42,.48)!important;color:var(--color-brand-green)!important;background:linear-gradient(180deg,rgba(175,207,42,.18),rgba(17,162,207,.065)),rgba(12,14,9,.7)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(175,207,42,.22),0 16px 38px rgba(0,0,0,.36)}.header-actions .header-render-button:before{background:radial-gradient(circle at 58% 25%,rgba(175,207,42,.28),transparent 60%),radial-gradient(circle at 32% 70%,rgba(17,162,207,.12),transparent 56%)}.header-actions .header-render-button svg{width:32px;height:32px;stroke-width:1.85}.header-actions .header-render-button.is-rendering,#finalize-videos.header-render-button.is-rendering{border-color:rgba(175,207,42,.78)!important;color:var(--color-brand-green)!important;box-shadow:inset 0 1px rgba(255,255,255,.24),0 0 28px rgba(175,207,42,.34),0 0 42px rgba(17,162,207,.14),0 16px 38px rgba(0,0,0,.36);animation:cuted-render-button-pulse 1.65s ease-in-out infinite}.header-actions .header-render-button.is-rendering:before,#finalize-videos.header-render-button.is-rendering:before{opacity:1;transform:scale(1.12);animation:cuted-render-button-scan 1.4s ease-in-out infinite}.header-actions .header-render-button.is-rendering svg,#finalize-videos.header-render-button.is-rendering svg{animation:cuted-render-icon-drift 1.9s ease-in-out infinite;filter:drop-shadow(0 0 9px rgba(175,207,42,.42))}.header-actions .header-settings-button svg{width:26px;height:26px}.header-actions .header-new-project svg{width:29px;height:29px}#open-settings.header-settings-button.is-openai-ready{border-color:rgba(175,207,42,.62)!important;color:var(--color-brand-green)!important;background:linear-gradient(180deg,rgba(175,207,42,.2),rgba(17,162,207,.055)),rgba(10,14,8,.7)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(175,207,42,.26),0 16px 38px rgba(0,0,0,.36)}#open-settings.header-settings-button.is-openai-ready:before{background:radial-gradient(circle at 50% 34%,rgba(175,207,42,.32),transparent 62%)}#open-settings.header-settings-button.is-openai-ready svg{animation:cuted-openai-gear-spin 5.8s linear infinite;filter:drop-shadow(0 0 8px rgba(175,207,42,.34))}@keyframes cuted-openai-gear-spin{to{transform:rotate(360deg)}}@keyframes cuted-render-button-pulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.2)}}@keyframes cuted-render-button-scan{0%,100%{opacity:.72;transform:scale(1.04) rotate(0deg)}50%{opacity:1;transform:scale(1.16) rotate(3deg)}}@keyframes cuted-render-icon-drift{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-1px) rotate(9deg)}}
 .settings-backdrop{position:fixed!important;inset:0!important;z-index:5000!important;display:grid!important;place-items:center!important;padding:32px;background:radial-gradient(circle at 50% 42%,rgba(17,162,207,.18),transparent 30%),radial-gradient(circle at 64% 58%,rgba(175,207,42,.12),transparent 26%),rgba(0,0,0,.68)!important;backdrop-filter:blur(18px) saturate(1.18)!important;opacity:0;pointer-events:none;transition:opacity 180ms ease}.settings-backdrop[hidden]{display:none!important}.settings-backdrop.is-open{opacity:1;pointer-events:auto}.settings-backdrop.is-closing{opacity:0;pointer-events:none}.settings-panel{position:relative!important;isolation:isolate;width:min(640px,calc(100vw - 48px))!important;max-height:min(760px,calc(100vh - 56px));overflow:hidden auto;padding:20px!important;border:1px solid rgba(17,162,207,.34)!important;border-radius:22px!important;background:linear-gradient(145deg,rgba(231,231,232,.11),rgba(5,5,5,.8) 46%,rgba(11,15,10,.88)),rgba(5,5,5,.92)!important;box-shadow:0 0 0 1px rgba(255,255,255,.055),0 0 42px rgba(17,162,207,.2),0 0 58px rgba(175,207,42,.12),0 32px 86px rgba(0,0,0,.72)!important;transform:translateY(18px) scale(.965);opacity:0;outline:none;transition:transform 210ms cubic-bezier(.2,.9,.2,1),opacity 180ms ease}.settings-backdrop.is-open .settings-panel{transform:translateY(0) scale(1);opacity:1}.settings-backdrop.is-closing .settings-panel{transform:translateY(12px) scale(.975);opacity:0}.settings-aura{position:absolute;inset:-46px;z-index:-1;background:conic-gradient(from 130deg,transparent,rgba(17,162,207,.22),transparent 32%,rgba(175,207,42,.18),transparent 62%);opacity:.54;filter:blur(12px);animation:settings-aura-drift 8s linear infinite}.settings-head{position:relative;display:flex!important;align-items:flex-start!important;justify-content:space-between!important;gap:18px;padding:0 0 16px;border-bottom:1px solid rgba(231,231,232,.1)}.settings-title-row{display:flex;align-items:center;gap:14px;min-width:0}.settings-orb{display:grid;place-items:center;width:52px;height:52px;min-width:52px;border:1px solid rgba(175,207,42,.44);border-radius:16px;background:radial-gradient(circle at 50% 32%,rgba(175,207,42,.22),transparent 62%),rgba(8,11,8,.78);color:var(--color-brand-green);box-shadow:inset 0 1px rgba(255,255,255,.16),0 0 26px rgba(175,207,42,.18)}.settings-orb svg{width:27px;height:27px;fill:none;stroke:currentColor;stroke-width:1.9;animation:cuted-openai-gear-spin 7.2s linear infinite}.settings-head strong{display:block;color:var(--color-text);font-size:22px;line-height:1.05}.settings-head p{margin:5px 0 0!important;color:rgba(231,231,232,.62)!important;font-size:13px;line-height:1.25}.settings-close-button{display:grid!important;place-items:center;width:40px!important;height:40px!important;min-width:40px!important;padding:0!important;border:1px solid rgba(231,231,232,.16)!important;border-radius:14px!important;background:rgba(231,231,232,.06)!important;color:rgba(231,231,232,.75)!important;font-weight:900!important}.settings-close-button:hover,.settings-close-button:focus-visible{border-color:rgba(255,111,111,.42)!important;color:#ff9d9d!important;box-shadow:0 0 22px rgba(255,111,111,.18)}.settings-form{display:grid!important;gap:14px!important;margin-top:16px!important}.settings-status{padding:12px 14px!important;border:1px solid rgba(17,162,207,.26)!important;border-radius:14px!important;background:linear-gradient(90deg,rgba(17,162,207,.12),rgba(175,207,42,.065)),rgba(0,0,0,.3)!important;color:rgba(231,231,232,.82)!important;font-size:13px}.settings-field{display:grid!important;gap:7px!important;color:rgba(231,231,232,.68)!important;font-size:12px!important;font-weight:800;letter-spacing:.01em}.settings-form input,.settings-form select{min-height:44px!important;border:1px solid rgba(231,231,232,.14)!important;border-radius:14px!important;background:rgba(0,0,0,.52)!important;color:var(--color-text)!important;padding:10px 12px!important;box-shadow:inset 0 1px rgba(255,255,255,.05)!important}.settings-form input:focus,.settings-form select:focus{border-color:rgba(17,162,207,.62)!important;outline:none;box-shadow:0 0 0 3px rgba(17,162,207,.16),inset 0 1px rgba(255,255,255,.07)!important}.settings-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important}.settings-usage{display:grid!important;gap:5px!important;padding:12px 14px!important;border:1px solid rgba(231,231,232,.12)!important;border-radius:14px!important;background:rgba(231,231,232,.045)!important;color:rgba(231,231,232,.6)!important;font-size:12px!important}.settings-usage strong{color:rgba(231,231,232,.86)}.settings-actions{display:flex!important;justify-content:flex-end!important;gap:10px!important;flex-wrap:wrap!important;padding-top:2px}.settings-actions button{min-height:42px!important;border-radius:999px!important;padding:0 18px!important}.settings-actions button[type=submit]{border-color:rgba(175,207,42,.56)!important;background:linear-gradient(90deg,rgba(175,207,42,.95),rgba(17,162,207,.88))!important;color:#050505!important;font-weight:900!important}.settings-actions [data-settings-test]{border-color:rgba(17,162,207,.36)!important;background:rgba(17,162,207,.08)!important;color:var(--color-text)!important}.settings-form small{color:rgba(231,231,232,.5)!important;font-size:11px!important}@keyframes settings-aura-drift{to{transform:rotate(360deg)}}@media(max-width:760px){.settings-backdrop{padding:18px}.settings-panel{width:calc(100vw - 28px)!important;padding:16px!important}.settings-grid{grid-template-columns:1fr!important}.settings-head strong{font-size:20px}}
 .settings-panel{scrollbar-width:none}.settings-panel::-webkit-scrollbar{width:0;height:0}
-.render-queue-backdrop{position:fixed!important;inset:0!important;z-index:4900!important;display:grid!important;place-items:center!important;padding:32px;background:radial-gradient(circle at 46% 38%,rgba(17,162,207,.18),transparent 30%),radial-gradient(circle at 63% 62%,rgba(175,207,42,.12),transparent 28%),rgba(0,0,0,.7)!important;backdrop-filter:blur(18px) saturate(1.18)!important;opacity:0;pointer-events:none;transition:opacity 180ms ease}.render-queue-backdrop[hidden]{display:none!important}.render-queue-backdrop.is-open{opacity:1;pointer-events:auto}.render-queue-backdrop.is-closing{opacity:0;pointer-events:none}.render-queue-panel{position:relative;isolation:isolate;width:min(760px,calc(100vw - 56px));max-height:min(780px,calc(100vh - 56px));overflow:hidden;padding:20px;border:1px solid rgba(17,162,207,.34);border-radius:22px;background:linear-gradient(145deg,rgba(231,231,232,.11),rgba(5,5,5,.82) 46%,rgba(11,15,10,.9)),rgba(5,5,5,.94);box-shadow:0 0 0 1px rgba(255,255,255,.055),0 0 42px rgba(17,162,207,.2),0 0 58px rgba(175,207,42,.12),0 32px 86px rgba(0,0,0,.72);transform:translateY(18px) scale(.965);opacity:0;outline:none;transition:transform 210ms cubic-bezier(.2,.9,.2,1),opacity 180ms ease}.render-queue-backdrop.is-open .render-queue-panel{transform:translateY(0) scale(1);opacity:1}.render-queue-aura{position:absolute;inset:-46px;z-index:-1;background:conic-gradient(from 120deg,transparent,rgba(17,162,207,.2),transparent 34%,rgba(175,207,42,.18),transparent 64%);opacity:.48;filter:blur(12px);animation:settings-aura-drift 8.5s linear infinite}.render-queue-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;padding-bottom:16px;border-bottom:1px solid rgba(231,231,232,.1)}.render-queue-head strong{display:block;font-size:22px;line-height:1.05}.render-queue-head p{margin:5px 0 0;color:rgba(231,231,232,.62);font-size:13px}.render-queue-close{display:grid;place-items:center;width:40px;height:40px;min-width:40px;padding:0;border:1px solid rgba(231,231,232,.16);border-radius:14px;background:rgba(231,231,232,.06);color:rgba(231,231,232,.75);font-weight:900}.render-resource-switch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:16px 0}.render-resource-switch button{min-height:42px;border:1px solid rgba(231,231,232,.16);border-radius:14px;background:rgba(231,231,232,.055);color:rgba(231,231,232,.74);font-weight:900}.render-resource-switch button.active{border-color:rgba(175,207,42,.58);background:linear-gradient(90deg,rgba(175,207,42,.2),rgba(17,162,207,.08));color:var(--color-text);box-shadow:0 0 22px rgba(175,207,42,.14)}.render-queue-status{min-height:42px;padding:12px 14px;border:1px solid rgba(17,162,207,.26);border-radius:14px;background:linear-gradient(90deg,rgba(17,162,207,.12),rgba(175,207,42,.065)),rgba(0,0,0,.3);color:rgba(231,231,232,.82);font-size:13px}.render-queue-list{display:grid;gap:10px;max-height:min(486px,calc(100vh - 288px));margin-top:12px;overflow:auto;padding-right:4px;scrollbar-width:thin;scrollbar-color:rgba(175,207,42,.55) rgba(255,255,255,.055)}.render-queue-list::-webkit-scrollbar{width:8px}.render-queue-list::-webkit-scrollbar-thumb{border-radius:999px;background:linear-gradient(180deg,rgba(17,162,207,.72),rgba(175,207,42,.72))}.render-job-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:13px 14px;border:1px solid rgba(231,231,232,.12);border-radius:16px;background:linear-gradient(180deg,rgba(231,231,232,.07),rgba(231,231,232,.025)),rgba(0,0,0,.34)}.render-job-card[data-status=ready]{border-color:rgba(175,207,42,.38)}.render-job-card[data-status=failed]{border-color:rgba(255,111,111,.36)}.render-job-main{display:grid;gap:7px;min-width:0}.render-job-title{display:flex;gap:8px;align-items:center;min-width:0}.render-job-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.render-job-pill{display:inline-flex;align-items:center;min-height:22px;padding:3px 8px;border-radius:999px;background:rgba(17,162,207,.12);color:rgba(36,220,255,.9);font-size:11px;font-weight:900;text-transform:uppercase}.render-job-meta{color:rgba(231,231,232,.58);font-size:12px}.render-job-progress{position:relative;height:5px;overflow:hidden;border-radius:999px;background:rgba(231,231,232,.1)}.render-job-progress span{position:absolute;inset:0 auto 0 0;width:var(--progress);border-radius:inherit;background:linear-gradient(90deg,var(--color-brand-blue),var(--color-brand-green));box-shadow:0 0 14px rgba(17,162,207,.34)}.render-job-actions{display:flex;gap:8px;align-items:center}.render-job-actions button{min-height:34px;padding:7px 11px;border:1px solid rgba(231,231,232,.16);border-radius:999px;background:rgba(231,231,232,.07);color:rgba(231,231,232,.82);font-weight:800}.render-job-actions button.primary{border-color:rgba(175,207,42,.52);background:rgba(175,207,42,.14);color:var(--color-brand-green)}.render-empty{padding:18px;border:1px dashed rgba(231,231,232,.16);border-radius:16px;color:rgba(231,231,232,.58);text-align:center}
+.render-queue-backdrop{position:fixed!important;inset:0!important;z-index:4900!important;display:grid!important;place-items:center!important;padding:32px;background:radial-gradient(circle at 46% 38%,rgba(17,162,207,.18),transparent 30%),radial-gradient(circle at 63% 62%,rgba(175,207,42,.12),transparent 28%),rgba(0,0,0,.7)!important;backdrop-filter:blur(18px) saturate(1.18)!important;opacity:0;pointer-events:none;transition:opacity 180ms ease}.render-queue-backdrop[hidden]{display:none!important}.render-queue-backdrop.is-open{opacity:1;pointer-events:auto}.render-queue-backdrop.is-closing{opacity:0;pointer-events:none}.render-queue-panel{position:relative;isolation:isolate;width:min(760px,calc(100vw - 56px));max-height:min(780px,calc(100vh - 56px));overflow:hidden;padding:20px;border:1px solid rgba(17,162,207,.34);border-radius:22px;background:linear-gradient(145deg,rgba(231,231,232,.11),rgba(5,5,5,.82) 46%,rgba(11,15,10,.9)),rgba(5,5,5,.94);box-shadow:0 0 0 1px rgba(255,255,255,.055),0 0 42px rgba(17,162,207,.2),0 0 58px rgba(175,207,42,.12),0 32px 86px rgba(0,0,0,.72);transform:translateY(18px) scale(.965);opacity:0;outline:none;transition:transform 210ms cubic-bezier(.2,.9,.2,1),opacity 180ms ease}.render-queue-backdrop.is-open .render-queue-panel{transform:translateY(0) scale(1);opacity:1}.render-queue-aura{position:absolute;inset:-46px;z-index:-1;background:conic-gradient(from 120deg,transparent,rgba(17,162,207,.2),transparent 34%,rgba(175,207,42,.18),transparent 64%);opacity:.48;filter:blur(12px);animation:settings-aura-drift 8.5s linear infinite}.render-queue-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;padding-bottom:16px;border-bottom:1px solid rgba(231,231,232,.1)}.render-queue-head strong{display:block;font-size:22px;line-height:1.05}.render-queue-head p{margin:5px 0 0;color:rgba(231,231,232,.62);font-size:13px}.render-queue-close{display:grid;place-items:center;width:40px;height:40px;min-width:40px;padding:0;border:1px solid rgba(231,231,232,.16);border-radius:14px;background:rgba(231,231,232,.06);color:rgba(231,231,232,.75);font-weight:900}.render-resource-switch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:16px 0}.render-resource-switch button{min-height:42px;border:1px solid rgba(231,231,232,.16);border-radius:14px;background:rgba(231,231,232,.055);color:rgba(231,231,232,.74);font-weight:900}.render-resource-switch button.active{border-color:rgba(175,207,42,.58);background:linear-gradient(90deg,rgba(175,207,42,.2),rgba(17,162,207,.08));color:var(--color-text);box-shadow:0 0 22px rgba(175,207,42,.14)}.render-queue-status{min-height:42px;padding:12px 14px;border:1px solid rgba(17,162,207,.26);border-radius:14px;background:linear-gradient(90deg,rgba(17,162,207,.12),rgba(175,207,42,.065)),rgba(0,0,0,.3);color:rgba(231,231,232,.82);font-size:13px}.render-queue-list{display:grid;gap:10px;max-height:min(486px,calc(100vh - 288px));margin-top:12px;overflow:auto;padding-right:4px;scrollbar-width:thin;scrollbar-color:rgba(175,207,42,.55) rgba(255,255,255,.055)}.render-queue-list::-webkit-scrollbar{width:8px}.render-queue-list::-webkit-scrollbar-thumb{border-radius:999px;background:linear-gradient(180deg,rgba(17,162,207,.72),rgba(175,207,42,.72))}.render-job-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:13px 14px;border:1px solid rgba(231,231,232,.12);border-radius:16px;background:linear-gradient(180deg,rgba(231,231,232,.07),rgba(231,231,232,.025)),rgba(0,0,0,.34)}.render-job-card[data-status=ready]{border-color:rgba(175,207,42,.38)}.render-job-card[data-status=failed],.render-job-card[data-status=cancelled]{border-color:rgba(255,111,111,.36)}.render-job-main{display:grid;gap:7px;min-width:0}.render-job-title{display:flex;gap:8px;align-items:center;min-width:0}.render-job-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.render-job-pill{display:inline-flex;align-items:center;min-height:22px;padding:3px 8px;border-radius:999px;background:rgba(17,162,207,.12);color:rgba(36,220,255,.9);font-size:11px;font-weight:900;text-transform:uppercase}.render-job-card[data-status=cancelled] .render-job-pill,.render-job-card[data-status=failed] .render-job-pill{background:rgba(255,111,111,.12);color:#ff9d9d}.render-job-meta{color:rgba(231,231,232,.58);font-size:12px}.render-job-progress{position:relative;height:5px;overflow:hidden;border-radius:999px;background:rgba(231,231,232,.1)}.render-job-progress span{position:absolute;inset:0 auto 0 0;width:var(--progress);border-radius:inherit;background:linear-gradient(90deg,var(--color-brand-blue),var(--color-brand-green));box-shadow:0 0 14px rgba(17,162,207,.34)}.render-job-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.render-job-actions button{min-height:34px;padding:7px 11px;border:1px solid rgba(231,231,232,.16);border-radius:999px;background:rgba(231,231,232,.07);color:rgba(231,231,232,.82);font-weight:800}.render-job-actions button.primary{border-color:rgba(175,207,42,.52);background:rgba(175,207,42,.14);color:var(--color-brand-green)}.render-job-actions [data-render-cancel],.render-job-actions [data-render-remove]{border-color:rgba(255,111,111,.34);background:rgba(255,111,111,.08);color:#ffb3b3}.render-empty{padding:18px;border:1px dashed rgba(231,231,232,.16);border-radius:16px;color:rgba(231,231,232,.58);text-align:center}
 .clip-control-surface .cuted-render-zone.is-ready .cuted-ready-region{flex:0 0 46px;width:46px;min-width:46px}.clip-control-surface .cuted-render-zone.is-ready .cuted-ready-pill{width:46px}
 """
 
@@ -13946,6 +14010,10 @@ function setupRenderQueuePanel(){
     const target = event.target instanceof Element ? event.target : null;
     const folderButton = target?.closest("[data-open-folder]");
     if (folderButton) openResultFolder(folderButton.dataset.openFolder || "", folderButton);
+    const cancelButton = target?.closest("[data-render-cancel]");
+    if (cancelButton) cancelRenderQueueJob(cancelButton.dataset.renderCancel || "", cancelButton);
+    const removeButton = target?.closest("[data-render-remove]");
+    if (removeButton) removeRenderQueueJob(removeButton.dataset.renderRemove || "", removeButton);
   });
   loadRenderQueue();
 }
@@ -14026,11 +14094,14 @@ function scheduleHeaderRenderActivityPoll(active){
 }
 function renderQueueJobHtml(job){
   const summary = job.summary || {};
+  const id = String(job.id || "");
   const title = `#${String(summary.rank || "").padStart(2, "0")} ${summary.title || "Render CUTED"}`;
   const meta = [summary.platform || "", summary.duration ? fixed(summary.duration) : "", renderProfileLabel(job.resource_profile)].filter(Boolean).join(" - ");
   const progress = Math.max(0, Math.min(100, Number(job.progress || 0)));
   const folder = job.export_dir || job.output_dir || "";
   const canOpen = job.status === "ready" && folder;
+  const canCancel = job.status === "queued" || job.status === "rendering";
+  const canRemove = !canCancel;
   return `<article class="render-job-card" data-status="${escapeAttr(job.status || "queued")}">
     <div class="render-job-main">
       <div class="render-job-title"><span class="render-job-pill">${escapeHtml(renderStatusLabel(job.status))}</span><strong>${escapeHtml(title)}</strong></div>
@@ -14040,6 +14111,8 @@ function renderQueueJobHtml(job){
     </div>
     <div class="render-job-actions">
       ${canOpen ? `<button class="primary" type="button" data-open-folder="${escapeAttr(folder)}">Abrir pasta</button>` : `<button type="button" disabled>${escapeHtml(renderStatusLabel(job.status))}</button>`}
+      ${canCancel ? `<button type="button" data-render-cancel="${escapeAttr(id)}">Parar</button>` : ""}
+      ${canRemove ? `<button type="button" data-render-remove="${escapeAttr(id)}">Remover</button>` : ""}
       <button type="button" disabled>Submit</button>
     </div>
   </article>`;
@@ -14058,10 +14131,27 @@ function renderQueuePayloadForCard(card){
   const platform = activePlatformForRank(rank);
   const row = (data.caption_queue || []).find(item => String(item.rank) === rank && item.platform === platform);
   if (!row) throw new Error("Este corte ainda nao esta pronto para render.");
+  validateActiveRenderRow(card, row, platform);
   return Object.assign({}, data, { caption_queue: [row] });
+}
+function validateActiveRenderRow(card, row, platform){
+  const rank = String(card?.dataset?.rank || "");
+  const duration = Number(row.adjusted_duration || cameraTimelineDurationForCard(card));
+  const edit = platformEditForRank(rank, platform);
+  const expectedPreset = resolutionPresetForPlatform(platform);
+  const expectedPath = cameraPathForEdit(edit, duration);
+  const actualPath = normalizeCameraPath(row.camera_path);
+  if (row.resolution_preset !== expectedPreset) {
+    throw new Error("O render nao bate com o formato ativo. Reabra o corte e tente de novo.");
+  }
+  if (JSON.stringify(actualPath) !== JSON.stringify(expectedPath)) {
+    throw new Error("A camera ativa mudou antes do envio. Reabra o corte e tente de novo.");
+  }
 }
 async function sendCardToRenderQueue(card){
   const status = card?.__cutedControlSurface;
+  if (!card || card.dataset.renderSubmitting === "1") return;
+  card.dataset.renderSubmitting = "1";
   try {
     const queue = renderQueuePayloadForCard(card);
     const response = await fetch("/api/render-jobs", {
@@ -14082,11 +14172,44 @@ async function sendCardToRenderQueue(card){
     cancelControlSurfaceReady(card);
     card?.__cutedControlSurface?.setStatus?.({ kind: "render", label, tone: "green" }, 1200);
     showAppNotice(label);
-    openRenderQueuePanel();
-    renderQueueJobs([payload.job]);
+    await loadRenderQueue();
   } catch (error) {
     status?.setStatus?.({ kind: "error", label: error.message || "Render falhou", tone: "red" }, 2200);
     showAppNotice(error.message || "Nao consegui enviar para render.");
+  } finally {
+    delete card.dataset.renderSubmitting;
+  }
+}
+async function cancelRenderQueueJob(jobId, button){
+  if (!jobId) return;
+  await updateRenderQueueJob(`/api/render-jobs/${encodeURIComponent(jobId)}/cancel`, button, "Parando...");
+}
+async function removeRenderQueueJob(jobId, button){
+  if (!jobId) return;
+  await updateRenderQueueJob(`/api/render-jobs/${encodeURIComponent(jobId)}/remove`, button, "Removendo...");
+}
+async function updateRenderQueueJob(url, button, label){
+  const previous = button?.textContent || "";
+  try {
+    if (button) {
+      button.disabled = true;
+      button.textContent = label;
+    }
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gallery_path: currentGalleryPath() })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Nao consegui atualizar a fila.");
+    if (Array.isArray(payload.jobs)) renderQueueJobs(payload.jobs);
+    else await loadRenderQueue();
+  } catch (error) {
+    if (button) {
+      button.disabled = false;
+      button.textContent = previous;
+    }
+    showAppNotice(error.message || "Nao consegui atualizar a fila.");
   }
 }
 async function openResultFolder(path, button){

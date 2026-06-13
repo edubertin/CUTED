@@ -225,6 +225,7 @@
       soundButton: container.querySelector("[data-cuted-control='sound']"),
       toolGroup: container.querySelector("[data-cuted-tool-group]"),
       statusBar: container.querySelector("[data-cuted-bar-status]"),
+      statusAction: container.querySelector("[data-cuted-status-action]"),
       statusLabel: container.querySelector("[data-cuted-status-label]"),
       statusMeter: container.querySelector("[data-cuted-status-meter]"),
       volumeMuteButton: container.querySelector("[data-cuted-control='volume-mute']"),
@@ -402,8 +403,8 @@
       callbacks.onReadyCancel?.(snapshotState(state));
     });
 
-    elements.statusBar.addEventListener("click", () => {
-      if (!state.ready || state.discarded || state.busy) return;
+    elements.statusAction.addEventListener("click", () => {
+      if (!state.ready || state.discarded || state.busy || state.renderQueued) return;
       state.renderQueued = true;
       state.ready = false;
       setStatus({ kind: "ready", label: "SENT", tone: "green" }, 1400);
@@ -411,11 +412,11 @@
       callbacks.onSendRender?.(snapshotState(state));
     });
 
-    elements.statusBar.addEventListener("keydown", (event) => {
+    elements.statusAction.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
-      if (!state.ready || state.discarded || state.busy) return;
+      if (!state.ready || state.discarded || state.busy || state.renderQueued) return;
       event.preventDefault();
-      elements.statusBar.click();
+      elements.statusAction.click();
     });
 
     elements.formatButton.addEventListener("click", () => {
@@ -585,10 +586,12 @@
     }
     elements.statusBar.dataset.tone = hasStatus ? status.tone : "neutral";
     elements.statusBar.dataset.kind = hasStatus ? status.kind : "idle";
-    const canSendRender = Boolean(state.ready && !state.discarded && !state.busy);
-    elements.statusBar.setAttribute("role", canSendRender ? "button" : "status");
-    elements.statusBar.setAttribute("aria-label", canSendRender ? "Enviar para render" : status?.label || "Status");
-    elements.statusBar.tabIndex = canSendRender ? 0 : -1;
+    const canSendRender = Boolean(state.ready && !state.discarded && !state.busy && !state.renderQueued);
+    elements.statusBar.setAttribute("role", "status");
+    elements.statusBar.removeAttribute("tabindex");
+    elements.statusAction.setAttribute("role", canSendRender ? "button" : "presentation");
+    elements.statusAction.setAttribute("aria-label", canSendRender ? "Enviar para render" : status?.label || "Status");
+    elements.statusAction.tabIndex = canSendRender ? 0 : -1;
     if (hasStatus && (status.kind === "ready" || status.kind === "discarded")) {
       elements.statusLabel.innerHTML = renderReadyLetters(status.label);
     } else if (hasStatus) {
@@ -622,7 +625,7 @@
         </div>
 
         <div class="cuted-bar-status-layer" data-kind="idle" data-tone="neutral" data-cuted-bar-status hidden>
-          <span data-cuted-status-label></span>
+          <span data-cuted-status-label data-cuted-status-action></span>
           <i data-cuted-status-meter></i>
         </div>
 
