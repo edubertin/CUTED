@@ -303,6 +303,8 @@ class CuttedImportUiTests(unittest.TestCase):
         )
 
         self.assertIn("data-cuted-control-surface", html)
+        self.assertIn("clip-control-row", html)
+        self.assertIn("clip-control-meta", html)
         self.assertIn("clip-control-surface", html)
         self.assertNotIn("clip-status", html)
         self.assertNotIn("Ajuste fino", html)

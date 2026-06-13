@@ -261,7 +261,11 @@ class CuttedCameraRuleTests(unittest.TestCase):
         html = CUTTED.card_html(moment)
 
         self.assertIn("data-cuted-control-surface", html)
+        self.assertIn("clip-control-row", html)
+        self.assertIn("clip-control-meta", html)
         self.assertIn("clip-control-surface", html)
+        self.assertLess(html.index("clip-control-row"), html.index("clip-control-meta"))
+        self.assertLess(html.index("clip-control-meta"), html.index("data-cuted-control-surface"))
         self.assertLess(html.index("data-cuted-control-surface"), html.index("data-preview-camera-timeline"))
         self.assertLess(html.index("data-preview-camera-timeline"), html.index("</summary>"))
         self.assertNotIn("preview-transport-group", html)
