@@ -447,12 +447,19 @@
     elements.statusAction.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      if (confirmTrimMode()) return;
+      if (state.trimMode) {
+        if (event.target instanceof Element && event.target.closest(".cuted-trim-status-confirm")) {
+          confirmTrimMode();
+        } else {
+          restoreTrimStatus();
+        }
+        return;
+      }
       if (!state.ready || state.discarded || state.busy || state.renderQueued) return;
       state.renderQueued = true;
       state.ready = false;
       closeToolModes();
-      setStatus({ kind: "render", label: "Enviado ao render", tone: "green" }, 1400);
+      setStatus({ kind: "render", label: "SENT TO RENDER", tone: "green" }, 1400);
       sync();
       callbacks.onSendRender?.(snapshotState(state));
     });
@@ -983,7 +990,7 @@
   }
 
   function renderTrimStatus() {
-    return '<span class="cuted-trim-status-main">TRIM</span><span class="cuted-trim-status-confirm">CONFIRMAR</span>';
+    return '<span class="cuted-trim-status-main">TRIM</span><span class="cuted-trim-status-confirm">CONFIRME</span>';
   }
 
   function clamp(value, min, max) {

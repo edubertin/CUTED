@@ -257,10 +257,11 @@ body.cuted-control-demo #cuted-control-bar-demo {
 }
 
 .cuted-control-bar[data-status-kind="trim"] .cuted-bar-status-layer > span {
-  left: clamp(390px, 44%, 560px);
+  right: auto;
+  left: calc(50% + min(300px, 20vw));
   display: inline-flex;
   width: max-content;
-  max-width: min(430px, calc(100% - 520px));
+  max-width: min(330px, calc(100% - 720px));
   align-items: center;
   justify-content: center;
   gap: 12px;
@@ -270,11 +271,12 @@ body.cuted-control-demo #cuted-control-bar-demo {
   background:
     linear-gradient(90deg, rgba(36, 220, 255, 0.12), rgba(231, 231, 232, 0.05)),
     rgba(5, 7, 8, 0.5);
-  cursor: pointer;
+  cursor: default;
   pointer-events: auto;
   box-shadow:
     inset 0 1px rgba(255, 255, 255, 0.12),
     0 0 24px rgba(17, 162, 207, 0.24);
+  transform: translate(-50%, -50%);
 }
 
 .cuted-trim-status-main,
@@ -294,11 +296,13 @@ body.cuted-control-demo #cuted-control-bar-demo {
   border-radius: 999px;
   background: rgba(36, 220, 255, 0.16);
   color: var(--cuted-blue-hot);
+  cursor: pointer;
   font-size: 13px;
   box-shadow: 0 0 14px rgba(17, 162, 207, 0.34);
 }
 
-.cuted-control-bar[data-status-kind="trim"] .cuted-bar-status-layer > span:hover .cuted-trim-status-confirm {
+.cuted-control-bar[data-status-kind="trim"] .cuted-trim-status-confirm:hover,
+.cuted-control-bar[data-status-kind="trim"] .cuted-trim-status-confirm:focus-visible {
   background: rgba(36, 220, 255, 0.24);
   color: var(--cuted-white);
   box-shadow: 0 0 22px rgba(36, 220, 255, 0.58);
@@ -2028,6 +2032,18 @@ body.cuted-control-demo #cuted-control-bar-demo {
   margin-left: 0;
 }
 
+.cuted-control-bar[data-status-kind="trim"] .cuted-ready-region {
+  width: 0;
+  flex-basis: 0;
+  min-width: 0;
+  min-height: 0;
+  margin-left: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: scaleX(0.2);
+  visibility: hidden;
+}
+
 .cuted-ready-region .cuted-action-group {
   grid-area: 1 / 1;
   transition:
@@ -2050,6 +2066,13 @@ body.cuted-control-demo #cuted-control-bar-demo {
   transform: scaleX(0.1) scaleY(0.45);
 }
 
+.cuted-control-bar[data-status-kind="trim"] .cuted-action-group {
+  opacity: 0;
+  filter: blur(8px) saturate(1.35);
+  pointer-events: none;
+  transform: scaleX(0.1) scaleY(0.45);
+}
+
 .cuted-control-bar.is-busy .cuted-audio-group,
 .cuted-control-bar.is-busy .cuted-format-group {
   opacity: 0.28;
@@ -2058,6 +2081,15 @@ body.cuted-control-demo #cuted-control-bar-demo {
 }
 
 .cuted-control-bar.is-status-transient .cuted-ready-divider {
+  opacity: 0;
+  transform: scaleY(0.32);
+}
+
+.cuted-control-bar[data-status-kind="trim"] .cuted-ready-divider {
+  width: 0;
+  flex-basis: 0;
+  margin-right: 0;
+  margin-left: 0;
   opacity: 0;
   transform: scaleY(0.32);
 }

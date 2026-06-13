@@ -14212,7 +14212,7 @@ async function sendCardToRenderQueue(card){
     }
     cancelControlSurfaceReady(card);
     card?.__cutedControlSurface?.update?.({ renderQueued: false });
-    card?.__cutedControlSurface?.setStatus?.({ kind: "ready", label: "Enviado ao render", tone: "green" }, 1800);
+    card?.__cutedControlSurface?.setStatus?.({ kind: "ready", label: "SENT TO RENDER", tone: "green" }, 1800);
     await loadRenderQueue();
   } catch (error) {
     updateControlSurfaceForCard(card);
