@@ -10501,6 +10501,24 @@ function cameraPathForEdit(edit, duration){
   const path = normalizeCameraPath(edit?.camera_path);
   return path.length ? path : cameraPathFromCamera(edit?.camera || defaultCamera(), duration);
 }
+function exportCameraPathForEdit(edit, sourceDuration, trimStart, adjustedDuration){
+  const safeSourceDuration = Math.max(Number(sourceDuration) || Number(adjustedDuration) || 0, .3);
+  const safeTrimStart = clampNumber(Number(trimStart) || 0, 0, Math.max(safeSourceDuration - .001, 0));
+  const safeAdjustedDuration = Math.max(Number(adjustedDuration) || (safeSourceDuration - safeTrimStart), .3);
+  const sourcePath = cameraPathForEdit(edit, safeSourceDuration);
+  const active = cameraFrameForTime(edit?.camera, sourcePath, safeTrimStart, safeSourceDuration);
+  const frames = [Object.assign({}, active, { time: 0 })];
+  sourcePath.forEach(frame => {
+    const time = Number(frame.time || 0);
+    if (time <= safeTrimStart + .001) return;
+    if (time >= safeTrimStart + safeAdjustedDuration - .001) return;
+    frames.push(Object.assign({}, frame, { time: Number((time - safeTrimStart).toFixed(3)) }));
+  });
+  return normalizeCameraPath(frames);
+}
+function sourceDurationForMoment(moment){
+  return Number(moment?.duration || (Number(moment?.end || 0) - Number(moment?.start || 0)) || moment?.adjusted_duration || 0);
+}
 function explicitCameraPathForEdit(edit){
   return normalizeCameraPath(edit?.camera_path);
 }
@@ -12948,6 +12966,7 @@ function adjustedMoment(moment){
   const platforms = Array.isArray(current.platforms) ? current.platforms : [];
   const adjustedDuration = Number((moment.end - trimEnd - moment.start - trimStart).toFixed(3));
   const edit = platformEditForRank(moment.rank);
+  const sourceDuration = sourceDurationForMoment(moment);
   return Object.assign({}, moment, {
     status: current.status || null,
     platforms,
@@ -12957,7 +12976,7 @@ function adjustedMoment(moment){
     adjusted_end: Number((moment.end - trimEnd).toFixed(3)),
     adjusted_duration: adjustedDuration,
     camera: edit.camera,
-    camera_path: cameraPathForEdit(edit, adjustedDuration),
+    camera_path: exportCameraPathForEdit(edit, sourceDuration, trimStart, adjustedDuration),
     director_plan: edit.director_plan,
     camera_motion_ms: current.cameraMotionMs,
     effect: effectForRank(moment.rank),
@@ -12967,7 +12986,7 @@ function adjustedMoment(moment){
     platform_edits: current.platformEdits
   });
 }
-function resolutionEditForPlatform(rank, platform, duration){
+function resolutionEditForPlatform(rank, platform, sourceDuration, trimStart, duration){
   const key = resolutionPresetForPlatform(platform);
   const edit = platformEditForRank(rank, platform);
   return {
@@ -12975,7 +12994,7 @@ function resolutionEditForPlatform(rank, platform, duration){
     resolution_label: resolutionPresetLabel(key),
     source: "platform_edits",
     camera: edit.camera,
-    camera_path: cameraPathForEdit(edit, duration),
+    camera_path: exportCameraPathForEdit(edit, sourceDuration, trimStart, duration),
     director_plan: edit.director_plan,
     camera_motion_ms: cardState(String(rank)).cameraMotionMs,
     effect: edit.effect,
@@ -12989,7 +13008,7 @@ function resolutionEditsForMoment(moment, exportFormat){
   captionPlatforms(moment, exportFormat).forEach(platform => {
     const key = resolutionPresetForPlatform(platform);
     if (!result[key]) {
-      result[key] = Object.assign(resolutionEditForPlatform(moment.rank, platform, moment.adjusted_duration), {
+      result[key] = Object.assign(resolutionEditForPlatform(moment.rank, platform, sourceDurationForMoment(moment), moment.trim_start_seconds, moment.adjusted_duration), {
         destinations: resolutionPresets[key]?.destinations || [platform],
         shared: true
       });
@@ -13010,7 +13029,7 @@ function buildExportData(){
   data.caption_queue = data.selected.flatMap(moment => captionPlatforms(moment, data.export_format).map(platform => {
     const edit = platformEditForRank(moment.rank, platform);
     const overlays = edit.overlays;
-    const cameraPath = cameraPathForEdit(edit, moment.adjusted_duration);
+    const cameraPath = exportCameraPathForEdit(edit, sourceDurationForMoment(moment), moment.trim_start_seconds, moment.adjusted_duration);
     const resolutionKey = resolutionPresetForPlatform(platform);
     return {
       rank: moment.rank,
@@ -14152,7 +14171,8 @@ function validateActiveRenderRow(card, row, platform){
   const duration = Number(row.adjusted_duration || cameraTimelineDurationForCard(card));
   const edit = platformEditForRank(rank, platform);
   const expectedPreset = resolutionPresetForPlatform(platform);
-  const expectedPath = cameraPathForEdit(edit, duration);
+  const values = trimValues(card);
+  const expectedPath = exportCameraPathForEdit(edit, values.duration, values.trimStart, duration);
   const actualPath = normalizeCameraPath(row.camera_path);
   if (row.resolution_preset !== expectedPreset) {
     throw new Error("O render nao bate com o formato ativo. Reabra o corte e tente de novo.");

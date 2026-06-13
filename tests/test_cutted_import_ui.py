@@ -143,6 +143,19 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("process.terminate()", source)
         self.assertIn('raise RuntimeError("Render cancelado.")', source)
 
+    def test_render_camera_path_is_rebased_after_trim(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("function exportCameraPathForEdit", html)
+        self.assertIn("Object.assign({}, active, { time: 0 })", html)
+        self.assertIn("time <= safeTrimStart + .001", html)
+        self.assertIn("time - safeTrimStart", html)
+        self.assertIn("function sourceDurationForMoment", html)
+        self.assertIn("exportCameraPathForEdit(edit, sourceDuration, trimStart, adjustedDuration)", html)
+        self.assertIn("exportCameraPathForEdit(edit, sourceDurationForMoment(moment), moment.trim_start_seconds, moment.adjusted_duration)", html)
+        self.assertIn("exportCameraPathForEdit(edit, values.duration, values.trimStart, duration)", html)
+        self.assertNotIn("cameraPathForEdit(edit, moment.adjusted_duration);", html)
+
     def test_partial_captioned_files_are_recovered_before_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             gallery_dir = Path(tmp)
