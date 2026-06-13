@@ -405,6 +405,31 @@ h1 {
   content: "";
 }
 
+.timeline-shell[data-trim-enabled="false"] .trim-handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.timeline-shell[data-trim-enabled="false"] .trim-blade {
+  pointer-events: none;
+}
+
+.timeline-shell[data-trim-enabled="true"] .trim-handle {
+  opacity: 1;
+  pointer-events: auto;
+  transition:
+    opacity 180ms ease,
+    filter 180ms ease;
+}
+
+.timeline-shell[data-trim-enabled="true"] .trim-blade {
+  pointer-events: auto;
+}
+
+.timeline-shell[data-trim-enabled="true"] {
+  cursor: ew-resize;
+}
+
 .keyframe-popover {
   --inspector-color: var(--color-brand-blue);
   --intensity: 0.72;
