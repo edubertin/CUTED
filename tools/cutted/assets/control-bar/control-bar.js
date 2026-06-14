@@ -2,6 +2,9 @@
   const DEFAULT_STATE = {
     aiStatus: "idle",
     captionsEnabled: false,
+    captionMenuOpen: false,
+    captionPaletteOpen: null,
+    captionStyle: { size: 72, width: 28, textColor: "#ffffff", backgroundColor: "transparent" },
     effectMenuOpen: false,
     effectStyle: "clean",
     formatMenuOpen: false,
@@ -14,7 +17,10 @@
     muted: false,
     ready: false,
     discarded: false,
+    renderQueued: false,
     status: null,
+    trimApplied: false,
+    trimMode: false,
     volume: 75
   };
 
@@ -61,11 +67,23 @@
       update(nextState) {
         const hasIncomingStatus = Object.prototype.hasOwnProperty.call(nextState || {}, "status");
         const incomingStatus = hasIncomingStatus ? normalizeStatus(nextState.status) : state.status;
-        const keepLocalStatus = hasIncomingStatus && !incomingStatus && state.status && !state.status.persistent && statusClock.id;
+        const incomingBumpers = normalizeBumpers(nextState?.bumpers);
+        const insertedSlot = state.insertMenuOpen ? ["intro", "outro"].find((slot) => !state.bumpers[slot] && incomingBumpers[slot]) : null;
+        const keepTimedStatus = state.status && !state.status.persistent && statusClock.id;
+        const keepMenuStatus = state.status?.persistent && (
+          (state.captionMenuOpen && state.status.kind === "caption") ||
+          (state.effectMenuOpen && state.status.kind === "effect") ||
+          (state.insertMenuOpen && state.status.kind === "insert")
+        );
+        const keepLocalStatus = hasIncomingStatus && !incomingStatus && !insertedSlot && (keepTimedStatus || keepMenuStatus);
         if (hasIncomingStatus && !keepLocalStatus) {
           window.clearTimeout(statusClock.id);
         }
         const normalizedNext = normalizeState({ ...state, ...nextState });
+        if (insertedSlot && !incomingStatus) {
+          const label = insertedSlot === "intro" ? "Start video inserted" : "End video inserted";
+          normalizedNext.status = { kind: "insert", label, persistent: true, progress: null, tone: "green" };
+        }
         if (keepLocalStatus) normalizedNext.status = state.status;
         Object.assign(state, normalizedNext);
         reconcileReadyStatus(state);
@@ -121,6 +139,7 @@
       onAiStatusChange: options.onAiStatusChange || nested.onAiStatusChange,
       onApproveClick: options.onApproveClick || nested.onApproveClick,
       onCaptionToggle: options.onCaptionToggle || nested.onCaptionToggle,
+      onCaptionStyleChange: options.onCaptionStyleChange || nested.onCaptionStyleChange,
       onDiscardClick: options.onDiscardClick || nested.onDiscardClick,
       onEffectClick: options.onEffectClick || nested.onEffectClick,
       onEffectStyleChange: options.onEffectStyleChange || nested.onEffectStyleChange,
@@ -131,6 +150,9 @@
       onInsertClick: options.onInsertClick || nested.onInsertClick,
       onStateChange: options.onStateChange || nested.onStateChange,
       onReadyCancel: options.onReadyCancel || nested.onReadyCancel,
+      onSendRender: options.onSendRender || nested.onSendRender,
+      onTrimConfirm: options.onTrimConfirm || nested.onTrimConfirm,
+      onTrimToggle: options.onTrimToggle || nested.onTrimToggle,
       onVolumeChange: options.onVolumeChange || nested.onVolumeChange
     };
   }
@@ -153,6 +175,9 @@
       aiStatus,
       busy: Boolean(state.busy),
       captionsEnabled: Boolean(state.captionsEnabled),
+      captionMenuOpen: Boolean(state.captionMenuOpen),
+      captionPaletteOpen: ["text", "background"].includes(state.captionPaletteOpen) ? state.captionPaletteOpen : null,
+      captionStyle: normalizeCaptionStyle(state.captionStyle),
       effectMenuOpen: Boolean(state.effectMenuOpen),
       effectStyle,
       formatMenuOpen: Boolean(state.formatMenuOpen),
@@ -164,7 +189,10 @@
       muted: Boolean(state.muted),
       ready: Boolean(state.ready),
       discarded: Boolean(state.discarded),
+      renderQueued: Boolean(state.renderQueued),
       status: normalizeStatus(state.status),
+      trimApplied: Boolean(state.trimApplied),
+      trimMode: Boolean(state.trimMode),
       volume: clamp(Number(state.volume), 0, 100)
     };
   }
@@ -191,11 +219,41 @@
     };
   }
 
+  function normalizeCaptionStyle(value) {
+    const input = value && typeof value === "object" ? value : {};
+    return {
+      size: clamp(Number(input.size || 72), 24, 140),
+      width: clamp(Number(input.width || 28), 12, 56),
+      textColor: normalizeHexColor(input.textColor, "#ffffff"),
+      backgroundColor: normalizeCaptionBackground(input.backgroundColor)
+    };
+  }
+
+  function normalizeCaptionBackground(value) {
+    const raw = String(value || "").trim().toLowerCase();
+    if (!raw || raw === "transparent" || raw === "none") return "transparent";
+    return normalizeHexColor(raw, "#000000");
+  }
+
+  function normalizeHexColor(value, fallback) {
+    const raw = String(value || "").trim();
+    return /^#[0-9a-f]{6}$/i.test(raw) ? raw.toLowerCase() : fallback;
+  }
+
   function readElements(container) {
     return {
       aiButton: container.querySelector("[data-cuted-control='ai']"),
       approveButton: container.querySelector("[data-cuted-control='approve']"),
       captionButton: container.querySelector("[data-cuted-control='caption']"),
+      captionMenu: container.querySelector("[data-cuted-caption-menu]"),
+      captionToggle: container.querySelector("[data-cuted-caption-toggle]"),
+      captionOkButton: container.querySelector("[data-cuted-caption-ok]"),
+      captionSizeInput: container.querySelector("[data-cuted-caption-size]"),
+      captionWidthInput: container.querySelector("[data-cuted-caption-width]"),
+      captionSteps: Array.from(container.querySelectorAll("[data-cuted-caption-step]")),
+      captionPalette: container.querySelector("[data-cuted-caption-palette]"),
+      captionPickers: Array.from(container.querySelectorAll("[data-cuted-caption-picker]")),
+      captionSwatches: Array.from(container.querySelectorAll("[data-cuted-caption-swatch]")),
       clipInfo: container.querySelector("[data-cuted-clip-info]"),
       clipRank: container.querySelector("[data-cuted-clip-rank]"),
       clipSummary: container.querySelector("[data-cuted-clip-summary]"),
@@ -215,13 +273,16 @@
       controlBar: container.querySelector("[data-cuted-control-bar]"),
       insertButton: container.querySelector("[data-cuted-control='insert']"),
       insertDots: Array.from(container.querySelectorAll("[data-cuted-insert-dot]")),
+      insertExitButton: container.querySelector("[data-cuted-insert-exit]"),
       insertMenu: container.querySelector("[data-cuted-insert-menu]"),
       readyCancelButton: container.querySelector("[data-cuted-control='ready-cancel']"),
       renderZone: container.querySelector("[data-cuted-render-zone]"),
       sonicRail: container.querySelector("[data-cuted-sonic-rail]"),
       soundButton: container.querySelector("[data-cuted-control='sound']"),
       toolGroup: container.querySelector("[data-cuted-tool-group]"),
+      trimButton: container.querySelector("[data-cuted-control='trim']"),
       statusBar: container.querySelector("[data-cuted-bar-status]"),
+      statusAction: container.querySelector("[data-cuted-status-action]"),
       statusLabel: container.querySelector("[data-cuted-status-label]"),
       statusMeter: container.querySelector("[data-cuted-status-meter]"),
       volumeMuteButton: container.querySelector("[data-cuted-control='volume-mute']"),
@@ -248,26 +309,56 @@
       syncView(elements, state);
       emitStateChange(container, callbacks, subscribers, state);
     };
-    const insertAutoCloseClock = { id: null };
-    const clearInsertAutoClose = () => {
-      window.clearTimeout(insertAutoCloseClock.id);
-      insertAutoCloseClock.id = null;
+    const emitCaptionChange = () => {
+      const payload = { captionsEnabled: state.captionsEnabled, captionStyle: { ...state.captionStyle } };
+      callbacks.onCaptionToggle?.(payload);
+      callbacks.onCaptionStyleChange?.(payload);
     };
-    const scheduleInsertAutoClose = () => {
-      clearInsertAutoClose();
-      insertAutoCloseClock.id = window.setTimeout(() => {
-        if (!state.insertMenuOpen || isLocked()) return;
-        state.insertMenuOpen = false;
-        sync();
-      }, 2200);
+    const updateCaptionStyle = (nextStyle, label) => {
+      state.captionStyle = normalizeCaptionStyle({ ...state.captionStyle, ...nextStyle });
+      setCaptionStatus(label);
+      sync();
+      emitCaptionChange();
+    };
+    const setCaptionStatus = (label, tone = "blue") => {
+      setStatus({ kind: "caption", label, tone, persistent: state.captionMenuOpen }, state.captionMenuOpen ? 0 : undefined);
+    };
+    const closeCaptionPalette = () => {
+      state.captionPaletteOpen = null;
+    };
+    const setInsertStatus = (label, tone = "blue") => {
+      setStatus({ kind: "insert", label, tone, persistent: state.insertMenuOpen }, state.insertMenuOpen ? 0 : undefined);
     };
     const closeMenus = () => {
-      clearInsertAutoClose();
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
+      state.captionMenuOpen = false;
+      closeCaptionPalette();
       state.volumeMenuOpen = false;
       sync();
+    };
+    const closeToolModes = () => {
+      const wasTrimMode = state.trimMode;
+      state.trimMode = false;
+      if (wasTrimMode) callbacks.onTrimToggle?.({ trimMode: false });
+    };
+    const restoreTrimStatus = () => {
+      if (!state.trimMode) return false;
+      window.clearTimeout(statusClock.id);
+      state.status = buildTrimStatus();
+      sync();
+      return true;
+    };
+    const confirmTrimMode = () => {
+      if (!state.trimMode) return false;
+      window.clearTimeout(statusClock.id);
+      state.trimMode = false;
+      state.status = null;
+      callbacks.onTrimToggle?.({ trimMode: false });
+      sync();
+      callbacks.onTrimConfirm?.(snapshotState(state));
+      return true;
     };
     const isLocked = () => state.ready || state.discarded || state.busy;
     const lockReady = () => {
@@ -276,7 +367,10 @@
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
+      state.captionMenuOpen = false;
+      closeCaptionPalette();
       state.volumeMenuOpen = false;
+      closeToolModes();
       setStatus(buildReadyStatus(), 0);
       sync();
     };
@@ -286,15 +380,20 @@
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
+      state.captionMenuOpen = false;
+      closeCaptionPalette();
       state.volumeMenuOpen = false;
+      closeToolModes();
       setStatus(buildDiscardedStatus(), 0);
       sync();
     };
     const dismissClick = (event) => {
       if (container.contains(event.target)) return;
+      if (state.captionMenuOpen || state.effectMenuOpen || state.insertMenuOpen) return;
       closeMenus();
     };
     const dismissKey = (event) => {
+      if (state.captionMenuOpen || state.effectMenuOpen || state.insertMenuOpen) return;
       if (event.key === "Escape") closeMenus();
     };
 
@@ -311,10 +410,13 @@
 
     elements.soundButton.addEventListener("click", () => {
       if (isLocked()) return;
+      if (restoreTrimStatus()) return;
       state.volumeMenuOpen = !state.volumeMenuOpen;
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
+      state.captionMenuOpen = false;
+      closeCaptionPalette();
       sync();
     });
 
@@ -328,7 +430,16 @@
 
     elements.aiButton.addEventListener("click", () => {
       if (isLocked()) return;
+      if (restoreTrimStatus()) return;
+      closeToolModes();
       state.volumeMenuOpen = false;
+      state.captionMenuOpen = false;
+      closeCaptionPalette();
+      if (state.aiStatus === "active") {
+        setStatus({ kind: "ai", label: "AI camera already exists", tone: "blue" }, 1500);
+        sync();
+        return;
+      }
       callbacks.onAiClick?.({ ...state });
       if (state.aiStatus === "idle") {
         state.aiStatus = "loading";
@@ -347,15 +458,20 @@
 
     elements.effectButton.addEventListener("click", () => {
       if (isLocked()) return;
-      state.effectMenuOpen = !state.effectMenuOpen;
+      if (restoreTrimStatus()) return;
+      closeToolModes();
+      state.effectMenuOpen = true;
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
+      state.captionMenuOpen = false;
+      closeCaptionPalette();
       state.volumeMenuOpen = false;
       setStatus({
         kind: "effect",
-        label: state.effectMenuOpen ? "Choose a visual effect" : "Effect menu closed",
-        tone: state.effectMenuOpen ? "green" : "neutral"
-      });
+        label: "FX",
+        persistent: true,
+        tone: "green"
+      }, 0);
       sync();
       callbacks.onEffectClick?.({ effectMenuOpen: state.effectMenuOpen, effectStyle: state.effectStyle });
     });
@@ -363,10 +479,13 @@
     elements.effectOptions.forEach((button) => {
       button.addEventListener("click", () => {
         if (isLocked()) return;
+        closeToolModes();
         state.effectStyle = button.dataset.cutedEffectStyle;
         state.effectMenuOpen = false;
+        state.captionMenuOpen = false;
+        closeCaptionPalette();
         state.volumeMenuOpen = false;
-        setStatus({ kind: "effect", label: `Effect preview: ${button.textContent.trim()}`, tone: "green" });
+        setStatus({ kind: "effect", label: `FX ${button.textContent.trim()}`, tone: "green" }, 1700);
         sync();
         callbacks.onEffectStyleChange?.({ effectStyle: state.effectStyle });
       });
@@ -374,35 +493,121 @@
 
     elements.captionButton.addEventListener("click", () => {
       if (isLocked()) return;
-      state.captionsEnabled = !state.captionsEnabled;
+      if (restoreTrimStatus()) return;
+      state.captionMenuOpen = true;
+      state.effectMenuOpen = false;
+      state.formatMenuOpen = false;
+      state.insertMenuOpen = false;
       state.volumeMenuOpen = false;
-      setStatus({ kind: "caption", label: state.captionsEnabled ? "Captions on" : "Captions off", tone: state.captionsEnabled ? "blue" : "neutral" });
+      setCaptionStatus("Closed caption");
       sync();
-      callbacks.onCaptionToggle?.({ captionsEnabled: state.captionsEnabled });
+    });
+    elements.captionToggle.addEventListener("click", () => {
+      if (isLocked()) return;
+      state.captionsEnabled = !state.captionsEnabled;
+      setCaptionStatus(state.captionsEnabled ? "Caption ON" : "Caption OFF", state.captionsEnabled ? "blue" : "neutral");
+      sync();
+      emitCaptionChange();
+    });
+    elements.captionOkButton.addEventListener("click", () => {
+      if (isLocked()) return;
+      state.captionMenuOpen = false;
+      closeCaptionPalette();
+      setStatus({ kind: "caption", label: "Caption saved", tone: "neutral" }, 1200);
+      sync();
+    });
+    elements.captionSteps.forEach((button) => {
+      button.addEventListener("click", () => {
+        if (isLocked()) return;
+        const key = button.dataset.cutedCaptionStep === "width" ? "width" : "size";
+        const direction = Number(button.dataset.cutedCaptionDirection || 0);
+        const current = key === "width" ? state.captionStyle.width : state.captionStyle.size;
+        const step = key === "width" ? 1 : 2;
+        const next = current + (direction * step);
+        updateCaptionStyle({ [key]: next }, key === "width" ? `Width ${Math.round(next)}` : `Size ${Math.round(next)}`);
+      });
+    });
+    [["size", elements.captionSizeInput], ["width", elements.captionWidthInput]].forEach(([key, input]) => {
+      input.addEventListener("change", () => {
+        if (isLocked()) return;
+        updateCaptionStyle({ [key]: Number(input.value) }, key === "width" ? `Width ${input.value}` : `Size ${input.value}`);
+      });
+    });
+    elements.captionPickers.forEach((picker) => {
+      picker.addEventListener("click", () => {
+        if (isLocked()) return;
+        const target = picker.dataset.cutedCaptionPicker === "background" ? "background" : "text";
+        state.captionPaletteOpen = state.captionPaletteOpen === target ? null : target;
+        setCaptionStatus(target === "background" ? "Background palette" : "Text palette");
+        sync();
+      });
+    });
+    elements.captionSwatches.forEach((button) => {
+      button.addEventListener("click", () => {
+        if (isLocked()) return;
+        const key = state.captionPaletteOpen === "background" ? "backgroundColor" : "textColor";
+        const value = button.dataset.cutedCaptionValue || "transparent";
+        updateCaptionStyle({ [key]: value }, key === "backgroundColor" ? "Background color" : "Text color");
+      });
     });
     elements.approveButton.addEventListener("click", () => {
       if (isLocked()) return;
+      if (restoreTrimStatus()) return;
       lockReady();
       callbacks.onApproveClick?.(snapshotState(state));
     });
     elements.discardButton.addEventListener("click", () => {
       if (isLocked()) return;
+      if (restoreTrimStatus()) return;
       lockDiscarded();
       callbacks.onDiscardClick?.(snapshotState(state));
     });
     elements.readyCancelButton.addEventListener("click", () => {
       state.ready = false;
       state.discarded = false;
+      state.renderQueued = false;
+      closeToolModes();
       setStatus({ kind: "editing", label: "Back to editing", tone: "neutral" }, 1800);
       sync();
       callbacks.onReadyCancel?.(snapshotState(state));
     });
 
+    elements.statusAction.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (state.trimMode) {
+        if (event.target instanceof Element && event.target.closest(".cuted-trim-status-confirm")) {
+          confirmTrimMode();
+        } else {
+          restoreTrimStatus();
+        }
+        return;
+      }
+      if (!state.ready || state.discarded || state.busy || state.renderQueued) return;
+      state.renderQueued = true;
+      state.ready = false;
+      closeToolModes();
+      setStatus({ kind: "render", label: "SENT TO RENDER", tone: "green" }, 1400);
+      sync();
+      callbacks.onSendRender?.(snapshotState(state));
+    });
+
+    elements.statusAction.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (!state.trimMode && (!state.ready || state.discarded || state.busy || state.renderQueued)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      elements.statusAction.click();
+    });
+
     elements.formatButton.addEventListener("click", () => {
       if (isLocked()) return;
+      if (restoreTrimStatus()) return;
       state.formatMenuOpen = !state.formatMenuOpen;
       state.effectMenuOpen = false;
       state.insertMenuOpen = false;
+      state.captionMenuOpen = false;
+      closeCaptionPalette();
       state.volumeMenuOpen = false;
       setStatus({ kind: "format", label: state.formatMenuOpen ? "Choose output format" : "Format menu closed", tone: "blue" });
       sync();
@@ -413,6 +618,8 @@
         if (isLocked()) return;
         state.aspectRatio = button.dataset.cutedFormat;
         state.formatMenuOpen = false;
+        state.captionMenuOpen = false;
+        closeCaptionPalette();
         state.volumeMenuOpen = false;
         setStatus({ kind: "format", label: `Format selected: ${state.aspectRatio}`, tone: "blue" });
         sync();
@@ -422,18 +629,41 @@
 
     elements.insertButton.addEventListener("click", () => {
       if (isLocked()) return;
-      state.insertMenuOpen = !state.insertMenuOpen;
+      if (restoreTrimStatus()) return;
+      closeToolModes();
+      state.insertMenuOpen = true;
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
+      state.captionMenuOpen = false;
+      closeCaptionPalette();
       state.volumeMenuOpen = false;
-      setStatus({ kind: "insert", label: state.insertMenuOpen ? "Insert bumper: Start or End" : "Insert menu closed", tone: "blue" });
-      if (state.insertMenuOpen) {
-        scheduleInsertAutoClose();
-      } else {
-        clearInsertAutoClose();
-      }
+      setInsertStatus("Insert");
       sync();
       callbacks.onInsertClick?.({ insertMenuOpen: state.insertMenuOpen, bumpers: { ...state.bumpers } });
+    });
+    elements.insertExitButton.addEventListener("click", () => {
+      if (isLocked()) return;
+      state.insertMenuOpen = false;
+      setStatus({ kind: "insert", label: "Insert closed", tone: "neutral" }, 900);
+      sync();
+    });
+
+    elements.trimButton.addEventListener("click", () => {
+      if (isLocked()) return;
+      if (state.trimMode) {
+        restoreTrimStatus();
+        return;
+      }
+      state.trimMode = true;
+      state.effectMenuOpen = false;
+      state.formatMenuOpen = false;
+      state.insertMenuOpen = false;
+      state.captionMenuOpen = false;
+      closeCaptionPalette();
+      state.volumeMenuOpen = false;
+      setStatus(buildTrimStatus(), 0);
+      sync();
+      callbacks.onTrimToggle?.({ trimMode: true });
     });
 
     elements.bumperButtons.forEach((button) => {
@@ -443,8 +673,8 @@
         if (!state.bumpers[slot] && settings.mockBumpers) {
           state.bumpers[slot] = mockBumper(slot);
         }
-        clearInsertAutoClose();
-        setStatus({ kind: "insert", label: `${slot === "intro" ? "Start" : "End"} bumper attached`, tone: "green" });
+        const label = slot === "intro" ? "Start" : "End";
+        setInsertStatus(state.bumpers[slot] ? `${label} video inserted` : `Choose ${label} video`, state.bumpers[slot] ? "green" : "blue");
         sync();
         callbacks.onBumperClick?.({ slot, bumper: state.bumpers[slot] });
         callbacks.onBumperChange?.({ bumpers: { ...state.bumpers } });
@@ -457,7 +687,7 @@
         if (isLocked()) return;
         const slot = button.dataset.cutedBumperRemove;
         state.bumpers[slot] = null;
-        setStatus({ kind: "insert", label: `${slot === "intro" ? "Start" : "End"} bumper removed`, tone: "red" });
+        setInsertStatus(`${slot === "intro" ? "Start" : "End"} video removed`, "red");
         sync();
         callbacks.onBumperRemove?.({ slot });
         callbacks.onBumperChange?.({ bumpers: { ...state.bumpers } });
@@ -465,7 +695,6 @@
     });
 
     return () => {
-      clearInsertAutoClose();
       window.clearTimeout(statusClock.id);
       document.removeEventListener("click", dismissClick, true);
       document.removeEventListener("keydown", dismissKey);
@@ -496,14 +725,22 @@
     elements.aiButton.dataset.aiStatus = state.aiStatus;
     elements.aiButton.classList.toggle("is-loading", state.aiStatus === "loading");
     elements.aiButton.classList.toggle("is-active", state.aiStatus === "loading" || state.aiStatus === "active");
-    elements.captionButton.classList.toggle("is-active", state.captionsEnabled);
-    elements.effectButton.classList.toggle("is-active", true);
     if (locked) {
       state.effectMenuOpen = false;
       state.formatMenuOpen = false;
       state.insertMenuOpen = false;
+      state.captionMenuOpen = false;
       state.volumeMenuOpen = false;
+      state.trimMode = false;
     }
+    elements.trimButton.classList.toggle("is-active", state.trimMode || state.trimApplied);
+    elements.trimButton.classList.toggle("is-trim-applied", !state.trimMode && state.trimApplied);
+    elements.trimButton.setAttribute("aria-pressed", String(state.trimMode));
+    elements.captionButton.classList.toggle("is-active", state.captionsEnabled);
+    elements.captionButton.classList.toggle("is-menu-open", state.captionMenuOpen);
+    elements.captionButton.setAttribute("aria-expanded", String(state.captionMenuOpen));
+    syncCaptionMenu(elements, state);
+    elements.effectButton.classList.toggle("is-active", true);
     elements.effectMenu.dataset.open = String(state.effectMenuOpen);
     syncInsert(elements, state);
     syncStatus(elements, state);
@@ -525,6 +762,29 @@
     });
   }
 
+  function syncCaptionMenu(elements, state) {
+    elements.captionMenu.dataset.open = String(state.captionMenuOpen);
+    elements.captionToggle.classList.toggle("is-on", state.captionsEnabled);
+    elements.captionToggle.setAttribute("aria-pressed", String(state.captionsEnabled));
+    elements.captionSizeInput.value = String(Math.round(state.captionStyle.size));
+    elements.captionWidthInput.value = String(Math.round(state.captionStyle.width));
+    elements.captionPickers.forEach((picker) => {
+      const key = picker.dataset.cutedCaptionPicker === "background" ? "backgroundColor" : "textColor";
+      const value = state.captionStyle[key];
+      picker.style.setProperty("--caption-picker-color", value === "transparent" ? "transparent" : value);
+      picker.dataset.transparent = String(value === "transparent");
+      picker.classList.toggle("is-active", state.captionPaletteOpen === picker.dataset.cutedCaptionPicker);
+    });
+    elements.captionPalette.dataset.open = String(Boolean(state.captionPaletteOpen));
+    elements.captionPalette.dataset.kind = state.captionPaletteOpen || "text";
+    elements.captionSwatches.forEach((button) => {
+      const isTransparent = button.dataset.cutedCaptionValue === "transparent";
+      const key = state.captionPaletteOpen === "background" ? "backgroundColor" : "textColor";
+      button.hidden = !state.captionPaletteOpen || (state.captionPaletteOpen === "text" && isTransparent);
+      button.classList.toggle("is-active", button.dataset.cutedCaptionValue === state.captionStyle[key]);
+    });
+  }
+
   function syncClipInfo(elements, state) {
     const hasInfo = Boolean(state.clipInfo.rank || state.clipInfo.title || state.clipInfo.summary);
     elements.clipInfo.hidden = !hasInfo;
@@ -534,11 +794,13 @@
   }
 
   function syncStatus(elements, state) {
-    const status = state.discarded ? buildDiscardedStatus() : state.ready ? buildReadyStatus() : state.status;
+    const transientStatus = state.status && !state.status.persistent ? state.status : null;
+    const status = state.trimMode ? buildTrimStatus() : state.discarded ? buildDiscardedStatus() : transientStatus || (state.ready ? buildReadyStatus() : state.status);
     const hasStatus = Boolean(status && status.label);
+    const statusIsTransient = !state.trimMode && Boolean(transientStatus);
     window.clearTimeout(elements.statusBar._cutedHideTimer);
     elements.controlBar.classList.toggle("has-status", hasStatus);
-    elements.controlBar.classList.toggle("is-status-transient", hasStatus && status.kind !== "ready" && status.kind !== "discarded");
+    elements.controlBar.classList.toggle("is-status-transient", statusIsTransient);
     elements.controlBar.dataset.statusKind = hasStatus ? status.kind : "idle";
     elements.controlBar.dataset.statusTone = hasStatus ? status.tone : "neutral";
     elements.toolGroup.classList.toggle("is-ready", state.ready);
@@ -565,8 +827,17 @@
     }
     elements.statusBar.dataset.tone = hasStatus ? status.tone : "neutral";
     elements.statusBar.dataset.kind = hasStatus ? status.kind : "idle";
+    const canConfirmTrim = Boolean(state.trimMode && !state.discarded && !state.busy);
+    const canSendRender = Boolean(state.ready && !state.discarded && !state.busy && !state.renderQueued && (!hasStatus || status.kind === "ready"));
+    elements.statusBar.setAttribute("role", "status");
+    elements.statusBar.removeAttribute("tabindex");
+    elements.statusAction.setAttribute("role", canConfirmTrim || canSendRender ? "button" : "presentation");
+    elements.statusAction.setAttribute("aria-label", canConfirmTrim ? "Confirmar trim" : canSendRender ? "Enviar para render" : status?.label || "Status");
+    elements.statusAction.tabIndex = canConfirmTrim || canSendRender ? 0 : -1;
     if (hasStatus && (status.kind === "ready" || status.kind === "discarded")) {
       elements.statusLabel.innerHTML = renderReadyLetters(status.label);
+    } else if (hasStatus && status.kind === "trim") {
+      elements.statusLabel.innerHTML = renderTrimStatus();
     } else if (hasStatus) {
       elements.statusLabel.textContent = status.label;
     }
@@ -597,8 +868,10 @@
           </button>
         </div>
 
+        ${renderCaptionMenu()}
+
         <div class="cuted-bar-status-layer" data-kind="idle" data-tone="neutral" data-cuted-bar-status hidden>
-          <span data-cuted-status-label></span>
+          <span data-cuted-status-label data-cuted-status-action></span>
           <i data-cuted-status-meter></i>
         </div>
 
@@ -650,6 +923,16 @@
         <div class="cuted-render-zone" data-cuted-render-zone>
           <div class="cuted-control-group cuted-tool-group" data-cuted-tool-group>
             <div class="cuted-tool-buttons">
+              <button class="cuted-tile-button cuted-trim-button" type="button" aria-label="Trim" aria-pressed="false" data-cuted-control="trim">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle class="cuted-trim-ring cuted-trim-ring-top" cx="6.1" cy="6.8" r="2.55"></circle>
+                  <circle class="cuted-trim-ring cuted-trim-ring-bottom" cx="6.1" cy="17.2" r="2.55"></circle>
+                  <path class="cuted-trim-hinge" d="M8.5 12h3.2"></path>
+                  <path class="cuted-trim-blade cuted-trim-blade-top" d="M8.3 8.5 19.3 4.2"></path>
+                  <path class="cuted-trim-blade cuted-trim-blade-bottom" d="M8.3 15.5 19.3 19.8"></path>
+                  <path class="cuted-trim-spark" d="M15.5 12h4.2"></path>
+                </svg>
+              </button>
               <button class="cuted-tile-button cuted-ai-button" type="button" aria-label="IA" data-cuted-control="ai">
                 <span>IA</span>
                 <i class="cuted-ai-loader" aria-hidden="true"></i>
@@ -723,9 +1006,89 @@
   function renderInsertMenu() {
     return `
       <div class="cuted-insert-menu" data-open="false" data-cuted-insert-menu>
-        ${renderBumperOption("intro", "Start", "Before cut")}
-        ${renderBumperOption("outro", "End", "After cut")}
+        <button class="cuted-insert-exit" type="button" data-cuted-insert-exit>Done</button>
+        <div class="cuted-insert-options">
+          ${renderBumperOption("intro", "Start", "Before cut")}
+          ${renderBumperOption("outro", "End", "After cut")}
+        </div>
       </div>
+    `;
+  }
+
+  function renderCaptionMenu() {
+    return `
+      <div class="cuted-caption-menu" data-open="false" data-cuted-caption-menu>
+        <div class="cuted-caption-menu-head">
+          <button class="cuted-caption-switch" type="button" aria-label="Closed captions on or off" aria-pressed="false" data-cuted-caption-toggle>
+            <span>ON</span>
+            <i aria-hidden="true"></i>
+            <span>OFF</span>
+          </button>
+          <button class="cuted-caption-ok" type="button" data-cuted-caption-ok>OK</button>
+        </div>
+        <div class="cuted-caption-number-grid">
+          ${renderCaptionStepper("size", "FONT", 72)}
+          ${renderCaptionStepper("width", "WIDTH", 28)}
+        </div>
+        <div class="cuted-caption-color-grid">
+          ${renderCaptionColorPicker("text", "A", "#ffffff")}
+          ${renderCaptionColorPicker("background", "BG", "#000000")}
+        </div>
+        ${renderCaptionPalette()}
+      </div>
+    `;
+  }
+
+  function renderCaptionStepper(key, label, value) {
+    return `
+      <label class="cuted-caption-stepper">
+        <span>${label}</span>
+        <span class="cuted-caption-stepper-row">
+          <button type="button" aria-label="${label} menor" data-cuted-caption-step="${key}" data-cuted-caption-direction="-1">-</button>
+          <input type="number" min="${key === "width" ? "12" : "24"}" max="${key === "width" ? "56" : "140"}" value="${value}" data-cuted-caption-${key} />
+          <button type="button" aria-label="${label} maior" data-cuted-caption-step="${key}" data-cuted-caption-direction="1">+</button>
+        </span>
+      </label>
+    `;
+  }
+
+  function renderCaptionColorPicker(kind, label, value) {
+    return `
+      <div class="cuted-caption-picker cuted-caption-picker-${kind}" data-cuted-caption-picker="${kind}" style="--caption-picker-color:${value}">
+        <span>${label}</span>
+        <i aria-hidden="true"></i>
+      </div>
+    `;
+  }
+
+  function renderCaptionPalette() {
+    const colors = captionPaletteColors();
+    return `
+      <div class="cuted-caption-palette" data-open="false" data-kind="text" data-cuted-caption-palette>
+        <div class="cuted-caption-palette-grid">
+          ${renderCaptionSwatch("transparent")}
+          ${colors.map(renderCaptionSwatch).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function captionPaletteColors() {
+    return [
+      "#ffffff", "#d7dde5", "#9aa4b2", "#111318",
+      "#ffcc00", "#ff8a00", "#ef4444", "#ec4899",
+      "#afcf2a", "#46d66f", "#11a2cf", "#2563eb",
+      "#7c3aed", "#14b8a6", "#f5f0dc", "#8b5cf6",
+      "#ffe066", "#fb7185", "#38bdf8", "#a3e635",
+      "#0f172a", "#20242a", "#08212b", "#24330c",
+      "#f97316", "#06b6d4", "#84cc16", "#e879f9"
+    ];
+  }
+
+  function renderCaptionSwatch(color) {
+    const isTransparent = color === "transparent";
+    return `
+      <button class="cuted-caption-swatch${isTransparent ? " is-transparent" : ""}" type="button" aria-label="${isTransparent ? "Transparente" : color}" data-cuted-caption-swatch data-cuted-caption-value="${color}" style="--swatch-color:${isTransparent ? "#000000" : color}"></button>
     `;
   }
 
@@ -810,7 +1173,7 @@
   function buildReadyStatus() {
     return {
       kind: "ready",
-      label: "READY",
+      label: "SEND TO RENDER",
       persistent: true,
       tone: "green"
     };
@@ -822,6 +1185,15 @@
       label: "CUT DISCARDED",
       persistent: true,
       tone: "red"
+    };
+  }
+
+  function buildTrimStatus() {
+    return {
+      kind: "trim",
+      label: "TRIM",
+      persistent: true,
+      tone: "blue"
     };
   }
 
@@ -847,6 +1219,7 @@
         intro: state.bumpers.intro ? { ...state.bumpers.intro } : null,
         outro: state.bumpers.outro ? { ...state.bumpers.outro } : null
       },
+      captionStyle: { ...state.captionStyle },
       clipInfo: { ...state.clipInfo },
       status: state.discarded ? buildDiscardedStatus() : state.ready ? buildReadyStatus() : state.status ? { ...state.status } : null
     };
@@ -859,6 +1232,10 @@
         return `<span data-cuted-status-letter style="--i:${index}">${content}</span>`;
       })
       .join("");
+  }
+
+  function renderTrimStatus() {
+    return '<span class="cuted-trim-status-main">TRIM</span><span class="cuted-trim-status-confirm">CONFIRME</span>';
   }
 
   function clamp(value, min, max) {

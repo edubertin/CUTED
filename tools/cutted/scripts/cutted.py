@@ -316,8 +316,32 @@ class ImportJob:
     stderr: str = ""
 
 
+@dataclass
+class RenderJob:
+    id: str
+    fingerprint: str
+    status: str
+    created_at: float
+    updated_at: float
+    gallery_dir: Path
+    base_dir: Path
+    output_dir: Path
+    resource_profile: str
+    payload: dict[str, object]
+    message: str = ""
+    progress: int = 0
+    speed: str = ""
+    eta_seconds: float | None = None
+    processed_seconds: float = 0.0
+    files: list[dict[str, object]] | None = None
+    export_dir: str = ""
+    error: str = ""
+
+
 IMPORT_JOBS: dict[str, ImportJob] = {}
 IMPORT_JOBS_LOCK = threading.Lock()
+RENDER_JOBS: dict[str, RenderJob] = {}
+RENDER_JOBS_LOCK = threading.Lock()
 VISUAL_MAP_TASKS: set[str] = set()
 VISUAL_MAP_TASKS_LOCK = threading.Lock()
 YOLO_MODEL_CACHE: dict[str, object | None] = {}
@@ -853,6 +877,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if path == "/api/import-jobs":
                 self.handle_import_job(base_dir)
                 return
+            if path == "/api/render-jobs":
+                self.handle_render_job(base_dir)
+                return
             if path == "/api/camera/analyze":
                 self.handle_camera_analyze(base_dir)
                 return
@@ -880,6 +907,15 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if re.fullmatch(r"/api/import-jobs/[^/]+/cancel", path):
                 self.handle_import_cancel(path)
                 return
+            if re.fullmatch(r"/api/render-jobs/[^/]+/cancel", path):
+                self.handle_render_cancel(path)
+                return
+            if re.fullmatch(r"/api/render-jobs/[^/]+/profile", path):
+                self.handle_render_profile(base_dir, path)
+                return
+            if re.fullmatch(r"/api/render-jobs/[^/]+/remove", path):
+                self.handle_render_remove(base_dir, path)
+                return
             if path != "/api/finalize":
                 self.send_error(404, "Not found")
                 return
@@ -888,6 +924,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             path = urllib.parse.urlparse(self.path).path
             if path == "/api/finalize-results":
                 self.handle_finalize_results(base_dir)
+                return
+            if path == "/api/render-jobs":
+                self.handle_render_jobs(base_dir)
                 return
             if path == "/api/projects":
                 self.handle_projects(base_dir)
@@ -903,6 +942,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
                 return
             if re.fullmatch(r"/api/import-jobs/[^/]+", path):
                 self.handle_import_status(path)
+                return
+            if re.fullmatch(r"/api/render-jobs/[^/]+", path):
+                self.handle_render_status(path)
                 return
             if self.handle_range_request():
                 return
@@ -978,6 +1020,53 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             job_id = path.split("/")[-2]
             result = cancel_import_job(job_id)
             send_json_response(self, 200 if result.get("ok") else 404, result)
+
+        def handle_render_job(self, request_base_dir: Path) -> None:
+            try:
+                result = start_render_job(self, request_base_dir)
+                send_json_response(self, 200, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
+
+        def handle_render_jobs(self, request_base_dir: Path) -> None:
+            try:
+                result = render_jobs_from_request(self, request_base_dir)
+                send_json_response(self, 200, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
+
+        def handle_render_status(self, path: str) -> None:
+            job_id = path.rsplit("/", 1)[-1]
+            job = render_job_snapshot(job_id)
+            if job is None:
+                send_json_response(self, 404, {"ok": False, "error": "Render job not found."})
+                return
+            send_json_response(self, 200, {"ok": True, "job": job})
+
+        def handle_render_cancel(self, path: str) -> None:
+            job_id = path.split("/")[-2]
+            result = cancel_render_job(job_id)
+            send_json_response(self, 200 if result.get("ok") else 404, result)
+
+        def handle_render_profile(self, request_base_dir: Path, path: str) -> None:
+            try:
+                job_id = path.split("/")[-2]
+                payload = read_json_body(self)
+                gallery_dir = resolve_request_gallery_dir(request_base_dir, payload)
+                result = update_render_job_profile(job_id, gallery_dir, payload.get("resource_profile"))
+                send_json_response(self, 200 if result.get("ok") else 404, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
+
+        def handle_render_remove(self, request_base_dir: Path, path: str) -> None:
+            try:
+                job_id = path.split("/")[-2]
+                payload = read_json_body(self)
+                gallery_dir = resolve_request_gallery_dir(request_base_dir, payload)
+                result = remove_render_job(job_id, gallery_dir)
+                send_json_response(self, 200 if result.get("ok") else 404, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
 
         def handle_projects(self, request_base_dir: Path) -> None:
             send_json_response(self, 200, {"ok": True, "projects": project_catalog_recent(request_base_dir)})
@@ -1078,28 +1167,37 @@ def parse_range_header(header: str, file_size: int) -> tuple[int, int] | None:
 
 def finalize_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
     payload = read_json_body(handler)
+    return finalize_payload(payload, base_dir)
+
+
+def finalize_payload(
+    payload: dict[str, object], base_dir: Path, out_dir: Path | None = None,
+    resource_profile: str = "medium", render_job_id: str = "",
+) -> dict[str, object]:
     queue = payload.get("queue") if isinstance(payload, dict) else None
     if not isinstance(queue, dict):
         raise ValueError("Missing queue data.")
     gallery_dir = resolve_request_gallery_dir(base_dir, payload)
     caption_path = gallery_dir / "caption-queue.json"
-    out_dir = gallery_dir / "captioned-clips"
-    out_dir.mkdir(parents=True, exist_ok=True)
+    target_dir = out_dir or gallery_dir / "captioned-clips"
+    target_dir.mkdir(parents=True, exist_ok=True)
     materialize_queue_image_assets(queue, gallery_dir / "overlay-assets")
     materialize_queue_bumper_assets(queue, gallery_dir / "bumper-assets")
     caption_path.write_text(json.dumps(queue, ensure_ascii=False, indent=2), encoding="utf-8")
     rows = caption_rows_from_data(queue)
+    apply_render_resource_to_rows(rows, resource_profile)
+    apply_render_job_id_to_rows(rows, render_job_id)
     options = SimpleNamespace(
         chars_per_line=int(payload.get("chars_per_line") or 28),
         max_lines=int(payload.get("max_lines") or 2),
         captions_enabled=bool(payload.get("captions_enabled", True)),
     )
-    captioned = caption_selected_rows(rows, gallery_dir, out_dir, find_ffmpeg(), options)
+    captioned = caption_selected_rows(rows, gallery_dir, target_dir, find_ffmpeg(), options)
     captioned, export_dir = export_captioned_rows(captioned, gallery_dir)
     manifest = {"source_caption_queue": str(caption_path), "captioned": captioned}
     if export_dir:
         manifest["export_dir"] = str(export_dir)
-    (out_dir / "captioned-clips.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    (target_dir / "captioned-clips.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"ok": True, "count": len(captioned), "files": finalized_file_urls(captioned, gallery_dir), "export_dir": str(export_dir) if export_dir else ""}
 
 
@@ -1108,6 +1206,343 @@ def finalize_results_from_request(handler: http.server.BaseHTTPRequestHandler, b
     query = urllib.parse.parse_qs(parsed.query)
     gallery_dir = resolve_request_gallery_dir(base_dir, {"gallery_path": query.get("gallery_path", [""])[0]})
     return finalized_results_from_gallery(gallery_dir)
+
+
+def render_jobs_from_request(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
+    parsed = urllib.parse.urlparse(handler.path)
+    query = urllib.parse.parse_qs(parsed.query)
+    gallery_dir = resolve_request_gallery_dir(base_dir, {"gallery_path": query.get("gallery_path", [""])[0]})
+    restore_render_jobs_from_manifest(gallery_dir, base_dir)
+    return {"ok": True, "jobs": render_queue_snapshot(gallery_dir)}
+
+
+def start_render_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
+    payload = read_json_body(handler)
+    queue = payload.get("queue") if isinstance(payload, dict) else None
+    if not isinstance(queue, dict) or not isinstance(queue.get("caption_queue"), list) or not queue.get("caption_queue"):
+        raise ValueError("Selecione ao menos um corte para enviar ao render.")
+    gallery_dir = resolve_request_gallery_dir(base_dir, payload)
+    profile = clean_render_resource_profile(payload.get("resource_profile"))
+    fingerprint = render_job_fingerprint(payload, profile)
+    restore_render_jobs_from_manifest(gallery_dir, base_dir)
+    existing = render_job_by_fingerprint(gallery_dir, fingerprint)
+    if existing is not None:
+        return {"ok": True, "job": existing, "duplicate": True}
+    job_id = f"render-{uuid.uuid4().hex[:10]}"
+    output_dir = render_job_output_dir(gallery_dir, job_id)
+    job = RenderJob(
+        job_id,
+        fingerprint,
+        "queued",
+        time.time(),
+        time.time(),
+        gallery_dir,
+        base_dir,
+        output_dir,
+        profile,
+        payload,
+        "Na fila de render.",
+        4,
+        "",
+        None,
+        0.0,
+        [],
+    )
+    with RENDER_JOBS_LOCK:
+        RENDER_JOBS[job.id] = job
+    persist_render_queue(gallery_dir)
+    thread = threading.Thread(target=run_render_job, args=(job.id,), daemon=True)
+    thread.start()
+    return {"ok": True, "job": render_job_to_dict(job), "duplicate": False}
+
+
+def run_render_job(job_id: str) -> None:
+    with RENDER_JOBS_LOCK:
+        job = RENDER_JOBS.get(job_id)
+        if job is None:
+            return
+        job.status = "rendering"
+        job.message = "Renderizando em background."
+        job.progress = 12
+        job.speed = ""
+        job.eta_seconds = None
+        job.processed_seconds = 0.0
+        job.updated_at = time.time()
+        persist_render_queue(job.gallery_dir)
+    try:
+        result = finalize_payload(job.payload, job.base_dir, job.output_dir, job.resource_profile, job.id)
+        with RENDER_JOBS_LOCK:
+            current = RENDER_JOBS.get(job_id)
+            if current is None or current.status == "cancelled":
+                return
+            current.status = "ready"
+            current.message = "Render pronto."
+            current.progress = 100
+            current.speed = ""
+            current.eta_seconds = 0.0
+            current.updated_at = time.time()
+            current.files = list(result.get("files") or [])
+            current.export_dir = str(result.get("export_dir") or "")
+            persist_render_queue(current.gallery_dir)
+            upsert_project_catalog_entry(project_entry_from_gallery(current.gallery_dir, current.base_dir))
+    except Exception as error:
+        with RENDER_JOBS_LOCK:
+            current = RENDER_JOBS.get(job_id)
+            if current is None or current.status == "cancelled":
+                return
+            current.status = "failed"
+            current.message = "Falha ao renderizar."
+            current.progress = 100
+            current.updated_at = time.time()
+            current.error = str(error)
+            persist_render_queue(current.gallery_dir)
+
+
+def cancel_render_job(job_id: str) -> dict[str, object]:
+    with RENDER_JOBS_LOCK:
+        job = RENDER_JOBS.get(job_id)
+        if job is None:
+            return {"ok": False, "error": "Render job not found."}
+        if job.status not in {"queued", "rendering"}:
+            return {"ok": True, "job": render_job_to_dict(job)}
+        job.status = "cancelled"
+        job.message = "Render cancelado."
+        job.progress = 100
+        job.updated_at = time.time()
+        persist_render_queue(job.gallery_dir)
+        return {"ok": True, "job": render_job_to_dict(job)}
+
+
+def remove_render_job(job_id: str, gallery_dir: Path) -> dict[str, object]:
+    with RENDER_JOBS_LOCK:
+        job = RENDER_JOBS.pop(job_id, None)
+        target_dir = job.gallery_dir if job is not None else gallery_dir
+        manifest = read_render_queue_manifest(target_dir)
+        manifest_jobs = manifest.get("jobs") if isinstance(manifest, dict) else []
+        kept = [item for item in manifest_jobs if isinstance(item, dict) and str(item.get("id")) != job_id]
+        removed = job is not None or len(kept) != len(manifest_jobs if isinstance(manifest_jobs, list) else [])
+        if not removed:
+            return {"ok": False, "error": "Render job not found."}
+        write_render_queue_manifest(target_dir, kept)
+        return {"ok": True, "jobs": render_queue_snapshot_without_lock(target_dir)}
+
+
+def update_render_job_profile(job_id: str, gallery_dir: Path, profile_value: object) -> dict[str, object]:
+    profile = clean_render_resource_profile(profile_value)
+    with RENDER_JOBS_LOCK:
+        job = RENDER_JOBS.get(job_id)
+        if job is not None:
+            if job.status != "queued":
+                return {
+                    "ok": True,
+                    "changed": False,
+                    "job": render_job_to_dict(job),
+                    "message": "Perfil salvo para proximos renders; este render ja iniciou.",
+                    "jobs": render_queue_snapshot_without_lock(job.gallery_dir),
+                }
+            job.resource_profile = profile
+            job.payload["resource_profile"] = profile
+            job.fingerprint = render_job_fingerprint(job.payload, profile)
+            job.updated_at = time.time()
+            job.message = f"Perfil alterado para {render_profile_label(profile)}."
+            persist_render_queue(job.gallery_dir)
+            return {
+                "ok": True,
+                "changed": True,
+                "job": render_job_to_dict(job),
+                "jobs": render_queue_snapshot_without_lock(job.gallery_dir),
+            }
+        manifest = read_render_queue_manifest(gallery_dir)
+        items = manifest.get("jobs") if isinstance(manifest, dict) else []
+        if not isinstance(items, list):
+            return {"ok": False, "error": "Render job not found."}
+        changed = False
+        for item in items:
+            if not isinstance(item, dict) or str(item.get("id")) != job_id:
+                continue
+            if item.get("status") != "queued":
+                return {
+                    "ok": True,
+                    "changed": False,
+                    "message": "Perfil salvo para proximos renders; este render ja iniciou.",
+                    "jobs": render_queue_snapshot_without_lock(gallery_dir),
+                }
+            item["resource_profile"] = profile
+            item["updated_at"] = time.time()
+            item["message"] = f"Perfil alterado para {render_profile_label(profile)}."
+            changed = True
+            break
+        if not changed:
+            return {"ok": False, "error": "Render job not found."}
+        write_render_queue_manifest(gallery_dir, items)
+        return {"ok": True, "changed": True, "jobs": render_queue_snapshot_without_lock(gallery_dir)}
+
+
+def render_job_cancelled(job_id: object) -> bool:
+    if not job_id:
+        return False
+    with RENDER_JOBS_LOCK:
+        job = RENDER_JOBS.get(str(job_id))
+        return bool(job and job.status == "cancelled")
+
+
+def render_job_snapshot(job_id: str) -> dict[str, object] | None:
+    with RENDER_JOBS_LOCK:
+        job = RENDER_JOBS.get(job_id)
+        return render_job_to_dict(job) if job else None
+
+
+def render_job_by_fingerprint(gallery_dir: Path, fingerprint: str) -> dict[str, object] | None:
+    for job in render_queue_snapshot(gallery_dir):
+        if job.get("fingerprint") == fingerprint and job.get("status") in {"queued", "rendering", "ready"}:
+            return job
+    return None
+
+
+def render_queue_snapshot(gallery_dir: Path) -> list[dict[str, object]]:
+    manifest_jobs = read_render_queue_manifest(gallery_dir).get("jobs", [])
+    jobs = [item for item in manifest_jobs if isinstance(item, dict)]
+    with RENDER_JOBS_LOCK:
+        live = [render_job_to_dict(job) for job in RENDER_JOBS.values() if job.gallery_dir == gallery_dir]
+    merged: dict[str, dict[str, object]] = {str(job.get("id")): job for job in jobs if job.get("id")}
+    for job in live:
+        merged[str(job["id"])] = job
+    return sorted(merged.values(), key=lambda item: float(item.get("created_at") or 0), reverse=True)
+
+
+def render_job_to_dict(job: RenderJob) -> dict[str, object]:
+    return {
+        "id": job.id,
+        "fingerprint": job.fingerprint,
+        "status": job.status,
+        "message": job.message,
+        "progress": job.progress,
+        "speed": job.speed,
+        "eta_seconds": job.eta_seconds,
+        "processed_seconds": job.processed_seconds,
+        "created_at": job.created_at,
+        "updated_at": job.updated_at,
+        "resource_profile": job.resource_profile,
+        "output_dir": str(job.output_dir),
+        "export_dir": job.export_dir,
+        "files": job.files or [],
+        "error": job.error,
+        "summary": render_job_summary(job.payload),
+    }
+
+
+def restore_render_jobs_from_manifest(gallery_dir: Path, base_dir: Path) -> None:
+    manifest = read_render_queue_manifest(gallery_dir)
+    items = manifest.get("jobs") if isinstance(manifest, dict) else []
+    if not isinstance(items, list):
+        return
+    with RENDER_JOBS_LOCK:
+        for item in items:
+            if not isinstance(item, dict) or not item.get("id") or item.get("id") in RENDER_JOBS:
+                continue
+            if item.get("status") not in {"queued", "rendering"}:
+                continue
+            item["status"] = "queued"
+            job = RenderJob(
+                str(item["id"]),
+                str(item.get("fingerprint") or ""),
+                "queued",
+                float(item.get("created_at") or time.time()),
+                time.time(),
+                gallery_dir,
+                base_dir,
+                Path(str(item.get("output_dir") or render_job_output_dir(gallery_dir, str(item["id"])))),
+                clean_render_resource_profile(item.get("resource_profile")),
+                {},
+                "Aguardando novo envio para retomar.",
+                0,
+                "",
+                None,
+                0.0,
+                [],
+                str(item.get("export_dir") or ""),
+                "Servidor reiniciado antes de concluir este render.",
+            )
+            RENDER_JOBS[job.id] = job
+
+
+def render_job_fingerprint(payload: dict[str, object], profile: str) -> str:
+    relevant = {
+        "queue": payload.get("queue"),
+        "chars_per_line": payload.get("chars_per_line"),
+        "max_lines": payload.get("max_lines"),
+        "captions_enabled": payload.get("captions_enabled"),
+        "resource_profile": profile,
+        "renderer": "cuted-render-queue-v1",
+    }
+    raw = json.dumps(relevant, ensure_ascii=False, sort_keys=True, default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
+
+
+def render_job_summary(payload: dict[str, object]) -> dict[str, object]:
+    queue = payload.get("queue") if isinstance(payload, dict) else None
+    rows = queue.get("caption_queue") if isinstance(queue, dict) else []
+    first = rows[0] if isinstance(rows, list) and rows and isinstance(rows[0], dict) else {}
+    return {
+        "count": len(rows) if isinstance(rows, list) else 0,
+        "rank": first.get("rank", ""),
+        "title": first.get("title") or first.get("peak_text") or "Render CUTED",
+        "platform": first.get("platform_label") or first.get("platform") or "",
+        "duration": first.get("adjusted_duration") or "",
+    }
+
+
+def render_queue_manifest_path(gallery_dir: Path) -> Path:
+    return gallery_dir / PROJECT_RENDERS_DIR_NAME / "render-queue.json"
+
+
+def render_job_output_dir(gallery_dir: Path, job_id: str) -> Path:
+    return gallery_dir / PROJECT_RENDERS_DIR_NAME / "jobs" / job_id
+
+
+def read_render_queue_manifest(gallery_dir: Path) -> dict[str, object]:
+    path = render_queue_manifest_path(gallery_dir)
+    if not path.exists():
+        return {"version": 1, "jobs": []}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return {"version": 1, "jobs": []}
+    return data if isinstance(data, dict) else {"version": 1, "jobs": []}
+
+
+def persist_render_queue(gallery_dir: Path) -> None:
+    jobs = render_queue_snapshot_without_lock(gallery_dir)
+    write_render_queue_manifest(gallery_dir, jobs)
+
+
+def write_render_queue_manifest(gallery_dir: Path, jobs: list[dict[str, object]]) -> None:
+    path = render_queue_manifest_path(gallery_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_suffix(".tmp")
+    temp_path.write_text(json.dumps({"version": 1, "jobs": jobs}, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp_path.replace(path)
+
+
+def render_queue_snapshot_without_lock(gallery_dir: Path) -> list[dict[str, object]]:
+    manifest_jobs = read_render_queue_manifest(gallery_dir).get("jobs", [])
+    jobs = [item for item in manifest_jobs if isinstance(item, dict)]
+    live = [render_job_to_dict(job) for job in RENDER_JOBS.values() if job.gallery_dir == gallery_dir]
+    merged: dict[str, dict[str, object]] = {str(job.get("id")): job for job in jobs if job.get("id")}
+    for job in live:
+        merged[str(job["id"])] = job
+    return sorted(merged.values(), key=lambda item: float(item.get("created_at") or 0), reverse=True)
+
+
+def clean_render_resource_profile(value: object) -> str:
+    profile = str(value or "medium").strip().lower()
+    aliases = {"medio": "medium", "médio": "medium", "alto": "high", "eco": "eco"}
+    profile = aliases.get(profile, profile)
+    return profile if profile in {"eco", "medium", "high"} else "medium"
+
+
+def render_profile_label(profile: str) -> str:
+    return {"eco": "Eco", "medium": "Medio", "high": "Alto"}.get(profile, "Medio")
 
 
 def finalized_results_from_gallery(gallery_dir: Path) -> dict[str, object]:
@@ -5809,9 +6244,10 @@ def read_json_body(handler: http.server.BaseHTTPRequestHandler) -> dict[str, obj
 
 def finalized_file_urls(rows: list[dict[str, object]], base_dir: Path) -> list[dict[str, object]]:
     files: list[dict[str, object]] = []
+    resolved_base_dir = base_dir.resolve()
     for row in rows:
         file_path = Path(str(row.get("file") or ""))
-        rel = file_path.resolve().relative_to(base_dir)
+        rel = file_path.resolve().relative_to(resolved_base_dir)
         final_path = exported_file_path(row, file_path)
         files.append({
             **row,
@@ -6026,6 +6462,186 @@ def caption_selected_rows(
     return captioned
 
 
+def apply_render_resource_to_rows(rows: list[dict[str, object]], profile: str) -> None:
+    settings = render_resource_settings(profile)
+    for row in rows:
+        row["_render_threads"] = settings["threads"]
+        row["_render_priority"] = settings["priority"]
+
+
+def apply_render_job_id_to_rows(rows: list[dict[str, object]], job_id: str) -> None:
+    if not job_id:
+        return
+    for row in rows:
+        row["_render_job_id"] = job_id
+
+
+def render_resource_settings(profile: str) -> dict[str, object]:
+    cpus = max(os.cpu_count() or 2, 1)
+    if profile == "eco":
+        return {"threads": 1, "priority": "idle"}
+    if profile == "high":
+        return {"threads": max(cpus - 1, 1), "priority": "below_normal"}
+    return {"threads": max(cpus // 2, 1), "priority": "below_normal"}
+
+
+def ffmpeg_filter_thread_args(row: dict[str, object]) -> list[str]:
+    threads = int(row.get("_render_threads") or 0)
+    return ["-filter_complex_threads", str(max(threads, 1))] if threads > 0 else []
+
+
+def ffmpeg_codec_thread_args(row: dict[str, object]) -> list[str]:
+    threads = int(row.get("_render_threads") or 0)
+    return ["-threads", str(max(threads, 1))] if threads > 0 else []
+
+
+def ffmpeg_creation_flags(row: dict[str, object]) -> int:
+    if os.name != "nt":
+        return 0
+    priority = str(row.get("_render_priority") or "below_normal")
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    if priority == "idle":
+        return flags | getattr(subprocess, "IDLE_PRIORITY_CLASS", 0)
+    return flags | getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
+
+
+def ffmpeg_command_with_progress(command: list[str]) -> list[str]:
+    if not command:
+        return command
+    return [command[0], "-hide_banner", "-nostats", "-loglevel", "error", "-progress", "pipe:1", *command[1:]]
+
+
+def parse_ffmpeg_time(value: str) -> float | None:
+    text = value.strip()
+    if not text or text == "N/A":
+        return None
+    match = re.fullmatch(r"(\d+):(\d{2}):(\d{2})(?:\.(\d+))?", text)
+    if match:
+        hours, minutes, seconds, fraction = match.groups()
+        return int(hours) * 3600 + int(minutes) * 60 + int(seconds) + float(f"0.{fraction or '0'}")
+    try:
+        return max(float(text), 0.0)
+    except ValueError:
+        return None
+
+
+def parse_ffmpeg_progress_seconds(key: str, value: str) -> float | None:
+    if key in {"out_time_us", "out_time_ms"}:
+        try:
+            return max(float(value) / 1_000_000.0, 0.0)
+        except ValueError:
+            return None
+    if key == "out_time":
+        return parse_ffmpeg_time(value)
+    return None
+
+
+def parse_ffmpeg_speed(value: str) -> float | None:
+    text = value.strip().lower().removesuffix("x")
+    try:
+        speed = float(text)
+    except ValueError:
+        return None
+    return speed if speed > 0 else None
+
+
+def update_render_job_progress(job_id: object, processed: float, duration: float, speed_label: str = "") -> None:
+    if not job_id or duration <= 0:
+        return
+    progress = int(clamp((processed / duration) * 84 + 12, 12, 96))
+    speed = parse_ffmpeg_speed(speed_label) if speed_label else None
+    remaining = max(duration - processed, 0.0)
+    eta = (remaining / speed) if speed else None
+    with RENDER_JOBS_LOCK:
+        job = RENDER_JOBS.get(str(job_id))
+        if job is None or job.status != "rendering":
+            return
+        if progress < job.progress and job.progress < 96:
+            progress = job.progress
+        job.progress = progress
+        job.processed_seconds = round(max(processed, job.processed_seconds), 3)
+        job.speed = speed_label.strip()
+        job.eta_seconds = round(eta, 1) if eta is not None else None
+        job.message = render_progress_message(job.processed_seconds, duration, job.speed, job.eta_seconds)
+        job.updated_at = time.time()
+        persist_render_queue(job.gallery_dir)
+
+
+def render_progress_message(processed: float, duration: float, speed: str, eta: float | None) -> str:
+    parts = [f"Renderizando {int(clamp((processed / max(duration, 0.1)) * 100, 0, 99))}%"]
+    if speed:
+        parts.append(speed)
+    if eta is not None and eta >= 1:
+        parts.append(f"{format_eta_seconds(eta)} restantes")
+    return " - ".join(parts)
+
+
+def format_eta_seconds(value: float) -> str:
+    seconds = int(max(value, 0))
+    minutes, sec = divmod(seconds, 60)
+    if minutes:
+        return f"{minutes}m {sec:02d}s"
+    return f"{sec}s"
+
+
+def run_ffmpeg_command(command: list[str], row: dict[str, object], cwd: str | None = None) -> None:
+    duration = caption_duration(row)
+    job_id = row.get("_render_job_id")
+    process = subprocess.Popen(
+        ffmpeg_command_with_progress(command),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=cwd,
+        creationflags=ffmpeg_creation_flags(row),
+    )
+    stdout_lines: list[str] = []
+    stderr = ""
+    last_progress_update = 0.0
+    last_seconds = 0.0
+    last_speed = ""
+    while True:
+        line = process.stdout.readline() if process.stdout else ""
+        if line:
+            stdout_lines.append(line)
+            key, separator, value = line.strip().partition("=")
+            if separator:
+                seconds = parse_ffmpeg_progress_seconds(key, value)
+                if seconds is not None:
+                    last_seconds = seconds
+                if key == "speed":
+                    last_speed = value.strip()
+                now = time.time()
+                if last_seconds > 0 and now - last_progress_update >= 0.8:
+                    update_render_job_progress(job_id, last_seconds, duration, last_speed)
+                    last_progress_update = now
+            continue
+        if process.poll() is not None:
+            break
+        if not render_job_cancelled(job_id):
+            time.sleep(0.1)
+            continue
+        process.terminate()
+        try:
+            _, stderr = process.communicate(timeout=3)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            _, stderr = process.communicate(timeout=3)
+        raise RuntimeError("Render cancelado.")
+    if process.stdout:
+        remaining_stdout = process.stdout.read()
+        if remaining_stdout:
+            stdout_lines.append(remaining_stdout)
+    if process.stderr:
+        stderr = process.stderr.read()
+    return_code = process.wait()
+    if last_seconds > 0:
+        update_render_job_progress(job_id, last_seconds, duration, last_speed)
+    stdout = "".join(stdout_lines)
+    if return_code != 0:
+        raise subprocess.CalledProcessError(return_code, command, output=stdout, stderr=stderr)
+
+
 def caption_input_path(row: dict[str, object], base_dir: Path) -> Path | None:
     rendered_file = row.get("file")
     clip_file = row.get("clip_file")
@@ -6038,8 +6654,13 @@ def caption_input_path(row: dict[str, object], base_dir: Path) -> Path | None:
 
 def write_ass_subtitles(path: Path, row: dict[str, object], preset: PlatformPreset, chars_per_line: int, max_lines: int) -> None:
     duration = caption_duration(row)
-    events = caption_events(row, chars_per_line, max_lines, duration)
-    path.write_text(ass_document(events, duration, preset, chars_per_line, max_lines), encoding="utf-8")
+    style = caption_style_from_row(row, preset)
+    style_width = int(style.get("width") or chars_per_line)
+    events = caption_events(row, style_width, max_lines, duration)
+    path.write_text(
+        ass_document_with_style(events, duration, preset, style_width, max_lines, row),
+        encoding="utf-8"
+    )
 
 
 def caption_duration(row: dict[str, object]) -> float:
@@ -6126,10 +6747,74 @@ def clean_caption_text(text: str) -> str:
     return clean.strip(" -")
 
 
+CAPTION_MOJIBAKE_REPLACEMENTS = {
+    "\u00c3\u00a1": "\u00e1",
+    "\u00c3\u00a0": "\u00e0",
+    "\u00c3\u00a2": "\u00e2",
+    "\u00c3\u00a3": "\u00e3",
+    "\u00c3\u00a4": "\u00e4",
+    "\u00c3\u00a9": "\u00e9",
+    "\u00c3\u00aa": "\u00ea",
+    "\u00c3\u00ad": "\u00ed",
+    "\u00c3\u00b3": "\u00f3",
+    "\u00c3\u00b4": "\u00f4",
+    "\u00c3\u00b5": "\u00f5",
+    "\u00c3\u00ba": "\u00fa",
+    "\u00c3\u00bc": "\u00fc",
+    "\u00c3\u00a7": "\u00e7",
+    "\u00c3\u0081": "\u00c1",
+    "\u00c3\u0080": "\u00c0",
+    "\u00c3\u0082": "\u00c2",
+    "\u00c3\u0083": "\u00c3",
+    "\u00c3\u0089": "\u00c9",
+    "\u00c3\u008a": "\u00ca",
+    "\u00c3\u008d": "\u00cd",
+    "\u00c3\u0093": "\u00d3",
+    "\u00c3\u0094": "\u00d4",
+    "\u00c3\u0095": "\u00d5",
+    "\u00c3\u009a": "\u00da",
+    "\u00c3\u009c": "\u00dc",
+    "\u00c3\u0087": "\u00c7",
+    "\u00c2\u00ba": "\u00ba",
+    "\u00c2\u00aa": "\u00aa",
+    "\u00c2\u00b7": "\u00b7",
+    "\u00c2\u00b4": "\u00b4",
+}
+
+
+def repair_caption_encoding(text: str) -> str:
+    if not any(marker in text for marker in ("Ã", "Â", "â")):
+        return text
+    candidate = repair_caption_encoding_as_utf8(text)
+    mapped = replace_caption_mojibake_sequences(candidate)
+    return mapped if caption_mojibake_score(mapped) <= caption_mojibake_score(text) else text
+
+
+def repair_caption_encoding_as_utf8(text: str) -> str:
+    try:
+        repaired = text.encode("latin-1").decode("utf-8")
+    except UnicodeError:
+        return text
+    return repaired if caption_mojibake_score(repaired) < caption_mojibake_score(text) else text
+
+
+def replace_caption_mojibake_sequences(text: str) -> str:
+    clean = text
+    for source, target in CAPTION_MOJIBAKE_REPLACEMENTS.items():
+        clean = clean.replace(source, target)
+    return clean
+
+
+def caption_mojibake_score(text: str) -> int:
+    return sum(text.count(marker) for marker in ("Ã", "Â", "â€", "â™", "�"))
+
+
 def normalize_caption_symbols(text: str) -> str:
+    text = repair_caption_encoding(text)
     return (
         text.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
         .replace("…", "...").replace("♪", " ").replace("\ufeff", " ")
+        .replace("–", "-").replace("—", "-")
     )
 
 
@@ -6164,6 +6849,13 @@ def ellipsize_caption(text: str) -> str:
 
 
 def ass_document(events: list[CaptionEvent], duration: float, preset: PlatformPreset, chars_per_line: int, max_lines: int) -> str:
+    return ass_document_with_style(events, duration, preset, chars_per_line, max_lines, {})
+
+
+def ass_document_with_style(
+    events: list[CaptionEvent], duration: float, preset: PlatformPreset, chars_per_line: int, max_lines: int,
+    row: dict[str, object]
+) -> str:
     return "\n".join([
         "[Script Info]",
         "ScriptType: v4.00+",
@@ -6175,7 +6867,7 @@ def ass_document(events: list[CaptionEvent], duration: float, preset: PlatformPr
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
         "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, "
         "MarginR, MarginV, Encoding",
-        ass_style_line(preset),
+        ass_style_line(preset, caption_style_from_row(row, preset)),
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -6184,15 +6876,58 @@ def ass_document(events: list[CaptionEvent], duration: float, preset: PlatformPr
     ])
 
 
-def ass_style_line(preset: PlatformPreset) -> str:
-    font_size = 72 if preset.height >= 1600 else 54
+def ass_style_line(preset: PlatformPreset, style: dict[str, object] | None = None) -> str:
+    style = style or {}
+    font_size = int(style.get("size") or (72 if preset.height >= 1600 else 54))
     margin_v = 250 if preset.height >= 1600 else 95
     outline = 7 if preset.height >= 1600 else 5
+    primary = ass_color(str(style.get("text_color") or "#ffffff"), "00")
+    background = str(style.get("background_color") or "transparent")
+    border_style = 3 if background != "transparent" else 1
+    back_color = ass_color(background if background != "transparent" else "#000000", "66" if border_style == 3 else "99")
     return (
         "Style: Default,Arial,"
-        f"{font_size},&H00FFFFFF,&H0000FFFF,&H00000000,&H99000000,-1,0,0,0,100,100,0,0,1,"
+        f"{font_size},{primary},&H0000FFFF,&H00000000,{back_color},-1,0,0,0,100,100,0,0,{border_style},"
         f"{outline},0,2,80,80,{margin_v},1"
     )
+
+
+def caption_style_from_row(row: dict[str, object], preset: PlatformPreset) -> dict[str, object]:
+    raw = row.get("caption_style")
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        "size": clamp_int(raw.get("size"), 24, 140, 72 if preset.height >= 1600 else 54),
+        "width": clamp_int(raw.get("width"), 12, 56, 28),
+        "text_color": normalize_hex_color(raw.get("textColor") or raw.get("text_color"), "#ffffff"),
+        "background_color": normalize_caption_background_color(raw.get("backgroundColor") or raw.get("background_color")),
+    }
+
+
+def clamp_int(value: object, minimum: int, maximum: int, fallback: int) -> int:
+    try:
+        number = int(round(float(value)))
+    except (TypeError, ValueError):
+        return fallback
+    return max(minimum, min(maximum, number))
+
+
+def normalize_hex_color(value: object, fallback: str) -> str:
+    text = str(value or "").strip()
+    return text.lower() if re.fullmatch(r"#[0-9a-fA-F]{6}", text) else fallback
+
+
+def normalize_caption_background_color(value: object) -> str:
+    text = str(value or "").strip().lower()
+    if not text or text in {"none", "transparent"}:
+        return "transparent"
+    return normalize_hex_color(text, "#000000")
+
+
+def ass_color(value: str, alpha: str) -> str:
+    color = normalize_hex_color(value, "#000000").lstrip("#")
+    red, green, blue = color[0:2], color[2:4], color[4:6]
+    return f"&H{alpha}{blue}{green}{red}".upper()
 
 
 def ass_dialogue_lines(events: list[CaptionEvent], duration: float, chars_per_line: int, max_lines: int) -> list[str]:
@@ -6236,7 +6971,7 @@ def render_captioned_clip(
     if overlay:
         filters.append(overlay)
     command = captioned_ffmpeg_command(input_path, output_path, row, preset, ffmpeg, filters)
-    subprocess.run(command, check=True, capture_output=True, text=True, cwd=str(out_dir))
+    run_ffmpeg_command(command, row, cwd=str(out_dir))
     return apply_bumpers_to_output(output_path, row, preset, base_dir, out_dir, ffmpeg)
 
 
@@ -6274,6 +7009,7 @@ def captioned_row(
         "file": str(output_path),
         "subtitle_file": str(subtitle_path) if subtitle_path else "",
         "captions_enabled": bool(subtitle_path),
+        "caption_style": caption_style_from_row(row, preset),
         "adjusted_start": row.get("adjusted_start"),
         "adjusted_end": row.get("adjusted_end"),
         "adjusted_duration": base_duration,
@@ -6309,22 +7045,22 @@ def apply_bumpers_to_output(
         intro = resolve_bumper_asset_path(base_dir, bumpers["intro"])
         intro_duration = bumper_duration(bumpers["intro"], intro, ffmpeg)
         intro_segment = work_dir / "intro.mp4"
-        normalize_bumper_segment(intro, intro_segment, intro_duration, preset, ffmpeg)
+        normalize_bumper_segment(intro, intro_segment, intro_duration, preset, ffmpeg, row)
         segments.append(intro_segment)
     core_segment = work_dir / "core.mp4"
-    normalize_bumper_segment(core_source, core_segment, base_duration, preset, ffmpeg)
+    normalize_bumper_segment(core_source, core_segment, base_duration, preset, ffmpeg, row)
     segments.append(core_segment)
     if "outro" in bumpers:
         outro = resolve_bumper_asset_path(base_dir, bumpers["outro"])
         outro_duration = bumper_duration(bumpers["outro"], outro, ffmpeg)
         outro_segment = work_dir / "outro.mp4"
-        normalize_bumper_segment(outro, outro_segment, outro_duration, preset, ffmpeg)
+        normalize_bumper_segment(outro, outro_segment, outro_duration, preset, ffmpeg, row)
         segments.append(outro_segment)
     concat_path = work_dir / "concat.txt"
     concat_path.write_text("".join(concat_file_entry(path) for path in segments), encoding="utf-8")
     temp_output = work_dir / "final.mp4"
     command = [ffmpeg, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_path), "-c", "copy", "-movflags", "+faststart", str(temp_output)]
-    subprocess.run(command, check=True, capture_output=True, text=True)
+    run_ffmpeg_command(command, row)
     shutil.copy2(temp_output, output_path)
     shutil.rmtree(work_dir, ignore_errors=True)
     final_duration = base_duration + intro_duration + outro_duration
@@ -6337,7 +7073,9 @@ def apply_bumpers_to_output(
     }
 
 
-def normalize_bumper_segment(source: Path, output: Path, duration: float, preset: PlatformPreset, ffmpeg: str) -> None:
+def normalize_bumper_segment(
+    source: Path, output: Path, duration: float, preset: PlatformPreset, ffmpeg: str, row: dict[str, object]
+) -> None:
     safe_duration = max(float(duration or 0.0), 0.1)
     video_filter_arg = ",".join([
         f"scale={preset.width}:{preset.height}:force_original_aspect_ratio=increase",
@@ -6359,6 +7097,7 @@ def normalize_bumper_segment(source: Path, output: Path, duration: float, preset
         "-preset", "medium",
         "-profile:v", "main",
         "-level", "4.1",
+        *ffmpeg_codec_thread_args(row),
         "-pix_fmt", "yuv420p",
         "-r", "30",
         "-crf", FINAL_VIDEO_CRF,
@@ -6368,7 +7107,7 @@ def normalize_bumper_segment(source: Path, output: Path, duration: float, preset
         "-movflags", "+faststart",
         str(output),
     ])
-    subprocess.run(command, check=True, capture_output=True, text=True)
+    run_ffmpeg_command(command, row)
 
 
 def media_has_audio(path: Path, ffmpeg: str) -> bool:
@@ -6476,7 +7215,7 @@ def render_platform_clip(
         ffmpeg, "-y", "-ss", fmt_time(start), "-i", str(input_path), "-t", fmt_time(duration),
     ]
     command = render_command(base, output_path, row, preset, filters, duration)
-    subprocess.run(command, check=True, capture_output=True, text=True)
+    run_ffmpeg_command(command, row)
 
 
 def render_command(
@@ -6486,19 +7225,19 @@ def render_command(
     if image_overlay_layers_from_row(row):
         filter_arg = image_overlay_complex_filter(preset, row, duration, filters)
         return [
-            *base, "-filter_complex", filter_arg, "-map", "[vout]", "-map", "0:a?",
+            *base, *ffmpeg_filter_thread_args(row), "-filter_complex", filter_arg, "-map", "[vout]", "-map", "0:a?",
             *mp4_output_args(row), str(output_path),
         ]
     if camera_is_path(row):
         filter_arg = camera_path_filter(preset, row, duration, filters)
         return [
-            *base, "-filter_complex", filter_arg, "-map", "[vout]", "-map", "0:a?",
+            *base, *ffmpeg_filter_thread_args(row), "-filter_complex", filter_arg, "-map", "[vout]", "-map", "0:a?",
             *mp4_output_args(row), str(output_path),
         ]
     if camera_is_sequence(row):
         filter_arg = camera_sequence_filter(preset, row, duration, filters)
         return [
-            *base, "-filter_complex", filter_arg, "-map", "[vout]", "-map", "0:a?",
+            *base, *ffmpeg_filter_thread_args(row), "-filter_complex", filter_arg, "-map", "[vout]", "-map", "0:a?",
             *mp4_output_args(row), str(output_path),
         ]
     filter_arg = ",".join([camera_filter(preset, row), *filters])
@@ -6514,6 +7253,7 @@ def mp4_output_args(row: dict[str, object]) -> list[str]:
         "-preset", "medium",
         "-profile:v", "main",
         "-level", "4.1",
+        *ffmpeg_codec_thread_args(row),
         "-pix_fmt", "yuv420p",
         "-r", "30",
         "-crf", video_crf(row),
@@ -8757,6 +9497,7 @@ def card_html(moment: Moment) -> str:
               <video class="camera-fit-bg" data-camera-fit-bg playsinline muted preload="none" aria-hidden="true" tabindex="-1"></video>
               <img class="camera-fit-logo" src="{html.escape('assets/brand/' + BRAND_LOGO_FILE)}" alt="" aria-hidden="true">
               <div class="camera-reticle"></div>
+              <div class="preview-caption-layer" data-preview-caption-layer aria-live="off"></div>
               <div data-overlay-layer-list></div>
               <div class="overlay-menu" data-overlay-menu hidden></div>
               <input data-overlay-image type="file" accept="image/png,image/webp,image/jpeg" hidden>
@@ -8952,6 +9693,25 @@ def page_html(
         </div>
         <small>Estimativa local. Confira o valor oficial no painel da OpenAI.</small>
       </form>
+    </section>
+  </div>
+  <div class="render-queue-backdrop" data-render-queue-modal hidden>
+    <section class="render-queue-panel" data-render-queue-panel role="dialog" aria-modal="true" aria-labelledby="render-queue-title" tabindex="-1">
+      <div class="render-queue-aura" aria-hidden="true"></div>
+      <div class="render-queue-head">
+        <div>
+          <strong id="render-queue-title">Render</strong>
+          <p>Fila local, cache e arquivos prontos.</p>
+        </div>
+        <button class="render-queue-close" type="button" data-render-queue-close aria-label="Fechar render">X</button>
+      </div>
+      <div class="render-resource-switch" role="group" aria-label="Uso da maquina">
+        <button type="button" data-render-profile="eco">Eco</button>
+        <button type="button" data-render-profile="medium" class="active">Medio</button>
+        <button type="button" data-render-profile="high">Alto</button>
+      </div>
+      <div class="render-queue-status" data-render-queue-status>Nenhum render em andamento.</div>
+      <div class="render-queue-list" data-render-queue-list></div>
     </section>
   </div>
   <main>{cards}</main>
@@ -9477,14 +10237,16 @@ main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px
 .app-notice{position:sticky;top:0;z-index:30;margin:0;padding:10px 14px;background:#2b1717;color:#ffd7d7;border-bottom:1px solid #6d2b2b;font-size:13px;text-align:center}.app-notice[hidden]{display:none}
 .import-stage{display:none;max-width:1080px;margin:18px auto;padding:0 18px}.import-panel{display:grid;gap:14px;padding:18px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised)}.import-panel p{margin:4px 0 0;color:var(--color-text-muted)}.import-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.import-panel label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.import-panel input,.import-panel select,.import-panel textarea{width:100%;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black);color:var(--color-text);padding:9px 10px;font:inherit}.import-panel textarea{resize:vertical;min-height:112px}.import-panel small{color:var(--color-text-muted);line-height:1.35}.import-path-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.import-key-banner{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 12px;border:1px solid rgba(17,162,207,.4);border-radius:8px;background:rgba(17,162,207,.1);color:var(--color-text)}.import-key-banner[hidden]{display:none}.import-key-banner button{min-height:34px}.import-path-row button{min-height:38px;background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.duration-profile{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0}.duration-profile legend{grid-column:1/-1;color:var(--color-text-muted);font-size:12px}.duration-profile label{position:relative;display:grid!important}.duration-profile input{position:absolute;opacity:0;pointer-events:none}.duration-profile span{display:grid;gap:2px;min-height:54px;padding:10px 12px;border:1px solid var(--color-border-strong);border-radius:8px;background:var(--color-surface-muted);color:var(--color-text-soft)}.duration-profile input:checked+span{border-color:var(--color-brand-green);background:#182011;color:var(--color-text)}.duration-profile small{color:var(--color-text-muted)}.import-context{display:grid}.import-status{min-height:20px;color:var(--color-text-muted)}.import-result{display:flex;gap:8px;flex-wrap:wrap}.import-result a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.import-result code{display:block;width:100%;padding:10px;border:1px solid #3a2525;border-radius:6px;background:#180d0d;color:#ffcccc;white-space:pre-wrap}
 .layer-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:100%;min-height:0}.layer-strip:empty{display:none}.bumper-sequence{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;min-height:24px;color:var(--color-text-muted);font-size:12px}.bumper-sequence:empty{display:none}.bumper-sequence span{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bumper-sequence b{color:var(--color-brand-green);font-weight:800}.layer-chip{display:inline-flex;gap:6px;align-items:center;max-width:100%;min-height:30px;padding:4px 5px 4px 9px;border:1px solid #303030;border-radius:999px;background:var(--color-surface-muted);color:var(--color-text-soft);font-size:12px}.layer-chip.is-selected{border-color:var(--color-focus);background:#182011;color:var(--color-text)}.layer-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.layer-chip button{display:inline-grid;place-items:center;width:22px;height:22px;min-width:22px;padding:0;border:1px solid #3a3a3a;border-radius:999px;background:#242424;color:var(--color-text-soft);font-size:14px;line-height:1}
-.cuted-control-surface-slot{display:none;position:relative;z-index:90;margin:-34px 14px 8px;justify-content:center}.cuted-control-surface-slot:empty{display:none}.card[open]>.cuted-control-surface-slot:not(:empty){display:flex}.cuted-control-surface-slot .cuted-control-bar{width:min(66%,930px);min-width:min(100%,820px);min-height:98px;padding:9px 16px;border-radius:18px}.cuted-control-surface-slot .cuted-render-zone{justify-content:flex-end;overflow:visible;min-height:74px}.cuted-control-surface-slot .cuted-tool-group{flex:0 0 316px;min-height:74px}.cuted-control-surface-slot .cuted-tile-button{flex:0 0 68px;width:68px;height:62px;font-size:30px}.cuted-control-surface-slot .cuted-insert-button span{font-size:20px}.cuted-control-surface-slot .cuted-format-trigger{flex:0 0 118px;width:118px;height:62px;grid-template-columns:auto 1fr auto;gap:8px;padding:7px 9px}.cuted-control-surface-slot .cuted-format-copy small{display:none}.cuted-control-surface-slot .cuted-format-copy strong{font-size:20px}.cuted-control-surface-slot .cuted-ratio-icon{border-width:2px;border-radius:3px}.cuted-control-surface-slot .cuted-ratio-vertical{width:16px;height:34px}.cuted-control-surface-slot .cuted-ratio-feed{width:22px;height:28px}.cuted-control-surface-slot .cuted-ratio-wide{width:32px;height:17px}.cuted-control-surface-slot .cuted-divider{flex:0 0 1px;height:48px;margin:0 8px}.cuted-control-surface-slot .cuted-audio-group{flex:0 0 58px;min-width:58px}.cuted-control-surface-slot .cuted-ready-region{flex:0 0 132px;width:132px;min-height:62px;margin-left:auto}.cuted-control-surface-slot .cuted-approve-button{width:60px;height:60px}.cuted-control-surface-slot .cuted-approve-button svg{width:36px;height:36px}.cuted-control-surface-slot .cuted-discard-button{width:46px;height:46px}.cuted-control-surface-slot .cuted-discard-button svg{width:25px;height:25px}
-.editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;justify-items:center;gap:10px}.preview-frame{display:grid;gap:10px;width:100%;max-width:520px}.media{position:relative;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000;pointer-events:none}.placeholder{display:grid;place-items:center;height:100%;color:#777}.preview-bar{display:grid;grid-template-columns:1fr;gap:8px;justify-items:center;width:100%;padding:8px;border:1px solid #252525;border-radius:8px;background:#0a0a0a}.preview-controls,.preview-volume-group{display:flex;gap:6px;align-items:center}.preview-controls{justify-content:center;padding:4px;border:1px solid #202020;border-radius:999px;background:var(--color-surface-raised)}.preview-volume-group{padding-left:4px;border-left:1px solid #2d2d2d}.preview-icon,.preview-step{display:inline-grid;place-items:center;width:32px;height:32px;min-width:32px;padding:0;border:1px solid var(--color-border-strong);border-radius:999px;background:var(--color-surface-control);color:var(--color-text-soft)}.preview-play{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}.preview-icon svg{width:16px;height:16px;display:block;stroke:currentColor}.preview-step{width:26px;height:26px;min-width:26px;font-weight:700}.preview-volume-group output{min-width:32px;color:#d8d8d8;font-size:12px;text-align:center}.card[data-preview-format=tiktok] .preview-frame,.card[data-preview-format=shorts] .preview-frame,.card[data-preview-format=instagram] .preview-frame{max-width:min(100%,calc(72vh * 9 / 16))}.card[data-preview-format=facebook] .preview-frame{max-width:min(100%,calc(72vh * 4 / 5))}.card[data-preview-format=youtube] .preview-frame{max-width:min(100%,520px)}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;overflow:visible;padding-bottom:1px}.preview-strip button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 10px;min-height:34px;border-radius:999px;white-space:nowrap}.preview-strip button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
+.cuted-control-surface-slot{display:none;position:relative;z-index:90;margin:-34px 14px 8px;justify-content:center}.cuted-control-surface-slot:empty{display:none}.card[open]>.cuted-control-surface-slot:not(:empty){display:flex}.cuted-control-surface-slot .cuted-control-bar{width:min(66%,930px);min-width:min(100%,820px);min-height:98px;padding:9px 16px;border-radius:18px}.cuted-control-surface-slot .cuted-render-zone{justify-content:flex-end;overflow:visible;min-height:74px}.cuted-control-surface-slot .cuted-tool-group{flex:0 0 408px;min-height:74px}.cuted-control-surface-slot .cuted-tile-button{flex:0 0 68px;width:68px;height:62px;font-size:30px}.cuted-control-surface-slot .cuted-insert-button span{font-size:20px}.cuted-control-surface-slot .cuted-format-trigger{flex:0 0 118px;width:118px;height:62px;grid-template-columns:auto 1fr auto;gap:8px;padding:7px 9px}.cuted-control-surface-slot .cuted-format-copy small{display:none}.cuted-control-surface-slot .cuted-format-copy strong{font-size:20px}.cuted-control-surface-slot .cuted-ratio-icon{border-width:2px;border-radius:3px}.cuted-control-surface-slot .cuted-ratio-vertical{width:16px;height:34px}.cuted-control-surface-slot .cuted-ratio-feed{width:22px;height:28px}.cuted-control-surface-slot .cuted-ratio-wide{width:32px;height:17px}.cuted-control-surface-slot .cuted-divider{flex:0 0 1px;height:48px;margin:0 8px}.cuted-control-surface-slot .cuted-audio-group{flex:0 0 58px;min-width:58px}.cuted-control-surface-slot .cuted-ready-region{flex:0 0 132px;width:132px;min-height:62px;margin-left:auto}.cuted-control-surface-slot .cuted-approve-button{width:60px;height:60px}.cuted-control-surface-slot .cuted-approve-button svg{width:36px;height:36px}.cuted-control-surface-slot .cuted-discard-button{width:46px;height:46px}.cuted-control-surface-slot .cuted-discard-button svg{width:25px;height:25px}
+.editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;justify-items:center;gap:10px}.preview-frame{display:grid;gap:10px;width:100%;max-width:520px}.media{position:relative;container-type:inline-size;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000;pointer-events:none}.placeholder{display:grid;place-items:center;height:100%;color:#777}.preview-bar{display:grid;grid-template-columns:1fr;gap:8px;justify-items:center;width:100%;padding:8px;border:1px solid #252525;border-radius:8px;background:#0a0a0a}.preview-controls,.preview-volume-group{display:flex;gap:6px;align-items:center}.preview-controls{justify-content:center;padding:4px;border:1px solid #202020;border-radius:999px;background:var(--color-surface-raised)}.preview-volume-group{padding-left:4px;border-left:1px solid #2d2d2d}.preview-icon,.preview-step{display:inline-grid;place-items:center;width:32px;height:32px;min-width:32px;padding:0;border:1px solid var(--color-border-strong);border-radius:999px;background:var(--color-surface-control);color:var(--color-text-soft)}.preview-play{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}.preview-icon svg{width:16px;height:16px;display:block;stroke:currentColor}.preview-step{width:26px;height:26px;min-width:26px;font-weight:700}.preview-volume-group output{min-width:32px;color:#d8d8d8;font-size:12px;text-align:center}.card[data-preview-format=tiktok] .preview-frame,.card[data-preview-format=shorts] .preview-frame,.card[data-preview-format=instagram] .preview-frame{max-width:min(100%,calc(72vh * 9 / 16))}.card[data-preview-format=facebook] .preview-frame{max-width:min(100%,calc(72vh * 4 / 5))}.card[data-preview-format=youtube] .preview-frame{max-width:min(100%,520px)}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;overflow:visible;padding-bottom:1px}.preview-strip button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 10px;min-height:34px;border-radius:999px;white-space:nowrap}.preview-strip button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
 .preview-camera-timeline--live{display:block!important;width:100%;min-height:152px;padding:0!important;border-color:rgba(17,162,207,.34)!important;overflow:hidden}.preview-camera-timeline--live .timeline-shell{min-height:150px;border:0;border-radius:4px;background:linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px) 0 0/28px 100%,linear-gradient(180deg,rgba(17,162,207,.08),transparent 34%),#070707}.preview-camera-timeline--live .volume-popover[data-disabled=true]{display:none!important}.preview-live-timeline-loading{display:grid;place-items:center;min-height:86px;color:var(--color-text-muted);font-size:12px}
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-stack{display:grid;gap:10px}.tool-section{border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:0;overflow:hidden}.tool-section>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:10px 12px;cursor:pointer;list-style:none;color:var(--color-text);font-weight:800}.tool-section>summary::-webkit-details-marker{display:none}.tool-section>summary:after{content:"";width:8px;height:8px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg);opacity:.62;transition:transform .16s ease}.tool-section[open]>summary:after{transform:rotate(225deg)}.tool-section>summary small{color:var(--color-text-muted);font-size:12px;font-weight:600;text-align:right}.tool-section[open]>summary{border-bottom:1px solid rgba(231,231,232,.08)}.tool-section>*:not(summary){margin:12px}.timeline-editor{padding:0}.timeline-head,.timeline-timebar,.timeline-values{display:flex;justify-content:space-between;gap:12px;color:var(--color-text-muted);font-size:12px}.timeline-head output,.timeline-timebar output{color:var(--color-text);text-align:right}.timeline-timebar{margin-top:10px}.timeline-timebar span:last-child{color:#777;text-align:right}.timeline-scrub{position:relative;height:42px;margin-top:8px}.timeline-scrub-track{position:absolute;left:0;right:0;top:17px;height:8px;border:1px solid #343434;border-radius:999px;background:linear-gradient(90deg,var(--color-surface-muted),#252525);overflow:hidden}.timeline-selected{position:absolute;top:0;bottom:0;background:rgba(175,207,42,.22);border-left:1px solid var(--color-brand-green);border-right:1px solid var(--color-brand-green)}.timeline-playhead{position:absolute;top:-8px;bottom:-8px;width:2px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7)}.timeline-playhead:before{content:"";position:absolute;left:50%;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--color-brand-white);transform:translateX(-50%)}.timeline-scrub input{position:absolute;inset:0;width:100%;height:42px;margin:0;background:transparent;opacity:0;cursor:pointer}.timeline{position:relative;height:38px;margin-top:6px}.timeline-track{position:absolute;left:0;right:0;top:16px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:var(--color-brand-white);border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:38px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{margin-top:6px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .export-dock{display:grid;gap:8px;margin-top:2px;padding:12px;border:1px solid #303030;border-radius:8px;background:#111}.export-dock strong{display:block;font-size:13px}.export-dock span{color:#a8a8a8;font-size:12px}
 .platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:var(--color-text);border-color:var(--color-brand-green)}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.effect-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.75fr);gap:10px}.effect-subpanel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.effect-subpanel strong{font-size:12px}.bumper-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.bumper-upload{display:grid;gap:6px;align-content:start;min-height:64px;padding:9px;border:1px dashed var(--color-border-strong);border-radius:8px;background:var(--color-surface-control);cursor:pointer}.bumper-upload input{font-size:11px}.bumper-strip{display:flex;gap:6px;flex-wrap:wrap;min-height:28px}.bumper-empty{color:var(--color-text-muted);font-size:12px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:var(--color-brand-blue)}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.camera-path-editor,.camera-manual-panel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-path-head,.camera-panel-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.camera-path-head strong,.camera-panel-title strong{font-size:12px}.camera-path-head span,.camera-panel-title span{color:var(--color-text-muted);font-size:12px}.camera-smart-panel{display:grid;gap:9px;padding:10px;border:1px solid rgba(17,162,207,.28);border-radius:8px;background:linear-gradient(135deg,rgba(17,162,207,.12),rgba(175,207,42,.06))}.camera-smart-row,.camera-smart-ai{display:grid;gap:8px}.camera-smart-row{grid-template-columns:repeat(3,minmax(0,1fr))}.camera-smart-ai{grid-template-columns:repeat(5,minmax(0,1fr))}.camera-smart-panel button{display:grid;gap:3px;justify-items:center;background:rgba(17,162,207,.1);color:var(--color-text);border:1px solid rgba(17,162,207,.34);text-align:center}.camera-smart-panel button:hover{border-color:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.14)}.camera-path-track{position:relative;height:34px}.camera-path-rail{position:absolute;left:0;right:0;top:15px;height:5px;border-radius:999px;background:#292929}.camera-path-marker{position:absolute;top:7px;width:20px;height:20px;min-width:20px;padding:0;border-radius:999px;transform:translateX(-50%);background:var(--color-surface-control);border:1px solid var(--color-border-strong)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:var(--color-brand-blue);box-shadow:0 0 0 4px rgba(17,162,207,.18)}.camera-path-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-keyframe-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}.camera-auto-status{min-height:18px;color:var(--color-text-muted);font-size:12px}.camera-path-delete{color:var(--color-danger)!important}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:minmax(160px,1fr) 120px 150px;gap:12px;max-width:none}.caption-toggle{align-content:center}.caption-toggle input{justify-self:start;width:auto;min-height:20px;accent-color:var(--color-brand-blue)}
-.camera-smart-panel p{margin:0;color:var(--color-text-muted);font-size:12px}.camera-smart-panel button span{color:var(--color-text-muted);font-size:11px}.camera-director-action{min-height:72px;background:linear-gradient(135deg,rgba(17,162,207,.32),rgba(231,231,232,.08))!important;border-color:rgba(17,162,207,.72)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 34px rgba(17,162,207,.1)}.camera-director-action strong{font-size:15px}.camera-smart-row button{min-height:54px}.camera-smart-ai button{min-height:50px}.camera-advanced{display:grid;gap:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.025)}.camera-advanced summary{display:flex;justify-content:space-between;gap:10px;align-items:center;cursor:pointer;color:var(--color-text-soft)}.camera-advanced summary small{color:var(--color-text-muted);font-size:12px}.camera-advanced[open] summary{padding-bottom:8px;border-bottom:1px solid rgba(231,231,232,.08)}.camera-advanced .camera-manual-panel{padding:0;border:0;background:transparent}.camera-surface video{position:relative;z-index:1;object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1),transform var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1)}.camera-surface[data-camera-cut=hard] video:not(.camera-fit-bg){transition:none}.camera-surface .camera-fit-bg{position:absolute!important;inset:-7%;z-index:0!important;width:114%!important;height:114%!important;display:none!important;object-fit:cover!important;object-position:center!important;transform:none!important;filter:blur(22px) saturate(.88) brightness(.62)!important;pointer-events:none}.camera-surface .camera-fit-logo{position:absolute;top:11%;left:50%;z-index:1;width:38%!important;max-width:240px;height:auto!important;display:none!important;object-fit:contain!important;object-position:center;background:transparent!important;transform:translateX(-50%);opacity:.9;pointer-events:none}.camera-surface[data-camera-fit=contain]{background:#050505}.camera-surface[data-camera-fit=contain] .camera-fit-bg{display:block!important}.camera-surface[data-camera-fit=contain] .camera-fit-logo{display:block!important}.camera-surface[data-camera-fit=contain] video:not(.camera-fit-bg){z-index:2;object-fit:contain;object-position:center;transform:none;transform-origin:center;background:transparent}.camera-reticle{position:absolute;inset:14% 22%;z-index:3;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}
+.camera-smart-panel p{margin:0;color:var(--color-text-muted);font-size:12px}.camera-smart-panel button span{color:var(--color-text-muted);font-size:11px}.camera-director-action{min-height:72px;background:linear-gradient(135deg,rgba(17,162,207,.32),rgba(231,231,232,.08))!important;border-color:rgba(17,162,207,.72)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 34px rgba(17,162,207,.1)}.camera-director-action strong{font-size:15px}.camera-smart-row button{min-height:54px}.camera-smart-ai button{min-height:50px}.camera-advanced{display:grid;gap:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.025)}.camera-advanced summary{display:flex;justify-content:space-between;gap:10px;align-items:center;cursor:pointer;color:var(--color-text-soft)}.camera-advanced summary small{color:var(--color-text-muted);font-size:12px}.camera-advanced[open] summary{padding-bottom:8px;border-bottom:1px solid rgba(231,231,232,.08)}.camera-advanced .camera-manual-panel{padding:0;border:0;background:transparent}.camera-surface video{position:relative;z-index:1;object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1),transform var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1)}.camera-surface[data-camera-cut=hard] video:not(.camera-fit-bg){transition:none}.camera-surface .camera-fit-bg{position:absolute!important;inset:-7%;z-index:0!important;width:114%!important;height:114%!important;display:none!important;object-fit:cover!important;object-position:center!important;transform:none!important;filter:blur(22px) saturate(.88) brightness(.62)!important;pointer-events:none}.camera-surface .camera-fit-logo{position:absolute;top:11%;left:50%;z-index:1;width:38%!important;max-width:240px;height:auto!important;display:none!important;object-fit:contain!important;object-position:center;background:transparent!important;transform:translateX(-50%);opacity:.9;pointer-events:none}.camera-surface[data-camera-fit=contain]{background:#050505}.camera-surface[data-camera-fit=contain] .camera-fit-bg{display:block!important}.camera-surface[data-camera-fit=contain] .camera-fit-logo{display:block!important}.camera-surface[data-camera-fit=contain] video:not(.camera-fit-bg){z-index:2;object-fit:contain;transform:none;transform-origin:center;background:transparent}.camera-reticle{position:absolute;inset:14% 22%;z-index:3;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}.preview-caption-layer{position:absolute;left:7.4%;right:7.4%;bottom:13%;z-index:4;display:grid;justify-items:center;pointer-events:none;opacity:0;transform:translateY(8px);transition:opacity 120ms ease,transform 120ms ease}.preview-caption-layer[data-visible=true]{opacity:1;transform:translateY(0)}.preview-caption-layer span{display:block;max-width:100%;color:#fff;font-family:Arial,sans-serif;font-size:clamp(18px,6.67cqw,36px);font-weight:900;line-height:1.08;text-align:center;text-shadow:0 2px 0 #000,0 -2px 0 #000,2px 0 0 #000,-2px 0 0 #000,0 0 12px rgba(0,0,0,.9),0 8px 22px rgba(0,0,0,.66);-webkit-text-stroke:clamp(1.2px,.44cqw,2.4px) rgba(0,0,0,.88);paint-order:stroke fill;text-transform:none;white-space:normal}.card[data-preview-format=facebook] .preview-caption-layer{bottom:7.05%}.card[data-preview-format=facebook] .preview-caption-layer span{font-size:clamp(18px,5cqw,34px);-webkit-text-stroke:clamp(1.1px,.38cqw,2px) rgba(0,0,0,.88)}.card[data-preview-format=youtube] .preview-caption-layer{bottom:8.8%}.card[data-preview-format=youtube] .preview-caption-layer span{font-size:clamp(18px,2.82cqw,32px);-webkit-text-stroke:clamp(1px,.26cqw,1.8px) rgba(0,0,0,.88)}
 .card[data-effect=light-grain] .media video,.card[data-effect=light-grain] .media img{filter:contrast(1.08) brightness(1.02)}.card[data-effect=old-film] .media video,.card[data-effect=old-film] .media img{filter:sepia(.48) contrast(1.2) saturate(.62) brightness(.92)}.card[data-effect=vhs] .media video,.card[data-effect=vhs] .media img{filter:saturate(.62) contrast(1.22) brightness(.9) hue-rotate(-7deg)}.card[data-effect=bw-old] .media video,.card[data-effect=bw-old] .media img{filter:grayscale(1) contrast(1.22) brightness(.9)}.card[data-effect=light-grain] .media:after,.card[data-effect=old-film] .media:after,.card[data-effect=vhs] .media:after,.card[data-effect=bw-old] .media:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--effect-opacity,.24);background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 70% 65%,rgba(0,0,0,.95) 0 1px,transparent 1.8px);background-size:4px 4px,6px 6px;mix-blend-mode:overlay}.card[data-effect=old-film] .media:before,.card[data-effect=bw-old] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at center,transparent 44%,rgba(0,0,0,.46) 100%)}.card[data-effect=vhs] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 4px);mix-blend-mode:overlay}
+.camera-surface[data-camera-fit=contain] video:not(.camera-fit-bg){object-position:center}
+.preview-caption-layer span{padding:var(--preview-caption-padding,0);border-radius:.16em;background:var(--preview-caption-bg,transparent);color:var(--preview-caption-color,#fff);font-size:var(--preview-caption-size,clamp(18px,6.67cqw,36px));box-decoration-break:clone;-webkit-box-decoration-break:clone}
 .overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,var(--color-brand-green));border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none;pointer-events:auto}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-text-box{display:grid;align-items:center;min-width:96px;min-height:34px;padding:8px 12px;border-left:0;background:rgba(var(--overlay-bg-rgb,0,0,0),var(--overlay-bg-opacity,.7));box-shadow:none;color:var(--overlay-color,#fff);font-weight:700;font-size:clamp(13px,var(--overlay-font-size,20px),36px);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.overlay-text-box[data-overlay-bg=off]{background:transparent;box-shadow:none}.overlay-text-box span{opacity:var(--overlay-opacity,1);overflow:hidden;text-overflow:ellipsis}.overlay-box.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.overlay-image-box{display:grid;place-items:center;min-width:72px;min-height:72px;padding:6px;border:1px dashed rgba(255,255,255,.42);background:rgba(0,0,0,.12);box-shadow:0 8px 24px rgba(0,0,0,.22)}.overlay-image-box img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none;background:transparent}.overlay-resize{position:absolute;right:3px;bottom:3px;z-index:4;width:22px;height:22px;padding:0;border:1px solid rgba(255,255,255,.52);border-radius:5px;background:rgba(255,255,255,.2);cursor:nwse-resize;touch-action:none;pointer-events:auto}.overlay-menu{position:absolute;z-index:6;display:grid;gap:8px;width:min(360px,94%);padding:8px;border:1px solid var(--color-border-strong);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel);touch-action:none}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px;cursor:move}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-inspector{display:grid;gap:8px}.overlay-inspector label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.overlay-inspector input[type=text],.overlay-inspector input[type=number]{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.overlay-inspector input[type=color]{width:42px;height:32px;padding:2px;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black)}.overlay-inspector-row{display:flex;gap:8px;align-items:center}.overlay-inspector-row>*{flex:1}.overlay-inspector-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.overlay-inspector-check input{width:auto}.overlay-danger{color:var(--color-danger)!important;border-color:#5b2626!important;background:#251111!important}.image-upload{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-empty{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;color:var(--color-text-muted)}
 p{color:#bebebe}.peak{color:#fff;font-size:16px;line-height:1.35}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}.transcript-copy{max-height:220px;overflow:auto;margin-top:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(0,0,0,.18)}.transcript-copy p{margin:0;line-height:1.45}
 body[data-tab=import] main,body[data-tab=import] .final-stage{display:none}body[data-tab=import] .import-stage{display:block}body[data-tab=final] main,body[data-tab=final] .import-stage{display:none}body[data-tab=final] .final-stage{display:block}.final-stage{display:none;margin:18px auto;max-width:1240px;padding:18px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised)}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.render-status{margin-top:12px;color:var(--color-text-muted)}.render-results{display:grid;gap:12px;margin-top:14px}.result-item{border:1px solid #303030;border-radius:8px;background:#090909;overflow:hidden}.result-item[open]{border-color:var(--color-metal-gray)}.result-item summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;border:0;color:var(--color-text)}.result-item summary strong{font-size:14px}.result-item summary span{color:var(--color-text-muted);font-size:12px}.result-body{display:grid;grid-template-columns:minmax(260px,420px) minmax(240px,1fr);gap:14px;padding:0 14px 14px}.result-body video{width:100%;max-height:70vh;background:#000;border-radius:6px;object-fit:contain}.result-meta{display:grid;align-content:start;gap:10px}.result-meta dl{margin:0}.result-path{display:block;max-width:100%;padding:8px 10px;border:1px solid rgba(17,162,207,.28);border-radius:6px;background:rgba(17,162,207,.08);color:var(--color-text);font-size:12px;line-height:1.35;overflow-wrap:anywhere}.result-actions{display:flex;gap:8px;flex-wrap:wrap}.result-actions a,.result-actions button{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.result-actions a.secondary,.result-actions button.secondary{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}
@@ -9545,16 +10307,18 @@ button[data-action=discard],.result-actions a.secondary,.result-actions button.s
 .settings-status,.settings-usage{border-color:var(--glass-border);background:rgba(231,231,232,.05)}.settings-backdrop{backdrop-filter:blur(14px)}
 .result-item{border-color:var(--glass-border);background:rgba(9,9,9,.82)}.result-item[open]{border-color:rgba(231,231,232,.25)}
 .result-body video{border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-panel)}
-.tabs{display:none!important}header{grid-template-columns:minmax(120px,1fr) auto minmax(240px,1fr);padding:14px 26px 16px}.brand-logo{width:min(560px,52vw);height:84px}.header-actions{align-items:center}.header-actions #finalize-videos{padding-inline:18px}.clip-summary{grid-template-columns:auto minmax(220px,1fr) minmax(560px,760px);align-items:center;gap:10px 14px;min-height:104px;padding:12px 18px;overflow:visible}.clip-rank{align-self:center;font-size:13px;letter-spacing:.08em}.clip-title strong{font-size:16px;letter-spacing:0}.clip-title small{font-size:12px}.clip-control-surface{grid-column:3;grid-row:1;display:flex!important;justify-content:flex-end;width:100%;min-width:0;margin:0!important}.clip-control-surface:empty{display:none!important}.clip-control-surface .cuted-control-bar{width:min(100%,760px);min-width:0;min-height:82px;padding:7px 12px;border-radius:16px}.clip-control-surface .cuted-render-zone{min-height:64px;justify-content:flex-end;overflow:visible}.clip-control-surface .cuted-tool-group{flex:0 1 294px;min-height:64px}.clip-control-surface .cuted-tile-button{flex:0 0 58px;width:58px;height:54px;font-size:26px}.clip-control-surface .cuted-insert-button span{font-size:18px}.clip-control-surface .cuted-format-trigger{flex:0 0 104px;width:104px;height:54px;gap:7px;padding:6px 8px}.clip-control-surface .cuted-format-copy small{display:none}.clip-control-surface .cuted-format-copy strong{font-size:18px}.clip-control-surface .cuted-ratio-vertical{width:14px;height:30px}.clip-control-surface .cuted-ratio-feed{width:20px;height:26px}.clip-control-surface .cuted-ratio-wide{width:29px;height:16px}.clip-control-surface .cuted-divider{height:42px;margin:0 6px}.clip-control-surface .cuted-audio-group{flex:0 0 52px;min-width:52px}.clip-control-surface .cuted-ready-region{flex:0 0 116px;width:116px;min-height:54px;margin-left:auto}.clip-control-surface .cuted-approve-button{width:52px;height:52px}.clip-control-surface .cuted-approve-button svg{width:31px;height:31px}.clip-control-surface .cuted-discard-button{width:40px;height:40px}.clip-row-timeline{grid-column:1/-1;grid-row:2;width:100%;min-width:0;height:34px;min-height:34px;margin-top:2px}.card[open] .clip-summary{grid-template-columns:auto minmax(220px,1fr) minmax(560px,760px);align-items:center;padding:14px 18px 16px}.card[open] .clip-row-timeline{grid-column:1/-1;grid-row:2}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:calc(100% + 36px);margin:6px -18px 0}.editor-shell{display:grid;grid-template-columns:1fr;padding:0 18px 22px}.editor-preview{justify-items:center}.preview-frame{width:100%;justify-items:center;max-width:100%}.card[data-preview-format=tiktok] .preview-frame,.card[data-preview-format=shorts] .preview-frame,.card[data-preview-format=instagram] .preview-frame{max-width:100%}.card[data-preview-format=facebook] .preview-frame,.card[data-preview-format=youtube] .preview-frame{max-width:100%}.media{width:min(100%,calc(72vh * 9 / 16));max-width:520px;max-height:72vh}.card[data-preview-format=facebook] .media{width:min(100%,calc(72vh * 4 / 5));max-width:560px}.card[data-preview-format=youtube] .media{width:min(100%,920px);max-width:920px}.edit-hidden-hooks{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.preview-bar,.editor-tools,.tool-stack,.tool-section,.export-dock,.clip-status{display:none!important}@media(max-width:1120px){.clip-summary,.card[open] .clip-summary{grid-template-columns:auto minmax(0,1fr);align-items:start}.clip-control-surface{grid-column:1/-1;grid-row:2;justify-content:center}.clip-row-timeline{grid-row:3}.clip-control-surface .cuted-control-bar{width:min(100%,760px)}}@media(max-width:860px){header{grid-template-columns:1fr;padding:12px}.brand-logo{width:min(420px,90vw);height:70px}.clip-summary,.card[open] .clip-summary{grid-template-columns:auto minmax(0,1fr);padding:12px}.clip-control-surface{grid-column:1/-1;grid-row:2}.clip-row-timeline{grid-column:1/-1;grid-row:3}.clip-control-surface .cuted-control-bar{width:100%;min-height:80px;padding:7px 9px}.editor-shell{padding:0 12px 16px}.media{max-height:none;width:100%;max-width:min(100%,520px)}}
+.tabs{display:none!important}header{grid-template-columns:minmax(120px,1fr) auto minmax(240px,1fr);padding:14px 26px 16px}.brand-logo{width:min(560px,52vw);height:84px}.header-actions{align-items:center}.header-actions #finalize-videos{padding-inline:18px}.clip-summary{grid-template-columns:auto minmax(220px,1fr) minmax(560px,760px);align-items:center;gap:10px 14px;min-height:104px;padding:12px 18px;overflow:visible}.clip-rank{align-self:center;font-size:13px;letter-spacing:.08em}.clip-title strong{font-size:16px;letter-spacing:0}.clip-title small{font-size:12px}.clip-control-surface{grid-column:3;grid-row:1;display:flex!important;justify-content:flex-end;width:100%;min-width:0;margin:0!important}.clip-control-surface:empty{display:none!important}.clip-control-surface .cuted-control-bar{width:min(100%,760px);min-width:0;min-height:82px;padding:7px 12px;border-radius:16px}.clip-control-surface .cuted-render-zone{min-height:64px;justify-content:flex-end;overflow:visible}.clip-control-surface .cuted-tool-group{flex:0 1 354px;min-height:64px}.clip-control-surface .cuted-tile-button{flex:0 0 58px;width:58px;height:54px;font-size:26px}.clip-control-surface .cuted-insert-button span{font-size:18px}.clip-control-surface .cuted-format-trigger{flex:0 0 104px;width:104px;height:54px;gap:7px;padding:6px 8px}.clip-control-surface .cuted-format-copy small{display:none}.clip-control-surface .cuted-format-copy strong{font-size:18px}.clip-control-surface .cuted-ratio-vertical{width:14px;height:30px}.clip-control-surface .cuted-ratio-feed{width:20px;height:26px}.clip-control-surface .cuted-ratio-wide{width:29px;height:16px}.clip-control-surface .cuted-divider{height:42px;margin:0 6px}.clip-control-surface .cuted-audio-group{flex:0 0 52px;min-width:52px}.clip-control-surface .cuted-ready-region{flex:0 0 116px;width:116px;min-height:54px;margin-left:auto}.clip-control-surface .cuted-approve-button{width:52px;height:52px}.clip-control-surface .cuted-approve-button svg{width:31px;height:31px}.clip-control-surface .cuted-discard-button{width:40px;height:40px}.clip-row-timeline{grid-column:1/-1;grid-row:2;width:100%;min-width:0;height:34px;min-height:34px;margin-top:2px}.card[open] .clip-summary{grid-template-columns:auto minmax(220px,1fr) minmax(560px,760px);align-items:center;padding:14px 18px 16px}.card[open] .clip-row-timeline{grid-column:1/-1;grid-row:2}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:calc(100% + 36px);margin:6px -18px 0}.editor-shell{display:grid;grid-template-columns:1fr;padding:0 18px 22px}.editor-preview{justify-items:center}.preview-frame{width:100%;justify-items:center;max-width:100%}.card[data-preview-format=tiktok] .preview-frame,.card[data-preview-format=shorts] .preview-frame,.card[data-preview-format=instagram] .preview-frame{max-width:100%}.card[data-preview-format=facebook] .preview-frame,.card[data-preview-format=youtube] .preview-frame{max-width:100%}.media{width:min(100%,calc(72vh * 9 / 16));max-width:520px;max-height:72vh}.card[data-preview-format=facebook] .media{width:min(100%,calc(72vh * 4 / 5));max-width:560px}.card[data-preview-format=youtube] .media{width:min(100%,920px);max-width:920px}.edit-hidden-hooks{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.preview-bar,.editor-tools,.tool-stack,.tool-section,.export-dock,.clip-status{display:none!important}@media(max-width:1120px){.clip-summary,.card[open] .clip-summary{grid-template-columns:auto minmax(0,1fr);align-items:start}.clip-control-surface{grid-column:1/-1;grid-row:2;justify-content:center}.clip-row-timeline{grid-row:3}.clip-control-surface .cuted-control-bar{width:min(100%,760px)}}@media(max-width:860px){header{grid-template-columns:1fr;padding:12px}.brand-logo{width:min(420px,90vw);height:70px}.clip-summary,.card[open] .clip-summary{grid-template-columns:auto minmax(0,1fr);padding:12px}.clip-control-surface{grid-column:1/-1;grid-row:2}.clip-row-timeline{grid-column:1/-1;grid-row:3}.clip-control-surface .cuted-control-bar{width:100%;min-height:80px;padding:7px 9px}.editor-shell{padding:0 12px 16px}.media{max-height:none;width:100%;max-width:min(100%,520px)}}
 @supports not (backdrop-filter:blur(1px)){.preview-bar,.preview-controls,.tool-section,.export-dock,.overlay-menu,header,.tabs{background:#111}}
 @media(max-width:860px){.brand-logo{width:min(360px,86vw);height:58px}.tabs{justify-content:flex-start}.tabs button{min-width:auto}.preview-bar{padding:8px}.preview-controls{grid-template-columns:1fr;max-width:100%;justify-content:stretch}.preview-transport-group{justify-self:center}.preview-camera-timeline{width:100%}.preview-volume-group{flex-wrap:nowrap}}
 @media(max-width:860px){body{overflow-x:hidden}.brand-logo{width:min(420px,90vw);height:70px}.card[open] .clip-row-timeline{grid-row:3}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:100%;margin:6px 0 0}.clip-control-surface .cuted-format-menu{left:auto;right:0;width:min(300px,calc(100vw - 48px))}.clip-control-surface .cuted-format-option{width:100%}}
-body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,#050505 100%);background-attachment:fixed}body::before{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(circle at 16% 8%,rgba(17,162,207,.22),transparent 30%),radial-gradient(circle at 88% 38%,rgba(175,207,42,.19),transparent 34%);content:"";opacity:.72;animation:cuted-edit-bg-breathe 22s ease-in-out infinite}header,main,.empty-project-stage,.settings-backdrop,.app-notice{position:relative;z-index:1}@keyframes cuted-edit-bg-breathe{0%,100%{opacity:.5}50%{opacity:.82}}header{padding:18px 26px 2px!important;background:transparent!important;border-bottom:0!important;box-shadow:none!important}.brand-lockup{gap:1px}.brand-logo{width:min(672px,62vw);height:101px;transform:translateY(4px)}.brand-lockup p{display:none!important}.tabs{border-bottom:0!important}main{padding-top:0}.card,.card[open]{border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible}.clip-summary,.card[open] .clip-summary{grid-template-columns:1fr;align-items:stretch;gap:0;min-height:0;padding:0;overflow:visible}.clip-control-surface{grid-column:1/-1;grid-row:1;display:block!important;width:100%;min-width:0;margin:0!important}.clip-control-surface:empty{display:none!important}.clip-control-surface .cuted-control-bar{width:100%;max-width:none;min-width:0;min-height:88px;margin:0;padding:7px 12px 7px 18px;border-radius:16px}.clip-control-surface .cuted-clip-info{flex:0 1 30%;max-width:30%;min-width:0;padding-right:10px}.clip-control-surface .cuted-clip-copy,.clip-control-surface .cuted-clip-copy strong,.clip-control-surface .cuted-clip-copy small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.clip-control-surface .cuted-render-zone{flex:1 1 auto;min-width:0;min-height:64px;justify-content:flex-end;overflow:visible}.clip-control-surface .cuted-tool-group{flex:0 1 294px;min-height:64px}.clip-control-surface .cuted-tile-button{flex:0 0 58px;width:58px;height:54px;font-size:26px}.clip-control-surface .cuted-format-trigger{flex:0 0 104px;width:104px;height:54px}.clip-control-surface .cuted-audio-group{flex:0 0 52px;min-width:52px}.clip-control-surface .cuted-divider{height:42px;margin:0 6px}.clip-row-timeline,.clip-row-timeline.preview-camera-timeline{display:none!important}.card[open] .clip-row-timeline,.card[open] .clip-row-timeline.preview-camera-timeline{display:block!important;grid-column:1/-1;grid-row:2;margin-top:0}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:100%;margin:-12px 0 0}.editor-shell{display:grid;grid-template-columns:1fr;padding:0 0 16px;margin-top:-18px}.editor-preview{gap:0}.preview-frame{gap:0}@media(max-width:1120px){.clip-control-surface .cuted-control-bar{flex-wrap:wrap;gap:10px}.clip-control-surface .cuted-clip-info{flex:0 1 100%;max-width:100%}.clip-control-surface .cuted-render-zone{flex:1 1 auto}.card[open] .clip-row-timeline{grid-row:2}}@media(max-width:860px){.clip-control-surface .cuted-control-bar{min-height:80px;padding:10px}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:100%;margin:-12px 0 0}}
-.brand-logo{transform:translateY(-6px)}.clip-control-surface .cuted-render-zone{justify-content:flex-end;padding-left:clamp(96px,12vw,190px);gap:14px}.clip-control-surface .cuted-ready-region{flex:0 0 116px;width:116px;min-height:54px;margin-left:14px}.clip-control-surface .cuted-tool-group{flex:0 0 294px}.clip-control-surface .cuted-tool-buttons{justify-content:flex-end}.clip-control-surface .cuted-format-trigger{flex:0 0 132px;width:132px;height:58px;gap:8px;padding:6px 10px}.clip-control-surface .cuted-format-copy small{display:block;font-size:10px;line-height:1.05}.clip-control-surface .cuted-format-copy strong{font-size:18px}.clip-control-surface .cuted-ratio-vertical{width:14px;height:30px}.clip-control-surface .cuted-ratio-feed{width:20px;height:26px}.clip-control-surface .cuted-ratio-wide{width:29px;height:16px}
-.clip-control-surface{position:relative;z-index:2600}.clip-control-surface .cuted-control-bar{position:relative;z-index:2600;overflow:visible}.clip-control-surface .cuted-effect-menu,.clip-control-surface .cuted-insert-menu,.clip-control-surface .cuted-format-menu,.clip-control-surface .cuted-volume-popover{z-index:3200}.card[open] .clip-row-timeline.preview-camera-timeline--live{position:relative;z-index:1}
-.header-actions{gap:10px;align-items:center}.header-actions .header-icon-button,#reset-ui.header-icon-button,#finalize-videos.header-icon-button,#open-settings.header-icon-button{position:relative;display:inline-grid;place-items:center;width:52px;height:52px;min-width:52px;padding:0!important;border:1px solid rgba(231,231,232,.18)!important;border-radius:16px;background:linear-gradient(180deg,rgba(255,255,255,.11),rgba(255,255,255,.025)),rgba(8,9,10,.52)!important;color:rgba(231,231,232,.8)!important;box-shadow:inset 0 1px rgba(255,255,255,.15),0 14px 34px rgba(0,0,0,.3);backdrop-filter:blur(18px) saturate(1.2);overflow:hidden}.header-actions .header-icon-button:before{position:absolute;inset:7px;border-radius:12px;background:radial-gradient(circle at 50% 22%,rgba(17,162,207,.16),transparent 62%);opacity:.64;content:"";transition:opacity .18s ease,transform .18s ease}.header-actions .header-icon-button svg{position:relative;z-index:1;width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}.header-actions .header-icon-button:hover,.header-actions .header-icon-button:focus-visible{border-color:rgba(17,162,207,.58)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(17,162,207,.22),0 16px 38px rgba(0,0,0,.34)}.header-actions .header-icon-button:hover:before,.header-actions .header-icon-button:focus-visible:before{opacity:1;transform:scale(1.08)}.header-actions .header-render-button,#finalize-videos.header-render-button{width:58px;height:58px;min-width:58px;border-color:rgba(175,207,42,.48)!important;color:var(--color-brand-green)!important;background:linear-gradient(180deg,rgba(175,207,42,.18),rgba(17,162,207,.065)),rgba(12,14,9,.7)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(175,207,42,.22),0 16px 38px rgba(0,0,0,.36)}.header-actions .header-render-button:before{background:radial-gradient(circle at 58% 25%,rgba(175,207,42,.28),transparent 60%),radial-gradient(circle at 32% 70%,rgba(17,162,207,.12),transparent 56%)}.header-actions .header-render-button svg{width:32px;height:32px;stroke-width:1.85}.header-actions .header-settings-button svg{width:26px;height:26px}.header-actions .header-new-project svg{width:29px;height:29px}#open-settings.header-settings-button.is-openai-ready{border-color:rgba(175,207,42,.62)!important;color:var(--color-brand-green)!important;background:linear-gradient(180deg,rgba(175,207,42,.2),rgba(17,162,207,.055)),rgba(10,14,8,.7)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(175,207,42,.26),0 16px 38px rgba(0,0,0,.36)}#open-settings.header-settings-button.is-openai-ready:before{background:radial-gradient(circle at 50% 34%,rgba(175,207,42,.32),transparent 62%)}#open-settings.header-settings-button.is-openai-ready svg{animation:cuted-openai-gear-spin 5.8s linear infinite;filter:drop-shadow(0 0 8px rgba(175,207,42,.34))}@keyframes cuted-openai-gear-spin{to{transform:rotate(360deg)}}
+body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,#050505 100%);background-attachment:fixed}body::before{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(circle at 16% 8%,rgba(17,162,207,.22),transparent 30%),radial-gradient(circle at 88% 38%,rgba(175,207,42,.19),transparent 34%);content:"";opacity:.72;animation:cuted-edit-bg-breathe 22s ease-in-out infinite}header,main,.empty-project-stage,.settings-backdrop,.app-notice{position:relative;z-index:1}@keyframes cuted-edit-bg-breathe{0%,100%{opacity:.5}50%{opacity:.82}}header{padding:18px 26px 2px!important;background:transparent!important;border-bottom:0!important;box-shadow:none!important}.brand-lockup{gap:1px}.brand-logo{width:min(672px,62vw);height:101px;transform:translateY(4px)}.brand-lockup p{display:none!important}.tabs{border-bottom:0!important}main{padding-top:0}.card,.card[open]{border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible}.clip-summary,.card[open] .clip-summary{grid-template-columns:1fr;align-items:stretch;gap:0;min-height:0;padding:0;overflow:visible}.clip-control-surface{grid-column:1/-1;grid-row:1;display:block!important;width:100%;min-width:0;margin:0!important}.clip-control-surface:empty{display:none!important}.clip-control-surface .cuted-control-bar{width:100%;max-width:none;min-width:0;min-height:88px;margin:0;padding:7px 12px 7px 18px;border-radius:16px}.clip-control-surface .cuted-clip-info{flex:0 1 30%;max-width:30%;min-width:0;padding-right:10px}.clip-control-surface .cuted-clip-copy,.clip-control-surface .cuted-clip-copy strong,.clip-control-surface .cuted-clip-copy small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.clip-control-surface .cuted-render-zone{flex:1 1 auto;min-width:0;min-height:64px;justify-content:flex-end;overflow:visible}.clip-control-surface .cuted-tool-group{flex:0 1 354px;min-height:64px}.clip-control-surface .cuted-tile-button{flex:0 0 58px;width:58px;height:54px;font-size:26px}.clip-control-surface .cuted-format-trigger{flex:0 0 104px;width:104px;height:54px}.clip-control-surface .cuted-audio-group{flex:0 0 52px;min-width:52px}.clip-control-surface .cuted-divider{height:42px;margin:0 6px}.clip-row-timeline,.clip-row-timeline.preview-camera-timeline{display:none!important}.card[open] .clip-row-timeline,.card[open] .clip-row-timeline.preview-camera-timeline{display:block!important;grid-column:1/-1;grid-row:2;margin-top:0}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:100%;margin:-12px 0 0}.editor-shell{display:grid;grid-template-columns:1fr;padding:0 0 16px;margin-top:-18px}.editor-preview{gap:0}.preview-frame{gap:0}@media(max-width:1120px){.clip-control-surface .cuted-control-bar{flex-wrap:wrap;gap:10px}.clip-control-surface .cuted-clip-info{flex:0 1 100%;max-width:100%}.clip-control-surface .cuted-render-zone{flex:1 1 auto}.card[open] .clip-row-timeline{grid-row:2}}@media(max-width:860px){.clip-control-surface .cuted-control-bar{min-height:80px;padding:10px}.card[open] .clip-row-timeline.preview-camera-timeline--live{width:100%;margin:-12px 0 0}}
+.brand-logo{transform:translateY(-6px)}.clip-control-surface .cuted-render-zone{justify-content:flex-end;padding-left:clamp(96px,12vw,190px);gap:14px}.clip-control-surface .cuted-ready-region{flex:0 0 116px;width:116px;min-height:54px;margin-left:14px}.clip-control-surface .cuted-tool-group{flex:0 0 354px}.clip-control-surface .cuted-tool-buttons{justify-content:flex-end}.clip-control-surface .cuted-format-trigger{flex:0 0 132px;width:132px;height:58px;gap:8px;padding:6px 10px}.clip-control-surface .cuted-format-copy small{display:block;font-size:10px;line-height:1.05}.clip-control-surface .cuted-format-copy strong{font-size:18px}.clip-control-surface .cuted-ratio-vertical{width:14px;height:30px}.clip-control-surface .cuted-ratio-feed{width:20px;height:26px}.clip-control-surface .cuted-ratio-wide{width:29px;height:16px}
+.clip-control-surface{position:relative;z-index:2600}.clip-control-surface .cuted-control-bar{position:relative;z-index:2600;overflow:visible}.clip-control-surface .cuted-effect-menu,.clip-control-surface .cuted-insert-menu,.clip-control-surface .cuted-caption-menu,.clip-control-surface .cuted-format-menu,.clip-control-surface .cuted-volume-popover{z-index:3200}.card[open] .clip-row-timeline.preview-camera-timeline--live{position:relative;z-index:1}
+.header-actions{gap:10px;align-items:center}.header-actions .header-icon-button,#reset-ui.header-icon-button,#finalize-videos.header-icon-button,#open-settings.header-icon-button{position:relative;display:inline-grid;place-items:center;width:52px;height:52px;min-width:52px;padding:0!important;border:1px solid rgba(231,231,232,.18)!important;border-radius:16px;background:linear-gradient(180deg,rgba(255,255,255,.11),rgba(255,255,255,.025)),rgba(8,9,10,.52)!important;color:rgba(231,231,232,.8)!important;box-shadow:inset 0 1px rgba(255,255,255,.15),0 14px 34px rgba(0,0,0,.3);backdrop-filter:blur(18px) saturate(1.2);overflow:hidden}.header-actions .header-icon-button:before{position:absolute;inset:7px;border-radius:12px;background:radial-gradient(circle at 50% 22%,rgba(17,162,207,.16),transparent 62%);opacity:.64;content:"";transition:opacity .18s ease,transform .18s ease}.header-actions .header-icon-button svg{position:relative;z-index:1;width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}.header-actions .header-icon-button:hover,.header-actions .header-icon-button:focus-visible{border-color:rgba(17,162,207,.58)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(17,162,207,.22),0 16px 38px rgba(0,0,0,.34)}.header-actions .header-icon-button:hover:before,.header-actions .header-icon-button:focus-visible:before{opacity:1;transform:scale(1.08)}.header-actions .header-render-button,#finalize-videos.header-render-button{width:58px;height:58px;min-width:58px;border-color:rgba(175,207,42,.48)!important;color:var(--color-brand-green)!important;background:linear-gradient(180deg,rgba(175,207,42,.18),rgba(17,162,207,.065)),rgba(12,14,9,.7)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(175,207,42,.22),0 16px 38px rgba(0,0,0,.36)}.header-actions .header-render-button:before{background:radial-gradient(circle at 58% 25%,rgba(175,207,42,.28),transparent 60%),radial-gradient(circle at 32% 70%,rgba(17,162,207,.12),transparent 56%)}.header-actions .header-render-button svg{width:32px;height:32px;stroke-width:1.85}.header-actions .header-render-button.is-rendering,#finalize-videos.header-render-button.is-rendering{border-color:rgba(175,207,42,.78)!important;color:var(--color-brand-green)!important;box-shadow:inset 0 1px rgba(255,255,255,.24),0 0 28px rgba(175,207,42,.34),0 0 42px rgba(17,162,207,.14),0 16px 38px rgba(0,0,0,.36);animation:cuted-render-button-pulse 1.65s ease-in-out infinite}.header-actions .header-render-button.is-rendering:before,#finalize-videos.header-render-button.is-rendering:before{opacity:1;transform:scale(1.12);animation:cuted-render-button-scan 1.4s ease-in-out infinite}.header-actions .header-render-button.is-rendering svg,#finalize-videos.header-render-button.is-rendering svg{animation:cuted-render-icon-drift 1.9s ease-in-out infinite;filter:drop-shadow(0 0 9px rgba(175,207,42,.42))}.header-actions .header-settings-button svg{width:26px;height:26px}.header-actions .header-new-project svg{width:29px;height:29px}#open-settings.header-settings-button.is-openai-ready{border-color:rgba(175,207,42,.62)!important;color:var(--color-brand-green)!important;background:linear-gradient(180deg,rgba(175,207,42,.2),rgba(17,162,207,.055)),rgba(10,14,8,.7)!important;box-shadow:inset 0 1px rgba(255,255,255,.2),0 0 24px rgba(175,207,42,.26),0 16px 38px rgba(0,0,0,.36)}#open-settings.header-settings-button.is-openai-ready:before{background:radial-gradient(circle at 50% 34%,rgba(175,207,42,.32),transparent 62%)}#open-settings.header-settings-button.is-openai-ready svg{animation:cuted-openai-gear-spin 5.8s linear infinite;filter:drop-shadow(0 0 8px rgba(175,207,42,.34))}@keyframes cuted-openai-gear-spin{to{transform:rotate(360deg)}}@keyframes cuted-render-button-pulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.2)}}@keyframes cuted-render-button-scan{0%,100%{opacity:.72;transform:scale(1.04) rotate(0deg)}50%{opacity:1;transform:scale(1.16) rotate(3deg)}}@keyframes cuted-render-icon-drift{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-1px) rotate(9deg)}}
 .settings-backdrop{position:fixed!important;inset:0!important;z-index:5000!important;display:grid!important;place-items:center!important;padding:32px;background:radial-gradient(circle at 50% 42%,rgba(17,162,207,.18),transparent 30%),radial-gradient(circle at 64% 58%,rgba(175,207,42,.12),transparent 26%),rgba(0,0,0,.68)!important;backdrop-filter:blur(18px) saturate(1.18)!important;opacity:0;pointer-events:none;transition:opacity 180ms ease}.settings-backdrop[hidden]{display:none!important}.settings-backdrop.is-open{opacity:1;pointer-events:auto}.settings-backdrop.is-closing{opacity:0;pointer-events:none}.settings-panel{position:relative!important;isolation:isolate;width:min(640px,calc(100vw - 48px))!important;max-height:min(760px,calc(100vh - 56px));overflow:hidden auto;padding:20px!important;border:1px solid rgba(17,162,207,.34)!important;border-radius:22px!important;background:linear-gradient(145deg,rgba(231,231,232,.11),rgba(5,5,5,.8) 46%,rgba(11,15,10,.88)),rgba(5,5,5,.92)!important;box-shadow:0 0 0 1px rgba(255,255,255,.055),0 0 42px rgba(17,162,207,.2),0 0 58px rgba(175,207,42,.12),0 32px 86px rgba(0,0,0,.72)!important;transform:translateY(18px) scale(.965);opacity:0;outline:none;transition:transform 210ms cubic-bezier(.2,.9,.2,1),opacity 180ms ease}.settings-backdrop.is-open .settings-panel{transform:translateY(0) scale(1);opacity:1}.settings-backdrop.is-closing .settings-panel{transform:translateY(12px) scale(.975);opacity:0}.settings-aura{position:absolute;inset:-46px;z-index:-1;background:conic-gradient(from 130deg,transparent,rgba(17,162,207,.22),transparent 32%,rgba(175,207,42,.18),transparent 62%);opacity:.54;filter:blur(12px);animation:settings-aura-drift 8s linear infinite}.settings-head{position:relative;display:flex!important;align-items:flex-start!important;justify-content:space-between!important;gap:18px;padding:0 0 16px;border-bottom:1px solid rgba(231,231,232,.1)}.settings-title-row{display:flex;align-items:center;gap:14px;min-width:0}.settings-orb{display:grid;place-items:center;width:52px;height:52px;min-width:52px;border:1px solid rgba(175,207,42,.44);border-radius:16px;background:radial-gradient(circle at 50% 32%,rgba(175,207,42,.22),transparent 62%),rgba(8,11,8,.78);color:var(--color-brand-green);box-shadow:inset 0 1px rgba(255,255,255,.16),0 0 26px rgba(175,207,42,.18)}.settings-orb svg{width:27px;height:27px;fill:none;stroke:currentColor;stroke-width:1.9;animation:cuted-openai-gear-spin 7.2s linear infinite}.settings-head strong{display:block;color:var(--color-text);font-size:22px;line-height:1.05}.settings-head p{margin:5px 0 0!important;color:rgba(231,231,232,.62)!important;font-size:13px;line-height:1.25}.settings-close-button{display:grid!important;place-items:center;width:40px!important;height:40px!important;min-width:40px!important;padding:0!important;border:1px solid rgba(231,231,232,.16)!important;border-radius:14px!important;background:rgba(231,231,232,.06)!important;color:rgba(231,231,232,.75)!important;font-weight:900!important}.settings-close-button:hover,.settings-close-button:focus-visible{border-color:rgba(255,111,111,.42)!important;color:#ff9d9d!important;box-shadow:0 0 22px rgba(255,111,111,.18)}.settings-form{display:grid!important;gap:14px!important;margin-top:16px!important}.settings-status{padding:12px 14px!important;border:1px solid rgba(17,162,207,.26)!important;border-radius:14px!important;background:linear-gradient(90deg,rgba(17,162,207,.12),rgba(175,207,42,.065)),rgba(0,0,0,.3)!important;color:rgba(231,231,232,.82)!important;font-size:13px}.settings-field{display:grid!important;gap:7px!important;color:rgba(231,231,232,.68)!important;font-size:12px!important;font-weight:800;letter-spacing:.01em}.settings-form input,.settings-form select{min-height:44px!important;border:1px solid rgba(231,231,232,.14)!important;border-radius:14px!important;background:rgba(0,0,0,.52)!important;color:var(--color-text)!important;padding:10px 12px!important;box-shadow:inset 0 1px rgba(255,255,255,.05)!important}.settings-form input:focus,.settings-form select:focus{border-color:rgba(17,162,207,.62)!important;outline:none;box-shadow:0 0 0 3px rgba(17,162,207,.16),inset 0 1px rgba(255,255,255,.07)!important}.settings-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important}.settings-usage{display:grid!important;gap:5px!important;padding:12px 14px!important;border:1px solid rgba(231,231,232,.12)!important;border-radius:14px!important;background:rgba(231,231,232,.045)!important;color:rgba(231,231,232,.6)!important;font-size:12px!important}.settings-usage strong{color:rgba(231,231,232,.86)}.settings-actions{display:flex!important;justify-content:flex-end!important;gap:10px!important;flex-wrap:wrap!important;padding-top:2px}.settings-actions button{min-height:42px!important;border-radius:999px!important;padding:0 18px!important}.settings-actions button[type=submit]{border-color:rgba(175,207,42,.56)!important;background:linear-gradient(90deg,rgba(175,207,42,.95),rgba(17,162,207,.88))!important;color:#050505!important;font-weight:900!important}.settings-actions [data-settings-test]{border-color:rgba(17,162,207,.36)!important;background:rgba(17,162,207,.08)!important;color:var(--color-text)!important}.settings-form small{color:rgba(231,231,232,.5)!important;font-size:11px!important}@keyframes settings-aura-drift{to{transform:rotate(360deg)}}@media(max-width:760px){.settings-backdrop{padding:18px}.settings-panel{width:calc(100vw - 28px)!important;padding:16px!important}.settings-grid{grid-template-columns:1fr!important}.settings-head strong{font-size:20px}}
 .settings-panel{scrollbar-width:none}.settings-panel::-webkit-scrollbar{width:0;height:0}
+.render-queue-backdrop{position:fixed!important;inset:0!important;z-index:4900!important;display:grid!important;place-items:center!important;padding:32px;background:radial-gradient(circle at 46% 38%,rgba(17,162,207,.18),transparent 30%),radial-gradient(circle at 63% 62%,rgba(175,207,42,.12),transparent 28%),rgba(0,0,0,.7)!important;backdrop-filter:blur(18px) saturate(1.18)!important;opacity:0;pointer-events:none;transition:opacity 180ms ease}.render-queue-backdrop[hidden]{display:none!important}.render-queue-backdrop.is-open{opacity:1;pointer-events:auto}.render-queue-backdrop.is-closing{opacity:0;pointer-events:none}.render-queue-panel{position:relative;isolation:isolate;width:min(760px,calc(100vw - 56px));max-height:min(780px,calc(100vh - 56px));overflow:hidden;padding:20px;border:1px solid rgba(17,162,207,.34);border-radius:22px;background:linear-gradient(145deg,rgba(231,231,232,.11),rgba(5,5,5,.82) 46%,rgba(11,15,10,.9)),rgba(5,5,5,.94);box-shadow:0 0 0 1px rgba(255,255,255,.055),0 0 42px rgba(17,162,207,.2),0 0 58px rgba(175,207,42,.12),0 32px 86px rgba(0,0,0,.72);transform:translateY(18px) scale(.965);opacity:0;outline:none;transition:transform 210ms cubic-bezier(.2,.9,.2,1),opacity 180ms ease}.render-queue-backdrop.is-open .render-queue-panel{transform:translateY(0) scale(1);opacity:1}.render-queue-aura{position:absolute;inset:-46px;z-index:-1;background:conic-gradient(from 120deg,transparent,rgba(17,162,207,.2),transparent 34%,rgba(175,207,42,.18),transparent 64%);opacity:.48;filter:blur(12px);animation:settings-aura-drift 8.5s linear infinite}.render-queue-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;padding-bottom:16px;border-bottom:1px solid rgba(231,231,232,.1)}.render-queue-head strong{display:block;font-size:22px;line-height:1.05}.render-queue-head p{margin:5px 0 0;color:rgba(231,231,232,.62);font-size:13px}.render-queue-close{display:grid;place-items:center;width:40px;height:40px;min-width:40px;padding:0;border:1px solid rgba(231,231,232,.16);border-radius:14px;background:rgba(231,231,232,.06);color:rgba(231,231,232,.75);font-weight:900}.render-resource-switch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:16px 0}.render-resource-switch button{min-height:42px;border:1px solid rgba(231,231,232,.16);border-radius:14px;background:rgba(231,231,232,.055);color:rgba(231,231,232,.74);font-weight:900}.render-resource-switch button.active{border-color:rgba(175,207,42,.58);background:linear-gradient(90deg,rgba(175,207,42,.2),rgba(17,162,207,.08));color:var(--color-text);box-shadow:0 0 22px rgba(175,207,42,.14)}.render-queue-status{min-height:42px;padding:12px 14px;border:1px solid rgba(17,162,207,.26);border-radius:14px;background:linear-gradient(90deg,rgba(17,162,207,.12),rgba(175,207,42,.065)),rgba(0,0,0,.3);color:rgba(231,231,232,.82);font-size:13px}.render-queue-list{display:grid;gap:10px;max-height:min(486px,calc(100vh - 288px));margin-top:12px;overflow:auto;padding-right:4px;scrollbar-width:thin;scrollbar-color:rgba(175,207,42,.55) rgba(255,255,255,.055)}.render-queue-list::-webkit-scrollbar{width:8px}.render-queue-list::-webkit-scrollbar-thumb{border-radius:999px;background:linear-gradient(180deg,rgba(17,162,207,.72),rgba(175,207,42,.72))}.render-job-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:13px 14px;border:1px solid rgba(231,231,232,.12);border-radius:16px;background:linear-gradient(180deg,rgba(231,231,232,.07),rgba(231,231,232,.025)),rgba(0,0,0,.34)}.render-job-card[data-status=ready]{border-color:rgba(175,207,42,.38)}.render-job-card[data-status=failed],.render-job-card[data-status=cancelled]{border-color:rgba(255,111,111,.36)}.render-job-main{display:grid;gap:7px;min-width:0}.render-job-title{display:flex;gap:8px;align-items:center;min-width:0}.render-job-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.render-job-pill{display:inline-flex;align-items:center;min-height:22px;padding:3px 8px;border-radius:999px;background:rgba(17,162,207,.12);color:rgba(36,220,255,.9);font-size:11px;font-weight:900;text-transform:uppercase}.render-job-card[data-status=cancelled] .render-job-pill,.render-job-card[data-status=failed] .render-job-pill{background:rgba(255,111,111,.12);color:#ff9d9d}.render-job-meta{color:rgba(231,231,232,.58);font-size:12px}.render-job-progress{position:relative;height:5px;overflow:hidden;border-radius:999px;background:rgba(231,231,232,.1)}.render-job-progress span{position:absolute;inset:0 auto 0 0;width:var(--progress);border-radius:inherit;background:linear-gradient(90deg,var(--color-brand-blue),var(--color-brand-green));box-shadow:0 0 14px rgba(17,162,207,.34)}.render-job-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.render-job-actions button{min-height:34px;padding:7px 11px;border:1px solid rgba(231,231,232,.16);border-radius:999px;background:rgba(231,231,232,.07);color:rgba(231,231,232,.82);font-weight:800}.render-job-actions button.primary{border-color:rgba(175,207,42,.52);background:rgba(175,207,42,.14);color:var(--color-brand-green)}.render-job-actions [data-render-cancel],.render-job-actions [data-render-remove]{border-color:rgba(255,111,111,.34);background:rgba(255,111,111,.08);color:#ffb3b3}.render-empty{padding:18px;border:1px dashed rgba(231,231,232,.16);border-radius:16px;color:rgba(231,231,232,.58);text-align:center}
+.clip-control-surface .cuted-render-zone.is-ready .cuted-ready-region{flex:0 0 46px;width:46px;min-width:46px}.clip-control-surface .cuted-render-zone.is-ready .cuted-ready-pill{width:46px}
 """
 
 
@@ -9722,9 +10486,12 @@ function normalizePlatformEdit(edit, fallback){
   const overlayFallback = source.overlay || base.overlay || defaultOverlay();
   const overlays = normalizeOverlayLayers(source.overlays, overlayFallback);
   const pathSource = Object.prototype.hasOwnProperty.call(source, "camera_path") ? source.camera_path : base.camera_path;
+  const captionSource = Object.prototype.hasOwnProperty.call(source, "captions") ? source.captions : null;
+  const captionBase = Object.prototype.hasOwnProperty.call(base, "captions") ? base.captions : null;
   return {
     camera: normalizeCamera(source.camera || base.camera || defaultCamera()),
     camera_path: normalizeCameraPath(pathSource),
+    captions: normalizeCaptionSettings(captionSource, captionBase),
     director_plan: normalizeDirectorPlan(source.director_plan || base.director_plan),
     effect: normalizeEffect(source.effect || base.effect || defaultEffect()),
     overlay: overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
@@ -9749,6 +10516,31 @@ function setPlatformEditForRank(rank, platform, patch){
   setCardState(String(rank), {
     platformEdits: Object.assign({}, current.platformEdits, { [key]: edit })
   });
+}
+function defaultCaptionSettings(){
+  return { enabled: captionEnabled(), style: captionStyle() };
+}
+function normalizeCaptionSettings(value, fallback = null){
+  const source = value && typeof value === "object" ? value : {};
+  const base = fallback && typeof fallback === "object" ? fallback : defaultCaptionSettings();
+  const enabled = Object.prototype.hasOwnProperty.call(source, "enabled")
+    ? Boolean(source.enabled)
+    : Object.prototype.hasOwnProperty.call(base, "enabled")
+      ? Boolean(base.enabled)
+      : captionEnabled();
+  return {
+    enabled,
+    style: normalizeCaptionStyleObject(Object.assign({}, base.style || {}, source.style || {}))
+  };
+}
+function normalizeCaptionStyleObject(value){
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    size: clampNumber(Number(source.size || defaultCaptionSize()), 24, 140),
+    width: clampNumber(Number(source.width || 28), 12, 56),
+    textColor: normalizeCaptionColor(source.textColor || source.text_color, "#ffffff"),
+    backgroundColor: normalizeCaptionBackground(source.backgroundColor || source.background_color)
+  };
 }
 function defaultCamera(){ return cameraSequence(cameraParts.map(part => defaultCameraSegment(part.key))); }
 function defaultCameraSegment(part){ return { part, part_label: cameraPartLabel(part), key: "center", label: cameraMeta.center.label, strength: 60 }; }
@@ -10054,6 +10846,24 @@ function cameraPathFromCamera(camera, duration){
 function cameraPathForEdit(edit, duration){
   const path = normalizeCameraPath(edit?.camera_path);
   return path.length ? path : cameraPathFromCamera(edit?.camera || defaultCamera(), duration);
+}
+function exportCameraPathForEdit(edit, sourceDuration, trimStart, adjustedDuration){
+  const safeSourceDuration = Math.max(Number(sourceDuration) || Number(adjustedDuration) || 0, .3);
+  const safeTrimStart = clampNumber(Number(trimStart) || 0, 0, Math.max(safeSourceDuration - .001, 0));
+  const safeAdjustedDuration = Math.max(Number(adjustedDuration) || (safeSourceDuration - safeTrimStart), .3);
+  const sourcePath = cameraPathForEdit(edit, safeSourceDuration);
+  const active = cameraFrameForTime(edit?.camera, sourcePath, safeTrimStart, safeSourceDuration);
+  const frames = [Object.assign({}, active, { time: 0 })];
+  sourcePath.forEach(frame => {
+    const time = Number(frame.time || 0);
+    if (time <= safeTrimStart + .001) return;
+    if (time >= safeTrimStart + safeAdjustedDuration - .001) return;
+    frames.push(Object.assign({}, frame, { time: Number((time - safeTrimStart).toFixed(3)) }));
+  });
+  return normalizeCameraPath(frames);
+}
+function sourceDurationForMoment(moment){
+  return Number(moment?.duration || (Number(moment?.end || 0) - Number(moment?.start || 0)) || moment?.adjusted_duration || 0);
 }
 function explicitCameraPathForEdit(edit){
   return normalizeCameraPath(edit?.camera_path);
@@ -10833,6 +11643,7 @@ function updateCardTools(card){
   updateCameraUi(card);
   updateEffectUi(card);
   updateOverlayUi(card);
+  syncPreviewCaptions(card);
   updateControlSurfaceForCard(card);
 }
 function updateControlSurfaceForCard(card){
@@ -10858,22 +11669,27 @@ function controlSurfaceStateForCard(card){
   const rank = card.dataset.rank;
   const current = cardState(rank);
   const platform = activePlatformForRank(rank);
+  const edit = platformEditForRank(rank, platform);
   const effect = effectForRank(rank, platform);
   const video = primaryCameraVideo(card);
   const platforms = uniquePlatforms(current.platforms);
   const busy = controlSurfaceBusy(card);
+  const trim = trimValues(card);
   return {
     aiStatus: busy ? "loading" : controlSurfaceAiStatus(card),
     aspectRatio: controlSurfaceAspectRatio(platform),
     bumpers: bumpersForRank(rank, platform),
     busy,
-    captionsEnabled: captionEnabled(),
+    captionsEnabled: edit.captions.enabled,
+    captionStyle: edit.captions.style,
     clipInfo: controlSurfaceClipInfo(card),
     effectStyle: controlSurfaceEffectStyle(effect),
     muted: video ? video.muted || video.volume <= 0 : false,
     ready: current.status === "liked" && platforms.includes(platform),
     discarded: current.status === "discarded",
     status: controlSurfaceStatus(card),
+    trimApplied: trimRangeActive(trim),
+    trimMode: !busy && card.dataset.trimMode === "1",
     volume: video ? Math.round((video.muted ? 0 : video.volume) * 100) : Math.round(defaultPreviewVolume * 100)
   };
 }
@@ -10889,11 +11705,14 @@ function controlSurfaceCallbacksForCard(card){
     onApproveClick: () => markControlSurfaceReady(card),
     onBumperClick: payload => openControlSurfaceBumperInput(card, payload.slot),
     onBumperRemove: payload => removeBumperForRank(card.dataset.rank, payload.slot),
-    onCaptionToggle: payload => setControlSurfaceCaptions(payload.captionsEnabled),
+    onCaptionToggle: payload => setControlSurfaceCaptions(payload.captionsEnabled, payload.captionStyle),
+    onCaptionStyleChange: payload => setControlSurfaceCaptions(payload.captionsEnabled, payload.captionStyle),
     onDiscardClick: () => discardControlSurfaceCard(card),
     onEffectStyleChange: payload => setEffectForRank(card.dataset.rank, { key: appEffectKeyFromControlSurface(payload.effectStyle) }),
     onFormatChange: payload => setControlSurfaceFormat(card, payload.aspectRatio),
     onReadyCancel: () => cancelControlSurfaceReady(card),
+    onSendRender: () => sendCardToRenderQueue(card),
+    onTrimToggle: payload => setControlSurfaceTrimMode(card, payload.trimMode),
     onVolumeChange: payload => setPreviewVolume(card, payload.muted ? 0 : payload.volume / 100)
   };
 }
@@ -10957,12 +11776,35 @@ function openControlSurfaceBumperInput(card, slot){
   const input = card.querySelector(`[data-bumper-video="${safeSlot}"]`);
   if (input) input.click();
 }
-function setControlSurfaceCaptions(enabled){
+function setControlSurfaceCaptions(enabled, style = null){
+  document.querySelectorAll(".card[open]").forEach(card => {
+    const rank = card.dataset.rank;
+    const platform = activePlatformForRank(rank);
+    const current = platformEditForRank(rank, platform).captions;
+    setPlatformEditForRank(rank, platform, {
+      captions: normalizeCaptionSettings({
+        enabled,
+        style: style || current.style
+      }, current)
+    });
+  });
   localStorage.setItem("cutted-caption-enabled", enabled ? "1" : "0");
+  storeCaptionStyle(style);
   syncCaptionInputs();
+  syncPreviewCaptionsForOpenCards();
   renderCaptionQueue();
   renderFinalStage();
   document.querySelectorAll(".card[open]").forEach(updateControlSurfaceForCard);
+}
+function setControlSurfaceTrimMode(card, enabled){
+  if (!card) return;
+  const active = Boolean(enabled);
+  card.dataset.trimMode = active ? "1" : "0";
+  card.classList.toggle("is-trim-mode", active);
+  const timeline = card.querySelector("[data-preview-camera-timeline]");
+  if (timeline) timeline.dataset.trimMode = active ? "1" : "0";
+  updateControlSurfaceForCard(card);
+  syncLiveTimelinePlaybackState(card);
 }
 function markControlSurfaceReady(card){
   const current = cardState(card.dataset.rank);
@@ -11723,6 +12565,7 @@ function updateTrimUi(card){
   if (windowLabel) windowLabel.textContent = `${fixed(values.startPos)} - ${fixed(values.endPos)} no clipe`;
   renderCardRowTimeline(card, values);
   updateTimelinePlayhead(card);
+  syncPreviewCaptions(card);
 }
 function renderCardRowTimeline(card, values = null){
   const container = card.querySelector("[data-card-row-timeline]");
@@ -11764,6 +12607,7 @@ function updateTimelinePlayhead(card, time = null){
   if (output) output.textContent = fixed(values.start + current);
   updateCameraSurfaceForCard(card, current);
   updatePreviewCameraTimelinePlayhead(card, current);
+  syncPreviewCaptions(card, current);
 }
 function previewCameraTimelineContext(card){
   const values = trimValues(card);
@@ -11855,7 +12699,8 @@ function liveTimelineOptionsForCard(card){
     logoUrl: "assets/brand/cuted-logo-transparent.png",
     playing: video ? !video.paused && !video.ended : false,
     showInspector: false,
-    showVolume: false
+    showVolume: false,
+    trimEnabled: card.dataset.trimMode === "1"
   });
 }
 function fallbackLiveTimelineOptions(model){
@@ -12488,6 +13333,7 @@ function adjustedMoment(moment){
   const platforms = Array.isArray(current.platforms) ? current.platforms : [];
   const adjustedDuration = Number((moment.end - trimEnd - moment.start - trimStart).toFixed(3));
   const edit = platformEditForRank(moment.rank);
+  const sourceDuration = sourceDurationForMoment(moment);
   return Object.assign({}, moment, {
     status: current.status || null,
     platforms,
@@ -12497,7 +13343,7 @@ function adjustedMoment(moment){
     adjusted_end: Number((moment.end - trimEnd).toFixed(3)),
     adjusted_duration: adjustedDuration,
     camera: edit.camera,
-    camera_path: cameraPathForEdit(edit, adjustedDuration),
+    camera_path: exportCameraPathForEdit(edit, sourceDuration, trimStart, adjustedDuration),
     director_plan: edit.director_plan,
     camera_motion_ms: current.cameraMotionMs,
     effect: effectForRank(moment.rank),
@@ -12507,7 +13353,7 @@ function adjustedMoment(moment){
     platform_edits: current.platformEdits
   });
 }
-function resolutionEditForPlatform(rank, platform, duration){
+function resolutionEditForPlatform(rank, platform, sourceDuration, trimStart, duration){
   const key = resolutionPresetForPlatform(platform);
   const edit = platformEditForRank(rank, platform);
   return {
@@ -12515,7 +13361,7 @@ function resolutionEditForPlatform(rank, platform, duration){
     resolution_label: resolutionPresetLabel(key),
     source: "platform_edits",
     camera: edit.camera,
-    camera_path: cameraPathForEdit(edit, duration),
+    camera_path: exportCameraPathForEdit(edit, sourceDuration, trimStart, duration),
     director_plan: edit.director_plan,
     camera_motion_ms: cardState(String(rank)).cameraMotionMs,
     effect: edit.effect,
@@ -12529,7 +13375,7 @@ function resolutionEditsForMoment(moment, exportFormat){
   captionPlatforms(moment, exportFormat).forEach(platform => {
     const key = resolutionPresetForPlatform(platform);
     if (!result[key]) {
-      result[key] = Object.assign(resolutionEditForPlatform(moment.rank, platform, moment.adjusted_duration), {
+      result[key] = Object.assign(resolutionEditForPlatform(moment.rank, platform, sourceDurationForMoment(moment), moment.trim_start_seconds, moment.adjusted_duration), {
         destinations: resolutionPresets[key]?.destinations || [platform],
         shared: true
       });
@@ -12550,8 +13396,9 @@ function buildExportData(){
   data.caption_queue = data.selected.flatMap(moment => captionPlatforms(moment, data.export_format).map(platform => {
     const edit = platformEditForRank(moment.rank, platform);
     const overlays = edit.overlays;
-    const cameraPath = cameraPathForEdit(edit, moment.adjusted_duration);
+    const cameraPath = exportCameraPathForEdit(edit, sourceDurationForMoment(moment), moment.trim_start_seconds, moment.adjusted_duration);
     const resolutionKey = resolutionPresetForPlatform(platform);
+    const captions = normalizeCaptionSettings(edit.captions);
     return {
       rank: moment.rank,
       platform,
@@ -12575,7 +13422,8 @@ function buildExportData(){
       overlay: overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
       overlays,
       bumpers: edit.bumpers,
-      captions_enabled: captionEnabled(),
+      captions_enabled: captions.enabled,
+      caption_style: captions.style,
       clip_file: moment.clip_file,
       title: moment.title,
       peak_text: moment.peak_text,
@@ -13389,12 +14237,279 @@ function captionLines(){
 function captionWidth(){
   return Number(localStorage.getItem("cutted-caption-width") || 28);
 }
+function captionSize(){
+  return Number(localStorage.getItem("cutted-caption-size") || defaultCaptionSize());
+}
+function defaultCaptionSize(){
+  const format = document.body.dataset.format || "tiktok";
+  return format === "youtube" || format === "facebook" ? 54 : 72;
+}
+function captionTextColor(){
+  return normalizeCaptionColor(localStorage.getItem("cutted-caption-text-color"), "#ffffff");
+}
+function captionBackgroundColor(){
+  return normalizeCaptionBackground(localStorage.getItem("cutted-caption-background-color"));
+}
+function captionStyle(){
+  return {
+    size: captionSize(),
+    width: captionWidth(),
+    textColor: captionTextColor(),
+    backgroundColor: captionBackgroundColor()
+  };
+}
 function captionEnabled(){
   return localStorage.getItem("cutted-caption-enabled") !== "0";
+}
+function normalizeCaptionColor(value, fallback){
+  const raw = String(value || "").trim();
+  return /^#[0-9a-f]{6}$/i.test(raw) ? raw.toLowerCase() : fallback;
+}
+function normalizeCaptionBackground(value){
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw || raw === "transparent" || raw === "none") return "transparent";
+  return normalizeCaptionColor(raw, "#000000");
+}
+function storeCaptionStyle(style){
+  if (!style || typeof style !== "object") return;
+  if (Number.isFinite(Number(style.size))) localStorage.setItem("cutted-caption-size", String(clampNumber(Number(style.size), 24, 140)));
+  if (Number.isFinite(Number(style.width))) localStorage.setItem("cutted-caption-width", String(clampNumber(Number(style.width), 12, 56)));
+  if (style.textColor) localStorage.setItem("cutted-caption-text-color", normalizeCaptionColor(style.textColor, captionTextColor()));
+  if (style.backgroundColor) localStorage.setItem("cutted-caption-background-color", normalizeCaptionBackground(style.backgroundColor));
+}
+function captionSettingsForCard(card){
+  if (!card?.dataset?.rank) return defaultCaptionSettings();
+  return platformEditForRank(card.dataset.rank, activePlatformForRank(card.dataset.rank)).captions;
+}
+function syncPreviewCaptionsForOpenCards(){
+  document.querySelectorAll(".card[open]").forEach(card => syncPreviewCaptions(card));
+}
+function syncPreviewCaptions(card, time = null){
+  const layer = card?.querySelector("[data-preview-caption-layer]");
+  if (!layer) return;
+  const captions = captionSettingsForCard(card);
+  applyPreviewCaptionStyle(card, layer);
+  if (!captions.enabled) {
+    layer.dataset.visible = "false";
+    layer.innerHTML = "";
+    return;
+  }
+  const event = previewCaptionEventForCard(card, time);
+  if (!event) {
+    layer.dataset.visible = "false";
+    layer.innerHTML = "";
+    return;
+  }
+  const lines = wrapPreviewCaptionLines(event.text, captions.style.width, captionLines());
+  layer.innerHTML = `<span>${lines.map(escapeHtml).join("<br>")}</span>`;
+  layer.dataset.visible = "true";
+}
+function applyPreviewCaptionStyle(card, layer){
+  const style = captionSettingsForCard(card).style;
+  const media = card?.querySelector(".media");
+  const mediaWidth = media ? media.getBoundingClientRect().width : 0;
+  const platformWidth = previewCaptionPlatformWidth(card);
+  const fontSize = mediaWidth > 0 ? clampNumber((style.size / platformWidth) * mediaWidth, 14, 72) : style.size;
+  layer.style.setProperty("--preview-caption-size", `${fontSize.toFixed(2)}px`);
+  layer.style.setProperty("--preview-caption-color", style.textColor);
+  layer.style.setProperty("--preview-caption-bg", captionBackgroundCss(style.backgroundColor));
+  layer.style.setProperty("--preview-caption-padding", style.backgroundColor === "transparent" ? "0" : ".12em .28em");
+}
+function previewCaptionPlatformWidth(card){
+  const format = card?.dataset?.previewFormat || document.body.dataset.format || "tiktok";
+  return format === "youtube" ? 1920 : 1080;
+}
+function captionBackgroundCss(value){
+  if (value === "transparent") return "transparent";
+  const color = normalizeCaptionColor(value, "#000000");
+  return `${color}cc`;
+}
+function previewCaptionEventForCard(card, time = null){
+  const moment = previewMomentForCard(card);
+  if (!moment) return null;
+  const row = adjustedMoment(moment);
+  const events = previewCaptionEvents(row);
+  if (!events.length) return null;
+  const values = trimValues(card);
+  const video = primaryCameraVideo(card);
+  const raw = time === null && video && Number.isFinite(video.currentTime) ? video.currentTime : time;
+  const current = clampPreviewTime(values, Number(raw ?? values.trimStart));
+  const position = Math.max(0, current - values.trimStart);
+  return events.find(event => position >= event.start && position < event.end) || null;
+}
+function previewMomentForCard(card){
+  const rank = String(card?.dataset?.rank || "");
+  return (window.CUTTED_DATA.moments || []).find(item => String(item.rank) === rank) || null;
+}
+function previewCaptionEvents(row){
+  const duration = Math.max(Number(row.adjusted_duration || 0), .1);
+  const segmentEvents = previewCaptionEventsFromSegments(row);
+  if (segmentEvents.length) return normalizePreviewCaptionEvents(segmentEvents, duration);
+  const chunks = previewCaptionChunks(previewCaptionSourceText(row), captionWidth(), captionLines(), duration);
+  return normalizePreviewCaptionEvents(distributedPreviewCaptionEvents(chunks, duration), duration);
+}
+function previewCaptionEventsFromSegments(row){
+  const segments = Array.isArray(row.caption_segments) ? row.caption_segments : [];
+  const clipStart = Number(row.adjusted_start || row.start || 0);
+  const clipEnd = Number(row.adjusted_end || row.end || clipStart);
+  return segments.map(item => previewCaptionEventFromSegment(item, clipStart, clipEnd)).filter(Boolean);
+}
+function previewCaptionEventFromSegment(item, clipStart, clipEnd){
+  if (!item || typeof item !== "object") return null;
+  const start = Math.max(Number(item.start || 0), clipStart) - clipStart;
+  const end = Math.min(Number(item.end || 0), clipEnd) - clipStart;
+  const text = cleanPreviewCaptionText(String(item.text || ""));
+  if (!text || end <= start) return null;
+  return { start: Number(start.toFixed(3)), end: Number(Math.max(end, start + .35).toFixed(3)), text };
+}
+function normalizePreviewCaptionEvents(events, duration){
+  return events.slice().sort((a, b) => a.start - b.start || a.end - b.end).map((event, index, source) => {
+    const start = clampNumber(event.start, 0, duration);
+    let end = clampNumber(event.end, start, duration);
+    if (index + 1 < source.length) {
+      const nextStart = clampNumber(source[index + 1].start, 0, duration);
+      end = Math.min(end, Math.max(start, nextStart - .04));
+    }
+    return { start: Number(start.toFixed(3)), end: Number(end.toFixed(3)), text: event.text };
+  }).filter(event => event.end - event.start >= .12);
+}
+function distributedPreviewCaptionEvents(chunks, duration){
+  const slot = duration / Math.max(chunks.length, 1);
+  return chunks.map((text, index) => ({
+    start: Number((index * slot).toFixed(3)),
+    end: Number((index === chunks.length - 1 ? duration : (index + 1) * slot).toFixed(3)),
+    text
+  }));
+}
+function previewCaptionSourceText(row){
+  const transcript = String(row.transcript || "").trim();
+  if (transcript) return cleanPreviewCaptionText(transcript);
+  return cleanPreviewCaptionText(String(row.peak_text || row.title || "Legenda do corte"));
+}
+const PREVIEW_CAPTION_MOJIBAKE_REPLACEMENTS = new Map([
+  ["\u00c3\u00a1", "\u00e1"],
+  ["\u00c3\u00a0", "\u00e0"],
+  ["\u00c3\u00a2", "\u00e2"],
+  ["\u00c3\u00a3", "\u00e3"],
+  ["\u00c3\u00a4", "\u00e4"],
+  ["\u00c3\u00a9", "\u00e9"],
+  ["\u00c3\u00aa", "\u00ea"],
+  ["\u00c3\u00ad", "\u00ed"],
+  ["\u00c3\u00b3", "\u00f3"],
+  ["\u00c3\u00b4", "\u00f4"],
+  ["\u00c3\u00b5", "\u00f5"],
+  ["\u00c3\u00ba", "\u00fa"],
+  ["\u00c3\u00bc", "\u00fc"],
+  ["\u00c3\u00a7", "\u00e7"],
+  ["\u00c3\u0081", "\u00c1"],
+  ["\u00c3\u0080", "\u00c0"],
+  ["\u00c3\u0082", "\u00c2"],
+  ["\u00c3\u0083", "\u00c3"],
+  ["\u00c3\u0089", "\u00c9"],
+  ["\u00c3\u008a", "\u00ca"],
+  ["\u00c3\u008d", "\u00cd"],
+  ["\u00c3\u0093", "\u00d3"],
+  ["\u00c3\u0094", "\u00d4"],
+  ["\u00c3\u0095", "\u00d5"],
+  ["\u00c3\u009a", "\u00da"],
+  ["\u00c3\u009c", "\u00dc"],
+  ["\u00c3\u0087", "\u00c7"],
+  ["\u00c2\u00ba", "\u00ba"],
+  ["\u00c2\u00aa", "\u00aa"],
+  ["\u00c2\u00b7", "\u00b7"],
+  ["\u00c2\u00b4", "\u00b4"]
+]);
+function repairPreviewCaptionEncoding(value){
+  const text = String(value || "");
+  if (!/[ÃÂâ]/.test(text)) return text;
+  const repaired = repairPreviewCaptionEncodingAsUtf8(text);
+  const mapped = replacePreviewCaptionMojibakeSequences(repaired);
+  return previewCaptionMojibakeScore(mapped) <= previewCaptionMojibakeScore(text) ? mapped : text;
+}
+function repairPreviewCaptionEncodingAsUtf8(text){
+  try {
+    const bytes = Array.from(text, char => {
+      const code = char.charCodeAt(0);
+      if (code > 255) throw new Error("Not latin-1 text");
+      return code;
+    });
+    const repaired = new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(bytes));
+    return previewCaptionMojibakeScore(repaired) < previewCaptionMojibakeScore(text) ? repaired : text;
+  } catch (_error) {
+    return text;
+  }
+}
+function replacePreviewCaptionMojibakeSequences(text){
+  let clean = String(text || "");
+  PREVIEW_CAPTION_MOJIBAKE_REPLACEMENTS.forEach((target, source) => {
+    clean = clean.split(source).join(target);
+  });
+  return clean;
+}
+function previewCaptionMojibakeScore(text){
+  return (String(text || "").match(/Ã|Â|â€|â™|�/g) || []).length;
+}
+function cleanPreviewCaptionText(text){
+  return repairPreviewCaptionEncoding(text)
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/\u2026/g, "...")
+    .replace(/\ufeff/g, " ")
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/(^|\\s)(>{1,3}|-{1,2})\\s*/g, " ")
+    .replace(/\\s+/g, " ")
+    .replace(/\\s+([,.;:!?])/g, "$1")
+    .replace(/([,.;:!?])([^\\s,.;:!?])/g, "$1 $2")
+    .replace(/^(ne\\??|aham|uhum|hum|entao|mas)\\s+/i, "")
+    .trim()
+    .replace(/^-+|-+$/g, "")
+    .trim();
+}
+function previewCaptionChunks(text, charsPerLine, maxLines, duration){
+  const lineWidth = Math.max(12, Number(charsPerLine) || 28);
+  const lineCount = Math.max(1, Number(maxLines) || 2);
+  const capacity = Math.max(18, lineWidth * lineCount);
+  const chunks = greedyPreviewCaptionChunks(String(text || "").split(/\\s+/).filter(Boolean), capacity);
+  const limit = Math.max(1, Math.floor(Math.max(duration, 1) / 1.35));
+  if (chunks.length > limit) {
+    const limited = chunks.slice(0, limit);
+    limited[limited.length - 1] = ellipsizePreviewCaption(limited[limited.length - 1]);
+    return limited;
+  }
+  return chunks.length ? chunks : ["Legenda do corte"];
+}
+function wrapPreviewCaptionLines(text, charsPerLine, maxLines){
+  const lineWidth = Math.max(12, Number(charsPerLine) || 28);
+  const lineCount = Math.max(1, Number(maxLines) || 2);
+  const lines = greedyPreviewCaptionChunks(String(text || "").split(/\\s+/).filter(Boolean), lineWidth);
+  if (lines.length <= lineCount) return lines;
+  return lines.slice(0, lineCount - 1).concat(lines.slice(lineCount - 1).join(" "));
+}
+function greedyPreviewCaptionChunks(words, capacity){
+  const chunks = [];
+  let current = [];
+  words.forEach(word => {
+    const candidate = current.concat(word).join(" ");
+    if (current.length && candidate.length > capacity) {
+      chunks.push(current.join(" "));
+      current = [word];
+    } else {
+      current.push(word);
+    }
+  });
+  if (current.length) chunks.push(current.join(" "));
+  return chunks;
+}
+function ellipsizePreviewCaption(text){
+  const clean = String(text || "").replace(/[ .,;:]+$/g, "");
+  return clean ? `${clean}...` : "...";
 }
 function syncCaptionInputs(){
   document.querySelectorAll("[data-caption-lines]").forEach(input => { input.value = String(captionLines()); });
   document.querySelectorAll("[data-caption-width]").forEach(input => { input.value = String(captionWidth()); });
+  document.querySelectorAll("[data-caption-size]").forEach(input => { input.value = String(captionSize()); });
+  document.querySelectorAll("[data-caption-text-color]").forEach(input => { input.value = captionTextColor(); });
+  document.querySelectorAll("[data-caption-background-color]").forEach(input => { input.value = captionBackgroundColor() === "transparent" ? "#000000" : captionBackgroundColor(); });
   document.querySelectorAll("[data-caption-enabled]").forEach(input => { input.checked = captionEnabled(); });
   document.querySelectorAll("[data-caption-current]").forEach(item => { item.textContent = captionEnabled() ? "Ativada" : "Desligada"; });
 }
@@ -13425,7 +14540,7 @@ async function finalizeVideos(){
         queue: data,
         chars_per_line: captionWidth(),
         max_lines: captionLines(),
-        captions_enabled: captionEnabled(),
+        captions_enabled: queue.some(item => item.captions_enabled !== false),
         gallery_path: currentGalleryPath()
       })
     });
@@ -13542,6 +14657,287 @@ function renderFinalizeResults(files, options = {}){
     </details>`;
   }).join("");
 }
+const renderQueueState = { profile: localStorage.getItem("cuted-render-profile") || "medium", pollId: null, activityPollId: null, lastFocus: null, lastJobs: [] };
+function setupRenderQueuePanel(){
+  const modal = document.querySelector("[data-render-queue-modal]");
+  if (!modal) return;
+  document.querySelectorAll("[data-render-profile]").forEach(button => {
+    button.classList.toggle("active", button.dataset.renderProfile === renderQueueState.profile);
+    button.addEventListener("click", () => setRenderQueueProfile(button.dataset.renderProfile || "medium"));
+  });
+  document.querySelector("[data-render-queue-close]")?.addEventListener("click", () => closeRenderQueuePanel());
+  modal.addEventListener("click", event => { if (event.target === modal) closeRenderQueuePanel(); });
+  document.addEventListener("keydown", event => {
+    if (!modal.hidden && event.key === "Escape") closeRenderQueuePanel();
+  });
+  document.querySelector("[data-render-queue-list]")?.addEventListener("click", event => {
+    const target = event.target instanceof Element ? event.target : null;
+    const folderButton = target?.closest("[data-open-folder]");
+    if (folderButton) openResultFolder(folderButton.dataset.openFolder || "", folderButton);
+    const cancelButton = target?.closest("[data-render-cancel]");
+    if (cancelButton) cancelRenderQueueJob(cancelButton.dataset.renderCancel || "", cancelButton);
+    const removeButton = target?.closest("[data-render-remove]");
+    if (removeButton) removeRenderQueueJob(removeButton.dataset.renderRemove || "", removeButton);
+  });
+  loadRenderQueue();
+}
+function openRenderQueuePanel(){
+  const modal = document.querySelector("[data-render-queue-modal]");
+  if (!modal) return;
+  renderQueueState.lastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  modal.hidden = false;
+  modal.classList.remove("is-closing");
+  requestAnimationFrame(() => modal.classList.add("is-open"));
+  modal.querySelector("[data-render-queue-panel]")?.focus();
+  loadRenderQueue();
+  scheduleRenderQueuePoll();
+}
+function closeRenderQueuePanel(){
+  const modal = document.querySelector("[data-render-queue-modal]");
+  if (!modal || modal.hidden) return;
+  window.clearTimeout(renderQueueState.pollId);
+  modal.classList.remove("is-open");
+  modal.classList.add("is-closing");
+  window.setTimeout(() => {
+    modal.hidden = true;
+    modal.classList.remove("is-closing");
+    renderQueueState.lastFocus?.focus?.();
+    renderQueueState.lastFocus = null;
+  }, 190);
+}
+function scheduleRenderQueuePoll(){
+  window.clearTimeout(renderQueueState.pollId);
+  renderQueueState.pollId = window.setTimeout(async () => {
+    const modal = document.querySelector("[data-render-queue-modal]");
+    if (!modal || modal.hidden) return;
+    await loadRenderQueue();
+    scheduleRenderQueuePoll();
+  }, 1800);
+}
+async function loadRenderQueue(){
+  const status = document.querySelector("[data-render-queue-status]");
+  try {
+    const response = await fetch(`/api/render-jobs?gallery_path=${encodeURIComponent(currentGalleryPath())}`, { cache: "no-store" });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao carregar fila.");
+    renderQueueJobs(payload.jobs || []);
+  } catch (error) {
+    if (status) status.textContent = error.message || "Nao consegui carregar a fila.";
+  }
+}
+function renderQueueJobs(jobs){
+  const list = document.querySelector("[data-render-queue-list]");
+  const status = document.querySelector("[data-render-queue-status]");
+  const safeJobs = Array.isArray(jobs) ? jobs : [];
+  renderQueueState.lastJobs = safeJobs;
+  const running = safeJobs.filter(job => job.status === "rendering" || job.status === "queued").length;
+  const ready = safeJobs.filter(job => job.status === "ready").length;
+  updateHeaderRenderActivity(safeJobs);
+  if (status) status.textContent = safeJobs.length ? `${running} em fila; ${ready} pronto(s).` : "Nenhum render em andamento.";
+  if (!list) return;
+  if (!safeJobs.length) {
+    list.innerHTML = '<div class="render-empty">Quando um corte for enviado, ele aparece aqui.</div>';
+    return;
+  }
+  list.innerHTML = safeJobs.map(renderQueueJobHtml).join("");
+}
+function updateHeaderRenderActivity(jobs){
+  const button = document.getElementById("finalize-videos");
+  if (!button) return;
+  const active = (Array.isArray(jobs) ? jobs : []).some(job => job.status === "rendering" || job.status === "queued");
+  button.classList.toggle("is-rendering", active);
+  button.setAttribute("aria-label", active ? "Render em andamento" : "Renderizar");
+  button.title = active ? "Render em andamento" : "Renderizar";
+  scheduleHeaderRenderActivityPoll(active);
+}
+function scheduleHeaderRenderActivityPoll(active){
+  window.clearTimeout(renderQueueState.activityPollId);
+  if (!active) return;
+  renderQueueState.activityPollId = window.setTimeout(async () => {
+    await loadRenderQueue();
+  }, 2400);
+}
+function renderQueueJobHtml(job){
+  const summary = job.summary || {};
+  const id = String(job.id || "");
+  const title = `#${String(summary.rank || "").padStart(2, "0")} ${summary.title || "Render CUTED"}`;
+  const eta = Number(job.eta_seconds || 0);
+  const meta = [
+    summary.platform || "",
+    summary.duration ? fixed(summary.duration) : "",
+    renderProfileLabel(job.resource_profile),
+    job.speed || "",
+    eta > 0 && job.status === "rendering" ? `${formatRenderEta(eta)} restantes` : ""
+  ].filter(Boolean).join(" - ");
+  const progress = Math.max(0, Math.min(100, Number(job.progress || 0)));
+  const folder = job.export_dir || job.output_dir || "";
+  const canOpen = job.status === "ready" && folder;
+  const canCancel = job.status === "queued" || job.status === "rendering";
+  const canRemove = !canCancel;
+  return `<article class="render-job-card" data-status="${escapeAttr(job.status || "queued")}">
+    <div class="render-job-main">
+      <div class="render-job-title"><span class="render-job-pill">${escapeHtml(renderStatusLabel(job.status))}</span><strong>${escapeHtml(title)}</strong></div>
+      <div class="render-job-meta">${escapeHtml(job.message || meta || "Render local")}</div>
+      <div class="render-job-progress" style="--progress:${progress}%"><span></span></div>
+      <div class="render-job-meta">${escapeHtml(`${Math.round(progress)}%${meta ? ` - ${meta}` : ""}`)}</div>
+      ${job.error ? `<div class="render-job-meta">${escapeHtml(job.error)}</div>` : ""}
+    </div>
+    <div class="render-job-actions">
+      ${canOpen ? `<button class="primary" type="button" data-open-folder="${escapeAttr(folder)}">Abrir pasta</button>` : `<button type="button" disabled>${escapeHtml(renderStatusLabel(job.status))}</button>`}
+      ${canCancel ? `<button type="button" data-render-cancel="${escapeAttr(id)}">Parar</button>` : ""}
+      ${canRemove ? `<button type="button" data-render-remove="${escapeAttr(id)}">Remover</button>` : ""}
+    </div>
+  </article>`;
+}
+function renderStatusLabel(status){
+  const labels = { queued: "Fila", rendering: "Render", ready: "Pronto", failed: "Falha", cancelled: "Cancelado" };
+  return labels[status] || "Fila";
+}
+function renderProfileLabel(profile){
+  const labels = { eco: "Eco", medium: "Medio", high: "Alto" };
+  return labels[profile] || "Medio";
+}
+function formatRenderEta(value){
+  const seconds = Math.max(0, Math.round(Number(value) || 0));
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return minutes ? `${minutes}m ${String(rest).padStart(2, "0")}s` : `${rest}s`;
+}
+async function setRenderQueueProfile(profile){
+  renderQueueState.profile = profile || "medium";
+  localStorage.setItem("cuted-render-profile", renderQueueState.profile);
+  document.querySelectorAll("[data-render-profile]").forEach(item => {
+    item.classList.toggle("active", item.dataset.renderProfile === renderQueueState.profile);
+  });
+  const queued = renderQueueState.lastJobs.filter(job => job.status === "queued");
+  const rendering = renderQueueState.lastJobs.some(job => job.status === "rendering");
+  const status = document.querySelector("[data-render-queue-status]");
+  if (!queued.length) {
+    if (status && rendering) {
+      status.textContent = `${renderProfileLabel(renderQueueState.profile)} salvo para proximos renders. Render atual mantem os threads atuais.`;
+    }
+    return;
+  }
+  if (status) status.textContent = `Atualizando ${queued.length} render(es) em fila para ${renderProfileLabel(renderQueueState.profile)}...`;
+  try {
+    const results = await Promise.all(queued.map(job => updateRenderQueueProfileJob(String(job.id || ""), renderQueueState.profile)));
+    const changed = results.filter(item => item.changed).length;
+    if (status) status.textContent = changed
+      ? `${changed} render(es) em fila atualizados para ${renderProfileLabel(renderQueueState.profile)}.`
+      : `${renderProfileLabel(renderQueueState.profile)} salvo para proximos renders.`;
+    await loadRenderQueue();
+  } catch (error) {
+    if (status) status.textContent = error.message || "Nao consegui atualizar o perfil da fila.";
+  }
+}
+async function updateRenderQueueProfileJob(jobId, profile){
+  if (!jobId) return { changed: false };
+  const response = await fetch(`/api/render-jobs/${encodeURIComponent(jobId)}/profile`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ gallery_path: currentGalleryPath(), resource_profile: profile })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload.ok) throw new Error(payload.error || "Nao consegui atualizar o perfil da fila.");
+  if (Array.isArray(payload.jobs)) renderQueueState.lastJobs = payload.jobs;
+  return payload;
+}
+function renderQueuePayloadForCard(card){
+  const data = buildExportData();
+  const rank = String(card.dataset.rank || "");
+  const platform = activePlatformForRank(rank);
+  const row = (data.caption_queue || []).find(item => String(item.rank) === rank && item.platform === platform);
+  if (!row) throw new Error("Este corte ainda nao esta pronto para render.");
+  validateActiveRenderRow(card, row, platform);
+  return Object.assign({}, data, { caption_queue: [row] });
+}
+function validateActiveRenderRow(card, row, platform){
+  const rank = String(card?.dataset?.rank || "");
+  const duration = Number(row.adjusted_duration || cameraTimelineDurationForCard(card));
+  const edit = platformEditForRank(rank, platform);
+  const expectedPreset = resolutionPresetForPlatform(platform);
+  const values = trimValues(card);
+  const expectedPath = exportCameraPathForEdit(edit, values.duration, values.trimStart, duration);
+  const actualPath = normalizeCameraPath(row.camera_path);
+  if (row.resolution_preset !== expectedPreset) {
+    throw new Error("O render nao bate com o formato ativo. Reabra o corte e tente de novo.");
+  }
+  if (JSON.stringify(actualPath) !== JSON.stringify(expectedPath)) {
+    throw new Error("A camera ativa mudou antes do envio. Reabra o corte e tente de novo.");
+  }
+}
+async function sendCardToRenderQueue(card){
+  const status = card?.__cutedControlSurface;
+  if (!card || card.dataset.renderSubmitting === "1") return;
+  card.dataset.renderSubmitting = "1";
+  try {
+    const queue = renderQueuePayloadForCard(card);
+    const response = await fetch("/api/render-jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        queue,
+        chars_per_line: captionWidth(),
+        max_lines: captionLines(),
+        captions_enabled: queue.caption_queue.some(item => item.captions_enabled !== false),
+        gallery_path: currentGalleryPath(),
+        resource_profile: renderQueueState.profile
+      })
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao enviar para render.");
+    if (payload.duplicate) {
+      cancelControlSurfaceReady(card);
+      card?.__cutedControlSurface?.update?.({ renderQueued: false });
+      card?.__cutedControlSurface?.setStatus?.({ kind: "ready", label: "Ja esta renderizando", tone: "green" }, 2600);
+      await loadRenderQueue();
+      return;
+    }
+    cancelControlSurfaceReady(card);
+    card?.__cutedControlSurface?.update?.({ renderQueued: false });
+    card?.__cutedControlSurface?.setStatus?.({ kind: "ready", label: "SENT TO RENDER", tone: "green" }, 1800);
+    await loadRenderQueue();
+  } catch (error) {
+    updateControlSurfaceForCard(card);
+    card?.__cutedControlSurface?.update?.({ renderQueued: false });
+    status?.setStatus?.({ kind: "error", label: error.message || "Render falhou", tone: "red" }, 2200);
+    showAppNotice(error.message || "Nao consegui enviar para render.");
+  } finally {
+    delete card.dataset.renderSubmitting;
+  }
+}
+async function cancelRenderQueueJob(jobId, button){
+  if (!jobId) return;
+  await updateRenderQueueJob(`/api/render-jobs/${encodeURIComponent(jobId)}/cancel`, button, "Parando...");
+}
+async function removeRenderQueueJob(jobId, button){
+  if (!jobId) return;
+  await updateRenderQueueJob(`/api/render-jobs/${encodeURIComponent(jobId)}/remove`, button, "Removendo...");
+}
+async function updateRenderQueueJob(url, button, label){
+  const previous = button?.textContent || "";
+  try {
+    if (button) {
+      button.disabled = true;
+      button.textContent = label;
+    }
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gallery_path: currentGalleryPath() })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Nao consegui atualizar a fila.");
+    if (Array.isArray(payload.jobs)) renderQueueJobs(payload.jobs);
+    else await loadRenderQueue();
+  } catch (error) {
+    if (button) {
+      button.disabled = false;
+      button.textContent = previous;
+    }
+    showAppNotice(error.message || "Nao consegui atualizar a fila.");
+  }
+}
 async function openResultFolder(path, button){
   if (!path) return;
   const previous = button?.textContent || "Abrir pasta";
@@ -13595,6 +14991,9 @@ function clearNewProjectState(){
   localStorage.removeItem("cutted-tab");
   localStorage.removeItem("cutted-caption-lines");
   localStorage.removeItem("cutted-caption-width");
+  localStorage.removeItem("cutted-caption-size");
+  localStorage.removeItem("cutted-caption-text-color");
+  localStorage.removeItem("cutted-caption-background-color");
   localStorage.removeItem("cutted-caption-enabled");
 }
 function resetCardPanels(card){
@@ -13668,6 +15067,7 @@ document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
   btn.addEventListener("click", () => { applyTab(btn.dataset.tab); renderCaptionQueue(); });
 });
 setupSettingsPanel();
+setupRenderQueuePanel();
 setupImportPathButtons();
 setupImportKeyBanner();
 document.querySelector("[data-empty-import]")?.addEventListener("click", () => applyTab("import"));
@@ -13857,8 +15257,7 @@ document.querySelectorAll(".card").forEach(card => {
 });
 document.getElementById("reset-ui").addEventListener("click", startNewProject);
 document.getElementById("finalize-videos").addEventListener("click", () => {
-  applyTab("final");
-  finalizeVideos();
+  openRenderQueuePanel();
 });
 document.querySelector("[data-render-results]")?.addEventListener("click", event => {
   const target = event.target instanceof Element ? event.target : null;
@@ -13871,12 +15270,16 @@ document.querySelector("[data-render-results]")?.addEventListener("click", event
   if (!copyButton) return;
   copyResultPath(copyButton.dataset.copyPath || "", copyButton);
 });
-document.querySelectorAll("[data-caption-lines],[data-caption-width],[data-caption-enabled]").forEach(input => {
+document.querySelectorAll("[data-caption-lines],[data-caption-width],[data-caption-size],[data-caption-text-color],[data-caption-background-color],[data-caption-enabled]").forEach(input => {
   const update = () => {
     if (input.matches("[data-caption-lines]")) localStorage.setItem("cutted-caption-lines", input.value);
     if (input.matches("[data-caption-width]")) localStorage.setItem("cutted-caption-width", input.value);
+    if (input.matches("[data-caption-size]")) localStorage.setItem("cutted-caption-size", input.value);
+    if (input.matches("[data-caption-text-color]")) localStorage.setItem("cutted-caption-text-color", normalizeCaptionColor(input.value, "#ffffff"));
+    if (input.matches("[data-caption-background-color]")) localStorage.setItem("cutted-caption-background-color", normalizeCaptionBackground(input.value));
     if (input.matches("[data-caption-enabled]")) localStorage.setItem("cutted-caption-enabled", input.checked ? "1" : "0");
     syncCaptionInputs();
+    syncPreviewCaptionsForOpenCards();
     renderFinalStage();
   };
   input.addEventListener("input", update);

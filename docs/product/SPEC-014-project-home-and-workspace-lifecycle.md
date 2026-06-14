@@ -6,7 +6,7 @@ Turn CUTED from a generated-gallery prototype into a first-class local app with
 a clear project lifecycle:
 
 ```text
-Open CUTED -> Project Home -> New/Open Project -> Edit -> Render/Submit
+Open CUTED -> Project Home -> New/Open Project -> Edit -> Render local
 ```
 
 The user should not feel that an old sample was loaded accidentally, that
@@ -56,7 +56,6 @@ CUTED App
     Edit
     Project switcher
     Render local
-    Submit / publish (future)
     Results
     Settings
 ```
@@ -141,11 +140,12 @@ Render should become a project action:
 ```text
 Renderizar
   Local
-  Submit (future)
   Results
 ```
 
-For the current local beta, only `Renderizar local` is in scope.
+For the current local beta, only `Renderizar local` is in scope. Submit,
+calendar, and publishing workflows are intentionally out of this product branch
+and should be explored as a separate program when needed.
 
 ## Project Switcher
 

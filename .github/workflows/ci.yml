@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "codex/**"
+
+jobs:
+  test:
+    name: Tests and live timeline build
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run Python tests
+        run: python -m unittest discover -s tests -p "test_*.py"
+
+      - name: Compile CUTED script
+        run: python -m py_compile tools/cutted/scripts/cutted.py
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: prototypes/live-timeline/package-lock.json
+
+      - name: Install live timeline dependencies
+        working-directory: prototypes/live-timeline
+        run: npm ci
+
+      - name: Build live timeline library
+        working-directory: prototypes/live-timeline
+        run: npm run build:lib
