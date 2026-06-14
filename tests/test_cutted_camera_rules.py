@@ -310,6 +310,68 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIn("showVolume: false", html)
         self.assertIn("function renderCardRowTimeline", html)
 
+    def test_timed_overlay_contract_is_normalized_for_render(self) -> None:
+        row = {
+            "overlays": [{
+                "kind": "text",
+                "text": "Oferta",
+                "start_seconds": 1.5,
+                "duration_seconds": 2.5,
+                "in_animation": "fade",
+                "out_animation": "fade",
+                "placement_mode": "full",
+            }],
+            "adjusted_duration": 8.0,
+        }
+
+        layer = CUTTED.overlay_layers_from_row(row)[0]
+        overlay = CUTTED.overlay_filter(row, CUTTED.PLATFORM_PRESETS["tiktok"], 8.0)
+
+        self.assertEqual(layer["start_seconds"], 1.5)
+        self.assertEqual(layer["duration_seconds"], 2.5)
+        self.assertEqual(layer["in_animation"], "fade")
+        self.assertEqual(layer["out_animation"], "fade")
+        self.assertEqual(layer["placement_mode"], "full")
+        self.assertIn("enable='between(t,1.500,4.000)'", overlay)
+        self.assertIn(":alpha='", overlay)
+
+    def test_legacy_overlay_without_timing_stays_full_clip(self) -> None:
+        row = {"overlays": [{"kind": "text", "text": "Sempre"}], "adjusted_duration": 8.0}
+
+        overlay = CUTTED.overlay_filter(row, CUTTED.PLATFORM_PRESETS["tiktok"], 8.0)
+
+        self.assertNotIn("enable='between", overlay)
+
+    def test_image_overlay_complex_filter_uses_timing_window(self) -> None:
+        row = {
+            "overlays": [{
+                "kind": "image",
+                "label": "Logo",
+                "image_file": "overlay-assets/logo.png",
+                "start_seconds": 2.0,
+                "duration_seconds": 3.0,
+                "in_animation": "fade",
+                "out_animation": "fade",
+            }]
+        }
+
+        filter_arg = CUTTED.image_overlay_complex_filter(CUTTED.PLATFORM_PRESETS["tiktok"], row, 9.0, [])
+
+        self.assertIn("fade=t=in:st=2.000", filter_arg)
+        self.assertIn("fade=t=out:st=4.650", filter_arg)
+        self.assertIn("enable='between(t,2.000,5.000)'", filter_arg)
+
+    def test_overlay_editor_exposes_timing_and_motion_controls(self) -> None:
+        html = CUTTED.page_html("Teste", "", "{}", "")
+
+        self.assertIn("data-layer-start", html)
+        self.assertIn("data-layer-duration", html)
+        self.assertIn("data-layer-in-animation", html)
+        self.assertIn("data-layer-out-animation", html)
+        self.assertIn("data-layer-placement-mode", html)
+        self.assertIn("function syncTimedOverlayPreview", html)
+        self.assertIn("overlayLayersForRank(card.dataset.rank, platform).flatMap", html)
+
     def test_export_buttons_use_resolution_formats(self) -> None:
         moment = CUTTED.Moment(
             rank=1,

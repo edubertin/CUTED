@@ -7143,11 +7143,12 @@ def render_captioned_clip(
     input_path: Path, output_path: Path, subtitle_path: Path | None, row: dict[str, object],
     preset: PlatformPreset, base_dir: Path, out_dir: Path, ffmpeg: str
 ) -> dict[str, object]:
+    duration = caption_duration(row)
     filters = [f"ass={subtitle_filter_path(subtitle_path, out_dir)}"] if subtitle_path else []
     effect = effect_filter(row)
     if effect:
         filters.append(effect)
-    overlay = overlay_filter(row, preset)
+    overlay = overlay_filter(row, preset, duration)
     if overlay:
         filters.append(overlay)
     command = captioned_ffmpeg_command(input_path, output_path, row, preset, ffmpeg, filters)
@@ -7390,7 +7391,7 @@ def render_platform_clip(
     input_path: Path, output_path: Path, start: float, duration: float,
     preset: PlatformPreset, row: dict[str, object], ffmpeg: str
 ) -> None:
-    filters = post_camera_filters(preset, row)
+    filters = post_camera_filters(preset, row, duration)
     base = [
         ffmpeg, "-y", "-ss", fmt_time(start), "-i", str(input_path), "-t", fmt_time(duration),
     ]
@@ -7454,12 +7455,12 @@ def video_filter(preset: PlatformPreset, row: dict[str, object]) -> str:
     return ",".join(filters)
 
 
-def post_camera_filters(preset: PlatformPreset, row: dict[str, object]) -> list[str]:
+def post_camera_filters(preset: PlatformPreset, row: dict[str, object], duration: float | None = None) -> list[str]:
     filters = []
     effect = effect_filter(row)
     if effect:
         filters.append(effect)
-    overlay = overlay_filter(row, preset)
+    overlay = overlay_filter(row, preset, duration)
     if overlay:
         filters.append(overlay)
     return filters
@@ -7487,8 +7488,8 @@ def image_overlay_complex_filter(
     for index, layer in enumerate(image_layers):
         image_label = f"img{index}"
         output_label = "vout" if index == len(image_layers) - 1 else f"vimg{index}"
-        parts.append(image_overlay_source_filter(layer, preset, image_label))
-        parts.append(image_overlay_compose_filter(layer, preset, previous, image_label, output_label))
+        parts.append(image_overlay_source_filter(layer, preset, image_label, duration))
+        parts.append(image_overlay_compose_filter(layer, preset, previous, image_label, output_label, duration))
         previous = output_label
     return ";".join(parts)
 
@@ -7500,20 +7501,22 @@ def image_overlay_layers_from_row(row: dict[str, object]) -> list[dict[str, obje
     ]
 
 
-def image_overlay_source_filter(overlay: dict[str, object], preset: PlatformPreset, label: str) -> str:
+def image_overlay_source_filter(overlay: dict[str, object], preset: PlatformPreset, label: str, duration: float) -> str:
     width = int(round(preset.width * float(overlay["width"])))
     opacity = clamp(float(overlay["opacity"]) / 100.0, 0.1, 1.0)
     path = ffmpeg_filter_path(Path(str(overlay["image_file"])))
-    return f"movie='{path}',scale={width}:-1,format=rgba,colorchannelmixer=aa={opacity:.2f}[{label}]"
+    source_filters = image_overlay_source_filters(overlay, width, opacity, duration)
+    return f"movie='{path}',{source_filters}[{label}]"
 
 
 def image_overlay_compose_filter(
-    overlay: dict[str, object], preset: PlatformPreset, input_label: str, image_label: str, output_label: str
+    overlay: dict[str, object], preset: PlatformPreset, input_label: str, image_label: str, output_label: str, duration: float
 ) -> str:
     width = int(round(preset.width * float(overlay["width"])))
     x = min(int(round(preset.width * float(overlay["x"]))), max(preset.width - width, 0))
     y = min(int(round(preset.height * float(overlay["y"]))), preset.height)
-    return f"[{input_label}][{image_label}]overlay={x}:{y}:format=auto:eof_action=repeat[{output_label}]"
+    enable = overlay_enable_suffix(overlay, duration)
+    return f"[{input_label}][{image_label}]overlay={x}:{y}:format=auto:eof_action=repeat{enable}[{output_label}]"
 
 
 def camera_filter(preset: PlatformPreset, row: dict[str, object]) -> str:
@@ -7922,18 +7925,23 @@ def effect_from_row(row: dict[str, object]) -> dict[str, object]:
     return {"key": preset.key, "label": preset.label, "intensity": intensity}
 
 
-def overlay_filter(row: dict[str, object], preset: PlatformPreset) -> str:
-    filters = [overlay_layer_filter(layer, preset) for layer in overlay_layers_from_row(row) if layer.get("kind") != "image"]
+def overlay_filter(row: dict[str, object], preset: PlatformPreset, duration: float | None = None) -> str:
+    clip_duration = duration if duration is not None else caption_duration(row)
+    filters = [
+        overlay_layer_filter(layer, preset, clip_duration)
+        for layer in overlay_layers_from_row(row)
+        if layer.get("kind") != "image"
+    ]
     return ",".join(item for item in filters if item)
 
 
-def overlay_layer_filter(overlay: dict[str, object], preset: PlatformPreset) -> str:
+def overlay_layer_filter(overlay: dict[str, object], preset: PlatformPreset, duration: float) -> str:
     if overlay["key"] == "none":
         return ""
     if overlay.get("kind") == "image":
-        return image_overlay_filter(overlay, preset)
+        return image_overlay_filter(overlay, preset, duration)
     if overlay.get("kind") == "text":
-        return text_overlay_filter(overlay, preset)
+        return text_overlay_filter(overlay, preset, duration)
     card = OVERLAY_PRESETS[str(overlay["key"])]
     box_w = int(round(preset.width * float(overlay["width"])))
     box_h = max(int(round(box_w * 0.28)), int(round(preset.height * 0.052)))
@@ -7950,15 +7958,16 @@ def overlay_layer_filter(overlay: dict[str, object], preset: PlatformPreset) -> 
     font = ffmpeg_filter_path(find_overlay_font())
     title = ffmpeg_text_value(card.title)
     subtitle = ffmpeg_text_value(card.subtitle)
+    enable = overlay_enable_suffix(overlay, duration)
     return ",".join([
-        f"drawbox=x={x}:y={y}:w={box_w}:h={box_h}:color=black@{opacity:.2f}:t=fill",
-        f"drawbox=x={x}:y={y}:w={bar_w}:h={box_h}:color={card.accent}@1.0:t=fill",
-        f"drawtext=fontfile='{font}':text='{title}':x={text_x}:y={title_y}:fontsize={title_size}:fontcolor=white",
-        f"drawtext=fontfile='{font}':text='{subtitle}':x={text_x}:y={subtitle_y}:fontsize={subtitle_size}:fontcolor=white@0.78",
+        f"drawbox=x={x}:y={y}:w={box_w}:h={box_h}:color=black@{opacity:.2f}:t=fill{enable}",
+        f"drawbox=x={x}:y={y}:w={bar_w}:h={box_h}:color={card.accent}@1.0:t=fill{enable}",
+        f"drawtext=fontfile='{font}':text='{title}':x={text_x}:y={title_y}:fontsize={title_size}:fontcolor=white{enable}",
+        f"drawtext=fontfile='{font}':text='{subtitle}':x={text_x}:y={subtitle_y}:fontsize={subtitle_size}:fontcolor=white@0.78{enable}",
     ])
 
 
-def text_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> str:
+def text_overlay_filter(overlay: dict[str, object], preset: PlatformPreset, duration: float) -> str:
     text = str(overlay.get("text") or overlay.get("label") or "").strip()
     if not text:
         return ""
@@ -7973,19 +7982,22 @@ def text_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> s
     font = ffmpeg_filter_path(find_overlay_font())
     color = ffmpeg_color(str(overlay.get("color") or "#ffffff"))
     escaped_text = ffmpeg_text_value(text)
+    enable = overlay_enable_suffix(overlay, duration)
+    alpha = overlay_text_alpha_option(overlay, duration, opacity)
+    font_color = f"fontcolor={color}" if alpha else f"fontcolor={color}@{opacity:.2f}"
     filters = []
     if bool(overlay.get("background_enabled")):
         background = ffmpeg_color(str(overlay.get("background_color") or "#000000"))
         background_opacity = clamp(float(overlay.get("background_opacity") or 70.0) / 100.0, 0.0, 1.0)
-        filters.append(f"drawbox=x={x}:y={y}:w={box_w}:h={box_h}:color={background}@{background_opacity:.2f}:t=fill")
+        filters.append(f"drawbox=x={x}:y={y}:w={box_w}:h={box_h}:color={background}@{background_opacity:.2f}:t=fill{enable}")
     filters.append(
         f"drawtext=fontfile='{font}':text='{escaped_text}':x={x + pad}:y={text_y}:"
-        f"fontsize={font_size}:fontcolor={color}@{opacity:.2f}"
+        f"fontsize={font_size}:{font_color}{alpha}{enable}"
     )
     return ",".join(filters)
 
 
-def image_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> str:
+def image_overlay_filter(overlay: dict[str, object], preset: PlatformPreset, duration: float) -> str:
     image_file = str(overlay.get("image_file") or "")
     if not image_file:
         return ""
@@ -7994,7 +8006,9 @@ def image_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> 
     y = min(int(round(preset.height * float(overlay["y"]))), preset.height)
     opacity = clamp(float(overlay["opacity"]) / 100.0, 0.1, 1.0)
     path = ffmpeg_filter_path(Path(image_file))
-    return f"movie='{path}',scale={width}:-1,colorchannelmixer=aa={opacity:.2f}[img];[in][img]overlay={x}:{y}:format=auto[out]"
+    image_filters = image_overlay_source_filters(overlay, width, opacity, duration)
+    enable = overlay_enable_suffix(overlay, duration)
+    return f"movie='{path}',{image_filters}[img];[in][img]overlay={x}:{y}:format=auto{enable}[out]"
 
 
 def overlay_from_row(row: dict[str, object]) -> dict[str, object]:
@@ -8039,6 +8053,7 @@ def overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
         "y": clamp(float(raw.get("y") if raw.get("y") is not None else 0.78), 0.0, 1.0),
         "width": clamp(float(raw.get("width") if raw.get("width") is not None else 0.34), 0.18, 0.72),
         "opacity": clamp(float(raw.get("opacity") if raw.get("opacity") is not None else 95.0), 35.0, 100.0),
+        **overlay_timing_from_raw(raw),
     }
 
 
@@ -8058,6 +8073,7 @@ def image_overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
         "opacity": clamp(float(raw.get("opacity") if raw.get("opacity") is not None else 100.0), 10.0, 100.0),
         "image_file": image_file,
         "image_data_url": image_data_url,
+        **overlay_timing_from_raw(raw),
     }
 
 
@@ -8085,6 +8101,7 @@ def text_overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
             0.0,
             100.0,
         ),
+        **overlay_timing_from_raw(raw),
     }
 
 
@@ -8128,6 +8145,100 @@ def safe_hex_color(value: str, fallback: str) -> str:
 
 def ffmpeg_color(value: str) -> str:
     return "0x" + safe_hex_color(value, "#ffffff").removeprefix("#")
+
+
+def overlay_timing_from_raw(raw: dict[str, object]) -> dict[str, object]:
+    timing = raw.get("timing") if isinstance(raw.get("timing"), dict) else {}
+    motion = raw.get("motion") if isinstance(raw.get("motion"), dict) else {}
+    start = raw.get("start_seconds", timing.get("start"))
+    duration = raw.get("duration_seconds", timing.get("duration"))
+    return {
+        "start_seconds": clamp_float(start, 0.0, 600.0, 0.0),
+        "duration_seconds": clamp_float(duration, 0.0, 600.0, 0.0),
+        "in_animation": overlay_animation_key(raw.get("in_animation", motion.get("in"))),
+        "out_animation": overlay_animation_key(raw.get("out_animation", motion.get("out"))),
+        "placement_mode": overlay_placement_mode(raw.get("placement_mode")),
+    }
+
+
+def clamp_float(value: object, minimum: float, maximum: float, fallback: float) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return fallback
+    if not math.isfinite(number):
+        return fallback
+    return clamp(number, minimum, maximum)
+
+
+def overlay_animation_key(value: object) -> str:
+    key = str(value or "none")
+    return key if key in {"none", "fade", "slide-up", "slide-down", "pop"} else "none"
+
+
+def overlay_placement_mode(value: object) -> str:
+    key = str(value or "safe")
+    return key if key in {"safe", "full", "video"} else "safe"
+
+
+def overlay_start_seconds(overlay: dict[str, object]) -> float:
+    return clamp_float(overlay.get("start_seconds"), 0.0, 600.0, 0.0)
+
+
+def overlay_end_seconds(overlay: dict[str, object], duration: float) -> float:
+    start = overlay_start_seconds(overlay)
+    clip_duration = max(float(duration or 0.0), 0.0)
+    layer_duration = clamp_float(overlay.get("duration_seconds"), 0.0, 600.0, 0.0)
+    if layer_duration <= 0.0:
+        return clip_duration if clip_duration > 0.0 else start
+    return min(start + layer_duration, clip_duration) if clip_duration > 0.0 else start + layer_duration
+
+
+def overlay_has_timing(overlay: dict[str, object], duration: float) -> bool:
+    start = overlay_start_seconds(overlay)
+    end = overlay_end_seconds(overlay, duration)
+    return start > 0.0 or (duration > 0.0 and end < duration - 0.001)
+
+
+def overlay_enable_suffix(overlay: dict[str, object], duration: float) -> str:
+    if not overlay_has_timing(overlay, duration):
+        return ""
+    start = overlay_start_seconds(overlay)
+    end = max(overlay_end_seconds(overlay, duration), start + 0.05)
+    return f":enable='between(t,{start:.3f},{end:.3f})'"
+
+
+def overlay_text_alpha_option(overlay: dict[str, object], duration: float, opacity: float) -> str:
+    expression = overlay_alpha_expression(overlay, duration, opacity)
+    return f":alpha='{expression}'" if expression else ""
+
+
+def overlay_alpha_expression(overlay: dict[str, object], duration: float, opacity: float) -> str:
+    start = overlay_start_seconds(overlay)
+    end = overlay_end_seconds(overlay, duration)
+    length = max(end - start, 0.0)
+    if length <= 0.0:
+        return ""
+    fade = min(0.35, length / 2.0)
+    expression = f"{opacity:.3f}"
+    if overlay.get("in_animation") == "fade" and fade > 0.0:
+        expression = f"if(lt(t,{start + fade:.3f}),{opacity:.3f}*(t-{start:.3f})/{fade:.3f},{expression})"
+    if overlay.get("out_animation") == "fade" and fade > 0.0:
+        expression = f"if(gt(t,{end - fade:.3f}),{opacity:.3f}*({end:.3f}-t)/{fade:.3f},{expression})"
+    return expression if expression != f"{opacity:.3f}" else ""
+
+
+def image_overlay_source_filters(overlay: dict[str, object], width: int, opacity: float, duration: float) -> str:
+    filters = [f"scale={width}:-1", "format=rgba", f"colorchannelmixer=aa={opacity:.2f}"]
+    start = overlay_start_seconds(overlay)
+    end = overlay_end_seconds(overlay, duration)
+    length = max(end - start, 0.0)
+    fade = min(0.35, length / 2.0)
+    if overlay.get("in_animation") == "fade" and fade > 0.0:
+        filters.append(f"fade=t=in:st={start:.3f}:d={fade:.3f}:alpha=1")
+    if overlay.get("out_animation") == "fade" and fade > 0.0:
+        filters.append(f"fade=t=out:st={end - fade:.3f}:d={fade:.3f}:alpha=1")
+    return ",".join(filters)
 
 
 def clamp(value: float, minimum: float, maximum: float) -> float:
@@ -10502,6 +10613,7 @@ button[data-action=discard],.result-actions a.secondary,.result-actions button.s
 .preview-camera-popover{overflow:hidden}.preview-camera-popover--live{gap:7px;padding:11px;border-color:rgba(17,162,207,.42);border-radius:12px;background:radial-gradient(circle at 26% 0,rgba(17,162,207,.26),transparent 36%),linear-gradient(135deg,rgba(231,231,232,.16),transparent 32%),rgba(7,7,7,.86);box-shadow:inset 0 1px rgba(255,255,255,.22),inset 0 -1px rgba(0,0,0,.62),0 22px 58px rgba(0,0,0,.58),0 0 36px rgba(17,162,207,.24);backdrop-filter:blur(24px) saturate(1.28);animation:preview-camera-popover-in 220ms cubic-bezier(.2,.9,.2,1)}.preview-camera-popover-aura,.preview-camera-popover-lens,.preview-camera-popover-beam{position:absolute;pointer-events:none}.preview-camera-popover-aura{inset:-34px;background:conic-gradient(from 140deg,transparent,rgba(17,162,207,.24),transparent 42%),radial-gradient(circle at 76% 18%,rgba(175,207,42,.16),transparent 20%);opacity:.48;animation:preview-camera-popover-orbit 5.2s linear infinite}.preview-camera-popover-lens{right:10px;top:12px;width:50px;height:50px;border:1px solid rgba(231,231,232,.12);border-radius:50%;background:radial-gradient(circle at 36% 30%,rgba(255,255,255,.24),transparent 28%),radial-gradient(circle,rgba(17,162,207,.16),transparent 68%);opacity:.64}.preview-camera-popover-beam{left:50%;bottom:-34px;width:2px;height:34px;background:linear-gradient(180deg,rgba(17,162,207,.9),transparent);box-shadow:0 0 18px rgba(17,162,207,.54)}.preview-camera-popover-head,.preview-camera-popover label,.preview-camera-popover small,.preview-camera-popover-actions,.preview-camera-popover-meter,.preview-camera-popover-primary{position:relative;z-index:1}.preview-camera-popover-head{display:grid;grid-template-columns:1fr auto auto;gap:7px;align-items:center}.preview-camera-popover-head strong{font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 0 16px rgba(17,162,207,.36)}.preview-camera-popover-head span,.preview-camera-popover small{color:rgba(231,231,232,.64);font-size:11px}.preview-camera-popover-close{display:inline-grid!important;place-items:center;width:22px!important;height:22px!important;min-width:22px!important;min-height:22px!important;padding:0!important;border-radius:999px!important;background:rgba(231,231,232,.08)!important}.preview-camera-popover label{gap:4px;font-size:11px;text-transform:none}.preview-camera-popover select{min-height:31px;padding:6px 8px;border-color:rgba(17,162,207,.34);background:rgba(0,0,0,.56)}.preview-camera-popover input{height:18px}.preview-camera-popover-meter{overflow:hidden;height:6px;margin:1px 0 2px;border-radius:999px;background:rgba(0,0,0,.28);box-shadow:inset 0 0 10px rgba(0,0,0,.58)}.preview-camera-popover-meter i{position:relative;display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--color-brand-blue),rgba(231,231,232,.9));box-shadow:0 0 16px rgba(17,162,207,.52);animation:preview-camera-meter-breathe 1.8s ease-in-out infinite}.preview-camera-popover-meter i::after{position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.52),transparent);content:"";transform:translateX(-110%);animation:preview-camera-meter-scan 2.4s ease-in-out infinite}.preview-camera-popover-actions{display:grid;grid-template-columns:1fr auto;gap:7px;align-items:center}.preview-camera-popover button{min-height:31px}.preview-camera-popover-primary{border-color:rgba(17,162,207,.56)!important;background:linear-gradient(180deg,rgba(17,162,207,.34),rgba(17,162,207,.12))!important;color:var(--color-text)!important;font-weight:900}.preview-camera-popover-danger{min-width:70px;color:#ff8f8f!important;border-color:rgba(255,111,111,.32)!important;background:linear-gradient(180deg,rgba(255,111,111,.12),rgba(255,111,111,.04))!important}.preview-camera-popover-danger:disabled{opacity:.42}.preview-camera-popover--portal{position:fixed!important;z-index:3200!important;width:min(236px,calc(100vw - 16px))!important;max-width:calc(100vw - 16px);transform:none!important}@keyframes preview-camera-popover-in{from{opacity:0;transform:translateY(12px) scale(.94);filter:blur(6px)}to{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}}@keyframes preview-camera-popover-orbit{to{transform:rotate(360deg)}}@keyframes preview-camera-meter-breathe{0%,100%{filter:brightness(.94)}50%{filter:brightness(1.18)}}@keyframes preview-camera-meter-scan{0%,18%{transform:translateX(-110%)}58%,100%{transform:translateX(130%)}}
 .preview-volume-group{z-index:2300}.preview-volume-popover{z-index:2600!important;width:44px!important;min-width:44px!important;height:120px!important;padding:10px 6px!important;overflow:visible}.preview-volume-slider{width:92px!important;max-width:92px}.preview-ai-button{display:inline-grid;place-items:center;min-width:42px;height:32px;padding:0 12px;border:1px solid rgba(17,162,207,.72);border-radius:999px;background:linear-gradient(180deg,rgba(17,162,207,.28),rgba(17,162,207,.1));color:var(--color-text);font-weight:900;letter-spacing:0}.preview-ai-button:disabled{opacity:.62;cursor:progress}.preview-ai-status{min-height:16px;width:100%;color:rgba(231,231,232,.62);font-size:12px;line-height:1.25;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .overlay-menu button,.overlay-layer-row button{background:rgba(231,231,232,.08);color:rgba(231,231,232,.8);border-color:var(--glass-border)}
+.layer-chip small{flex:0 0 auto;color:var(--color-brand-green);font-size:10px;font-weight:800;text-transform:uppercase}.overlay-box.is-outside-window{opacity:.22;filter:saturate(.4);outline:1px dashed rgba(175,207,42,.45);outline-offset:3px}.overlay-box[data-overlay-active=true][data-overlay-motion=fade]{animation:overlay-fade-in .28s ease both}.overlay-box[data-overlay-active=true][data-overlay-motion=slide-up]{animation:overlay-slide-up .32s ease both}.overlay-box[data-overlay-active=true][data-overlay-motion=slide-down]{animation:overlay-slide-down .32s ease both}.overlay-box[data-overlay-active=true][data-overlay-motion=pop]{animation:overlay-pop-in .24s cubic-bezier(.2,1.2,.2,1) both}.overlay-inspector-block{display:grid;gap:7px;padding:8px;border:1px solid rgba(231,231,232,.1);border-radius:8px;background:rgba(231,231,232,.04)}.overlay-inspector-block strong{color:var(--color-text-soft);font-size:11px;text-transform:uppercase}.overlay-inspector select{width:100%;min-height:34px;border:1px solid var(--glass-border);border-radius:999px;background:rgba(5,5,5,.72);color:var(--color-text);padding:7px 10px}@keyframes overlay-fade-in{from{opacity:0}to{opacity:1}}@keyframes overlay-slide-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}@keyframes overlay-slide-down{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}@keyframes overlay-pop-in{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
 .overlay-danger{background:rgba(80,20,20,.72)!important;border-color:rgba(255,120,120,.46)!important;color:#ffd2d2!important}
 .settings-status,.settings-usage{border-color:var(--glass-border);background:rgba(231,231,232,.05)}.settings-backdrop{backdrop-filter:blur(14px)}
 .result-item{border-color:var(--glass-border);background:rgba(9,9,9,.82)}.result-item[open]{border-color:rgba(231,231,232,.25)}
@@ -11679,8 +11791,32 @@ function defaultTextOverlay(text = "Digite seu texto"){
     color: "#ffffff",
     background_enabled: true,
     background_color: "#000000",
-    background_opacity: 70
+    background_opacity: 70,
+    start_seconds: 0,
+    duration_seconds: 5,
+    in_animation: "fade",
+    out_animation: "fade",
+    placement_mode: "safe"
   };
+}
+function normalizeOverlayTiming(layer){
+  const timing = layer?.timing && typeof layer.timing === "object" ? layer.timing : {};
+  const motion = layer?.motion && typeof layer.motion === "object" ? layer.motion : {};
+  return {
+    start_seconds: clampNumber(layer?.start_seconds ?? timing.start ?? 0, 0, 600),
+    duration_seconds: clampNumber(layer?.duration_seconds ?? timing.duration ?? 0, 0, 600),
+    in_animation: normalizeOverlayAnimation(layer?.in_animation ?? motion.in),
+    out_animation: normalizeOverlayAnimation(layer?.out_animation ?? motion.out),
+    placement_mode: normalizeOverlayPlacement(layer?.placement_mode)
+  };
+}
+function normalizeOverlayAnimation(value){
+  const key = String(value || "none");
+  return ["none", "fade", "slide-up", "slide-down", "pop"].includes(key) ? key : "none";
+}
+function normalizeOverlayPlacement(value){
+  const key = String(value || "safe");
+  return ["safe", "full", "video"].includes(key) ? key : "safe";
 }
 function normalizeOverlay(overlay){
   const key = overlayMeta[overlay?.key] ? overlay.key : "none";
@@ -11705,7 +11841,8 @@ function normalizeTextOverlay(layer){
     color: normalizeHexColor(layer?.color, "#ffffff"),
     background_enabled: layer?.background_enabled !== false,
     background_color: normalizeHexColor(layer?.background_color, "#000000"),
-    background_opacity: clampNumber(layer?.background_opacity ?? 70, 0, 100)
+    background_opacity: clampNumber(layer?.background_opacity ?? 70, 0, 100),
+    ...normalizeOverlayTiming(layer)
   };
 }
 function normalizeImageOverlay(layer){
@@ -11719,7 +11856,8 @@ function normalizeImageOverlay(layer){
     width: clampNumber(layer?.width ?? .28, .08, .9),
     opacity: clampNumber(layer?.opacity ?? 100, 10, 100),
     image_data_url: String(layer?.image_data_url || ""),
-    image_file: String(layer?.image_file || "")
+    image_file: String(layer?.image_file || ""),
+    ...normalizeOverlayTiming(layer)
   };
 }
 function normalizeOverlayLayer(layer){
@@ -11747,6 +11885,7 @@ function setOverlayLayersForRank(rank, layers, rerender = true, platform = activ
   setPlatformEditForRank(rank, platform, { overlays: normalized, overlay: normalized.find(layer => layer.kind !== "image") || defaultOverlay() });
   const card = cardForRank(rank);
   if (card && rerender) updateOverlayUi(card);
+  if (card) refreshLiveTimelineForCard(card);
   renderFinalStage();
 }
 function addOverlayLayerForRank(rank, layer, platform = activePlatformForRank(rank)){
@@ -12281,6 +12420,7 @@ function updateOverlayUi(card){
   if (summary) summary.textContent = layers.length ? `${layers.length} camada(s)` : "Sem chamada";
   renderOverlayLayerBoxes(card, layers);
   bindCardOverlayControls(card);
+  syncTimedOverlayPreview(card);
 }
 function renderOverlayLayerBoxes(card, layers){
   const list = card.querySelector("[data-overlay-layer-list]");
@@ -12297,6 +12437,7 @@ function renderLayerStrip(card, layers){
     const selected = layer.id === selectedId ? " is-selected" : "";
     return `<span class="layer-chip${selected}" data-layer-chip="${escapeAttr(layer.id)}">
       <span>${escapeHtml(layerStripLabel(layer))}</span>
+      <small>${escapeHtml(overlayTimingLabel(layer))}</small>
       <button data-layer-strip-remove="${escapeAttr(layer.id)}" type="button" title="Remover camada" aria-label="Remover camada">x</button>
     </span>`;
   }).join("");
@@ -12306,6 +12447,38 @@ function layerStripLabel(layer){
   if (layer.kind === "image") return layer.label || "Imagem";
   if (layer.kind === "text") return layer.text || layer.label || "Texto";
   return overlayMeta[layer.key]?.label || layer.label || "Camada";
+}
+function formatSeconds(value){
+  const number = Number(value || 0);
+  return `${Number.isInteger(number) ? number : number.toFixed(1)}s`;
+}
+function overlayTimingLabel(layer){
+  const start = Number(layer?.start_seconds || 0);
+  const duration = Number(layer?.duration_seconds || 0);
+  if (!duration) return "inteiro";
+  return `${formatSeconds(start)} + ${formatSeconds(duration)}`;
+}
+function overlayEndSeconds(layer, fallbackDuration = 0){
+  const start = clampNumber(layer?.start_seconds ?? 0, 0, 600);
+  const duration = clampNumber(layer?.duration_seconds ?? 0, 0, 600);
+  if (!duration) return Math.max(Number(fallbackDuration || 0), start);
+  const end = start + duration;
+  return fallbackDuration ? Math.min(end, fallbackDuration) : end;
+}
+function overlayIsActiveAt(layer, time, fallbackDuration = 0){
+  const start = clampNumber(layer?.start_seconds ?? 0, 0, 600);
+  const duration = clampNumber(layer?.duration_seconds ?? 0, 0, 600);
+  if (!duration) return true;
+  return time >= start - .025 && time <= overlayEndSeconds(layer, fallbackDuration) + .025;
+}
+function overlayLayerDataAttrs(layer){
+  return [
+    `data-overlay-start="${escapeAttr(layer.start_seconds || 0)}"`,
+    `data-overlay-duration="${escapeAttr(layer.duration_seconds || 0)}"`,
+    `data-overlay-in="${escapeAttr(layer.in_animation || "none")}"`,
+    `data-overlay-out="${escapeAttr(layer.out_animation || "none")}"`,
+    `data-overlay-placement="${escapeAttr(layer.placement_mode || "safe")}"`
+  ].join(" ");
 }
 function bindLayerStripControls(card, strip){
   if (strip.dataset.layerStripBound) return;
@@ -12331,19 +12504,19 @@ function overlayLayerBoxHtml(layer){
   const selectedClass = selected ? " is-selected" : "";
   if (layer.kind === "image") {
     const src = layer.image_data_url || layer.image_file || "";
-    return `<div class="overlay-box overlay-image-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="image" style="${escapeAttr(overlayStyle(layer))}">
+    return `<div class="overlay-box overlay-image-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="image" ${overlayLayerDataAttrs(layer)} style="${escapeAttr(overlayStyle(layer))}">
       <img src="${escapeAttr(src)}" alt="${escapeAttr(layer.label)}">
       <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
     </div>`;
   }
   if (layer.kind === "text") {
-    return `<div class="overlay-box overlay-text-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="text" data-overlay-bg="${layer.background_enabled ? "on" : "off"}" style="${escapeAttr(overlayStyle(layer))}">
+    return `<div class="overlay-box overlay-text-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="text" data-overlay-bg="${layer.background_enabled ? "on" : "off"}" ${overlayLayerDataAttrs(layer)} style="${escapeAttr(overlayStyle(layer))}">
       <span>${escapeHtml(layer.text)}</span>
       <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
     </div>`;
   }
   const meta = overlayMeta[layer.key] || overlayMeta.none;
-  return `<div class="overlay-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="${escapeAttr(layer.key)}" style="${escapeAttr(overlayStyle(layer))}">
+  return `<div class="overlay-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="${escapeAttr(layer.key)}" ${overlayLayerDataAttrs(layer)} style="${escapeAttr(overlayStyle(layer))}">
     <strong>${escapeHtml(meta.title)}</strong>
     <em>${escapeHtml(meta.subtitle)}</em>
     <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
@@ -12361,11 +12534,55 @@ function overlayPlaceButtonsHtml(){
       <button data-overlay-place-camera>Camera</button>
     </div>`;
 }
+function overlayTimingControlsHtml(layer){
+  return `<div class="overlay-inspector-block">
+    <strong>Tempo</strong>
+    <div class="overlay-inspector-row">
+      <label>Inicio
+        <input data-layer-start type="number" min="0" max="600" step=".1" value="${Number(layer.start_seconds || 0)}">
+      </label>
+      <label>Duracao
+        <input data-layer-duration type="number" min="0" max="600" step=".1" value="${Number(layer.duration_seconds || 0)}">
+      </label>
+    </div>
+    <button type="button" data-layer-full-clip>Corte inteiro</button>
+  </div>`;
+}
+function overlayMotionControlsHtml(layer){
+  return `<div class="overlay-inspector-block">
+    <strong>Animacao</strong>
+    <div class="overlay-inspector-row">
+      <label>Entrada
+        <select data-layer-in-animation>${overlayAnimationOptionsHtml(layer.in_animation)}</select>
+      </label>
+      <label>Saida
+        <select data-layer-out-animation>${overlayAnimationOptionsHtml(layer.out_animation)}</select>
+      </label>
+    </div>
+  </div>`;
+}
+function overlayPlacementControlsHtml(layer){
+  return `<div class="overlay-inspector-block">
+    <strong>Area</strong>
+    <select data-layer-placement-mode>${overlayPlacementOptionsHtml(layer.placement_mode)}</select>
+  </div>`;
+}
+function overlayAnimationOptionsHtml(current){
+  const labels = { none: "Nenhuma", fade: "Fade", "slide-up": "Subir", "slide-down": "Descer", pop: "Pop" };
+  return Object.entries(labels).map(([key, label]) => `<option value="${key}" ${current === key ? "selected" : ""}>${label}</option>`).join("");
+}
+function overlayPlacementOptionsHtml(current){
+  const labels = { safe: "Seguro social", full: "Tela inteira", video: "Dentro do video" };
+  return Object.entries(labels).map(([key, label]) => `<option value="${key}" ${current === key ? "selected" : ""}>${label}</option>`).join("");
+}
 function overlayInspectorHtml(layer){
   if (!layer) return overlayPlaceButtonsHtml();
   if (layer.kind === "image") {
     return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>Imagem</strong><button data-overlay-close>Fechar</button></div>
       <div class="overlay-inspector">
+        ${overlayTimingControlsHtml(layer)}
+        ${overlayMotionControlsHtml(layer)}
+        ${overlayPlacementControlsHtml(layer)}
         <label>Opacidade
           <input data-layer-opacity type="range" min="10" max="100" step="5" value="${layer.opacity}">
         </label>
@@ -12377,6 +12594,9 @@ function overlayInspectorHtml(layer){
   }
   return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>Texto</strong><button data-overlay-close>Fechar</button></div>
     <div class="overlay-inspector">
+      ${overlayTimingControlsHtml(layer)}
+      ${overlayMotionControlsHtml(layer)}
+      ${overlayPlacementControlsHtml(layer)}
       <label>Conteudo
         <input data-layer-text type="text" value="${escapeAttr(layer.text || layer.label || "")}">
       </label>
@@ -12414,6 +12634,16 @@ function bindCardOverlayControls(card){
   }
   bindOverlayDrag(card);
   bindOverlayPlacement(card);
+  bindOverlayTimingPreview(card);
+  syncTimedOverlayPreview(card);
+}
+function bindOverlayTimingPreview(item){
+  const video = item?.querySelector?.("video");
+  if (!video || video.dataset.overlayTimingBound) return;
+  video.dataset.overlayTimingBound = "1";
+  ["loadedmetadata", "timeupdate", "seeking", "play", "pause"].forEach(eventName => {
+    video.addEventListener(eventName, () => syncTimedOverlayPreview(item));
+  });
 }
 function addImageOverlayFromInput(card, input){
   const file = input.files && input.files[0];
@@ -12430,7 +12660,12 @@ function addImageOverlayFromInput(card, input){
       x,
       y,
       width: .28,
-      opacity: 100
+      opacity: 100,
+      start_seconds: 0,
+      duration_seconds: 5,
+      in_animation: "fade",
+      out_animation: "fade",
+      placement_mode: "safe"
     });
     card.dataset.selectedOverlayLayer = layer.id;
     addOverlayLayerForRank(card.dataset.rank, layer, overlayPlatformForItem(card));
@@ -12644,6 +12879,20 @@ function bindOverlayInspectorControls(card, layer, platform = overlayPlatformFor
   if (opacity) opacity.addEventListener("input", () => patch({ opacity: Number(opacity.value) }));
   const width = card.querySelector("[data-layer-width]");
   if (width) width.addEventListener("input", () => patch({ width: Number(width.value) / 100 }));
+  const start = card.querySelector("[data-layer-start]");
+  if (start) start.addEventListener("input", () => patch({ start_seconds: Number(start.value) }));
+  const duration = card.querySelector("[data-layer-duration]");
+  if (duration) duration.addEventListener("input", () => patch({ duration_seconds: Number(duration.value) }));
+  const inAnimation = card.querySelector("[data-layer-in-animation]");
+  if (inAnimation) inAnimation.addEventListener("change", () => patch({ in_animation: inAnimation.value }));
+  const outAnimation = card.querySelector("[data-layer-out-animation]");
+  if (outAnimation) outAnimation.addEventListener("change", () => patch({ out_animation: outAnimation.value }));
+  const placementMode = card.querySelector("[data-layer-placement-mode]");
+  if (placementMode) placementMode.addEventListener("change", () => patch({ placement_mode: placementMode.value }));
+  card.querySelector("[data-layer-full-clip]")?.addEventListener("click", () => {
+    if (duration) duration.value = "0";
+    patch({ start_seconds: 0, duration_seconds: 0 });
+  });
   const backgroundEnabled = card.querySelector("[data-layer-background-enabled]");
   if (backgroundEnabled) backgroundEnabled.addEventListener("change", () => patch({ background_enabled: backgroundEnabled.checked }));
   const backgroundColor = card.querySelector("[data-layer-background-color]");
@@ -12935,7 +13184,20 @@ function fallbackLiveTimelineOptions(model){
 function liveTimelineEffectKeyframesForCard(card){
   const current = cardState(card.dataset.rank);
   const effectFrames = Array.isArray(current.effect_keyframes) ? current.effect_keyframes : [];
-  return effectFrames;
+  const values = trimValues(card);
+  const platform = activePlatformForRank(card.dataset.rank);
+  const duration = Math.max(trimEndPosition(values) - values.trimStart, 0);
+  const overlayFrames = overlayLayersForRank(card.dataset.rank, platform).flatMap((layer, index) => {
+    const label = layer.kind === "image" ? layer.label || "Imagem" : layer.text || layer.label || `Camada ${index + 1}`;
+    const start = clampNumber(values.trimStart + Number(layer.start_seconds || 0), 0, cameraTimelineDurationForCard(card));
+    const end = clampNumber(values.trimStart + overlayEndSeconds(layer, duration), start, cameraTimelineDurationForCard(card));
+    const frames = [{ time: start, key: layer.key, label, intensity: .72, source: "overlay-start" }];
+    if (Number(layer.duration_seconds || 0) > 0 && end > start + .05) {
+      frames.push({ time: end, key: layer.key, label: `${label} fim`, intensity: .48, source: "overlay-end" });
+    }
+    return frames;
+  });
+  return [...effectFrames, ...overlayFrames];
 }
 function liveTimelineCallbacksForCard(card){
   return {
@@ -13992,8 +14254,12 @@ function overlayPreviewItemHtml(item){
 function bindOverlayPreviewControls(){
   document.querySelectorAll("[data-overlay-preview] .caption-item video").forEach(video => {
     video.volume = defaultPreviewVolume;
+    bindOverlayTimingPreview(video.closest(".caption-item"));
   });
-  document.querySelectorAll("[data-overlay-preview] .caption-item").forEach(item => bindOverlayDrag(item));
+  document.querySelectorAll("[data-overlay-preview] .caption-item").forEach(item => {
+    bindOverlayDrag(item);
+    syncTimedOverlayPreview(item);
+  });
 }
 function bindOverlayDrag(item){
   const surface = item.querySelector("[data-overlay-surface]");
@@ -14045,10 +14311,9 @@ function bindOverlayDrag(item){
         patch.width = width;
       } else {
         const boxRect = box.getBoundingClientRect();
-        const maxLeft = Math.max(drag.surfaceWidth - boxRect.width, 0);
-        const maxTop = Math.max(drag.surfaceHeight - boxRect.height, 0);
-        const left = clampNumber(drag.startLeft + dx, 0, maxLeft);
-        const top = clampNumber(drag.startTop + dy, 0, maxTop);
+        const bounds = overlayDragBounds(box, drag.surfaceWidth, drag.surfaceHeight, boxRect.width, boxRect.height);
+        const left = clampNumber(drag.startLeft + dx, bounds.minLeft, bounds.maxLeft);
+        const top = clampNumber(drag.startTop + dy, bounds.minTop, bounds.maxTop);
         patch.x = drag.surfaceWidth ? left / drag.surfaceWidth : 0;
         patch.y = drag.surfaceHeight ? top / drag.surfaceHeight : 0;
         box.style.setProperty("--overlay-x", patch.x);
@@ -14097,6 +14362,37 @@ function bindOverlayDrag(item){
       handle.onmousedown = startDrag;
     });
   });
+}
+function overlayDragBounds(box, surfaceWidth, surfaceHeight, boxWidth, boxHeight){
+  const mode = box.dataset.overlayPlacement || "safe";
+  const marginX = mode === "safe" ? surfaceWidth * .05 : 0;
+  const marginY = mode === "safe" ? surfaceHeight * .05 : 0;
+  return {
+    minLeft: marginX,
+    minTop: marginY,
+    maxLeft: Math.max(surfaceWidth - boxWidth - marginX, marginX),
+    maxTop: Math.max(surfaceHeight - boxHeight - marginY, marginY)
+  };
+}
+function syncTimedOverlayPreview(item){
+  if (!item) return;
+  const video = item.querySelector("video");
+  const time = video ? Number(video.currentTime || 0) : 0;
+  const fallbackDuration = Number(video?.duration || item.dataset.adjustedDuration || item.dataset.duration || 0);
+  item.querySelectorAll("[data-overlay-layer]").forEach(box => {
+    const layer = overlayLayerForBox(item, box);
+    if (!layer) return;
+    const active = overlayIsActiveAt(layer, time, fallbackDuration);
+    box.classList.toggle("is-outside-window", !active);
+    box.dataset.overlayActive = String(active);
+    box.dataset.overlayMotion = active ? layer.in_animation || "none" : "idle";
+  });
+}
+function overlayLayerForBox(item, box){
+  const rank = item.dataset.rank;
+  if (!rank) return null;
+  const platform = overlayPlatformForItem(item);
+  return overlayLayersForRank(rank, platform).find(layer => layer.id === box.dataset.overlayLayer) || null;
 }
 function renderFinalStage(){
   const queue = buildExportData().caption_queue || [];
