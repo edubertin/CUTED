@@ -74,6 +74,18 @@ class CuttedImportUiTests(unittest.TestCase):
 
         self.assertIn("window.location.assign(job.output_url)", html)
 
+    def test_editor_state_is_scoped_to_current_project(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("function galleryStorageKey(name)", html)
+        self.assertIn('const editorStateStorageKey = galleryStorageKey("cutted-state");', html)
+        self.assertIn('const editorTabStorageKey = galleryStorageKey("cutted-tab");', html)
+        self.assertIn('const state = JSON.parse(localStorage.getItem(editorStateStorageKey) || "{}");', html)
+        self.assertIn("localStorage.setItem(editorStateStorageKey, JSON.stringify(state));", html)
+        self.assertIn("localStorage.setItem(editorTabStorageKey, next);", html)
+        self.assertNotIn('localStorage.setItem("cutted-state", JSON.stringify(state));', html)
+        self.assertNotIn('const state = JSON.parse(localStorage.getItem("cutted-state") || "{}");', html)
+
     def test_render_results_are_restored_from_gallery(self) -> None:
         html = gallery_html()
 

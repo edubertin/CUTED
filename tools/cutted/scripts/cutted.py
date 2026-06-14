@@ -10525,13 +10525,20 @@ body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,
 
 def js() -> str:
     return """
+function galleryStorageKey(name){
+  return `${name}:${currentGalleryPath() || window.location.pathname || "root"}`;
+}
+const editorStateStorageKey = galleryStorageKey("cutted-state");
+const editorTabStorageKey = galleryStorageKey("cutted-tab");
 if (new URLSearchParams(location.search).has("reset")) {
+  localStorage.removeItem(editorStateStorageKey);
+  localStorage.removeItem(editorTabStorageKey);
   localStorage.removeItem("cutted-state");
   localStorage.removeItem("cutted-tab");
   localStorage.removeItem("cutted-empty-gallery");
   history.replaceState(null, "", location.pathname);
 }
-const state = JSON.parse(localStorage.getItem("cutted-state") || "{}");
+const state = JSON.parse(localStorage.getItem(editorStateStorageKey) || "{}");
 const emptyGalleryStorageKey = "cutted-empty-gallery";
 const maxOverlayImageBytes = 1800000;
 const maxOverlayImageSourceBytes = 6000000;
@@ -10541,7 +10548,7 @@ const cameraAnalysisFetchTimeoutMs = 180000;
 const cameraReadinessPollMs = 3500;
 function save(){
   try {
-    localStorage.setItem("cutted-state", JSON.stringify(state));
+    localStorage.setItem(editorStateStorageKey, JSON.stringify(state));
     clearAppNotice();
     return true;
   } catch (error) {
@@ -10648,7 +10655,7 @@ const overlayMeta = {
 function applyTab(tab){
   const next = ["import", "edit", "final"].includes(tab) ? tab : "edit";
   document.body.dataset.tab = next;
-  localStorage.setItem("cutted-tab", next);
+  localStorage.setItem(editorTabStorageKey, next);
   document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.tab === next);
   });
@@ -15201,6 +15208,8 @@ function copyTextFallback(text){
 }
 function clearNewProjectState(){
   Object.keys(state).forEach(key => { delete state[key]; });
+  localStorage.removeItem(editorStateStorageKey);
+  localStorage.removeItem(editorTabStorageKey);
   localStorage.removeItem("cutted-state");
   localStorage.removeItem("cutted-tab");
   localStorage.removeItem("cutted-caption-lines");
