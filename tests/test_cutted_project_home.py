@@ -248,6 +248,27 @@ class CuttedProjectHomeTests(unittest.TestCase):
             self.assertEqual(entry["clip_count"], 2)
             self.assertTrue(str(entry["id"]).startswith("demo-"))
 
+    def test_touch_project_catalog_entry_adds_valid_open_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            catalog_path = workspace / "projects.json"
+            gallery = workspace / "projects" / "demo"
+            gallery.mkdir(parents=True)
+            (gallery / "index.html").write_text("ok", encoding="utf-8")
+            (gallery / "moments.json").write_text(json.dumps({"moments": [{}, {}]}), encoding="utf-8")
+            original_catalog_path = CUTTED.project_catalog_path
+            CUTTED.project_catalog_path = lambda: catalog_path
+            try:
+                result = CUTTED.touch_project_catalog_entry(gallery, workspace)
+                recent = CUTTED.project_catalog_recent(workspace)
+
+                self.assertTrue(result["ok"])
+                self.assertEqual(result["project"]["url"], "/projects/demo/index.html")
+                self.assertEqual([project["id"] for project in recent], [result["project"]["id"]])
+                self.assertEqual(recent[0]["clip_count"], 2)
+            finally:
+                CUTTED.project_catalog_path = original_catalog_path
+
 
 if __name__ == "__main__":
     unittest.main()
