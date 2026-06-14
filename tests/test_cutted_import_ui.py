@@ -418,6 +418,12 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("captions_enabled: queue.some(item => item.captions_enabled !== false)", html)
         self.assertIn("captions_enabled: queue.caption_queue.some(item => item.captions_enabled !== false)", html)
 
+    def test_render_queue_does_not_expose_submit_action(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("function renderQueueJobHtml(job)", html)
+        self.assertNotIn("<button type=\"button\" disabled>Submit</button>", html)
+
     def test_control_surface_timeline_click_does_not_toggle_card(self) -> None:
         source = MODULE_PATH.read_text(encoding="utf-8")
 

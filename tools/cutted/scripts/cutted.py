@@ -14785,7 +14785,6 @@ function renderQueueJobHtml(job){
       ${canOpen ? `<button class="primary" type="button" data-open-folder="${escapeAttr(folder)}">Abrir pasta</button>` : `<button type="button" disabled>${escapeHtml(renderStatusLabel(job.status))}</button>`}
       ${canCancel ? `<button type="button" data-render-cancel="${escapeAttr(id)}">Parar</button>` : ""}
       ${canRemove ? `<button type="button" data-render-remove="${escapeAttr(id)}">Remover</button>` : ""}
-      <button type="button" disabled>Submit</button>
     </div>
   </article>`;
 }

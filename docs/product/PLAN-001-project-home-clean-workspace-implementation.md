@@ -185,9 +185,9 @@ Implementation:
 - keep `/api/finalize` contract initially;
 - keep `/api/finalize-results` restore behavior.
 
-Future reserved:
+Out of scope for this branch:
 
-- `Submit` or publish flow can share this entrypoint later.
+- Submit, calendar, or social publishing flows.
 
 Acceptance:
 
