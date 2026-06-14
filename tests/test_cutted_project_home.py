@@ -178,6 +178,59 @@ class CuttedProjectHomeTests(unittest.TestCase):
             finally:
                 CUTTED.project_catalog_path = original_catalog_path
 
+    def test_recent_projects_only_include_current_workspace_projects(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            catalog_path = root / "projects.json"
+            valid_project = workspace / "projects" / "valid"
+            missing_index = workspace / "projects" / "missing"
+            outside_project = root / "outside"
+            valid_project.mkdir(parents=True)
+            missing_index.mkdir(parents=True)
+            outside_project.mkdir()
+            (valid_project / "index.html").write_text("ok", encoding="utf-8")
+            (outside_project / "index.html").write_text("ok", encoding="utf-8")
+            original_catalog_path = CUTTED.project_catalog_path
+            CUTTED.project_catalog_path = lambda: catalog_path
+            try:
+                CUTTED.upsert_project_catalog_entry({"id": "valid", "title": "Valid", "path": str(valid_project)})
+                CUTTED.upsert_project_catalog_entry({"id": "missing", "title": "Missing", "path": str(missing_index)})
+                CUTTED.upsert_project_catalog_entry({"id": "outside", "title": "Outside", "path": str(outside_project)})
+
+                recent = CUTTED.project_catalog_recent(workspace)
+                catalog = CUTTED.read_project_catalog(catalog_path)
+
+                self.assertEqual([project["id"] for project in recent], ["valid"])
+                self.assertEqual([project["id"] for project in catalog["projects"]], ["valid"])
+                self.assertEqual(recent[0]["url"], "/projects/valid/index.html")
+            finally:
+                CUTTED.project_catalog_path = original_catalog_path
+
+    def test_project_delete_keeps_catalog_entry_when_file_delete_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            outside_project = root / "outside"
+            workspace.mkdir()
+            outside_project.mkdir()
+            (outside_project / "index.html").write_text("ok", encoding="utf-8")
+            catalog_path = root / "projects.json"
+            original_catalog_path = CUTTED.project_catalog_path
+            CUTTED.project_catalog_path = lambda: catalog_path
+            try:
+                CUTTED.upsert_project_catalog_entry({"id": "outside", "title": "Outside", "path": str(outside_project)})
+
+                with self.assertRaises(ValueError):
+                    CUTTED.delete_project_from_catalog("outside", workspace, True)
+
+                catalog = CUTTED.read_project_catalog(catalog_path)
+                self.assertEqual([project["id"] for project in catalog["projects"]], ["outside"])
+                self.assertTrue(outside_project.exists())
+            finally:
+                CUTTED.project_catalog_path = original_catalog_path
+
     def test_project_entry_from_gallery_reads_import_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp)
