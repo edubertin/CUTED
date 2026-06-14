@@ -2416,6 +2416,7 @@ body.cuted-control-demo #cuted-control-bar-demo {
 .cuted-control-bar[data-status-kind="caption"] .cuted-ready-region,
 .cuted-control-bar[data-status-kind="effect"] .cuted-ready-region,
 .cuted-control-bar[data-status-kind="insert"] .cuted-ready-region,
+.cuted-control-bar[data-status-kind="mapping"] .cuted-ready-region,
 .cuted-control-bar[data-status-kind="ai"] .cuted-ready-region {
   width: 0;
   flex-basis: 0;
@@ -2454,6 +2455,7 @@ body.cuted-control-demo #cuted-control-bar-demo {
 .cuted-control-bar[data-status-kind="caption"] .cuted-action-group,
 .cuted-control-bar[data-status-kind="effect"] .cuted-action-group,
 .cuted-control-bar[data-status-kind="insert"] .cuted-action-group,
+.cuted-control-bar[data-status-kind="mapping"] .cuted-action-group,
 .cuted-control-bar[data-status-kind="ai"] .cuted-action-group {
   opacity: 0;
   filter: blur(8px) saturate(1.35);
@@ -2477,6 +2479,7 @@ body.cuted-control-demo #cuted-control-bar-demo {
 .cuted-control-bar[data-status-kind="caption"] .cuted-ready-divider,
 .cuted-control-bar[data-status-kind="effect"] .cuted-ready-divider,
 .cuted-control-bar[data-status-kind="insert"] .cuted-ready-divider,
+.cuted-control-bar[data-status-kind="mapping"] .cuted-ready-divider,
 .cuted-control-bar[data-status-kind="ai"] .cuted-ready-divider {
   width: 0;
   flex-basis: 0;
