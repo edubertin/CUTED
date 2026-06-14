@@ -22,7 +22,7 @@ import urllib.parse
 import urllib.request
 import uuid
 import webbrowser
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -57,6 +57,7 @@ YOUTUBE_HIGH_QUALITY_FORMAT = (
     "b[height<=1080]/best"
 )
 YOUTUBE_STREAM_FALLBACK_FORMAT = "b[height<=1080]/b[height<=720]/18/b[height<=480]/best"
+IMPORT_PROGRESS_PREFIX = "CUTED_IMPORT_EVENT "
 PREVIEW_VIDEO_CRF = "20"
 PREVIEW_DRAFT_VIDEO_CRF = "28"
 LOCAL_IMPORT_MAX_INITIAL_CLIPS = 4
@@ -314,6 +315,8 @@ class ImportJob:
     return_code: int | None = None
     stdout: str = ""
     stderr: str = ""
+    progress: dict[str, object] = field(default_factory=dict)
+    events: list[dict[str, object]] = field(default_factory=list)
 
 
 @dataclass
@@ -484,24 +487,70 @@ def main() -> int:
 
 
 def analyze(args: argparse.Namespace) -> None:
+    emit_import_progress("prepare", "Preparando", "Criando pasta do projeto...", 8)
     out_dir = args.out.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     config = build_config(args)
+    emit_import_progress("prepare", "Preparando", "Conferindo ferramentas locais...", 12)
     ffmpeg = find_ffmpeg()
     ffprobe = find_ffprobe()
+    media_message = "Baixando e preparando video do YouTube..." if args.youtube_url else "Lendo video local..."
+    emit_import_progress("media", "Midia", media_message, 18)
     source = prepare_source(args, out_dir, ffmpeg, ffprobe)
     write_source_metadata(out_dir, source.metadata)
+    emit_import_progress("media", "Midia", "Midia pronta para analise.", 30, detail=source.label)
     duration = probe_duration(source.render_source, ffprobe)
+    provider = requested_ai_provider(args)
+    audio_detail = "OpenAI" if provider == "openai" else "transcricao local"
+    emit_import_progress("audio", "Audio", "Transcrevendo audio...", 36, detail=audio_detail)
     segments = load_segments(args, source.transcribe_source)
+    emit_import_progress("analysis", "Analise", "Analisando transcricao...", 58, detail=f"{len(segments)} segmentos")
     moments = pick_moments_for_import(args, segments, config, duration)
-    rendered = render_outputs(source.render_source, out_dir, moments, ffmpeg, args.skip_render)
+    emit_import_progress("suggestions", "Sugestoes", "Gerando sugestoes de cortes...", 66, detail=f"{len(moments)} cortes")
+    emit_import_progress("previews", "Previews", "Renderizando previews...", 72, step=0, steps=len(moments))
+    rendered = render_outputs(source.render_source, out_dir, moments, ffmpeg, args.skip_render, emit_preview_import_progress)
+    emit_import_progress("editor", "Editor", "Montando area de edicao...", 94)
     write_json(out_dir / "moments.json", rendered, source.label, duration, config)
     write_html(out_dir / "index.html", rendered, source.label)
     start_visual_map_background(out_dir, source)
     if args.cleanup_source:
         cleanup_sources(source.cleanup_paths)
+    emit_import_progress("ready", "Pronto", "Projeto importado. Abrindo editor...", 100)
     print(f"[cutted] Generated {len(rendered)} moments in {out_dir}")
     print(f"[cutted] Open: {out_dir / 'index.html'}")
+
+
+def emit_preview_import_progress(step: int, steps: int) -> None:
+    total = max(steps, 1)
+    percent = min(92, int(72 + (step / total) * 18))
+    emit_import_progress(
+        "previews",
+        "Previews",
+        "Renderizando previews...",
+        percent,
+        step=step,
+        steps=steps,
+        detail=f"{step} de {steps} previews",
+    )
+
+
+def emit_import_progress(
+    stage: str, label: str, message: str, percent: int,
+    step: int | None = None, steps: int | None = None, detail: str = "",
+) -> None:
+    payload: dict[str, object] = {
+        "stage": stage,
+        "label": label,
+        "message": message,
+        "percent": max(0, min(100, int(percent))),
+    }
+    if step is not None:
+        payload["step"] = max(0, int(step))
+    if steps is not None:
+        payload["steps"] = max(0, int(steps))
+    if detail:
+        payload["detail"] = detail
+    print(f"{IMPORT_PROGRESS_PREFIX}{json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}", flush=True)
 
 
 def render_selected(args: argparse.Namespace) -> None:
@@ -798,6 +847,18 @@ def delete_project_from_catalog(project_id: str, workspace: Path, delete_files: 
     return {"ok": True, "deleted_files": deleted, "projects": project_catalog_recent(workspace)}
 
 
+def touch_project_catalog_entry(gallery_dir: Path, workspace: Path) -> dict[str, object]:
+    if not valid_recent_project_dir(gallery_dir, workspace):
+        raise ValueError("Projeto invalido para recentes.")
+    entry = project_entry_from_gallery(gallery_dir, workspace)
+    upsert_project_catalog_entry(entry)
+    return {
+        "ok": True,
+        "project": project_home_entry(entry, workspace),
+        "projects": project_catalog_recent(workspace),
+    }
+
+
 def valid_recent_project_dir(project_dir: Path, workspace: Path) -> bool:
     try:
         resolved = project_dir.expanduser().resolve()
@@ -921,6 +982,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
                 return
             if path == "/api/open-folder":
                 self.handle_open_folder()
+                return
+            if path == "/api/projects/touch":
+                self.handle_project_touch(base_dir)
                 return
             if re.fullmatch(r"/api/projects/[^/]+/delete", path):
                 self.handle_project_delete(base_dir, path)
@@ -1097,6 +1161,15 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
 
         def handle_projects(self, request_base_dir: Path) -> None:
             send_json_response(self, 200, {"ok": True, "projects": project_catalog_recent(request_base_dir)})
+
+        def handle_project_touch(self, request_base_dir: Path) -> None:
+            try:
+                payload = read_json_body(self)
+                gallery_dir = resolve_request_gallery_dir(request_base_dir, payload)
+                result = touch_project_catalog_entry(gallery_dir, request_base_dir)
+                send_json_response(self, 200, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
 
         def handle_project_delete(self, request_base_dir: Path, path: str) -> None:
             try:
@@ -5784,8 +5857,16 @@ def wait_for_import_job(job_id: str) -> None:
         job = IMPORT_JOBS.get(job_id)
     if job is None or job.process is None:
         return
-    stdout, stderr = job.process.communicate()
-    status = "ready" if job.process.returncode == 0 else "failed"
+    process = job.process
+    stderr_lines: list[str] = []
+    stderr_thread = threading.Thread(target=collect_import_pipe_lines, args=(process.stderr, stderr_lines), daemon=True)
+    stderr_thread.start()
+    stdout_lines = read_import_stdout(job_id, process)
+    return_code = process.wait()
+    stderr_thread.join(timeout=1.0)
+    stdout = "".join(stdout_lines)
+    stderr = "".join(stderr_lines)
+    status = "ready" if return_code == 0 else "failed"
     message = "Projeto importado." if status == "ready" else "Falha ao importar projeto."
     with IMPORT_JOBS_LOCK:
         current = IMPORT_JOBS.get(job_id)
@@ -5793,20 +5874,89 @@ def wait_for_import_job(job_id: str) -> None:
             return
         if current.status == "cancelled":
             current.updated_at = time.time()
-            current.return_code = job.process.returncode
+            current.return_code = return_code
             current.stdout = stdout[-6000:]
             current.stderr = stderr[-6000:]
             current.process = None
             return
         current.status = status
         current.updated_at = time.time()
-        current.return_code = job.process.returncode
+        current.return_code = return_code
         current.stdout = stdout[-6000:]
         current.stderr = import_job_error_message(stderr) if status == "failed" else stderr[-6000:]
         current.message = message
         current.process = None
         if status == "ready":
             upsert_project_catalog_entry(project_entry_from_gallery(current.output_dir, current.base_dir))
+
+
+def read_import_stdout(job_id: str, process: subprocess.Popen[str]) -> list[str]:
+    lines: list[str] = []
+    if process.stdout is None:
+        return lines
+    for line in process.stdout:
+        lines.append(line)
+        event = parse_import_progress_line(line)
+        if event:
+            update_import_job_progress(job_id, event)
+    return lines
+
+
+def collect_import_pipe_lines(pipe: object, lines: list[str]) -> None:
+    if pipe is None:
+        return
+    try:
+        for line in pipe:
+            lines.append(str(line))
+    except OSError:
+        return
+
+
+def parse_import_progress_line(line: str) -> dict[str, object] | None:
+    text = line.strip()
+    if not text.startswith(IMPORT_PROGRESS_PREFIX):
+        return None
+    try:
+        data = json.loads(text[len(IMPORT_PROGRESS_PREFIX):])
+    except json.JSONDecodeError:
+        return None
+    return import_progress_payload(data) if isinstance(data, dict) else None
+
+
+def import_progress_payload(data: dict[str, object]) -> dict[str, object]:
+    stage = clean_optional_text(data.get("stage"), 32) or "running"
+    label = clean_optional_text(data.get("label"), 32) or "Importacao"
+    message = clean_optional_text(data.get("message"), 180) or "Processando importacao..."
+    payload: dict[str, object] = {
+        "stage": stage,
+        "label": label,
+        "message": message,
+        "percent": clamp_int(data.get("percent"), 0, 100, 35),
+        "updated_at": time.time(),
+    }
+    detail = clean_optional_text(data.get("detail"), 160)
+    if detail:
+        payload["detail"] = detail
+    if "step" in data:
+        payload["step"] = clamp_int(data.get("step"), 0, 9999, 0)
+    if "steps" in data:
+        payload["steps"] = clamp_int(data.get("steps"), 0, 9999, 0)
+    return payload
+
+
+def update_import_job_progress(job_id: str, progress: dict[str, object]) -> None:
+    with IMPORT_JOBS_LOCK:
+        job = IMPORT_JOBS.get(job_id)
+        if job is None or job.status != "running":
+            return
+        previous_percent = int(job.progress.get("percent", 0) or 0) if job.progress else 0
+        next_percent = int(progress.get("percent", 0) or 0)
+        if next_percent < previous_percent and previous_percent < 96:
+            progress["percent"] = previous_percent
+        job.progress = dict(progress)
+        job.events = [*job.events[-7:], dict(progress)]
+        job.message = str(progress.get("message") or job.message)
+        job.updated_at = time.time()
 
 
 def cancel_import_job(job_id: str) -> dict[str, object]:
@@ -5841,16 +5991,19 @@ def import_job_to_dict(job: ImportJob) -> dict[str, object]:
         "output_dir": str(job.output_dir),
         "return_code": job.return_code,
         "stderr": job.stderr,
+        "events": job.events[-8:],
     }
 
 
 def import_job_progress(job: ImportJob) -> dict[str, object]:
     if job.status == "ready":
-        return {"percent": 100, "label": "Pronto", "message": "Projeto importado. Abrindo editor..."}
+        return {"percent": 100, "stage": "editor", "label": "Pronto", "message": "Projeto importado. Abrindo editor..."}
     if job.status == "failed":
-        return {"percent": 100, "label": "Falha", "message": job.message or "Falha ao importar projeto."}
+        return {"percent": 100, "stage": str(job.progress.get("stage") or "prepare"), "label": "Falha", "message": job.message or "Falha ao importar projeto."}
     if job.status == "cancelled":
-        return {"percent": 100, "label": "Cancelado", "message": job.message or "Importacao cancelada."}
+        return {"percent": 100, "stage": str(job.progress.get("stage") or "prepare"), "label": "Cancelado", "message": job.message or "Importacao cancelada."}
+    if job.progress:
+        return job.progress
     elapsed = max(0.0, time.time() - job.created_at)
     stages = import_job_running_stages(job.source_kind, job.ai_provider)
     index = min(int(elapsed // 7), len(stages) - 1)
@@ -8944,7 +9097,10 @@ def with_rank(moment: Moment, rank: int) -> Moment:
                   moment.waveform_file)
 
 
-def render_outputs(video: Path | str, out_dir: Path, moments: list[Moment], ffmpeg: str, skip_render: bool) -> list[Moment]:
+def render_outputs(
+    video: Path | str, out_dir: Path, moments: list[Moment], ffmpeg: str, skip_render: bool,
+    progress_callback: object | None = None,
+) -> list[Moment]:
     clips_dir = out_dir / "clips"
     frames_dir = out_dir / "frames"
     waveforms_dir = out_dir / "waveforms"
@@ -8952,8 +9108,11 @@ def render_outputs(video: Path | str, out_dir: Path, moments: list[Moment], ffmp
     frames_dir.mkdir(exist_ok=True)
     waveforms_dir.mkdir(exist_ok=True)
     rendered = []
-    for moment in moments:
+    total = len(moments)
+    for index, moment in enumerate(moments, start=1):
         rendered.append(render_one(video, clips_dir, frames_dir, waveforms_dir, moment, ffmpeg, skip_render))
+        if callable(progress_callback):
+            progress_callback(index, total)
     return rendered
 
 
@@ -9107,9 +9266,7 @@ def write_project_home(path: Path, workspace: Path) -> None:
 
 
 def project_home_html(workspace: Path, logo_src: str, recent: list[dict[str, object]]) -> str:
-    mock_projects = project_home_mock_projects(workspace)
-    display_projects = recent if recent else mock_projects
-    project_rows = "\n".join(project_home_card_html(project) for project in display_projects)
+    project_rows = "\n".join(project_home_card_html(project) for project in recent) if recent else project_home_empty_state_html()
     return f"""<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -9151,7 +9308,7 @@ def project_home_html(workspace: Path, logo_src: str, recent: list[dict[str, obj
   </main>
   {project_home_import_loading_html(logo_src)}
   {settings_modal_html()}
-  <script>{project_home_js(workspace, mock_projects)}</script>
+  <script>{project_home_js(workspace)}</script>
 </body>
 </html>"""
 
@@ -9165,14 +9322,10 @@ def project_home_card_html(project: dict[str, object]) -> str:
     clip_count = int(project.get("clip_count") or 0)
     render_count = int(project.get("render_count") or 0)
     size_label = file_size_label(int(project.get("size_bytes") or 0))
-    is_mock = bool(project.get("is_mock"))
-    mock_attr = " data-project-mock=\"true\"" if is_mock else ""
     open_action = f'<a href="{url}">Abrir</a>' if url else '<button type="button" disabled>Abrir</button>'
-    remove_disabled = " disabled" if is_mock else ""
-    delete_disabled = " disabled" if is_mock else ""
-    updated = html.escape(str(project.get("last_opened_at") or "Mock"))
+    updated = html.escape(str(project.get("last_opened_at") or ""))
     return f"""
-        <article class="project-row" data-project-id="{project_id}"{mock_attr}>
+        <article class="project-row" data-project-id="{project_id}">
           <div class="project-name-cell">
             <strong>{title}</strong>
             <p>{source}</p>
@@ -9186,60 +9339,18 @@ def project_home_card_html(project: dict[str, object]) -> str:
           <time class="project-updated-cell">{updated}</time>
           <div class="project-row-actions">
             {open_action}
-            <button type="button" data-forget-project{remove_disabled}>Remover</button>
-            <button type="button" data-delete-project{delete_disabled}>Apagar</button>
+            <button type="button" data-forget-project>Remover</button>
+            <button type="button" data-delete-project>Apagar</button>
           </div>
         </article>"""
 
 
-def project_home_mock_projects(workspace: Path) -> list[dict[str, object]]:
-    base = workspace / "_mock"
-    return [
-        {
-            "id": "mock-podcast-cortes",
-            "title": "Podcast cortes virais",
-            "source_label": "Mock visual",
-            "path": str(base / "podcast-cortes"),
-            "clip_count": 12,
-            "render_count": 4,
-            "size_bytes": 328_000_000,
-            "last_opened_at": "Hoje",
-            "is_mock": True,
-        },
-        {
-            "id": "mock-aula-masterclass",
-            "title": "Aula masterclass",
-            "source_label": "Mock visual",
-            "path": str(base / "aula-masterclass"),
-            "clip_count": 8,
-            "render_count": 2,
-            "size_bytes": 184_000_000,
-            "last_opened_at": "Ontem",
-            "is_mock": True,
-        },
-        {
-            "id": "mock-reacts-live",
-            "title": "React live highlights",
-            "source_label": "Mock visual",
-            "path": str(base / "react-live"),
-            "clip_count": 15,
-            "render_count": 6,
-            "size_bytes": 512_000_000,
-            "last_opened_at": "Semana",
-            "is_mock": True,
-        },
-        {
-            "id": "mock-lancamento-produto",
-            "title": "Lancamento produto",
-            "source_label": "Mock visual",
-            "path": str(base / "lancamento-produto"),
-            "clip_count": 5,
-            "render_count": 1,
-            "size_bytes": 96_000_000,
-            "last_opened_at": "Arquivo",
-            "is_mock": True,
-        },
-    ]
+def project_home_empty_state_html() -> str:
+    return """
+        <article class="project-empty-state" data-project-empty-state>
+          <strong>Nenhum projeto recente</strong>
+          <p>Crie um novo projeto para comecar.</p>
+        </article>"""
 
 
 def project_import_form_html() -> str:
@@ -9314,6 +9425,16 @@ def project_home_import_loading_html(logo_src: str) -> str:
         <strong data-import-loading-message>Preparando projeto...</strong>
       </div>
       <small data-import-loading-label>Importacao</small>
+      <p class="home-import-detail" data-import-loading-detail>Organizando arquivos locais.</p>
+      <ol class="home-import-steps" data-import-loading-steps aria-label="Etapas do import">
+        <li data-import-step="prepare" data-state="active"><span></span>Projeto</li>
+        <li data-import-step="media"><span></span>Midia</li>
+        <li data-import-step="audio"><span></span>Audio</li>
+        <li data-import-step="analysis"><span></span>Analise</li>
+        <li data-import-step="suggestions"><span></span>Cortes</li>
+        <li data-import-step="previews"><span></span>Previews</li>
+        <li data-import-step="editor"><span></span>Editor</li>
+      </ol>
       <button type="button" data-import-loading-back hidden>Voltar</button>
     </div>
   </section>"""
@@ -9788,7 +9909,8 @@ def static_assets_html(assets: dict[str, str], kind: str) -> str:
 
 def project_home_css() -> str:
     return """
-body[data-project-home]{overflow-x:hidden}body[data-project-home] header{display:none}.project-home{width:min(1080px,calc(100vw - 36px));max-width:none;min-height:100vh;padding:30px 0 34px;align-content:start;gap:12px}.home-brand-stage{display:grid;place-items:center;min-height:164px;padding:4px 0 0}.home-logo-orbit{position:relative;display:grid;place-items:center;width:min(620px,84vw);isolation:isolate}.home-logo-orbit:before{position:absolute;inset:18% 12%;z-index:-1;border-radius:999px;background:radial-gradient(circle at 26% 50%,rgba(17,162,207,.28),transparent 34%),radial-gradient(circle at 74% 50%,rgba(175,207,42,.24),transparent 34%);filter:blur(24px);content:"";animation:home-logo-aura 5.2s ease-in-out infinite}.home-brand-logo{display:block;width:min(520px,80vw);height:104px;object-fit:contain;filter:drop-shadow(0 0 12px rgba(17,162,207,.18)) drop-shadow(0 0 12px rgba(175,207,42,.12));animation:home-logo-breathe 5.8s ease-in-out infinite}.project-library{display:grid;align-content:start;gap:0;border:1px solid var(--glass-border);border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,.052),rgba(255,255,255,.016)),rgba(7,7,7,.76);box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(22px) saturate(1.22);overflow:hidden}.project-section-head{display:flex;justify-content:space-between;gap:12px;align-items:center;min-height:52px;padding:9px 16px;border-bottom:1px solid rgba(231,231,232,.1)}.project-section-head strong{font-size:17px;letter-spacing:0}.project-toolbar{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.project-toolbar button,.project-row-actions button,.project-row-actions a{min-height:32px;padding:6px 11px}.project-icon-button{display:inline-grid!important;place-items:center;width:36px;min-width:36px;padding:0!important;font-size:17px;font-weight:900}.project-primary{border-color:rgba(175,207,42,.58)!important;background:linear-gradient(180deg,rgba(175,207,42,.26),rgba(17,162,207,.1)),rgba(23,32,14,.78)!important;color:var(--color-text)!important}.project-table{display:grid;max-height:min(456px,calc(100vh - 304px));overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(175,207,42,.55) rgba(255,255,255,.055)}.project-table::-webkit-scrollbar{width:10px}.project-table::-webkit-scrollbar-track{background:rgba(255,255,255,.04);border-left:1px solid rgba(231,231,232,.06)}.project-table::-webkit-scrollbar-thumb{border:2px solid rgba(7,7,7,.76);border-radius:999px;background:linear-gradient(180deg,rgba(17,162,207,.72),rgba(175,207,42,.72));box-shadow:0 0 12px rgba(17,162,207,.22)}.project-table::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,var(--color-brand-blue),var(--color-brand-green))}.project-table-head,.project-row{display:grid;grid-template-columns:minmax(230px,1fr) minmax(245px,.82fr) 100px minmax(214px,.58fr);gap:14px;align-items:center}.project-table-head{position:sticky;top:0;z-index:2;min-height:34px;padding:0 16px;border-bottom:1px solid rgba(231,231,232,.08);background:rgba(11,11,11,.92);color:var(--color-text-muted);font-size:11px;text-transform:uppercase;backdrop-filter:blur(12px)}.project-row{min-height:76px;padding:12px 16px;border-bottom:1px solid rgba(231,231,232,.075);animation:home-row-in .42s ease both}.project-row:last-child{border-bottom:0}.project-row:nth-child(2){animation-delay:.03s}.project-row:nth-child(3){animation-delay:.08s}.project-row:nth-child(4){animation-delay:.13s}.project-row:nth-child(5){animation-delay:.18s}.project-row:hover{background:linear-gradient(90deg,rgba(17,162,207,.085),rgba(175,207,42,.045),transparent)}.project-row[data-project-mock=true]{background:rgba(255,255,255,.018)}.project-name-cell{display:grid;gap:3px;min-width:0}.project-name-cell strong{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-name-cell p{margin:0;color:rgba(175,207,42,.82);font-size:12px}.project-name-cell small{display:block;color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-meta-cell{display:flex;gap:10px;margin:0}.project-meta-cell div{display:grid;gap:2px;min-width:62px}.project-meta-cell dt{color:var(--color-text-muted);font-size:11px}.project-meta-cell dd{margin:0;color:var(--color-text);font-weight:800}.project-updated-cell{color:var(--color-text-muted);font-size:12px}.project-row-actions{display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap}.project-row-actions a{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--glass-border);border-radius:999px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.project-row-actions button[data-delete-project]{color:var(--color-danger)}.project-row-actions button:disabled{opacity:.38;cursor:not-allowed}.project-import{margin-top:12px}.project-import[hidden],.project-library[hidden]{display:none}.project-import .import-panel{animation:home-row-in .28s ease both}.new-project-panel{gap:14px;border-color:var(--glass-border);background:linear-gradient(180deg,rgba(255,255,255,.052),rgba(255,255,255,.016)),rgba(7,7,7,.76);box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(22px) saturate(1.22)}.new-project-head,.new-project-footer,.ai-context-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.new-project-head{min-height:38px;padding-bottom:10px;border-bottom:1px solid rgba(231,231,232,.1)}.new-project-head strong{font-size:17px}.source-toggle{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.source-toggle label,.duration-size-toggle label{position:relative;display:grid}.source-toggle input,.duration-size-toggle input{position:absolute;opacity:0;pointer-events:none}.source-toggle span,.duration-size-toggle span{display:grid;place-items:center;min-height:48px;padding:8px 12px;border:1px solid var(--glass-border);border-radius:8px;background:rgba(231,231,232,.055);box-shadow:inset 0 1px rgba(255,255,255,.14);color:var(--color-text-soft);font-weight:800}.source-toggle input:checked+span,.duration-size-toggle input:checked+span{border-color:rgba(175,207,42,.72);background:linear-gradient(180deg,rgba(175,207,42,.2),rgba(17,162,207,.08)),rgba(13,18,12,.84);color:var(--color-text);box-shadow:inset 0 1px rgba(255,255,255,.18),0 0 22px rgba(175,207,42,.12)}.source-panel{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}.source-panel[hidden]{display:none}.new-project-grid{display:grid;grid-template-columns:minmax(140px,.32fr) minmax(0,1fr);gap:12px;align-items:end}.suggestion-field{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.duration-size-toggle{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0}.duration-size-toggle legend{grid-column:1/-1;color:var(--color-text-muted);font-size:12px}.duration-size-toggle span{min-height:58px}.duration-size-toggle strong{font-size:22px;line-height:1}.duration-size-toggle small{color:var(--color-text-muted);font-size:11px}.ai-context-box{display:grid;gap:8px;padding:12px;border:1px solid rgba(17,162,207,.28);border-radius:8px;background:linear-gradient(135deg,rgba(17,162,207,.09),rgba(175,207,42,.035)),rgba(0,0,0,.18)}.ai-context-box textarea{min-height:126px;border-color:rgba(17,162,207,.28);background:rgba(0,0,0,.44)}.new-project-footer{padding-top:4px}.new-project-footer span{color:var(--color-text-muted);font-size:12px}@keyframes home-logo-aura{0%,100%{opacity:.56;transform:scale(.98)}50%{opacity:.84;transform:scale(1.03)}}@keyframes home-logo-breathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-1px) scale(1.006)}}@keyframes home-row-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@media(max-width:900px){.project-home{width:min(100vw - 20px,760px);padding-top:26px}.home-brand-stage{min-height:138px}.home-brand-logo{height:78px}.project-section-head{align-items:flex-start;flex-direction:column}.project-toolbar{justify-content:flex-start}.project-table{max-height:none}.project-table-head{display:none}.project-row,.new-project-grid,.source-panel{grid-template-columns:1fr;gap:10px}.project-meta-cell{justify-content:space-between}.project-row-actions{justify-content:flex-start}.project-updated-cell{display:none}}
+body[data-project-home]{overflow-x:hidden}body[data-project-home] header{display:none}.project-home{width:min(1080px,calc(100vw - 36px));max-width:none;min-height:100vh;padding:30px 0 34px;align-content:start;gap:12px}.home-brand-stage{display:grid;place-items:center;min-height:164px;padding:4px 0 0}.home-logo-orbit{position:relative;display:grid;place-items:center;width:min(620px,84vw);isolation:isolate}.home-logo-orbit:before{position:absolute;inset:18% 12%;z-index:-1;border-radius:999px;background:radial-gradient(circle at 26% 50%,rgba(17,162,207,.28),transparent 34%),radial-gradient(circle at 74% 50%,rgba(175,207,42,.24),transparent 34%);filter:blur(24px);content:"";animation:home-logo-aura 5.2s ease-in-out infinite}.home-brand-logo{display:block;width:min(520px,80vw);height:104px;object-fit:contain;filter:drop-shadow(0 0 12px rgba(17,162,207,.18)) drop-shadow(0 0 12px rgba(175,207,42,.12));animation:home-logo-breathe 5.8s ease-in-out infinite}.project-library{display:grid;align-content:start;gap:0;border:1px solid var(--glass-border);border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,.052),rgba(255,255,255,.016)),rgba(7,7,7,.76);box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(22px) saturate(1.22);overflow:hidden}.project-section-head{display:flex;justify-content:space-between;gap:12px;align-items:center;min-height:52px;padding:9px 16px;border-bottom:1px solid rgba(231,231,232,.1)}.project-section-head strong{font-size:17px;letter-spacing:0}.project-toolbar{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.project-toolbar button,.project-row-actions button,.project-row-actions a{min-height:32px;padding:6px 11px}.project-icon-button{display:inline-grid!important;place-items:center;width:36px;min-width:36px;padding:0!important;font-size:17px;font-weight:900}.project-primary{border-color:rgba(175,207,42,.58)!important;background:linear-gradient(180deg,rgba(175,207,42,.26),rgba(17,162,207,.1)),rgba(23,32,14,.78)!important;color:var(--color-text)!important}.project-table{display:grid;max-height:min(456px,calc(100vh - 304px));overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(175,207,42,.55) rgba(255,255,255,.055)}.project-table::-webkit-scrollbar{width:10px}.project-table::-webkit-scrollbar-track{background:rgba(255,255,255,.04);border-left:1px solid rgba(231,231,232,.06)}.project-table::-webkit-scrollbar-thumb{border:2px solid rgba(7,7,7,.76);border-radius:999px;background:linear-gradient(180deg,rgba(17,162,207,.72),rgba(175,207,42,.72));box-shadow:0 0 12px rgba(17,162,207,.22)}.project-table::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,var(--color-brand-blue),var(--color-brand-green))}.project-table-head,.project-row{display:grid;grid-template-columns:minmax(230px,1fr) minmax(245px,.82fr) 100px minmax(214px,.58fr);gap:14px;align-items:center}.project-table-head{position:sticky;top:0;z-index:2;min-height:34px;padding:0 16px;border-bottom:1px solid rgba(231,231,232,.08);background:rgba(11,11,11,.92);color:var(--color-text-muted);font-size:11px;text-transform:uppercase;backdrop-filter:blur(12px)}.project-row{min-height:76px;padding:12px 16px;border-bottom:1px solid rgba(231,231,232,.075);animation:home-row-in .42s ease both}.project-row:last-child{border-bottom:0}.project-row:nth-child(2){animation-delay:.03s}.project-row:nth-child(3){animation-delay:.08s}.project-row:nth-child(4){animation-delay:.13s}.project-row:nth-child(5){animation-delay:.18s}.project-row:hover{background:linear-gradient(90deg,rgba(17,162,207,.085),rgba(175,207,42,.045),transparent)}.project-name-cell{display:grid;gap:3px;min-width:0}.project-name-cell strong{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-name-cell p{margin:0;color:rgba(175,207,42,.82);font-size:12px}.project-name-cell small{display:block;color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-meta-cell{display:flex;gap:10px;margin:0}.project-meta-cell div{display:grid;gap:2px;min-width:62px}.project-meta-cell dt{color:var(--color-text-muted);font-size:11px}.project-meta-cell dd{margin:0;color:var(--color-text);font-weight:800}.project-updated-cell{color:var(--color-text-muted);font-size:12px}.project-row-actions{display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap}.project-row-actions a{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--glass-border);border-radius:999px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.project-row-actions button[data-delete-project]{color:var(--color-danger)}.project-row-actions button:disabled{opacity:.38;cursor:not-allowed}.project-import{margin-top:12px}.project-import[hidden],.project-library[hidden]{display:none}.project-import .import-panel{animation:home-row-in .28s ease both}.new-project-panel{gap:14px;border-color:var(--glass-border);background:linear-gradient(180deg,rgba(255,255,255,.052),rgba(255,255,255,.016)),rgba(7,7,7,.76);box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(22px) saturate(1.22)}.new-project-head,.new-project-footer,.ai-context-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.new-project-head{min-height:38px;padding-bottom:10px;border-bottom:1px solid rgba(231,231,232,.1)}.new-project-head strong{font-size:17px}.source-toggle{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.source-toggle label,.duration-size-toggle label{position:relative;display:grid}.source-toggle input,.duration-size-toggle input{position:absolute;opacity:0;pointer-events:none}.source-toggle span,.duration-size-toggle span{display:grid;place-items:center;min-height:48px;padding:8px 12px;border:1px solid var(--glass-border);border-radius:8px;background:rgba(231,231,232,.055);box-shadow:inset 0 1px rgba(255,255,255,.14);color:var(--color-text-soft);font-weight:800}.source-toggle input:checked+span,.duration-size-toggle input:checked+span{border-color:rgba(175,207,42,.72);background:linear-gradient(180deg,rgba(175,207,42,.2),rgba(17,162,207,.08)),rgba(13,18,12,.84);color:var(--color-text);box-shadow:inset 0 1px rgba(255,255,255,.18),0 0 22px rgba(175,207,42,.12)}.source-panel{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}.source-panel[hidden]{display:none}.new-project-grid{display:grid;grid-template-columns:minmax(140px,.32fr) minmax(0,1fr);gap:12px;align-items:end}.suggestion-field{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.duration-size-toggle{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0}.duration-size-toggle legend{grid-column:1/-1;color:var(--color-text-muted);font-size:12px}.duration-size-toggle span{min-height:58px}.duration-size-toggle strong{font-size:22px;line-height:1}.duration-size-toggle small{color:var(--color-text-muted);font-size:11px}.ai-context-box{display:grid;gap:8px;padding:12px;border:1px solid rgba(17,162,207,.28);border-radius:8px;background:linear-gradient(135deg,rgba(17,162,207,.09),rgba(175,207,42,.035)),rgba(0,0,0,.18)}.ai-context-box textarea{min-height:126px;border-color:rgba(17,162,207,.28);background:rgba(0,0,0,.44)}.new-project-footer{padding-top:4px}.new-project-footer span{color:var(--color-text-muted);font-size:12px}@keyframes home-logo-aura{0%,100%{opacity:.56;transform:scale(.98)}50%{opacity:.84;transform:scale(1.03)}}@keyframes home-logo-breathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-1px) scale(1.006)}}@keyframes home-row-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@media(max-width:900px){.project-home{width:min(100vw - 20px,760px);padding-top:26px}.home-brand-stage{min-height:138px}.home-brand-logo{height:78px}.project-section-head{align-items:flex-start;flex-direction:column}.project-toolbar{justify-content:flex-start}.project-table{max-height:none}.project-table-head{display:none}.project-row,.new-project-grid,.source-panel{grid-template-columns:1fr;gap:10px}.project-meta-cell{justify-content:space-between}.project-row-actions{justify-content:flex-start}.project-updated-cell{display:none}}
+.project-empty-state{display:grid;justify-items:center;gap:6px;min-height:116px;padding:30px 18px;border-top:1px solid rgba(231,231,232,.075);color:rgba(231,231,232,.64);text-align:center;animation:home-row-in .3s ease both}.project-empty-state strong{color:var(--color-text);font-size:15px}.project-empty-state p{margin:0;color:var(--color-text-muted);font-size:12px}
 """
 
 
@@ -9842,17 +9964,25 @@ def project_home_compact_import_css() -> str:
 .home-import-progress span{position:absolute;inset:0 auto 0 0;width:8%;border-radius:999px;background:linear-gradient(90deg,var(--color-brand-blue),var(--color-brand-green));transition:width .5s ease}
 .home-import-progress strong{position:relative;z-index:1;display:grid;place-items:center;height:100%;padding:0 18px;color:var(--color-text);font-size:13px;text-align:center;text-shadow:0 1px 8px rgba(0,0,0,.6)}
 .home-import-loading small{color:var(--color-text-muted);font-size:12px;text-transform:uppercase}
+.home-import-detail{min-height:18px;margin:-4px 0 0;color:rgba(231,231,232,.7);font-size:12px;text-align:center}
+.home-import-steps{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;width:100%;margin:2px 0 0;padding:0;list-style:none}
+.home-import-steps li{display:grid;justify-items:center;gap:6px;min-width:0;color:rgba(231,231,232,.48);font-size:10px;font-weight:800;text-transform:uppercase}
+.home-import-steps li span{display:block;width:10px;height:10px;border:1px solid rgba(231,231,232,.18);border-radius:999px;background:rgba(231,231,232,.08);box-shadow:inset 0 1px rgba(255,255,255,.12)}
+.home-import-steps li[data-state=done]{color:rgba(175,207,42,.86)}.home-import-steps li[data-state=done] span{border-color:rgba(175,207,42,.62);background:var(--color-brand-green);box-shadow:0 0 14px rgba(175,207,42,.3)}
+.home-import-steps li[data-state=active]{color:var(--color-text)}.home-import-steps li[data-state=active] span{border-color:rgba(17,162,207,.72);background:var(--color-brand-blue);box-shadow:0 0 16px rgba(17,162,207,.38);animation:home-import-step-pulse 1.2s ease-in-out infinite}
 .home-import-loading[data-state=failed] .home-import-progress span{background:linear-gradient(90deg,#7f1d1d,var(--color-danger))}
+.home-import-loading[data-state=failed] .home-import-steps li[data-state=active] span{border-color:rgba(255,111,111,.68);background:var(--color-danger);box-shadow:0 0 16px rgba(255,111,111,.32);animation:none}
 .home-import-loading button{min-height:38px;padding:8px 14px;border-color:var(--glass-border);background:var(--color-brand-white);color:var(--color-brand-black)}
 body[data-importing=true] .project-home{opacity:0;pointer-events:none;transition:opacity .24s ease}
+@keyframes home-import-step-pulse{0%,100%{transform:scale(1);opacity:.72}50%{transform:scale(1.2);opacity:1}}
+@media(max-width:680px){.home-import-steps{grid-template-columns:repeat(4,minmax(0,1fr))}.home-import-steps li{font-size:9px}}
 @media(max-width:900px){.new-project-config-grid{grid-template-columns:1fr}.new-project-config-block{width:100%}.source-panel,.source-panel[data-source-panel=youtube]{grid-template-columns:minmax(0,1fr) 52px}.source-panel[data-source-panel=youtube]{grid-template-columns:minmax(0,1fr)}.cuts-control-grid{grid-template-columns:1fr}.cut-count-field select{min-height:54px}.duration-tile-grid{grid-template-columns:repeat(2,minmax(54px,1fr))}.duration-size-toggle span{min-width:0}}
 """
 
 
-def project_home_js(workspace: Path, mock_projects: list[dict[str, object]]) -> str:
+def project_home_js(workspace: Path) -> str:
     script = r"""
 const workspacePath = __WORKSPACE_PATH__;
-const mockProjects = __MOCK_PROJECTS__;
 const homeImport = document.querySelector("[data-home-import]");
 const projectLibrary = document.querySelector("[data-project-library]");
 const projectList = document.querySelector("[data-project-list]");
@@ -9899,22 +10029,44 @@ let importOpenaiState = { provider: "local", keyConfigured: true };
 function importNeedsOpenaiKey(){
   return importOpenaiState.provider === "openai" && !importOpenaiState.keyConfigured;
 }
-function setImportLoading(message, label = "Importacao", percent = 8){
+const importStageOrder = ["prepare", "media", "audio", "analysis", "suggestions", "previews", "editor"];
+function setImportLoading(message, label = "Importacao", percent = 8, progress = {}){
   const loading = document.querySelector("[data-import-loading]");
   if (!loading) return;
   const value = Math.max(0, Math.min(100, Number(percent || 0)));
+  const stage = String(progress.stage || "prepare");
   loading.hidden = false;
   loading.dataset.state = "running";
   document.body.dataset.importing = "true";
   loading.querySelector("[data-import-loading-message]").textContent = message || "Processando...";
   loading.querySelector("[data-import-loading-label]").textContent = label || "Importacao";
+  loading.querySelector("[data-import-loading-detail]").textContent = importProgressDetail(progress);
   loading.querySelector("[data-import-loading-bar]").style.width = `${value}%`;
   loading.querySelector("[role=progressbar]").setAttribute("aria-valuenow", String(value));
   loading.querySelector("[data-import-loading-back]").hidden = true;
+  updateImportSteps(stage);
+}
+function importProgressDetail(progress){
+  if (progress.detail) return String(progress.detail);
+  const step = Number(progress.step || 0);
+  const steps = Number(progress.steps || 0);
+  if (step && steps) return `${step} de ${steps}`;
+  if (progress.stage === "media") return "Preparando fonte de video.";
+  if (progress.stage === "audio") return "Audio sendo convertido e transcrito.";
+  if (progress.stage === "analysis") return "Procurando trechos com gancho e fechamento.";
+  if (progress.stage === "previews") return "Gerando amostras para revisar no editor.";
+  return "Acompanhe as etapas enquanto o projeto nasce.";
+}
+function updateImportSteps(stage){
+  const currentIndex = Math.max(0, importStageOrder.indexOf(stage));
+  document.querySelectorAll("[data-import-step]").forEach(item => {
+    const index = importStageOrder.indexOf(item.dataset.importStep || "");
+    item.dataset.state = index < currentIndex ? "done" : index === currentIndex ? "active" : "";
+  });
 }
 function updateImportLoading(job){
   const progress = job.progress || {};
-  setImportLoading(progress.message || job.message || "Processando importacao...", progress.label || job.status || "Importacao", progress.percent || 35);
+  setImportLoading(progress.message || job.message || "Processando importacao...", progress.label || job.status || "Importacao", progress.percent || 35, progress);
 }
 function failImportLoading(message){
   const loading = document.querySelector("[data-import-loading]");
@@ -9923,6 +10075,7 @@ function failImportLoading(message){
   loading.dataset.state = "failed";
   loading.querySelector("[data-import-loading-message]").textContent = message || "Nao consegui importar este projeto.";
   loading.querySelector("[data-import-loading-label]").textContent = "Importacao interrompida";
+  loading.querySelector("[data-import-loading-detail]").textContent = "Confira a mensagem abaixo e tente novamente.";
   loading.querySelector("[data-import-loading-bar]").style.width = "100%";
   loading.querySelector("[role=progressbar]").setAttribute("aria-valuenow", "100");
   loading.querySelector("[data-import-loading-back]").hidden = false;
@@ -9946,7 +10099,7 @@ async function startImport(form){
     return;
   }
   setResult("");
-  setImportLoading("Preparando projeto...", "Preparando", 8);
+  setImportLoading("Preparando projeto...", "Preparando", 8, { stage: "prepare", detail: "Organizando arquivos locais." });
   setStatus("Criando job de importacao...");
   if (button) button.disabled = true;
   try {
@@ -10209,16 +10362,16 @@ function setupImportKeyBanner(){
   refreshImportKeyBanner();
 }
 function projectCard(project){
-  const isMock = Boolean(project.is_mock);
-  const mockAttr = isMock ? ' data-project-mock="true"' : "";
-  const disabled = isMock ? " disabled" : "";
   const open = project.url ? `<a href="${escapeAttr(project.url)}">Abrir</a>` : `<button type="button" disabled>Abrir</button>`;
-  return `<article class="project-row" data-project-id="${escapeAttr(project.id)}"${mockAttr}>
+  return `<article class="project-row" data-project-id="${escapeAttr(project.id)}">
     <div class="project-name-cell"><strong>${escapeHtml(project.title || "Projeto sem titulo")}</strong><p>${escapeHtml(project.source_label || "")}</p><small>${escapeHtml(project.path || "")}</small></div>
     <dl class="project-meta-cell"><div><dt>Cortes</dt><dd>${Number(project.clip_count || 0)}</dd></div><div><dt>Renders</dt><dd>${Number(project.render_count || 0)}</dd></div><div><dt>Tamanho</dt><dd>${escapeHtml(sizeLabel(project.size_bytes || 0))}</dd></div></dl>
-    <time class="project-updated-cell">${escapeHtml(project.last_opened_at || "Mock")}</time>
-    <div class="project-row-actions">${open}<button type="button" data-forget-project${disabled}>Remover</button><button type="button" data-delete-project${disabled}>Apagar</button></div>
+    <time class="project-updated-cell">${escapeHtml(project.last_opened_at || "")}</time>
+    <div class="project-row-actions">${open}<button type="button" data-forget-project>Remover</button><button type="button" data-delete-project>Apagar</button></div>
   </article>`;
+}
+function emptyProjectState(){
+  return `<article class="project-empty-state" data-project-empty-state><strong>Nenhum projeto recente</strong><p>Crie um novo projeto para comecar.</p></article>`;
 }
 function sizeLabel(bytes){
   let value = Number(bytes || 0);
@@ -10233,13 +10386,12 @@ async function refreshProjects(){
   const response = await fetch("/api/projects");
   const data = await response.json();
   if (!response.ok || !data.ok) throw new Error(data.error || "Nao consegui carregar projetos.");
-  const realProjects = Array.isArray(data.projects) ? data.projects : [];
-  const projects = realProjects.length ? realProjects : mockProjects;
-  projectList.innerHTML = `<div class="project-table-head" aria-hidden="true"><span>Projeto</span><span>Status</span><span>Atualizado</span><span>Acoes</span></div>${projects.map(projectCard).join("")}`;
+  const projects = Array.isArray(data.projects) ? data.projects : [];
+  const content = projects.length ? projects.map(projectCard).join("") : emptyProjectState();
+  projectList.innerHTML = `<div class="project-table-head" aria-hidden="true"><span>Projeto</span><span>Status</span><span>Atualizado</span><span>Acoes</span></div>${content}`;
 }
 async function deleteProject(card, deleteFiles){
   const projectId = card?.dataset.projectId || "";
-  if (card?.dataset.projectMock === "true") return;
   const message = deleteFiles ? "Apagar os arquivos locais deste projeto?" : "Remover este projeto da lista recente?";
   if (!projectId || !window.confirm(message)) return;
   await postJson(`/api/projects/${encodeURIComponent(projectId)}/delete`, { delete_files: deleteFiles });
@@ -10269,7 +10421,7 @@ setupHomeSettingsPanel();
 setupImportKeyBanner();
 bindImportForm();
 """
-    return script.replace("__WORKSPACE_PATH__", json.dumps(str(workspace))).replace("__MOCK_PROJECTS__", json.dumps(mock_projects, ensure_ascii=False))
+    return script.replace("__WORKSPACE_PATH__", json.dumps(str(workspace)))
 
 
 def css() -> str:
@@ -10373,13 +10525,20 @@ body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,
 
 def js() -> str:
     return """
+function galleryStorageKey(name){
+  return `${name}:${currentGalleryPath() || window.location.pathname || "root"}`;
+}
+const editorStateStorageKey = galleryStorageKey("cutted-state");
+const editorTabStorageKey = galleryStorageKey("cutted-tab");
 if (new URLSearchParams(location.search).has("reset")) {
+  localStorage.removeItem(editorStateStorageKey);
+  localStorage.removeItem(editorTabStorageKey);
   localStorage.removeItem("cutted-state");
   localStorage.removeItem("cutted-tab");
   localStorage.removeItem("cutted-empty-gallery");
   history.replaceState(null, "", location.pathname);
 }
-const state = JSON.parse(localStorage.getItem("cutted-state") || "{}");
+const state = JSON.parse(localStorage.getItem(editorStateStorageKey) || "{}");
 const emptyGalleryStorageKey = "cutted-empty-gallery";
 const maxOverlayImageBytes = 1800000;
 const maxOverlayImageSourceBytes = 6000000;
@@ -10389,7 +10548,7 @@ const cameraAnalysisFetchTimeoutMs = 180000;
 const cameraReadinessPollMs = 3500;
 function save(){
   try {
-    localStorage.setItem("cutted-state", JSON.stringify(state));
+    localStorage.setItem(editorStateStorageKey, JSON.stringify(state));
     clearAppNotice();
     return true;
   } catch (error) {
@@ -10496,7 +10655,7 @@ const overlayMeta = {
 function applyTab(tab){
   const next = ["import", "edit", "final"].includes(tab) ? tab : "edit";
   document.body.dataset.tab = next;
-  localStorage.setItem("cutted-tab", next);
+  localStorage.setItem(editorTabStorageKey, next);
   document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.tab === next);
   });
@@ -13957,6 +14116,19 @@ function currentGalleryPath(){
   if (path.endsWith("/")) return path.replace(/\\/$/, "");
   return path.replace(/\\/[^/]*$/, "");
 }
+async function touchCurrentProject(){
+  const galleryPath = currentGalleryPath();
+  if (!galleryPath || galleryPath === "/index") return null;
+  const response = await fetch("/api/projects/touch", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({gallery_path: galleryPath}),
+    keepalive: true
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload.ok) throw new Error(payload.error || "Nao consegui atualizar recentes.");
+  return payload;
+}
 function isCurrentGalleryEmpty(){
   return localStorage.getItem(emptyGalleryStorageKey) === currentGalleryPath();
 }
@@ -15036,6 +15208,8 @@ function copyTextFallback(text){
 }
 function clearNewProjectState(){
   Object.keys(state).forEach(key => { delete state[key]; });
+  localStorage.removeItem(editorStateStorageKey);
+  localStorage.removeItem(editorTabStorageKey);
   localStorage.removeItem("cutted-state");
   localStorage.removeItem("cutted-tab");
   localStorage.removeItem("cutted-caption-lines");
@@ -15124,14 +15298,20 @@ function trapWorkspaceExitFocus(event){
     first.focus();
   }
 }
-function confirmWorkspaceExit(){
+async function confirmWorkspaceExit(){
   save();
   const button = document.querySelector("[data-workspace-exit-confirm]");
   if (button) {
     button.disabled = true;
     button.textContent = "Voltando...";
   }
-  window.location.assign("/index.html");
+  try {
+    await touchCurrentProject();
+  } catch (error) {
+    console.warn("CUTED project was not added to recents", error);
+  } finally {
+    window.location.assign("/index.html");
+  }
 }
 function startNewProject(){
   openWorkspaceExitModal();
@@ -15171,6 +15351,7 @@ document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
 setupSettingsPanel();
 setupRenderQueuePanel();
 setupWorkspaceExitModal();
+touchCurrentProject().catch(error => console.warn("CUTED project was not added to recents", error));
 setupImportPathButtons();
 setupImportKeyBanner();
 document.querySelector("[data-empty-import]")?.addEventListener("click", () => applyTab("import"));

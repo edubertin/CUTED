@@ -74,6 +74,18 @@ class CuttedImportUiTests(unittest.TestCase):
 
         self.assertIn("window.location.assign(job.output_url)", html)
 
+    def test_editor_state_is_scoped_to_current_project(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("function galleryStorageKey(name)", html)
+        self.assertIn('const editorStateStorageKey = galleryStorageKey("cutted-state");', html)
+        self.assertIn('const editorTabStorageKey = galleryStorageKey("cutted-tab");', html)
+        self.assertIn('const state = JSON.parse(localStorage.getItem(editorStateStorageKey) || "{}");', html)
+        self.assertIn("localStorage.setItem(editorStateStorageKey, JSON.stringify(state));", html)
+        self.assertIn("localStorage.setItem(editorTabStorageKey, next);", html)
+        self.assertNotIn('localStorage.setItem("cutted-state", JSON.stringify(state));', html)
+        self.assertNotIn('const state = JSON.parse(localStorage.getItem("cutted-state") || "{}");', html)
+
     def test_render_results_are_restored_from_gallery(self) -> None:
         html = gallery_html()
 
@@ -609,8 +621,12 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("Voltar para recentes", html)
         self.assertIn("function setupWorkspaceExitModal()", source)
         self.assertIn("function openWorkspaceExitModal()", source)
-        self.assertIn("function confirmWorkspaceExit()", source)
+        self.assertIn("async function touchCurrentProject()", source)
+        self.assertIn('fetch("/api/projects/touch"', source)
+        self.assertIn("async function confirmWorkspaceExit()", source)
         self.assertIn("save();\n  const button = document.querySelector(\"[data-workspace-exit-confirm]\");", source)
+        self.assertIn("await touchCurrentProject();", source)
+        self.assertIn('touchCurrentProject().catch(error => console.warn("CUTED project was not added to recents", error));', source)
         self.assertIn('window.location.assign("/index.html");', source)
         self.assertIn("function startNewProject(){\n  openWorkspaceExitModal();\n}", source)
         self.assertNotIn('confirm("Iniciar novo projeto?', source)
@@ -928,6 +944,50 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("message", payload["progress"])
         self.assertGreaterEqual(payload["progress"]["percent"], 8)
         self.assertIn(payload["progress"]["label"], {"Preparando", "Midia", "Audio", "Analise", "Sugestoes", "Editor"})
+
+    def test_import_progress_event_is_parsed_for_job_snapshot(self) -> None:
+        event = CUTTED.parse_import_progress_line(
+            'CUTED_IMPORT_EVENT {"stage":"previews","label":"Previews","message":"Renderizando previews...","percent":82,"step":2,"steps":4,"detail":"2 de 4 previews"}'
+        )
+
+        self.assertIsNotNone(event)
+        self.assertEqual(event["stage"], "previews")
+        self.assertEqual(event["label"], "Previews")
+        self.assertEqual(event["percent"], 82)
+        self.assertEqual(event["step"], 2)
+        self.assertEqual(event["steps"], 4)
+        self.assertEqual(event["detail"], "2 de 4 previews")
+
+    def test_import_job_snapshot_prefers_real_progress_event(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            job = CUTTED.ImportJob(
+                "job123",
+                "running",
+                time.time() - 30,
+                time.time(),
+                Path(tmp),
+                Path(tmp),
+                "/projects/job123/index.html",
+                None,
+                "Importacao iniciada.",
+                "local",
+                "local",
+            )
+            job.progress = {
+                "stage": "previews",
+                "label": "Previews",
+                "message": "Renderizando previews...",
+                "percent": 84,
+                "step": 3,
+                "steps": 4,
+            }
+            job.events.append(job.progress)
+
+            payload = CUTTED.import_job_to_dict(job)
+
+        self.assertEqual(payload["progress"]["stage"], "previews")
+        self.assertEqual(payload["progress"]["percent"], 84)
+        self.assertEqual(payload["events"][0]["step"], 3)
 
     def test_import_request_metadata_requires_source(self) -> None:
         with self.assertRaisesRegex(ValueError, "link ou caminho local"):
