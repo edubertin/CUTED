@@ -71,6 +71,9 @@ class CuttedProjectHomeTests(unittest.TestCase):
             self.assertIn("data-settings-modal", html)
             self.assertIn("data-import-loading", html)
             self.assertIn("data-import-loading-message", html)
+            self.assertIn("data-import-loading-detail", html)
+            self.assertIn("data-import-loading-steps", html)
+            self.assertIn('data-import-step="previews"', html)
             self.assertIn("project-table-head", html)
             self.assertIn("project-row", html)
             self.assertIn("Sample", html)
@@ -78,19 +81,21 @@ class CuttedProjectHomeTests(unittest.TestCase):
             self.assertNotIn("1. Importar", html)
             self.assertNotIn("project-intro", html)
 
-    def test_project_home_shows_mock_rows_without_real_projects(self) -> None:
+    def test_project_home_shows_empty_state_without_real_projects(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp)
 
             html = CUTTED.project_home_html(workspace, "assets/brand/cuted-logo-transparent.png", [])
 
             self.assertIn("home-brand-logo", html)
-            self.assertIn("data-project-mock=\"true\"", html)
-            self.assertEqual(html.count('data-project-id="mock-'), 4)
-            self.assertIn("Podcast cortes virais", html)
+            self.assertIn("data-project-empty-state", html)
+            self.assertIn("Nenhum projeto recente", html)
+            self.assertIn("Crie um novo projeto para comecar.", html)
+            self.assertNotIn("data-project-mock", html)
+            self.assertNotIn('data-project-id="mock-', html)
             self.assertIn("data-new-project", html)
             self.assertIn("data-open-workspace", html)
-            self.assertIn("mockProjects", html)
+            self.assertNotIn("mockProjects", html)
 
     def test_project_home_new_project_state_uses_compact_import_flow(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -150,7 +155,8 @@ class CuttedProjectHomeTests(unittest.TestCase):
             self.assertIn("data-project-home", html)
             self.assertIn("home-brand-logo", html)
             self.assertNotIn("home-logo-spark-left", html)
-            self.assertIn("data-project-mock=\"true\"", html)
+            self.assertIn("data-project-empty-state", html)
+            self.assertNotIn("data-project-mock", html)
             self.assertTrue(CUTTED.workspace_index_is_empty_shell(workspace / "index.html"))
 
     def test_project_delete_can_forget_or_remove_workspace_files(self) -> None:
@@ -247,6 +253,27 @@ class CuttedProjectHomeTests(unittest.TestCase):
             self.assertEqual(entry["title"], "video.mp4")
             self.assertEqual(entry["clip_count"], 2)
             self.assertTrue(str(entry["id"]).startswith("demo-"))
+
+    def test_touch_project_catalog_entry_adds_valid_open_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            catalog_path = workspace / "projects.json"
+            gallery = workspace / "projects" / "demo"
+            gallery.mkdir(parents=True)
+            (gallery / "index.html").write_text("ok", encoding="utf-8")
+            (gallery / "moments.json").write_text(json.dumps({"moments": [{}, {}]}), encoding="utf-8")
+            original_catalog_path = CUTTED.project_catalog_path
+            CUTTED.project_catalog_path = lambda: catalog_path
+            try:
+                result = CUTTED.touch_project_catalog_entry(gallery, workspace)
+                recent = CUTTED.project_catalog_recent(workspace)
+
+                self.assertTrue(result["ok"])
+                self.assertEqual(result["project"]["url"], "/projects/demo/index.html")
+                self.assertEqual([project["id"] for project in recent], [result["project"]["id"]])
+                self.assertEqual(recent[0]["clip_count"], 2)
+            finally:
+                CUTTED.project_catalog_path = original_catalog_path
 
 
 if __name__ == "__main__":
