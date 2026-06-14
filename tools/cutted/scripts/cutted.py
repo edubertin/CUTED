@@ -716,9 +716,22 @@ def write_project_catalog(catalog: dict[str, object], path: Path | None = None) 
 
 
 def project_catalog_recent(workspace: Path, limit: int = PROJECT_CATALOG_LIMIT) -> list[dict[str, object]]:
-    projects = read_project_catalog().get("projects")
-    rows = [project_home_entry(row, workspace) for row in projects if isinstance(row, dict)]
-    rows = [row for row in rows if row]
+    catalog = read_project_catalog()
+    projects = catalog.get("projects")
+    source_rows = projects if isinstance(projects, list) else []
+    rows = []
+    kept_projects = []
+    for row in source_rows:
+        if not isinstance(row, dict):
+            continue
+        entry = project_home_entry(row, workspace)
+        if not entry:
+            continue
+        rows.append(entry)
+        kept_projects.append(row)
+    if kept_projects != source_rows:
+        catalog["projects"] = kept_projects
+        write_project_catalog(catalog)
     rows.sort(key=lambda row: str(row.get("last_opened_at") or row.get("updated_at") or ""), reverse=True)
     return rows[:limit]
 
@@ -729,7 +742,11 @@ def project_home_entry(row: dict[str, object], workspace: Path) -> dict[str, obj
     if not project_id or not raw_path:
         return {}
     project_path = Path(raw_path).expanduser()
+    if not valid_recent_project_dir(project_path, workspace):
+        return {}
     url = project_url_for_workspace(project_path, workspace)
+    if not url:
+        return {}
     return {
         "id": project_id,
         "title": clean_optional_text(row.get("title"), 100) or project_path.name,
@@ -771,14 +788,24 @@ def delete_project_from_catalog(project_id: str, workspace: Path, delete_files: 
     target = next((row for row in rows if isinstance(row, dict) and clean_project_id(row.get("id")) == project_id), None)
     if target is None:
         raise ValueError("Projeto nao encontrado.")
-    catalog["projects"] = [row for row in rows if not (isinstance(row, dict) and clean_project_id(row.get("id")) == project_id)]
-    write_project_catalog(catalog)
     deleted = False
     if delete_files:
         project_dir = safe_project_delete_dir(Path(str(target.get("path") or "")), workspace)
         shutil.rmtree(project_dir)
         deleted = True
+    catalog["projects"] = [row for row in rows if not (isinstance(row, dict) and clean_project_id(row.get("id")) == project_id)]
+    write_project_catalog(catalog)
     return {"ok": True, "deleted_files": deleted, "projects": project_catalog_recent(workspace)}
+
+
+def valid_recent_project_dir(project_dir: Path, workspace: Path) -> bool:
+    try:
+        resolved = project_dir.expanduser().resolve()
+        root = workspace.resolve()
+        resolved.relative_to(root)
+    except (OSError, ValueError):
+        return False
+    return resolved != root and (resolved / "index.html").is_file()
 
 
 def safe_project_delete_dir(project_dir: Path, workspace: Path) -> Path:
