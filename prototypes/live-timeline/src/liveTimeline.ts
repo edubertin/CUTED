@@ -85,6 +85,7 @@ interface TimelineState extends LiveTimelineSnapshot {
   volumeOpen: boolean;
   volumeEnabled: boolean;
   inspectorEnabled: boolean;
+  trimEnabled: boolean;
   mode: TimelineMode;
   activeHandle: TrimSide | null;
   inspectorOpen: boolean;
@@ -112,6 +113,7 @@ export interface LiveTimelineOptions {
   selectedKeyframeId?: string | null;
   showInspector?: boolean;
   showVolume?: boolean;
+  trimEnabled?: boolean;
   trimEnd?: number;
   trimStart?: number;
   volume?: number;
@@ -294,6 +296,7 @@ function createInitialState(options: LiveTimelineOptions): TimelineState {
     volumeOpen: false,
     volumeEnabled: options.showVolume ?? true,
     inspectorEnabled: options.showInspector ?? true,
+    trimEnabled: options.trimEnabled ?? false,
     mode: "idle",
     activeHandle: null,
     inspectorOpen: false,
@@ -351,6 +354,11 @@ function applyOptionsToState(target: TimelineState, options: LiveTimelineOptions
   target.volume = clamp(options.volume ?? target.volume, 0, 1);
   target.volumeEnabled = options.showVolume ?? target.volumeEnabled;
   target.inspectorEnabled = options.showInspector ?? target.inspectorEnabled;
+  target.trimEnabled = options.trimEnabled ?? target.trimEnabled;
+  if (!target.trimEnabled && target.mode === "trimming") {
+    target.mode = "idle";
+    target.activeHandle = null;
+  }
   target.peaks = options.peaks ?? target.peaks;
   target.keyframes = options.keyframes ?? target.keyframes;
   if (Object.prototype.hasOwnProperty.call(options, "selectedKeyframeId")) {
@@ -817,6 +825,12 @@ function bindShellInteractions(elements: TimelineElements, state: TimelineState,
   });
   elements.shell.addEventListener("pointermove", (event) => {
     if (isHandleTarget(event.target)) return;
+    if (state.trimEnabled) {
+      state.hoveredKeyframeId = null;
+      elements.shell.classList.remove("is-over-keyframe");
+      render();
+      return;
+    }
     if (isPointerNearTrim(event.clientX, event.clientY, elements, state)) {
       state.hoveredKeyframeId = null;
       elements.shell.classList.remove("is-over-keyframe");
@@ -883,7 +897,7 @@ function bindRightButtonTrimDrag(
     event.stopPropagation();
   });
   handle.addEventListener("pointerdown", (event) => {
-    if (event.button !== 2) return;
+    if (!state.trimEnabled || (event.button !== 0 && event.button !== 2)) return;
     event.preventDefault();
     event.stopPropagation();
     handle.setPointerCapture?.(event.pointerId);
@@ -1012,6 +1026,7 @@ function nearestKeyframe(clientX: number, clientY: number, elements: TimelineEle
 }
 
 function isPointerNearTrim(clientX: number, clientY: number, elements: TimelineElements, state: TimelineState): boolean {
+  if (!state.trimEnabled) return false;
   const m = getMetrics(elements.canvasHost);
   const rect = elements.canvasHost.getBoundingClientRect();
   const x = clientX - rect.left;
@@ -1023,7 +1038,7 @@ function isPointerNearTrim(clientX: number, clientY: number, elements: TimelineE
 }
 
 function openInspector(keyframe: TimelineKeyframe, state: TimelineState, render: () => void): void {
-  if (state.mode === "trimming") return;
+  if (state.mode === "trimming" || state.trimEnabled) return;
   state.playing = false;
   state.volumeOpen = false;
   state.selectedKeyframeId = keyframe.id;
@@ -1101,6 +1116,7 @@ function updateShellMode(state: TimelineState, elements: TimelineElements): void
   elements.shell.dataset.mode = state.mode;
   elements.shell.dataset.activeHandle = state.activeHandle ?? "";
   elements.shell.dataset.focus = state.inspectorOpen ? "keyframe" : "";
+  elements.shell.dataset.trimEnabled = String(state.trimEnabled);
 }
 
 function isHandleTarget(target: EventTarget | null): boolean {

@@ -82,6 +82,165 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("restoreFinalizeResults", html)
         self.assertIn('if (next === "final") restoreFinalizeResults();', html)
 
+    def test_render_queue_modal_and_controls_are_available(self) -> None:
+        html = gallery_html()
+        script = (Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar" / "control-bar.js").read_text(
+            encoding="utf-8"
+        )
+        styles = (Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar" / "control-bar.css").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("data-render-queue-modal", html)
+        self.assertIn('data-render-profile="eco"', html)
+        self.assertIn('data-render-profile="medium"', html)
+        self.assertIn('data-render-profile="high"', html)
+        self.assertIn("/api/render-jobs", html)
+        self.assertIn("openRenderQueuePanel", html)
+        self.assertIn("sendCardToRenderQueue", html)
+        self.assertIn("data-render-cancel", html)
+        self.assertIn("data-render-remove", html)
+        self.assertIn("/api/render-jobs/${encodeURIComponent(jobId)}/remove", html)
+        self.assertIn("SEND TO RENDER", script)
+        self.assertIn("SENT TO RENDER", script)
+        self.assertIn("Ja esta renderizando", html)
+        self.assertIn("}, 2600);", html)
+        self.assertIn("if (payload.duplicate)", html)
+        self.assertIn("cancelControlSurfaceReady(card);", html)
+        self.assertIn("update?.({ renderQueued: false });", html)
+        self.assertIn("elements.statusAction.addEventListener(\"click\"", script)
+        self.assertIn("event.stopPropagation();", script)
+        self.assertIn("const transientStatus = state.status && !state.status.persistent ? state.status : null;", script)
+        self.assertIn("const statusIsTransient = !state.trimMode && Boolean(transientStatus);", script)
+        self.assertIn('classList.toggle("is-status-transient", statusIsTransient);', script)
+        self.assertIn('.cuted-control-bar.is-status-transient[data-status-kind="ready"]', styles)
+        self.assertIn("right: 108px;", styles)
+        self.assertIn("state.renderQueued", script)
+        self.assertIn("data-cuted-status-action", script)
+        self.assertNotIn('data-cuted-control="send-render"', script)
+        self.assertNotIn("openRenderQueuePanel();\n    await loadRenderQueue();", html)
+        self.assertNotIn("showAppNotice(label);\n    await loadRenderQueue();", html)
+
+    def test_closed_captions_can_render_in_preview(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("data-preview-caption-layer", html)
+        self.assertIn(".preview-caption-layer", html)
+        self.assertIn("function syncPreviewCaptions", html)
+        self.assertIn("function previewCaptionEventsFromSegments", html)
+        self.assertIn("function previewCaptionEventForCard", html)
+        self.assertIn("syncPreviewCaptionsForOpenCards();", html)
+        self.assertIn("syncPreviewCaptions(card, current);", html)
+        self.assertIn("caption_segments: moment.caption_segments || []", html)
+        self.assertIn("onCaptionToggle: payload => setControlSurfaceCaptions(payload.captionsEnabled, payload.captionStyle)", html)
+        self.assertIn("caption_style: captions.style", html)
+        self.assertIn("captions_enabled: captions.enabled", html)
+        self.assertIn("function captionSettingsForCard(card)", html)
+        self.assertIn("storeCaptionStyle(style)", html)
+        self.assertIn("captionEnabled() ? \"Ativada\" : \"Desligada\"", html)
+
+    def test_preview_caption_text_repairs_portuguese_mojibake(self) -> None:
+        html = gallery_html()
+        broken = "voc\u00c3\u00aa n\u00c3\u00a3o tem rela\u00c3\u00a7\u00c3\u00a3o com informa\u00c3\u00a7\u00c3\u00a3o"
+
+        self.assertEqual(CUTTED.clean_caption_text(broken), "você não tem relação com informação")
+        self.assertIn("function repairPreviewCaptionEncoding", html)
+        self.assertIn("replacePreviewCaptionMojibakeSequences", html)
+        self.assertIn("return repairPreviewCaptionEncoding(text)", html)
+
+    def test_closed_caption_control_bar_menu_is_available(self) -> None:
+        asset_dir = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar"
+        script = (asset_dir / "control-bar.js").read_text(encoding="utf-8")
+        styles = (asset_dir / "control-bar.css").read_text(encoding="utf-8")
+
+        self.assertIn("captionMenuOpen", script)
+        self.assertIn("captionPaletteOpen", script)
+        self.assertIn("renderCaptionMenu", script)
+        self.assertIn("data-cuted-caption-toggle", script)
+        self.assertIn("data-cuted-caption-size", script)
+        self.assertIn("data-cuted-caption-width", script)
+        self.assertIn('renderCaptionColorPicker("text", "A", "#ffffff")', script)
+        self.assertIn('renderCaptionColorPicker("background", "BG", "#000000")', script)
+        self.assertIn("renderCaptionPalette", script)
+        self.assertIn("data-cuted-caption-swatch", script)
+        self.assertIn("renderCaptionSwatch", script)
+        self.assertIn("onCaptionStyleChange", script)
+        self.assertIn(".cuted-caption-menu", styles)
+        self.assertIn(".cuted-caption-palette", styles)
+        self.assertIn(".cuted-caption-switch", styles)
+        self.assertIn(".cuted-caption-swatch", styles)
+
+    def test_caption_ass_style_accepts_control_bar_style(self) -> None:
+        preset = CUTTED.PLATFORM_PRESETS["tiktok"]
+        style = CUTTED.caption_style_from_row(
+            {"caption_style": {"size": 88, "width": 34, "textColor": "#11a2cf", "backgroundColor": "#000000"}},
+            preset,
+        )
+        line = CUTTED.ass_style_line(preset, style)
+
+        self.assertIn("Arial,88,", line)
+        self.assertIn("&H00CFA211", line)
+        self.assertIn("&H66000000", line)
+        self.assertIn(",3,7,0,2,80,80,250,1", line)
+        self.assertEqual(style["width"], 34)
+
+    def test_render_resource_profiles_apply_threads_and_priority(self) -> None:
+        rows = [{"rank": 1}, {"rank": 2}]
+
+        CUTTED.apply_render_resource_to_rows(rows, "eco")
+        self.assertEqual(rows[0]["_render_threads"], 1)
+        self.assertEqual(rows[0]["_render_priority"], "idle")
+        self.assertIn("-threads", CUTTED.ffmpeg_codec_thread_args(rows[0]))
+
+        rows = [{"rank": 1}]
+        CUTTED.apply_render_resource_to_rows(rows, "high")
+        self.assertGreaterEqual(rows[0]["_render_threads"], 1)
+        self.assertEqual(rows[0]["_render_priority"], "below_normal")
+
+    def test_ffmpeg_progress_parser_reports_render_percent(self) -> None:
+        self.assertEqual(CUTTED.parse_ffmpeg_progress_seconds("out_time_ms", "1234000"), 1.234)
+        self.assertEqual(CUTTED.parse_ffmpeg_progress_seconds("out_time", "00:01:30.500000"), 90.5)
+        self.assertEqual(CUTTED.parse_ffmpeg_speed("1.25x"), 1.25)
+        self.assertIn("Renderizando 50%", CUTTED.render_progress_message(5, 10, "1.25x", 4))
+        self.assertIn("-progress", CUTTED.ffmpeg_command_with_progress(["ffmpeg", "-y"]))
+
+    def test_render_jobs_support_cancel_remove_and_process_cancel(self) -> None:
+        source = MODULE_PATH.read_text(encoding="utf-8")
+
+        self.assertIn('"/api/render-jobs/[^/]+/remove"', source)
+        self.assertIn('"/api/render-jobs/[^/]+/profile"', source)
+        self.assertIn("def remove_render_job(job_id: str, gallery_dir: Path)", source)
+        self.assertIn("def update_render_job_profile(job_id: str, gallery_dir: Path, profile_value: object)", source)
+        self.assertIn("def render_job_cancelled(job_id: object)", source)
+        self.assertIn("process = subprocess.Popen(", source)
+        self.assertIn("update_render_job_progress(job_id, last_seconds, duration, last_speed)", source)
+        self.assertIn("process.terminate()", source)
+        self.assertIn('raise RuntimeError("Render cancelado.")', source)
+
+    def test_render_queue_profile_and_progress_ui_are_available(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("setRenderQueueProfile", html)
+        self.assertIn("updateRenderQueueProfileJob", html)
+        self.assertIn("/profile", html)
+        self.assertIn("job.speed", html)
+        self.assertIn("job.eta_seconds", html)
+        self.assertIn("formatRenderEta", html)
+        self.assertIn("Render atual mantem os threads atuais", html)
+
+    def test_render_camera_path_is_rebased_after_trim(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("function exportCameraPathForEdit", html)
+        self.assertIn("Object.assign({}, active, { time: 0 })", html)
+        self.assertIn("time <= safeTrimStart + .001", html)
+        self.assertIn("time - safeTrimStart", html)
+        self.assertIn("function sourceDurationForMoment", html)
+        self.assertIn("exportCameraPathForEdit(edit, sourceDuration, trimStart, adjustedDuration)", html)
+        self.assertIn("exportCameraPathForEdit(edit, sourceDurationForMoment(moment), moment.trim_start_seconds, moment.adjusted_duration)", html)
+        self.assertIn("exportCameraPathForEdit(edit, values.duration, values.trimStart, duration)", html)
+        self.assertNotIn("cameraPathForEdit(edit, moment.adjusted_duration);", html)
+
     def test_partial_captioned_files_are_recovered_before_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             gallery_dir = Path(tmp)
@@ -108,6 +267,19 @@ class CuttedImportUiTests(unittest.TestCase):
             self.assertEqual(result["count"], 1)
             self.assertEqual(result["files"][0]["url"], "captioned-clips/clip-002-tiktok-captioned.mp4")
             self.assertEqual(result["files"][0]["adjusted_duration"], 91.2)
+
+    def test_finalized_file_urls_normalizes_base_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery_dir = Path(tmp) / "gallery"
+            out_dir = gallery_dir / "captioned-clips"
+            out_dir.mkdir(parents=True)
+            file_path = out_dir / "clip-002-tiktok-captioned.mp4"
+            file_path.write_bytes(b"video")
+            aliased_base_dir = gallery_dir / "nested" / ".."
+
+            files = CUTTED.finalized_file_urls([{"file": str(file_path)}], aliased_base_dir)
+
+            self.assertEqual(files[0]["url"], "captioned-clips/clip-002-tiktok-captioned.mp4")
 
     def test_camera_analysis_fetch_has_timeout(self) -> None:
         html = gallery_html()
@@ -235,10 +407,35 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("updateControlSurfaceForCard(card);", source)
         self.assertIn('label: "Projeto sendo mapeado..."', source)
         self.assertIn('label: "IA ajustando keyframes..."', source)
+        self.assertIn('label: "AI camera already exists"', script)
         self.assertIn("state.ready || state.discarded || state.busy", script)
         self.assertIn("dataset.ready = String(state.ready || state.discarded)", script)
         self.assertIn('classList.toggle("is-busy"', script)
         self.assertIn(".cuted-control-bar.is-busy .cuted-audio-group", styles)
+        self.assertIn('.cuted-control-bar[data-status-kind="ai"] .cuted-ready-region', styles)
+        self.assertIn('.cuted-control-bar[data-status-kind="mapping"] .cuted-ready-region', styles)
+        self.assertIn('.cuted-control-bar[data-status-kind="mapping"] .cuted-action-group', styles)
+        self.assertIn('.cuted-control-bar[data-status-kind="mapping"] .cuted-ready-divider', styles)
+
+    def test_caption_settings_are_scoped_to_active_platform_render_row(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("captions: normalizeCaptionSettings(captionSource, captionBase)", html)
+        self.assertIn("captionsEnabled: edit.captions.enabled", html)
+        self.assertIn("captionStyle: edit.captions.style", html)
+        self.assertIn("setPlatformEditForRank(rank, platform, {", html)
+        self.assertIn("captions: normalizeCaptionSettings({", html)
+        self.assertIn("const captions = normalizeCaptionSettings(edit.captions)", html)
+        self.assertIn("captions_enabled: captions.enabled", html)
+        self.assertIn("caption_style: captions.style", html)
+        self.assertIn("captions_enabled: queue.some(item => item.captions_enabled !== false)", html)
+        self.assertIn("captions_enabled: queue.caption_queue.some(item => item.captions_enabled !== false)", html)
+
+    def test_render_queue_does_not_expose_submit_action(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("function renderQueueJobHtml(job)", html)
+        self.assertNotIn("<button type=\"button\" disabled>Submit</button>", html)
 
     def test_control_surface_timeline_click_does_not_toggle_card(self) -> None:
         source = MODULE_PATH.read_text(encoding="utf-8")
@@ -282,7 +479,7 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn(".clip-control-surface .cuted-format-trigger{flex:0 0 132px;width:132px;height:58px", source)
         self.assertIn(".clip-control-surface .cuted-format-copy small{display:block;font-size:10px", source)
         self.assertIn(".clip-control-surface{position:relative;z-index:2600}", source)
-        self.assertIn(".clip-control-surface .cuted-effect-menu,.clip-control-surface .cuted-insert-menu,.clip-control-surface .cuted-format-menu,.clip-control-surface .cuted-volume-popover{z-index:3200}", source)
+        self.assertIn(".clip-control-surface .cuted-effect-menu,.clip-control-surface .cuted-insert-menu,.clip-control-surface .cuted-caption-menu,.clip-control-surface .cuted-format-menu,.clip-control-surface .cuted-volume-popover{z-index:3200}", source)
         self.assertIn(".cuted-effect-menu {\n  position: absolute;\n  right: 206px;\n  top: calc(100% + 12px);", styles)
         self.assertIn(".cuted-insert-menu {\n  position: absolute;\n  right: 176px;\n  top: calc(100% + 12px);", styles)
         self.assertNotIn("bottom: 106px", styles)
@@ -308,9 +505,11 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("data-cuted-control=\"volume-mute\"", script)
         self.assertIn("<span>INS</span>", script)
         self.assertIn("state.volumeMenuOpen = !state.volumeMenuOpen", script)
-        self.assertIn("insertAutoCloseClock", script)
-        self.assertIn("scheduleInsertAutoClose", script)
-        self.assertIn("}, 2200)", script)
+        self.assertIn("data-cuted-insert-exit", script)
+        self.assertIn("setInsertStatus", script)
+        self.assertIn("Start video inserted", script)
+        self.assertIn(".cuted-insert-options", styles)
+        self.assertNotIn("scheduleInsertAutoClose", script)
         self.assertIn('document.addEventListener("click", dismissClick, true)', script)
         self.assertIn('document.removeEventListener("click", dismissClick, true)', script)
         self.assertNotIn('kind: "volume"', script)
@@ -318,6 +517,44 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn(".cuted-volume-popover", styles)
         self.assertIn("top: calc(100% + 14px)", styles)
         self.assertIn("flex: 0 0 58px", styles)
+
+    def test_control_bar_trim_tool_toggles_live_timeline_handles(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        script = (root / "tools" / "cutted" / "assets" / "control-bar" / "control-bar.js").read_text(
+            encoding="utf-8"
+        )
+        styles = (root / "tools" / "cutted" / "assets" / "control-bar" / "control-bar.css").read_text(
+            encoding="utf-8"
+        )
+        source = (root / "tools" / "cutted" / "scripts" / "cutted.py").read_text(encoding="utf-8")
+        timeline = (root / "prototypes" / "live-timeline" / "src" / "liveTimeline.ts").read_text(encoding="utf-8")
+        timeline_styles = (root / "prototypes" / "live-timeline" / "src" / "timeline.css").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('data-cuted-control="trim"', script)
+        self.assertIn("trimApplied: false", script)
+        self.assertIn("onTrimConfirm", script)
+        self.assertIn("buildTrimStatus()", script)
+        self.assertIn("renderTrimStatus()", script)
+        self.assertIn("CONFIRME", script)
+        self.assertIn("is-trim-applied", script)
+        self.assertIn("restoreTrimStatus()", script)
+        self.assertIn("confirmTrimMode()", script)
+        self.assertIn("onTrimToggle", script)
+        self.assertIn('label: "TRIM"', script)
+        self.assertIn("state.trimMode = true", script)
+        self.assertIn("state.trimMode = false", script)
+        self.assertIn('trimMode: !busy && card.dataset.trimMode === "1"', source)
+        self.assertIn("trimApplied: trimRangeActive(trim)", source)
+        self.assertIn("setControlSurfaceTrimMode(card, payload.trimMode)", source)
+        self.assertIn('trimEnabled: card.dataset.trimMode === "1"', source)
+        self.assertIn("trimEnabled?: boolean", timeline)
+        self.assertIn("state.trimEnabled", timeline)
+        self.assertIn('[data-trim-enabled="false"] .trim-handle', timeline_styles)
+        self.assertIn('[data-status-kind="trim"]', styles)
+        self.assertIn("cuted-trim-blade-top", styles)
+        self.assertIn(".cuted-trim-button.is-trim-applied", styles)
 
     def test_cards_include_control_surface_slot(self) -> None:
         html = CUTTED.card_html(
@@ -371,6 +608,9 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn('"render"', source)
         self.assertIn(".header-actions .header-icon-button,#reset-ui.header-icon-button,#finalize-videos.header-icon-button,#open-settings.header-icon-button", source)
         self.assertIn(".header-actions .header-render-button,#finalize-videos.header-render-button{width:58px;height:58px", source)
+        self.assertIn("#finalize-videos.header-render-button.is-rendering", source)
+        self.assertIn("cuted-render-icon-drift", source)
+        self.assertIn('button.classList.toggle("is-rendering", active)', source)
         self.assertIn("border-color:rgba(175,207,42,.48)!important", source)
         self.assertIn(".header-actions .header-icon-button svg{position:relative;z-index:1;width:28px;height:28px", source)
         self.assertIn("#open-settings.header-settings-button.is-openai-ready", source)
