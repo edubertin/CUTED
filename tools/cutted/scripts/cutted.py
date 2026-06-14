@@ -798,6 +798,18 @@ def delete_project_from_catalog(project_id: str, workspace: Path, delete_files: 
     return {"ok": True, "deleted_files": deleted, "projects": project_catalog_recent(workspace)}
 
 
+def touch_project_catalog_entry(gallery_dir: Path, workspace: Path) -> dict[str, object]:
+    if not valid_recent_project_dir(gallery_dir, workspace):
+        raise ValueError("Projeto invalido para recentes.")
+    entry = project_entry_from_gallery(gallery_dir, workspace)
+    upsert_project_catalog_entry(entry)
+    return {
+        "ok": True,
+        "project": project_home_entry(entry, workspace),
+        "projects": project_catalog_recent(workspace),
+    }
+
+
 def valid_recent_project_dir(project_dir: Path, workspace: Path) -> bool:
     try:
         resolved = project_dir.expanduser().resolve()
@@ -921,6 +933,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
                 return
             if path == "/api/open-folder":
                 self.handle_open_folder()
+                return
+            if path == "/api/projects/touch":
+                self.handle_project_touch(base_dir)
                 return
             if re.fullmatch(r"/api/projects/[^/]+/delete", path):
                 self.handle_project_delete(base_dir, path)
@@ -1097,6 +1112,15 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
 
         def handle_projects(self, request_base_dir: Path) -> None:
             send_json_response(self, 200, {"ok": True, "projects": project_catalog_recent(request_base_dir)})
+
+        def handle_project_touch(self, request_base_dir: Path) -> None:
+            try:
+                payload = read_json_body(self)
+                gallery_dir = resolve_request_gallery_dir(request_base_dir, payload)
+                result = touch_project_catalog_entry(gallery_dir, request_base_dir)
+                send_json_response(self, 200, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
 
         def handle_project_delete(self, request_base_dir: Path, path: str) -> None:
             try:
@@ -13957,6 +13981,19 @@ function currentGalleryPath(){
   if (path.endsWith("/")) return path.replace(/\\/$/, "");
   return path.replace(/\\/[^/]*$/, "");
 }
+async function touchCurrentProject(){
+  const galleryPath = currentGalleryPath();
+  if (!galleryPath || galleryPath === "/index") return null;
+  const response = await fetch("/api/projects/touch", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({gallery_path: galleryPath}),
+    keepalive: true
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload.ok) throw new Error(payload.error || "Nao consegui atualizar recentes.");
+  return payload;
+}
 function isCurrentGalleryEmpty(){
   return localStorage.getItem(emptyGalleryStorageKey) === currentGalleryPath();
 }
@@ -15124,14 +15161,20 @@ function trapWorkspaceExitFocus(event){
     first.focus();
   }
 }
-function confirmWorkspaceExit(){
+async function confirmWorkspaceExit(){
   save();
   const button = document.querySelector("[data-workspace-exit-confirm]");
   if (button) {
     button.disabled = true;
     button.textContent = "Voltando...";
   }
-  window.location.assign("/index.html");
+  try {
+    await touchCurrentProject();
+  } catch (error) {
+    console.warn("CUTED project was not added to recents", error);
+  } finally {
+    window.location.assign("/index.html");
+  }
 }
 function startNewProject(){
   openWorkspaceExitModal();
@@ -15171,6 +15214,7 @@ document.querySelectorAll(".tabs [data-tab]").forEach(btn => {
 setupSettingsPanel();
 setupRenderQueuePanel();
 setupWorkspaceExitModal();
+touchCurrentProject().catch(error => console.warn("CUTED project was not added to recents", error));
 setupImportPathButtons();
 setupImportKeyBanner();
 document.querySelector("[data-empty-import]")?.addEventListener("click", () => applyTab("import"));
