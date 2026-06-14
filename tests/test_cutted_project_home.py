@@ -145,6 +145,25 @@ class CuttedProjectHomeTests(unittest.TestCase):
             self.assertIn('Renders salvos automaticamente no projeto.', html)
             self.assertNotIn('name="output_path"', html)
 
+    def test_project_home_recovers_backgrounded_import_job(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+
+            html = CUTTED.project_home_html(workspace, "assets/brand/cuted-logo-transparent.png", [])
+
+            self.assertIn('const activeImportJobStorageKey = "cuted-active-import-job";', html)
+            self.assertIn("function saveActiveImportJob(job)", html)
+            self.assertIn("saveActiveImportJob(data.job || {});", html)
+            self.assertIn("function recoverActiveImportJob(options = {})", html)
+            self.assertIn("function setupImportRecovery()", html)
+            self.assertIn("function importOutputIsReady(outputUrl)", html)
+            self.assertIn('document.visibilityState !== "visible"', html)
+            self.assertIn("window.addEventListener(\"focus\"", html)
+            self.assertIn("await refreshProjects().catch", html)
+            self.assertIn("clearActiveImportJob(job.id || options.jobId);", html)
+            self.assertIn("await completeImportJob({ id: jobId, output_url: active.output_url }", html)
+            self.assertIn("window.location.assign(job.output_url)", html)
+
     def test_bootstrap_workspace_writes_project_home(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp)

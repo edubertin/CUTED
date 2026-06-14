@@ -10085,6 +10085,82 @@ function hideImportLoading(){
   if (loading) loading.hidden = true;
   delete document.body.dataset.importing;
 }
+const activeImportJobStorageKey = "cuted-active-import-job";
+let activeImportPollJobId = "";
+function importJobStorage(){
+  try {
+    return window.sessionStorage;
+  } catch (error) {
+    console.warn("Nao foi possivel acessar sessionStorage para import.", error);
+    return null;
+  }
+}
+function saveActiveImportJob(job){
+  if (!job?.id) return;
+  const storage = importJobStorage();
+  if (!storage) return;
+  storage.setItem(activeImportJobStorageKey, JSON.stringify({
+    id: job.id,
+    output_url: job.output_url || "",
+    updated_at: Date.now()
+  }));
+}
+function storedActiveImportJob(){
+  const storage = importJobStorage();
+  if (!storage) return null;
+  try {
+    const data = JSON.parse(storage.getItem(activeImportJobStorageKey) || "null");
+    return data && data.id ? data : null;
+  } catch (error) {
+    storage.removeItem(activeImportJobStorageKey);
+    return null;
+  }
+}
+function clearActiveImportJob(jobId){
+  const storage = importJobStorage();
+  if (!storage) return;
+  const active = storedActiveImportJob();
+  if (!jobId || !active || active.id === jobId) storage.removeItem(activeImportJobStorageKey);
+}
+async function completeImportJob(job, button, options = {}){
+  activeImportPollJobId = "";
+  clearActiveImportJob(job.id || options.jobId);
+  if (button) button.disabled = false;
+  setImportLoading("Projeto pronto. Abrindo editor...", "Concluido", 100, { stage: "editor", detail: "Atualizando projetos recentes." });
+  if (job.output_url) setResult(`<a href="${escapeAttr(job.output_url)}">Abrir projeto importado</a>`);
+  await refreshProjects().catch(error => console.warn("Nao consegui atualizar projetos apos import.", error));
+  if (job.output_url && options.open !== false) {
+    window.setTimeout(() => window.location.assign(job.output_url), 450);
+  }
+}
+async function importOutputIsReady(outputUrl){
+  if (!outputUrl) return false;
+  try {
+    const response = await fetch(outputUrl, { cache: "no-store" });
+    return response.ok;
+  } catch (error) {
+    return false;
+  }
+}
+function recoverActiveImportJob(options = {}){
+  const active = storedActiveImportJob();
+  if (!active?.id || activeImportPollJobId === active.id) return;
+  setImportLoading("Retomando importacao...", "Acompanhando", 35, { stage: "analysis", detail: "Reconectando ao job ativo." });
+  pollImport(active.id, document.querySelector("[data-import-form] button[type=submit]"), options);
+}
+function setupImportRecovery(){
+  refreshProjects().catch(error => console.warn("Nao consegui atualizar projetos ao abrir a home.", error));
+  recoverActiveImportJob();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    refreshProjects().catch(error => console.warn("Nao consegui atualizar projetos ao voltar para a aba.", error));
+    recoverActiveImportJob();
+  });
+  window.addEventListener("focus", () => {
+    refreshProjects().catch(error => console.warn("Nao consegui atualizar projetos no foco da aba.", error));
+    recoverActiveImportJob();
+  });
+}
 async function startImport(form){
   const button = form.querySelector("button[type=submit]");
   const payload = projectPayload(form);
@@ -10106,6 +10182,7 @@ async function startImport(form){
     const data = await postJson("/api/import-jobs", payload);
     setStatus(data.job?.message || "Importacao iniciada.");
     updateImportLoading(data.job || {});
+    saveActiveImportJob(data.job || {});
     pollImport(data.job.id, button);
   } catch (error) {
     if (button) button.disabled = false;
@@ -10114,7 +10191,9 @@ async function startImport(form){
     setResult(`<code>${escapeHtml(error.message || String(error))}</code>`);
   }
 }
-async function pollImport(jobId, button){
+async function pollImport(jobId, button, options = {}){
+  if (!jobId) return;
+  activeImportPollJobId = jobId;
   try {
     const response = await fetch(`/api/import-jobs/${encodeURIComponent(jobId)}`);
     const data = await response.json();
@@ -10123,12 +10202,12 @@ async function pollImport(jobId, button){
     setStatus(`${job.message || "Processando..."} (${job.status || "running"})`);
     updateImportLoading(job);
     if (job.status === "ready") {
-      if (button) button.disabled = false;
-      setResult(`<a href="${escapeAttr(job.output_url)}">Abrir projeto importado</a>`);
-      if (job.output_url) window.setTimeout(() => window.location.assign(job.output_url), 450);
+      await completeImportJob(job, button, { jobId, open: options.open !== false });
       return;
     }
     if (job.status === "failed" || job.status === "cancelled") {
+      activeImportPollJobId = "";
+      clearActiveImportJob(jobId);
       if (button) button.disabled = false;
       failImportLoading(job.stderr || job.message || "Importacao encerrada.");
       setResult(`<code>${escapeHtml(job.stderr || job.message || "Importacao encerrada.")}</code>`);
@@ -10136,10 +10215,17 @@ async function pollImport(jobId, button){
     }
     window.setTimeout(() => pollImport(jobId, button), 1200);
   } catch (error) {
+    activeImportPollJobId = "";
+    const active = storedActiveImportJob();
+    if (active?.id === jobId && await importOutputIsReady(active.output_url)) {
+      await completeImportJob({ id: jobId, output_url: active.output_url }, button, { jobId, open: options.open !== false });
+      return;
+    }
     if (button) button.disabled = false;
-    failImportLoading(error.message || "Nao consegui acompanhar a importacao.");
-    setStatus("Nao consegui acompanhar a importacao.");
+    setImportLoading("Reconectando importacao...", "Acompanhando", 35, { stage: "analysis", detail: "A aba perdeu o acompanhamento; vou tentar retomar." });
+    setStatus("Nao consegui acompanhar a importacao. Vou tentar retomar quando a aba voltar.");
     setResult(`<code>${escapeHtml(error.message || String(error))}</code>`);
+    refreshProjects().catch(() => {});
   }
 }
 function bindImportForm(){
@@ -10420,6 +10506,7 @@ projectList?.addEventListener("click", event => {
 setupHomeSettingsPanel();
 setupImportKeyBanner();
 bindImportForm();
+setupImportRecovery();
 """
     return script.replace("__WORKSPACE_PATH__", json.dumps(str(workspace)))
 
