@@ -600,6 +600,21 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertNotIn('data-tab="final">3. Renderizar', html)
         self.assertIn('applyTab("edit");', html)
 
+    def test_workspace_new_project_button_confirms_exit_to_home(self) -> None:
+        html = CUTTED.page_html("Projeto", "", "{}", "assets/brand/cuted-logo-transparent.png")
+        source = MODULE_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("data-workspace-exit-modal", html)
+        self.assertIn("Sair deste projeto?", html)
+        self.assertIn("Voltar para recentes", html)
+        self.assertIn("function setupWorkspaceExitModal()", source)
+        self.assertIn("function openWorkspaceExitModal()", source)
+        self.assertIn("function confirmWorkspaceExit()", source)
+        self.assertIn("save();\n  const button = document.querySelector(\"[data-workspace-exit-confirm]\");", source)
+        self.assertIn('window.location.assign("/index.html");', source)
+        self.assertIn("function startNewProject(){\n  openWorkspaceExitModal();\n}", source)
+        self.assertNotIn('confirm("Iniciar novo projeto?', source)
+
     def test_edit_header_icon_buttons_follow_cuted_style(self) -> None:
         source = MODULE_PATH.read_text(encoding="utf-8")
 
@@ -607,11 +622,15 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn('"new-project"', source)
         self.assertIn('"render"', source)
         self.assertIn(".header-actions .header-icon-button,#reset-ui.header-icon-button,#finalize-videos.header-icon-button,#open-settings.header-icon-button", source)
-        self.assertIn(".header-actions .header-render-button,#finalize-videos.header-render-button{width:58px;height:58px", source)
+        self.assertIn(".header-actions{display:flex;justify-content:flex-end;align-items:center;gap:10px;width:min(100%,760px);margin-left:auto}", source)
+        self.assertIn("#reset-ui.header-icon-button,#finalize-videos.header-icon-button,#open-settings.header-icon-button{width:56px!important;height:56px!important;min-width:56px!important}", source)
+        self.assertIn(".header-actions .header-render-button,#finalize-videos.header-render-button{width:56px!important;height:56px!important", source)
+        self.assertIn("background:var(--color-brand-white)!important;color:var(--color-brand-black)!important", source)
         self.assertIn("#finalize-videos.header-render-button.is-rendering", source)
+        self.assertIn("background:linear-gradient(180deg,rgba(175,207,42,.2),rgba(17,162,207,.065)),rgba(12,14,9,.72)!important", source)
         self.assertIn("cuted-render-icon-drift", source)
         self.assertIn('button.classList.toggle("is-rendering", active)', source)
-        self.assertIn("border-color:rgba(175,207,42,.48)!important", source)
+        self.assertIn("border-color:rgba(175,207,42,.78)!important", source)
         self.assertIn(".header-actions .header-icon-button svg{position:relative;z-index:1;width:28px;height:28px", source)
         self.assertIn("#open-settings.header-settings-button.is-openai-ready", source)
         self.assertIn("animation:cuted-openai-gear-spin 5.8s linear infinite", source)
