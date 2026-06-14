@@ -933,6 +933,50 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertGreaterEqual(payload["progress"]["percent"], 8)
         self.assertIn(payload["progress"]["label"], {"Preparando", "Midia", "Audio", "Analise", "Sugestoes", "Editor"})
 
+    def test_import_progress_event_is_parsed_for_job_snapshot(self) -> None:
+        event = CUTTED.parse_import_progress_line(
+            'CUTED_IMPORT_EVENT {"stage":"previews","label":"Previews","message":"Renderizando previews...","percent":82,"step":2,"steps":4,"detail":"2 de 4 previews"}'
+        )
+
+        self.assertIsNotNone(event)
+        self.assertEqual(event["stage"], "previews")
+        self.assertEqual(event["label"], "Previews")
+        self.assertEqual(event["percent"], 82)
+        self.assertEqual(event["step"], 2)
+        self.assertEqual(event["steps"], 4)
+        self.assertEqual(event["detail"], "2 de 4 previews")
+
+    def test_import_job_snapshot_prefers_real_progress_event(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            job = CUTTED.ImportJob(
+                "job123",
+                "running",
+                time.time() - 30,
+                time.time(),
+                Path(tmp),
+                Path(tmp),
+                "/projects/job123/index.html",
+                None,
+                "Importacao iniciada.",
+                "local",
+                "local",
+            )
+            job.progress = {
+                "stage": "previews",
+                "label": "Previews",
+                "message": "Renderizando previews...",
+                "percent": 84,
+                "step": 3,
+                "steps": 4,
+            }
+            job.events.append(job.progress)
+
+            payload = CUTTED.import_job_to_dict(job)
+
+        self.assertEqual(payload["progress"]["stage"], "previews")
+        self.assertEqual(payload["progress"]["percent"], 84)
+        self.assertEqual(payload["events"][0]["step"], 3)
+
     def test_import_request_metadata_requires_source(self) -> None:
         with self.assertRaisesRegex(ValueError, "link ou caminho local"):
             CUTTED.import_request_metadata({"output_path": "C:\\videos"})
