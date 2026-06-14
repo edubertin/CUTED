@@ -133,7 +133,9 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("syncPreviewCaptions(card, current);", html)
         self.assertIn("caption_segments: moment.caption_segments || []", html)
         self.assertIn("onCaptionToggle: payload => setControlSurfaceCaptions(payload.captionsEnabled, payload.captionStyle)", html)
-        self.assertIn("caption_style: captionStyle()", html)
+        self.assertIn("caption_style: captions.style", html)
+        self.assertIn("captions_enabled: captions.enabled", html)
+        self.assertIn("function captionSettingsForCard(card)", html)
         self.assertIn("storeCaptionStyle(style)", html)
         self.assertIn("captionEnabled() ? \"Ativada\" : \"Desligada\"", html)
 
@@ -398,6 +400,23 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn('classList.toggle("is-busy"', script)
         self.assertIn(".cuted-control-bar.is-busy .cuted-audio-group", styles)
         self.assertIn('.cuted-control-bar[data-status-kind="ai"] .cuted-ready-region', styles)
+        self.assertIn('.cuted-control-bar[data-status-kind="mapping"] .cuted-ready-region', styles)
+        self.assertIn('.cuted-control-bar[data-status-kind="mapping"] .cuted-action-group', styles)
+        self.assertIn('.cuted-control-bar[data-status-kind="mapping"] .cuted-ready-divider', styles)
+
+    def test_caption_settings_are_scoped_to_active_platform_render_row(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("captions: normalizeCaptionSettings(captionSource, captionBase)", html)
+        self.assertIn("captionsEnabled: edit.captions.enabled", html)
+        self.assertIn("captionStyle: edit.captions.style", html)
+        self.assertIn("setPlatformEditForRank(rank, platform, {", html)
+        self.assertIn("captions: normalizeCaptionSettings({", html)
+        self.assertIn("const captions = normalizeCaptionSettings(edit.captions)", html)
+        self.assertIn("captions_enabled: captions.enabled", html)
+        self.assertIn("caption_style: captions.style", html)
+        self.assertIn("captions_enabled: queue.some(item => item.captions_enabled !== false)", html)
+        self.assertIn("captions_enabled: queue.caption_queue.some(item => item.captions_enabled !== false)", html)
 
     def test_control_surface_timeline_click_does_not_toggle_card(self) -> None:
         source = MODULE_PATH.read_text(encoding="utf-8")

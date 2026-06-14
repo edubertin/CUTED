@@ -10485,9 +10485,12 @@ function normalizePlatformEdit(edit, fallback){
   const overlayFallback = source.overlay || base.overlay || defaultOverlay();
   const overlays = normalizeOverlayLayers(source.overlays, overlayFallback);
   const pathSource = Object.prototype.hasOwnProperty.call(source, "camera_path") ? source.camera_path : base.camera_path;
+  const captionSource = Object.prototype.hasOwnProperty.call(source, "captions") ? source.captions : null;
+  const captionBase = Object.prototype.hasOwnProperty.call(base, "captions") ? base.captions : null;
   return {
     camera: normalizeCamera(source.camera || base.camera || defaultCamera()),
     camera_path: normalizeCameraPath(pathSource),
+    captions: normalizeCaptionSettings(captionSource, captionBase),
     director_plan: normalizeDirectorPlan(source.director_plan || base.director_plan),
     effect: normalizeEffect(source.effect || base.effect || defaultEffect()),
     overlay: overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
@@ -10512,6 +10515,31 @@ function setPlatformEditForRank(rank, platform, patch){
   setCardState(String(rank), {
     platformEdits: Object.assign({}, current.platformEdits, { [key]: edit })
   });
+}
+function defaultCaptionSettings(){
+  return { enabled: captionEnabled(), style: captionStyle() };
+}
+function normalizeCaptionSettings(value, fallback = null){
+  const source = value && typeof value === "object" ? value : {};
+  const base = fallback && typeof fallback === "object" ? fallback : defaultCaptionSettings();
+  const enabled = Object.prototype.hasOwnProperty.call(source, "enabled")
+    ? Boolean(source.enabled)
+    : Object.prototype.hasOwnProperty.call(base, "enabled")
+      ? Boolean(base.enabled)
+      : captionEnabled();
+  return {
+    enabled,
+    style: normalizeCaptionStyleObject(Object.assign({}, base.style || {}, source.style || {}))
+  };
+}
+function normalizeCaptionStyleObject(value){
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    size: clampNumber(Number(source.size || defaultCaptionSize()), 24, 140),
+    width: clampNumber(Number(source.width || 28), 12, 56),
+    textColor: normalizeCaptionColor(source.textColor || source.text_color, "#ffffff"),
+    backgroundColor: normalizeCaptionBackground(source.backgroundColor || source.background_color)
+  };
 }
 function defaultCamera(){ return cameraSequence(cameraParts.map(part => defaultCameraSegment(part.key))); }
 function defaultCameraSegment(part){ return { part, part_label: cameraPartLabel(part), key: "center", label: cameraMeta.center.label, strength: 60 }; }
@@ -11640,6 +11668,7 @@ function controlSurfaceStateForCard(card){
   const rank = card.dataset.rank;
   const current = cardState(rank);
   const platform = activePlatformForRank(rank);
+  const edit = platformEditForRank(rank, platform);
   const effect = effectForRank(rank, platform);
   const video = primaryCameraVideo(card);
   const platforms = uniquePlatforms(current.platforms);
@@ -11650,8 +11679,8 @@ function controlSurfaceStateForCard(card){
     aspectRatio: controlSurfaceAspectRatio(platform),
     bumpers: bumpersForRank(rank, platform),
     busy,
-    captionsEnabled: captionEnabled(),
-    captionStyle: captionStyle(),
+    captionsEnabled: edit.captions.enabled,
+    captionStyle: edit.captions.style,
     clipInfo: controlSurfaceClipInfo(card),
     effectStyle: controlSurfaceEffectStyle(effect),
     muted: video ? video.muted || video.volume <= 0 : false,
@@ -11747,6 +11776,17 @@ function openControlSurfaceBumperInput(card, slot){
   if (input) input.click();
 }
 function setControlSurfaceCaptions(enabled, style = null){
+  document.querySelectorAll(".card[open]").forEach(card => {
+    const rank = card.dataset.rank;
+    const platform = activePlatformForRank(rank);
+    const current = platformEditForRank(rank, platform).captions;
+    setPlatformEditForRank(rank, platform, {
+      captions: normalizeCaptionSettings({
+        enabled,
+        style: style || current.style
+      }, current)
+    });
+  });
   localStorage.setItem("cutted-caption-enabled", enabled ? "1" : "0");
   storeCaptionStyle(style);
   syncCaptionInputs();
@@ -13357,6 +13397,7 @@ function buildExportData(){
     const overlays = edit.overlays;
     const cameraPath = exportCameraPathForEdit(edit, sourceDurationForMoment(moment), moment.trim_start_seconds, moment.adjusted_duration);
     const resolutionKey = resolutionPresetForPlatform(platform);
+    const captions = normalizeCaptionSettings(edit.captions);
     return {
       rank: moment.rank,
       platform,
@@ -13380,8 +13421,8 @@ function buildExportData(){
       overlay: overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
       overlays,
       bumpers: edit.bumpers,
-      captions_enabled: captionEnabled(),
-      caption_style: captionStyle(),
+      captions_enabled: captions.enabled,
+      caption_style: captions.style,
       clip_file: moment.clip_file,
       title: moment.title,
       peak_text: moment.peak_text,
@@ -14235,14 +14276,19 @@ function storeCaptionStyle(style){
   if (style.textColor) localStorage.setItem("cutted-caption-text-color", normalizeCaptionColor(style.textColor, captionTextColor()));
   if (style.backgroundColor) localStorage.setItem("cutted-caption-background-color", normalizeCaptionBackground(style.backgroundColor));
 }
+function captionSettingsForCard(card){
+  if (!card?.dataset?.rank) return defaultCaptionSettings();
+  return platformEditForRank(card.dataset.rank, activePlatformForRank(card.dataset.rank)).captions;
+}
 function syncPreviewCaptionsForOpenCards(){
   document.querySelectorAll(".card[open]").forEach(card => syncPreviewCaptions(card));
 }
 function syncPreviewCaptions(card, time = null){
   const layer = card?.querySelector("[data-preview-caption-layer]");
   if (!layer) return;
+  const captions = captionSettingsForCard(card);
   applyPreviewCaptionStyle(card, layer);
-  if (!captionEnabled()) {
+  if (!captions.enabled) {
     layer.dataset.visible = "false";
     layer.innerHTML = "";
     return;
@@ -14253,12 +14299,12 @@ function syncPreviewCaptions(card, time = null){
     layer.innerHTML = "";
     return;
   }
-  const lines = wrapPreviewCaptionLines(event.text, captionWidth(), captionLines());
+  const lines = wrapPreviewCaptionLines(event.text, captions.style.width, captionLines());
   layer.innerHTML = `<span>${lines.map(escapeHtml).join("<br>")}</span>`;
   layer.dataset.visible = "true";
 }
 function applyPreviewCaptionStyle(card, layer){
-  const style = captionStyle();
+  const style = captionSettingsForCard(card).style;
   const media = card?.querySelector(".media");
   const mediaWidth = media ? media.getBoundingClientRect().width : 0;
   const platformWidth = previewCaptionPlatformWidth(card);
@@ -14493,7 +14539,7 @@ async function finalizeVideos(){
         queue: data,
         chars_per_line: captionWidth(),
         max_lines: captionLines(),
-        captions_enabled: captionEnabled(),
+        captions_enabled: queue.some(item => item.captions_enabled !== false),
         gallery_path: currentGalleryPath()
       })
     });
@@ -14833,7 +14879,7 @@ async function sendCardToRenderQueue(card){
         queue,
         chars_per_line: captionWidth(),
         max_lines: captionLines(),
-        captions_enabled: captionEnabled(),
+        captions_enabled: queue.caption_queue.some(item => item.captions_enabled !== false),
         gallery_path: currentGalleryPath(),
         resource_profile: renderQueueState.profile
       })
