@@ -268,6 +268,19 @@ class CuttedImportUiTests(unittest.TestCase):
             self.assertEqual(result["files"][0]["url"], "captioned-clips/clip-002-tiktok-captioned.mp4")
             self.assertEqual(result["files"][0]["adjusted_duration"], 91.2)
 
+    def test_finalized_file_urls_normalizes_base_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery_dir = Path(tmp) / "gallery"
+            out_dir = gallery_dir / "captioned-clips"
+            out_dir.mkdir(parents=True)
+            file_path = out_dir / "clip-002-tiktok-captioned.mp4"
+            file_path.write_bytes(b"video")
+            aliased_base_dir = gallery_dir / "nested" / ".."
+
+            files = CUTTED.finalized_file_urls([{"file": str(file_path)}], aliased_base_dir)
+
+            self.assertEqual(files[0]["url"], "captioned-clips/clip-002-tiktok-captioned.mp4")
+
     def test_camera_analysis_fetch_has_timeout(self) -> None:
         html = gallery_html()
 
