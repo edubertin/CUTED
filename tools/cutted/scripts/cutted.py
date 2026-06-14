@@ -6244,9 +6244,10 @@ def read_json_body(handler: http.server.BaseHTTPRequestHandler) -> dict[str, obj
 
 def finalized_file_urls(rows: list[dict[str, object]], base_dir: Path) -> list[dict[str, object]]:
     files: list[dict[str, object]] = []
+    resolved_base_dir = base_dir.resolve()
     for row in rows:
         file_path = Path(str(row.get("file") or ""))
-        rel = file_path.resolve().relative_to(base_dir)
+        rel = file_path.resolve().relative_to(resolved_base_dir)
         final_path = exported_file_path(row, file_path)
         files.append({
             **row,
