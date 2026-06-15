@@ -260,6 +260,7 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("const edit = publishEditForRank(moment.rank)", html)
         self.assertIn("Object.assign({}, generated", html)
         self.assertIn("publishCaptionHintFromEdit(edit, generated", html)
+        self.assertIn("cover: publishCoverFromEdit(edit, generated, moment)", html)
         self.assertIn('parts.join("\\n\\n")', html)
 
     def test_publish_panel_edits_are_bound_to_card_state(self) -> None:
@@ -267,6 +268,8 @@ class CuttedImportUiTests(unittest.TestCase):
 
         self.assertIn("function bindPublishPanel(card)", html)
         self.assertIn("data-publish-field", html)
+        self.assertIn("data-publish-cover-option", html)
+        self.assertIn("publish.coverFrame", html)
         self.assertIn("publish[input.dataset.publishField]", html)
         self.assertIn("setCardState(card.dataset.rank, { publish })", html)
 

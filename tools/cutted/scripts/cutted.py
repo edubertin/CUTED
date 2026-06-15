@@ -226,6 +226,7 @@ class Moment:
     caption_segments: tuple[Segment, ...] = ()
     waveform_file: str | None = None
     publish_metadata: dict[str, object] | None = None
+    cover_candidates: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -9144,13 +9145,49 @@ def render_one(video: Path | str, clips_dir: Path, frames_dir: Path, waveforms_d
     if not skip_render:
         cut_clip(video, clip_path, moment.start, moment.end, ffmpeg)
         extract_frame(video, frame_path, moment.peak, ffmpeg)
+        cover_candidates = extract_cover_candidates(video, frames_dir, stem, frame_path, moment, ffmpeg)
     else:
         return Moment(moment.rank, moment.start, moment.end, moment.peak, moment.score, moment.title, moment.reason,
                       moment.transcript, moment.peak_text, None, None, moment.caption_segments, None)
     waveform_file = write_audio_waveform_file(clip_path, waveform_path, ffmpeg)
     return Moment(moment.rank, moment.start, moment.end, moment.peak, moment.score, moment.title, moment.reason,
                   moment.transcript, moment.peak_text, rel(clip_path, clips_dir.parent), rel(frame_path, frames_dir.parent),
-                  moment.caption_segments, rel(waveform_path, waveforms_dir.parent) if waveform_file else None)
+                  moment.caption_segments, rel(waveform_path, waveforms_dir.parent) if waveform_file else None,
+                  None, tuple(rel(path, frames_dir.parent) for path in cover_candidates))
+
+
+def extract_cover_candidates(
+    video: Path | str, frames_dir: Path, stem: str, peak_frame: Path, moment: Moment, ffmpeg: str
+) -> list[Path]:
+    candidates = [peak_frame]
+    for label, timestamp in cover_candidate_timestamps(moment):
+        output = frames_dir / f"{stem}-cover-{label}.jpg"
+        try:
+            extract_frame(video, output, timestamp, ffmpeg)
+            candidates.append(output)
+        except subprocess.CalledProcessError as error:
+            print(f"Warning: could not extract cover candidate {output}: {error}", file=sys.stderr)
+    return unique_paths(candidates)
+
+
+def cover_candidate_timestamps(moment: Moment) -> list[tuple[str, float]]:
+    duration = max(moment.end - moment.start, 0.1)
+    return [
+        ("inicio", moment.start + duration * 0.22),
+        ("fim", moment.start + duration * 0.78),
+    ]
+
+
+def unique_paths(paths: list[Path]) -> list[Path]:
+    seen: set[str] = set()
+    result: list[Path] = []
+    for path in paths:
+        key = path.as_posix()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(path)
+    return result
 
 
 def write_audio_waveform_file(media: Path, output: Path, ffmpeg: str, buckets: int = 120) -> bool:
@@ -9291,7 +9328,7 @@ def publish_intelligence_system_prompt() -> str:
         "principalmente do transcript e peak_text do corte; use o titulo original "
         "so para identificar tema, convidado ou evento. Relacione trends apenas "
         "quando houver encaixe claro com o que foi falado. Escolha capa apenas "
-        "entre o frame existente do corte; nao redesenhe."
+        "entre os frames candidatos do corte; nao redesenhe."
     )
 
 
@@ -9307,6 +9344,7 @@ def publish_intelligence_user_prompt(
             "hook: uma chamada forte para os 2 primeiros segundos",
             "description: 1 ou 2 frases limpas explicando o corte",
             "hashtags: 4 a 6 tags relevantes baseadas no que foi falado",
+            "cover: escolha somente um arquivo existente em cover_candidates",
         ],
         "clips": publish_clip_rows(moments),
     }
@@ -9322,6 +9360,7 @@ def publish_clip_rows(moments: list[Moment]) -> list[dict[str, object]]:
             "peak_text": trim_publish_text(clean_transcript_artifacts(moment.peak_text), 260),
             "transcript": trim_publish_text(clean_transcript_artifacts(moment.transcript), PUBLISH_CLIP_TEXT_LIMIT),
             "frame_file": moment.frame_file or "",
+            "cover_candidates": list(publish_cover_candidates_for_moment(moment)),
         })
     return rows
 
@@ -9572,15 +9611,25 @@ def build_publish_metadata(
 
 def normalize_publish_cover(value: object, moment: Moment) -> dict[str, object]:
     frame = moment.frame_file or ""
+    fallback_candidates = list(publish_cover_candidates_for_moment(moment))
     if isinstance(value, dict):
         selected = str(value.get("selected_frame") or frame)
-        candidates = clean_string_list(value.get("candidates"), 3) or ([frame] if frame else [])
+        candidates = clean_string_list(value.get("candidates"), 4) or fallback_candidates
         reason = clean_publish_line(value.get("reason"), "Frame de pico extraido do corte.", 140)
     else:
         selected = frame
-        candidates = [frame] if frame else []
+        candidates = fallback_candidates
         reason = "Frame de pico extraido do corte."
+    if selected and selected not in candidates:
+        candidates = [selected, *candidates]
     return {"selected_frame": selected, "candidates": candidates, "reason": reason}
+
+
+def publish_cover_candidates_for_moment(moment: Moment) -> tuple[str, ...]:
+    candidates = [item for item in moment.cover_candidates if str(item).strip()]
+    if moment.frame_file and moment.frame_file not in candidates:
+        candidates.insert(0, moment.frame_file)
+    return tuple(candidates[:4])
 
 
 def publish_caption_hint(hook: str, description: str, hashtags: list[str]) -> str:
@@ -9788,6 +9837,7 @@ def moment_to_dict(moment: Moment) -> dict[str, object]:
         "peak_text": moment.peak_text, "clip_file": moment.clip_file, "frame_file": moment.frame_file,
         "waveform_file": moment.waveform_file,
         "publish_metadata": moment.publish_metadata or {},
+        "cover_candidates": list(moment.cover_candidates),
         "caption_segments": [segment_to_dict(item) for item in moment.caption_segments],
     }
 
@@ -10228,10 +10278,12 @@ def publish_panels_html(moment: Moment) -> tuple[str, str]:
     tags = publish_hashtags_html(metadata.get("hashtags"))
     tag_value = html.escape(" ".join(publish_hashtags_list(metadata.get("hashtags"))), quote=True)
     cover_img = f'<img src="{poster}" alt="Capa sugerida do corte {moment.rank}">' if poster else "<span></span>"
+    cover_options = publish_cover_options_html(moment, cover, frame)
     return (
         f"""<aside class="publish-panel publish-cover-panel" data-publish-panel="cover">
           <strong>Capa IA</strong>
-          <div class="publish-cover-frame">{cover_img}</div>
+          <div class="publish-cover-frame" data-publish-cover-preview>{cover_img}</div>
+          {cover_options}
           <p>{reason}</p>
         </aside>""",
         f"""<aside class="publish-panel publish-copy-panel" data-publish-panel="copy">
@@ -10257,6 +10309,22 @@ def publish_panels_html(moment: Moment) -> tuple[str, str]:
     )
 
 
+def publish_cover_options_html(moment: Moment, cover: object, selected: str) -> str:
+    cover_data = cover if isinstance(cover, dict) else {}
+    raw = cover_data.get("candidates") if isinstance(cover_data, dict) else []
+    candidates = publish_hashtags_list(raw) or list(publish_cover_candidates_for_moment(moment))
+    buttons = []
+    for index, frame in enumerate(unique_strings(candidates)[:4], start=1):
+        src = html.escape(cache_busted_url(frame, preview_cache_token(moment)), quote=True)
+        value = html.escape(frame, quote=True)
+        active = " active" if frame == selected else ""
+        buttons.append(
+            f'<button type="button" class="{active}" data-publish-cover-option="{value}" '
+            f'aria-label="Escolher capa {index}"><img src="{src}" alt=""></button>'
+        )
+    return f'<div class="publish-cover-options">{"".join(buttons)}</div>' if buttons else ""
+
+
 def publish_hashtags_html(value: object) -> str:
     cleaned = [html.escape(str(tag)) for tag in publish_hashtags_list(value)]
     if not cleaned:
@@ -10267,6 +10335,18 @@ def publish_hashtags_html(value: object) -> str:
 def publish_hashtags_list(value: object) -> list[str]:
     tags = value if isinstance(value, list) else []
     return [str(tag).strip() for tag in tags if str(tag).strip()]
+
+
+def unique_strings(values: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        key = value.strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        result.append(key)
+    return result
 
 
 def media_html(moment: Moment) -> str:
@@ -11214,7 +11294,7 @@ body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,
 .workspace-exit-backdrop{position:fixed!important;inset:0!important;z-index:4950!important;display:grid!important;place-items:center!important;padding:32px;background:radial-gradient(circle at 45% 38%,rgba(17,162,207,.18),transparent 30%),radial-gradient(circle at 62% 62%,rgba(175,207,42,.12),transparent 28%),rgba(0,0,0,.72)!important;backdrop-filter:blur(18px) saturate(1.18)!important;opacity:0;pointer-events:none;transition:opacity 180ms ease}.workspace-exit-backdrop[hidden]{display:none!important}.workspace-exit-backdrop.is-open{opacity:1;pointer-events:auto}.workspace-exit-backdrop.is-closing{opacity:0;pointer-events:none}.workspace-exit-panel{position:relative;isolation:isolate;width:min(620px,calc(100vw - 48px));overflow:hidden;padding:20px;border:1px solid rgba(17,162,207,.34);border-radius:22px;background:linear-gradient(145deg,rgba(231,231,232,.11),rgba(5,5,5,.83) 46%,rgba(11,15,10,.9)),rgba(5,5,5,.94);box-shadow:0 0 0 1px rgba(255,255,255,.055),0 0 42px rgba(17,162,207,.2),0 0 58px rgba(175,207,42,.12),0 32px 86px rgba(0,0,0,.72);transform:translateY(18px) scale(.965);opacity:0;outline:none;transition:transform 210ms cubic-bezier(.2,.9,.2,1),opacity 180ms ease}.workspace-exit-backdrop.is-open .workspace-exit-panel{transform:translateY(0) scale(1);opacity:1}.workspace-exit-aura{position:absolute;inset:-46px;z-index:-1;background:conic-gradient(from 120deg,transparent,rgba(17,162,207,.2),transparent 34%,rgba(175,207,42,.18),transparent 64%);opacity:.48;filter:blur(12px);animation:settings-aura-drift 8.5s linear infinite}.workspace-exit-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;padding-bottom:16px;border-bottom:1px solid rgba(231,231,232,.1)}.workspace-exit-head strong{display:block;font-size:22px;line-height:1.05}.workspace-exit-head p,.workspace-exit-body p{margin:5px 0 0;color:rgba(231,231,232,.62);font-size:13px;line-height:1.35}.workspace-exit-body{display:grid;gap:8px;padding:16px 0}.workspace-exit-close{display:grid;place-items:center;width:40px;height:40px;min-width:40px;padding:0;border:1px solid rgba(231,231,232,.16);border-radius:14px;background:rgba(231,231,232,.06);color:rgba(231,231,232,.75);font-weight:900}.workspace-exit-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}.workspace-exit-actions button{min-height:42px;border-radius:999px;padding:0 18px;border:1px solid rgba(231,231,232,.16);background:rgba(231,231,232,.07);color:rgba(231,231,232,.82);font-weight:900}.workspace-exit-actions button.primary{border-color:rgba(175,207,42,.56);background:var(--color-brand-white);color:var(--color-brand-black)}
 .header-actions{position:absolute;right:26px;top:50%;display:flex;justify-content:flex-end;align-items:center;gap:10px;width:auto;margin:0;transform:translateY(-50%)}header{grid-template-columns:1fr!important;justify-items:center;padding:18px 26px 2px!important}.header-actions .header-icon-button,#reset-ui.header-icon-button,#finalize-videos.header-icon-button,#open-settings.header-icon-button{width:56px!important;height:56px!important;min-width:56px!important;border-color:rgba(17,162,207,.42)!important;background:linear-gradient(145deg,rgba(17,162,207,.16),rgba(175,207,42,.08) 48%,rgba(5,5,5,.84)),rgba(5,5,5,.88)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.12),0 0 18px rgba(17,162,207,.12),0 14px 34px rgba(0,0,0,.36)!important;transition:transform 170ms ease,border-color 170ms ease,box-shadow 170ms ease,color 170ms ease!important}.header-actions .header-icon-button:before,#finalize-videos.header-render-button:before,#open-settings.header-settings-button.is-openai-ready:before{background:radial-gradient(circle at 45% 22%,rgba(17,162,207,.24),transparent 58%),radial-gradient(circle at 70% 72%,rgba(175,207,42,.18),transparent 62%)!important;opacity:.66!important;transition:opacity 170ms ease,transform 170ms ease!important}.header-actions .header-icon-button:hover,.header-actions .header-icon-button:focus-visible{border-color:rgba(175,207,42,.7)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.16),0 0 24px rgba(17,162,207,.24),0 0 26px rgba(175,207,42,.16),0 18px 40px rgba(0,0,0,.42)!important;transform:translateY(-2px) scale(1.035)}.header-actions .header-icon-button:hover:before,.header-actions .header-icon-button:focus-visible:before{opacity:1!important;transform:scale(1.12) rotate(2deg)!important}.header-actions .header-render-button,#finalize-videos.header-render-button{width:56px!important;height:56px!important;min-width:56px!important;animation:none!important}.header-actions .header-render-button svg,#finalize-videos.header-render-button svg{width:30px;height:30px;stroke-width:1.85;animation:none!important;filter:none!important}#open-settings.header-settings-button.is-openai-ready{border-color:rgba(17,162,207,.42)!important;background:linear-gradient(145deg,rgba(17,162,207,.16),rgba(175,207,42,.08) 48%,rgba(5,5,5,.84)),rgba(5,5,5,.88)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.12),0 0 18px rgba(17,162,207,.12),0 14px 34px rgba(0,0,0,.36)!important}#open-settings.header-settings-button.is-openai-ready svg{animation:cuted-openai-gear-spin 5.8s linear infinite;filter:drop-shadow(0 0 8px rgba(175,207,42,.24))}.header-actions .header-render-button.is-rendering,#finalize-videos.header-render-button.is-rendering{border-color:rgba(175,207,42,.78)!important;background:linear-gradient(180deg,rgba(175,207,42,.2),rgba(17,162,207,.065)),rgba(12,14,9,.72)!important;color:var(--color-brand-green)!important;box-shadow:inset 0 1px rgba(255,255,255,.24),0 0 28px rgba(175,207,42,.34),0 0 42px rgba(17,162,207,.14),0 16px 38px rgba(0,0,0,.36)!important;animation:cuted-render-button-pulse 1.65s ease-in-out infinite!important}.header-actions .header-render-button.is-rendering:before,#finalize-videos.header-render-button.is-rendering:before{background:radial-gradient(circle at 58% 25%,rgba(175,207,42,.28),transparent 60%),radial-gradient(circle at 32% 70%,rgba(17,162,207,.12),transparent 56%)!important;opacity:1!important;transform:scale(1.12);animation:cuted-render-button-scan 1.4s ease-in-out infinite}.header-actions .header-render-button.is-rendering svg,#finalize-videos.header-render-button.is-rendering svg{animation:cuted-render-icon-drift 1.9s ease-in-out infinite!important;filter:drop-shadow(0 0 9px rgba(175,207,42,.42))!important}@media(max-width:1080px){.header-actions{position:static;justify-content:center;width:100%;margin:0;transform:none}.brand-logo{width:min(520px,88vw)}header{grid-template-columns:1fr!important;gap:8px;padding:12px!important}}@media(max-width:860px){.header-actions{justify-content:center;width:100%;margin:0;transform:none}header{grid-template-columns:1fr!important;padding:12px!important}}
 .clip-control-surface .cuted-render-zone.is-ready .cuted-ready-region{flex:0 0 46px;width:46px;min-width:46px}.clip-control-surface .cuted-render-zone.is-ready .cuted-ready-pill{width:46px}
-.card[open] .editor-shell{grid-template-columns:minmax(210px,260px) minmax(340px,1fr) minmax(260px,330px);gap:14px;align-items:start;padding:0 18px 18px;margin-top:-10px}.card[open] .editor-preview{grid-column:2}.publish-panel{display:grid;gap:10px;align-content:start;min-width:0;max-height:72vh;overflow:auto;padding:12px;border:1px solid rgba(231,231,232,.12);border-radius:12px;background:linear-gradient(180deg,rgba(231,231,232,.075),rgba(231,231,232,.025)),rgba(5,5,5,.52);box-shadow:inset 0 1px rgba(255,255,255,.08),0 12px 34px rgba(0,0,0,.24);backdrop-filter:blur(16px) saturate(1.1)}.publish-panel strong{color:rgba(231,231,232,.72);font-size:11px;letter-spacing:.08em;text-transform:uppercase}.publish-panel h2{margin:0;color:var(--color-text);font-size:17px;line-height:1.18;letter-spacing:0}.publish-panel p{margin:0;color:rgba(231,231,232,.72);font-size:12px;line-height:1.38}.publish-panel small{color:rgba(231,231,232,.5);font-size:11px;line-height:1.34}.publish-cover-frame{position:relative;overflow:hidden;aspect-ratio:9/16;border:1px solid rgba(231,231,232,.1);border-radius:8px;background:#050505}.publish-cover-frame img{display:block;width:100%;height:100%;object-fit:cover}.publish-cover-frame span{display:block;width:100%;height:100%;background:linear-gradient(135deg,rgba(17,162,207,.18),rgba(175,207,42,.08))}.publish-hook{padding:9px 10px;border-left:3px solid rgba(175,207,42,.78);border-radius:8px;background:rgba(175,207,42,.075);color:var(--color-text)!important;font-weight:800}.publish-tags{display:flex;gap:6px;flex-wrap:wrap}.publish-tags span{display:inline-flex;align-items:center;min-height:24px;max-width:100%;padding:4px 7px;border:1px solid rgba(17,162,207,.24);border-radius:999px;background:rgba(17,162,207,.09);color:rgba(231,231,232,.84);font-size:11px;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr);margin-top:0}.card[open] .editor-preview{grid-column:1}.publish-panel{max-height:none}.publish-cover-panel{grid-row:2}.publish-copy-panel{grid-row:3}.publish-cover-frame{max-width:180px}}@media(max-width:860px){.card[open] .editor-shell{padding:0 12px 16px}.publish-panel{border-radius:10px}.publish-cover-frame{max-width:150px}}
+.card[open] .editor-shell{grid-template-columns:minmax(210px,260px) minmax(340px,1fr) minmax(260px,330px);gap:14px;align-items:start;padding:0 18px 18px;margin-top:-10px}.card[open] .editor-preview{grid-column:2}.publish-panel{display:grid;gap:10px;align-content:start;min-width:0;max-height:72vh;overflow:auto;padding:12px;border:1px solid rgba(231,231,232,.12);border-radius:12px;background:linear-gradient(180deg,rgba(231,231,232,.075),rgba(231,231,232,.025)),rgba(5,5,5,.52);box-shadow:inset 0 1px rgba(255,255,255,.08),0 12px 34px rgba(0,0,0,.24);backdrop-filter:blur(16px) saturate(1.1)}.publish-panel strong{color:rgba(231,231,232,.72);font-size:11px;letter-spacing:.08em;text-transform:uppercase}.publish-panel h2{margin:0;color:var(--color-text);font-size:17px;line-height:1.18;letter-spacing:0}.publish-panel p{margin:0;color:rgba(231,231,232,.72);font-size:12px;line-height:1.38}.publish-panel small{color:rgba(231,231,232,.5);font-size:11px;line-height:1.34}.publish-cover-frame{position:relative;overflow:hidden;aspect-ratio:9/16;border:1px solid rgba(231,231,232,.1);border-radius:8px;background:#050505}.publish-cover-frame img{display:block;width:100%;height:100%;object-fit:cover}.publish-cover-frame span{display:block;width:100%;height:100%;background:linear-gradient(135deg,rgba(17,162,207,.18),rgba(175,207,42,.08))}.publish-cover-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.publish-cover-options button{min-height:58px;padding:2px;border:1px solid rgba(231,231,232,.14);border-radius:8px;background:rgba(0,0,0,.38);overflow:hidden}.publish-cover-options button.active{border-color:rgba(175,207,42,.82);box-shadow:0 0 0 2px rgba(175,207,42,.16)}.publish-cover-options img{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:5px}.publish-hook{padding:9px 10px;border-left:3px solid rgba(175,207,42,.78);border-radius:8px;background:rgba(175,207,42,.075);color:var(--color-text)!important;font-weight:800}.publish-tags{display:flex;gap:6px;flex-wrap:wrap}.publish-tags span{display:inline-flex;align-items:center;min-height:24px;max-width:100%;padding:4px 7px;border:1px solid rgba(17,162,207,.24);border-radius:999px;background:rgba(17,162,207,.09);color:rgba(231,231,232,.84);font-size:11px;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr);margin-top:0}.card[open] .editor-preview{grid-column:1}.publish-panel{max-height:none}.publish-cover-panel{grid-row:2}.publish-copy-panel{grid-row:3}.publish-cover-frame{max-width:180px}}@media(max-width:860px){.card[open] .editor-shell{padding:0 12px 16px}.publish-panel{border-radius:10px}.publish-cover-frame{max-width:150px}}
 .card[open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(340px,calc(72vh * 9 / 16)) minmax(260px,330px);gap:8px;align-items:center;justify-content:center}.card[data-preview-format=facebook][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(390px,calc(72vh * 4 / 5)) minmax(260px,330px)}.card[data-preview-format=youtube][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(520px,720px) minmax(260px,330px)}.publish-panel{gap:9px;align-content:center;align-self:center;padding:11px}.publish-cover-panel{justify-self:end}.publish-copy-panel{justify-self:start}.publish-panel-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.publish-panel-head button{min-height:26px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-field{display:grid;gap:5px;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-field input,.publish-field textarea{width:100%;min-height:34px;padding:7px 9px;border:1px solid rgba(231,231,232,.14);border-radius:8px;background:rgba(0,0,0,.42);color:var(--color-text);font:inherit;font-size:12px;line-height:1.28;letter-spacing:0}.publish-field textarea{resize:vertical;min-height:72px}.publish-field input:focus,.publish-field textarea:focus{border-color:rgba(17,162,207,.58);outline:0;box-shadow:0 0 0 2px rgba(17,162,207,.16)}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr)}.publish-panel{align-content:start}.publish-cover-panel{justify-self:center}.publish-copy-panel{justify-self:stretch}}
 """
 
@@ -13428,12 +13508,22 @@ function syncPublishPanel(card){
   const moment = (window.CUTTED_DATA.moments || []).find(item => String(item.rank) === String(card.dataset.rank));
   if (!moment) return;
   const metadata = publishMetadata(activePlatformForRank(card.dataset.rank), moment);
+  const cover = metadata.cover || {};
   setPublishFieldValue(card, "title", metadata.title || "");
   setPublishFieldValue(card, "hook", metadata.hook || "");
   setPublishFieldValue(card, "description", metadata.description || "");
   setPublishFieldValue(card, "hashtags", (metadata.hashtags || []).join(" "));
+  syncPublishCoverPanel(card, moment, cover);
   const tags = card.querySelector(".publish-tags");
   if (tags) tags.innerHTML = (metadata.hashtags || []).map(tag => `<span>${escapeHtml(tag)}</span>`).join("");
+}
+function syncPublishCoverPanel(card, moment, cover){
+  const selected = cover.selected_frame || moment.frame_file || "";
+  const preview = card.querySelector("[data-publish-cover-preview] img");
+  if (preview && selected) preview.src = cacheBustedPreview(selected, `${moment.rank}-${selected}`);
+  card.querySelectorAll("[data-publish-cover-option]").forEach(button => {
+    button.classList.toggle("active", button.dataset.publishCoverOption === selected);
+  });
 }
 function setPublishFieldValue(card, field, value){
   const input = card.querySelector(`[data-publish-field="${field}"]`);
@@ -13451,6 +13541,15 @@ function bindPublishPanel(card){
       publish[input.dataset.publishField] = input.dataset.publishField === "hashtags"
         ? normalizePublishHashtags(input.value)
         : cleanPublishField(input.value, input.dataset.publishField === "description" ? 360 : 140);
+      setCardState(card.dataset.rank, { publish });
+      syncPublishPanel(card);
+      renderCaptionQueue();
+    });
+  });
+  card.querySelectorAll("[data-publish-cover-option]").forEach(button => {
+    button.addEventListener("click", () => {
+      const publish = normalizePublishEdit(cardState(card.dataset.rank).publish);
+      publish.coverFrame = cleanPublishField(button.dataset.publishCoverOption, 260);
       setCardState(card.dataset.rank, { publish });
       syncPublishPanel(card);
       renderCaptionQueue();
@@ -14406,6 +14505,7 @@ function publishMetadata(platform, moment){
       hook: edit.hook || generated.hook,
       description: edit.description || generated.description,
       hashtags,
+      cover: publishCoverFromEdit(edit, generated, moment),
       caption_hint: publishCaptionHintFromEdit(edit, generated, platform, moment, hashtags),
       strategy: generated.strategy || platformStrategy(platform)
     });
@@ -14417,6 +14517,7 @@ function publishMetadata(platform, moment){
     hook: edit.hook || "",
     description: edit.description || "",
     hashtags,
+    cover: publishCoverFromEdit(edit, null, moment),
     caption_hint: publishCaptionHintFromEdit(edit, null, platform, moment, hashtags),
     strategy: platformStrategy(platform)
   };
@@ -14427,6 +14528,7 @@ function normalizePublishEdit(value){
     title: cleanPublishField(source.title, 110),
     hook: cleanPublishField(source.hook, 140),
     description: cleanPublishField(source.description, 360),
+    coverFrame: cleanPublishField(source.coverFrame, 260),
     hashtags: normalizePublishHashtags(source.hashtags)
   };
 }
@@ -14449,6 +14551,31 @@ function normalizePublishHashtags(value){
     seen.add(key);
     return true;
   }).slice(0, 8);
+}
+function publishCoverFromEdit(edit, generated, moment){
+  const cover = generated?.cover && typeof generated.cover === "object" ? generated.cover : {};
+  const candidates = publishCoverCandidates(moment, cover);
+  const fallback = cover.selected_frame || candidates[0] || moment.frame_file || "";
+  const selected = candidates.includes(edit.coverFrame) ? edit.coverFrame : fallback;
+  return {
+    selected_frame: selected,
+    candidates,
+    reason: cover.reason || "Frame de pico extraido do corte."
+  };
+}
+function publishCoverCandidates(moment, cover){
+  const raw = Array.isArray(cover.candidates) && cover.candidates.length
+    ? cover.candidates
+    : (Array.isArray(moment.cover_candidates) ? moment.cover_candidates : []);
+  return uniqueCoverFrames([...raw, cover.selected_frame, moment.frame_file]);
+}
+function uniqueCoverFrames(values){
+  const seen = new Set();
+  return values.map(value => String(value || "").trim()).filter(value => {
+    if (!value || seen.has(value)) return false;
+    seen.add(value);
+    return true;
+  }).slice(0, 4);
 }
 function publishCaptionHintFromEdit(edit, generated, platform, moment, hashtags){
   const hook = edit.hook || generated?.hook || "";
