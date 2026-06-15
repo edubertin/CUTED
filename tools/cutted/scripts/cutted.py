@@ -9443,6 +9443,9 @@ def publish_cover_schema() -> dict[str, object]:
         "properties": {
             "selected_frame": {"type": "string"},
             "candidates": {"type": "array", "items": {"type": "string"}},
+            "zoom": {"type": "number"},
+            "x": {"type": "number"},
+            "y": {"type": "number"},
             "reason": {"type": "string"},
         },
     }
@@ -9615,14 +9618,20 @@ def normalize_publish_cover(value: object, moment: Moment) -> dict[str, object]:
     if isinstance(value, dict):
         selected = str(value.get("selected_frame") or frame)
         candidates = clean_string_list(value.get("candidates"), 4) or fallback_candidates
+        zoom = clamp_float(value.get("zoom"), 1.0, 1.8, 1.0)
+        x = clamp_float(value.get("x"), 0.0, 100.0, 50.0)
+        y = clamp_float(value.get("y"), 0.0, 100.0, 50.0)
         reason = clean_publish_line(value.get("reason"), "Frame de pico extraido do corte.", 140)
     else:
         selected = frame
         candidates = fallback_candidates
+        zoom = 1.0
+        x = 50.0
+        y = 50.0
         reason = "Frame de pico extraido do corte."
     if selected and selected not in candidates:
         candidates = [selected, *candidates]
-    return {"selected_frame": selected, "candidates": candidates, "reason": reason}
+    return {"selected_frame": selected, "candidates": candidates, "zoom": zoom, "x": x, "y": y, "reason": reason}
 
 
 def publish_cover_candidates_for_moment(moment: Moment) -> tuple[str, ...]:
@@ -10278,11 +10287,18 @@ def publish_panels_html(moment: Moment) -> tuple[str, str]:
     tags = publish_hashtags_html(metadata.get("hashtags"))
     tag_value = html.escape(" ".join(publish_hashtags_list(metadata.get("hashtags"))), quote=True)
     cover_img = f'<img src="{poster}" alt="Capa sugerida do corte {moment.rank}">' if poster else "<span></span>"
+    cover_zoom = int(round(clamp_float(cover.get("zoom") if isinstance(cover, dict) else None, 1.0, 1.8, 1.0) * 100))
     cover_options = publish_cover_options_html(moment, cover, frame)
     return (
         f"""<aside class="publish-panel publish-cover-panel" data-publish-panel="cover">
           <strong>Capa IA</strong>
           <div class="publish-cover-frame" data-publish-cover-preview>{cover_img}</div>
+          <div class="publish-cover-adjust">
+            <label>Zoom <output data-publish-cover-zoom-value>{cover_zoom}%</output>
+              <input data-publish-cover-zoom type="range" min="100" max="180" step="5" value="{cover_zoom}">
+            </label>
+            <button type="button" data-publish-cover-zoom-reset title="Restaurar zoom">Reset</button>
+          </div>
           {cover_options}
           <p>{reason}</p>
         </aside>""",
@@ -11296,6 +11312,7 @@ body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,
 .clip-control-surface .cuted-render-zone.is-ready .cuted-ready-region{flex:0 0 46px;width:46px;min-width:46px}.clip-control-surface .cuted-render-zone.is-ready .cuted-ready-pill{width:46px}
 .card[open] .editor-shell{grid-template-columns:minmax(210px,260px) minmax(340px,1fr) minmax(260px,330px);gap:14px;align-items:start;padding:0 18px 18px;margin-top:-10px}.card[open] .editor-preview{grid-column:2}.publish-panel{display:grid;gap:10px;align-content:start;min-width:0;max-height:72vh;overflow:auto;padding:12px;border:1px solid rgba(231,231,232,.12);border-radius:12px;background:linear-gradient(180deg,rgba(231,231,232,.075),rgba(231,231,232,.025)),rgba(5,5,5,.52);box-shadow:inset 0 1px rgba(255,255,255,.08),0 12px 34px rgba(0,0,0,.24);backdrop-filter:blur(16px) saturate(1.1)}.publish-panel strong{color:rgba(231,231,232,.72);font-size:11px;letter-spacing:.08em;text-transform:uppercase}.publish-panel h2{margin:0;color:var(--color-text);font-size:17px;line-height:1.18;letter-spacing:0}.publish-panel p{margin:0;color:rgba(231,231,232,.72);font-size:12px;line-height:1.38}.publish-panel small{color:rgba(231,231,232,.5);font-size:11px;line-height:1.34}.publish-cover-frame{position:relative;overflow:hidden;aspect-ratio:9/16;border:1px solid rgba(231,231,232,.1);border-radius:8px;background:#050505}.publish-cover-frame img{display:block;width:100%;height:100%;object-fit:cover}.publish-cover-frame span{display:block;width:100%;height:100%;background:linear-gradient(135deg,rgba(17,162,207,.18),rgba(175,207,42,.08))}.publish-cover-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.publish-cover-options button{min-height:58px;padding:2px;border:1px solid rgba(231,231,232,.14);border-radius:8px;background:rgba(0,0,0,.38);overflow:hidden}.publish-cover-options button.active{border-color:rgba(175,207,42,.82);box-shadow:0 0 0 2px rgba(175,207,42,.16)}.publish-cover-options img{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:5px}.publish-hook{padding:9px 10px;border-left:3px solid rgba(175,207,42,.78);border-radius:8px;background:rgba(175,207,42,.075);color:var(--color-text)!important;font-weight:800}.publish-tags{display:flex;gap:6px;flex-wrap:wrap}.publish-tags span{display:inline-flex;align-items:center;min-height:24px;max-width:100%;padding:4px 7px;border:1px solid rgba(17,162,207,.24);border-radius:999px;background:rgba(17,162,207,.09);color:rgba(231,231,232,.84);font-size:11px;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr);margin-top:0}.card[open] .editor-preview{grid-column:1}.publish-panel{max-height:none}.publish-cover-panel{grid-row:2}.publish-copy-panel{grid-row:3}.publish-cover-frame{max-width:180px}}@media(max-width:860px){.card[open] .editor-shell{padding:0 12px 16px}.publish-panel{border-radius:10px}.publish-cover-frame{max-width:150px}}
 .card[open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(340px,calc(72vh * 9 / 16)) minmax(260px,330px);gap:8px;align-items:center;justify-content:center}.card[data-preview-format=facebook][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(390px,calc(72vh * 4 / 5)) minmax(260px,330px)}.card[data-preview-format=youtube][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(520px,720px) minmax(260px,330px)}.publish-panel{gap:9px;align-content:center;align-self:center;padding:11px}.publish-cover-panel{justify-self:end}.publish-copy-panel{justify-self:start}.publish-panel-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.publish-panel-head button{min-height:26px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-field{display:grid;gap:5px;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-field input,.publish-field textarea{width:100%;min-height:34px;padding:7px 9px;border:1px solid rgba(231,231,232,.14);border-radius:8px;background:rgba(0,0,0,.42);color:var(--color-text);font:inherit;font-size:12px;line-height:1.28;letter-spacing:0}.publish-field textarea{resize:vertical;min-height:72px}.publish-field input:focus,.publish-field textarea:focus{border-color:rgba(17,162,207,.58);outline:0;box-shadow:0 0 0 2px rgba(17,162,207,.16)}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr)}.publish-panel{align-content:start}.publish-cover-panel{justify-self:center}.publish-copy-panel{justify-self:stretch}}
+.publish-cover-frame{touch-action:none}.publish-cover-frame[data-publish-cover-can-drag="1"]{cursor:grab}.publish-cover-frame[data-publish-cover-dragging="1"]{cursor:grabbing}.publish-cover-frame img{user-select:none;-webkit-user-drag:none;transform:scale(var(--publish-cover-zoom,1));transform-origin:var(--publish-cover-x,50%) var(--publish-cover-y,50%);transition:transform 120ms ease;will-change:transform}.publish-cover-frame[data-publish-cover-dragging="1"] img{transition:none}.publish-cover-adjust{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.publish-cover-adjust label{display:grid;grid-template-columns:auto 1fr auto;gap:7px;align-items:center;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-cover-adjust output{min-width:38px;color:rgba(231,231,232,.84);font-size:11px;text-align:right}.publish-cover-adjust input{width:100%;accent-color:var(--color-brand-green)}.publish-cover-adjust button{min-height:28px;padding:4px 8px;border-radius:999px;font-size:11px}
 """
 
 
@@ -13519,8 +13536,26 @@ function syncPublishPanel(card){
 }
 function syncPublishCoverPanel(card, moment, cover){
   const selected = cover.selected_frame || moment.frame_file || "";
-  const preview = card.querySelector("[data-publish-cover-preview] img");
-  if (preview && selected) preview.src = cacheBustedPreview(selected, `${moment.rank}-${selected}`);
+  const zoom = normalizePublishCoverZoom(cover.zoom, 1);
+  const x = normalizePublishCoverPosition(cover.x, zoom);
+  const y = normalizePublishCoverPosition(cover.y, zoom);
+  const frame = card.querySelector("[data-publish-cover-preview]");
+  const preview = frame?.querySelector("img");
+  if (frame) {
+    frame.dataset.publishCoverCanDrag = zoom > 1.001 ? "1" : "0";
+    frame.dataset.publishCoverX = String(Math.round(x));
+    frame.dataset.publishCoverY = String(Math.round(y));
+  }
+  if (preview && selected) {
+    preview.src = cacheBustedPreview(selected, `${moment.rank}-${selected}`);
+    preview.style.setProperty("--publish-cover-zoom", String(zoom));
+    preview.style.setProperty("--publish-cover-x", `${x}%`);
+    preview.style.setProperty("--publish-cover-y", `${y}%`);
+  }
+  const zoomInput = card.querySelector("[data-publish-cover-zoom]");
+  if (zoomInput && document.activeElement !== zoomInput) zoomInput.value = String(Math.round(zoom * 100));
+  const zoomValue = card.querySelector("[data-publish-cover-zoom-value]");
+  if (zoomValue) zoomValue.textContent = `${Math.round(zoom * 100)}%`;
   card.querySelectorAll("[data-publish-cover-option]").forEach(button => {
     button.classList.toggle("active", button.dataset.publishCoverOption === selected);
   });
@@ -13530,10 +13565,70 @@ function setPublishFieldValue(card, field, value){
   if (!input || document.activeElement === input) return;
   input.value = value;
 }
+function bindPublishCoverDrag(card){
+  const frame = card.querySelector("[data-publish-cover-preview]");
+  if (!frame) return;
+  frame.addEventListener("pointerdown", event => beginPublishCoverDrag(card, event));
+}
+function publishCoverForCard(card){
+  const moment = (window.CUTTED_DATA.moments || []).find(item => String(item.rank) === String(card.dataset.rank));
+  if (!moment) return null;
+  const metadata = publishMetadata(activePlatformForRank(card.dataset.rank), moment);
+  return metadata.cover || {};
+}
+function beginPublishCoverDrag(card, event){
+  if (event.button !== undefined && event.button !== 0) return;
+  const frame = event.currentTarget;
+  const cover = publishCoverForCard(card);
+  if (!cover) return;
+  const zoom = normalizePublishCoverZoom(cover.zoom, 1);
+  if (zoom <= 1.001) return;
+  const rect = frame.getBoundingClientRect();
+  const drag = {
+    rank: card.dataset.rank,
+    startClientX: event.clientX,
+    startClientY: event.clientY,
+    startX: normalizePublishCoverPosition(cover.x, zoom),
+    startY: normalizePublishCoverPosition(cover.y, zoom),
+    width: Math.max(rect.width, 1),
+    height: Math.max(rect.height, 1),
+    zoom
+  };
+  event.preventDefault();
+  frame.dataset.publishCoverDragging = "1";
+  frame.setPointerCapture?.(event.pointerId);
+  const move = pointerEvent => movePublishCoverDrag(card, drag, pointerEvent);
+  const end = () => endPublishCoverDrag(frame, event.pointerId, move, end);
+  frame.addEventListener("pointermove", move);
+  frame.addEventListener("pointerup", end);
+  frame.addEventListener("pointercancel", end);
+}
+function movePublishCoverDrag(card, drag, event){
+  event.preventDefault();
+  const publish = normalizePublishEdit(cardState(drag.rank).publish);
+  publish.coverZoom = drag.zoom;
+  publish.coverX = normalizePublishCoverPosition(drag.startX + publishCoverDragDelta(drag.startClientX, event.clientX, drag.width, drag.zoom), drag.zoom);
+  publish.coverY = normalizePublishCoverPosition(drag.startY + publishCoverDragDelta(drag.startClientY, event.clientY, drag.height, drag.zoom), drag.zoom);
+  setCardState(drag.rank, { publish });
+  syncPublishPanel(card);
+}
+function endPublishCoverDrag(frame, pointerId, move, end){
+  frame.dataset.publishCoverDragging = "0";
+  if (frame.hasPointerCapture?.(pointerId)) frame.releasePointerCapture(pointerId);
+  frame.removeEventListener("pointermove", move);
+  frame.removeEventListener("pointerup", end);
+  frame.removeEventListener("pointercancel", end);
+  renderCaptionQueue();
+}
+function publishCoverDragDelta(start, current, size, zoom){
+  const zoomGap = Math.max(normalizePublishCoverZoom(zoom, 1) - 1, 0.08);
+  return ((start - current) / Math.max(size, 1)) * 100 / zoomGap;
+}
 function bindPublishPanel(card){
   if (card.dataset.publishBound === "1") return;
   card.dataset.publishBound = "1";
   syncPublishPanel(card);
+  bindPublishCoverDrag(card);
   card.querySelectorAll("[data-publish-field]").forEach(input => {
     input.addEventListener("input", () => {
       const current = cardState(card.dataset.rank);
@@ -13554,6 +13649,27 @@ function bindPublishPanel(card){
       syncPublishPanel(card);
       renderCaptionQueue();
     });
+  });
+  card.querySelector("[data-publish-cover-zoom]")?.addEventListener("input", event => {
+    const publish = normalizePublishEdit(cardState(card.dataset.rank).publish);
+    const zoom = normalizePublishCoverZoom(Number(event.target.value) / 100, 1);
+    publish.coverZoom = zoom;
+    if (zoom <= 1.001) {
+      publish.coverX = 50;
+      publish.coverY = 50;
+    }
+    setCardState(card.dataset.rank, { publish });
+    syncPublishPanel(card);
+    renderCaptionQueue();
+  });
+  card.querySelector("[data-publish-cover-zoom-reset]")?.addEventListener("click", () => {
+    const publish = normalizePublishEdit(cardState(card.dataset.rank).publish);
+    publish.coverZoom = 1;
+    publish.coverX = 50;
+    publish.coverY = 50;
+    setCardState(card.dataset.rank, { publish });
+    syncPublishPanel(card);
+    renderCaptionQueue();
   });
   card.querySelector("[data-publish-reset]")?.addEventListener("click", () => {
     setCardState(card.dataset.rank, { publish: {} });
@@ -14529,6 +14645,9 @@ function normalizePublishEdit(value){
     hook: cleanPublishField(source.hook, 140),
     description: cleanPublishField(source.description, 360),
     coverFrame: cleanPublishField(source.coverFrame, 260),
+    coverZoom: normalizePublishCoverZoom(source.coverZoom, null),
+    coverX: normalizePublishCoverPosition(source.coverX, source.coverZoom || 1),
+    coverY: normalizePublishCoverPosition(source.coverY, source.coverZoom || 1),
     hashtags: normalizePublishHashtags(source.hashtags)
   };
 }
@@ -14557,11 +14676,27 @@ function publishCoverFromEdit(edit, generated, moment){
   const candidates = publishCoverCandidates(moment, cover);
   const fallback = cover.selected_frame || candidates[0] || moment.frame_file || "";
   const selected = candidates.includes(edit.coverFrame) ? edit.coverFrame : fallback;
+  const zoom = normalizePublishCoverZoom(edit.coverZoom, normalizePublishCoverZoom(cover.zoom, 1));
   return {
     selected_frame: selected,
     candidates,
+    zoom,
+    x: normalizePublishCoverPosition(edit.coverX ?? cover.x, zoom),
+    y: normalizePublishCoverPosition(edit.coverY ?? cover.y, zoom),
     reason: cover.reason || "Frame de pico extraido do corte."
   };
+}
+function normalizePublishCoverZoom(value, fallback = 1){
+  if (value === null || value === undefined || value === "") return fallback;
+  const next = Number(value);
+  if (!Number.isFinite(next)) return fallback;
+  return clampNumber(next, 1, 1.8);
+}
+function normalizePublishCoverPosition(value, zoom){
+  if (normalizePublishCoverZoom(zoom, 1) <= 1.001) return 50;
+  const next = Number(value);
+  if (!Number.isFinite(next)) return 50;
+  return clampNumber(next, 0, 100);
 }
 function publishCoverCandidates(moment, cover){
   const raw = Array.isArray(cover.candidates) && cover.candidates.length
