@@ -253,6 +253,13 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("exportCameraPathForEdit(edit, values.duration, values.trimStart, duration)", html)
         self.assertNotIn("cameraPathForEdit(edit, moment.adjusted_duration);", html)
 
+    def test_export_prefers_generated_publish_metadata(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("moment.publish_metadata && typeof moment.publish_metadata === \"object\"", html)
+        self.assertIn("Object.assign({}, generated", html)
+        self.assertIn("generated.caption_hint || captionHint", html)
+
     def test_partial_captioned_files_are_recovered_before_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             gallery_dir = Path(tmp)
