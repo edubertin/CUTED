@@ -187,7 +187,8 @@ PUBLISH_INTELLIGENCE_VERSION = "publish-intelligence-v1"
 PUBLISH_INTELLIGENCE_TIMEOUT_SECONDS = 35
 PUBLISH_CLIP_TEXT_LIMIT = 900
 PUBLISH_SOURCE_TEXT_LIMIT = 1800
-PUBLISH_MAX_HASHTAGS = 8
+PUBLISH_MAX_HASHTAGS = 6
+PUBLISH_DEFAULT_HASHTAGS = ["#Podcast", "#Cortes"]
 MAX_SELECTION_OVERLAP = 0.35
 MAX_SELECTION_TEXT_SIMILARITY = 0.72
 SELECTION_CLUSTER_SECONDS = 120.0
@@ -246,6 +247,15 @@ class SourceMedia:
     label: str
     cleanup_paths: tuple[Path, ...]
     metadata: dict[str, object] | None = None
+
+
+@dataclass(frozen=True)
+class PublishSourceContext:
+    label: str
+    kind: str
+    title: str
+    user_context: str
+    source_url: str
 
 
 @dataclass(frozen=True)
@@ -516,8 +526,8 @@ def analyze(args: argparse.Namespace) -> None:
     emit_import_progress("suggestions", "Sugestoes", "Gerando sugestoes de cortes...", 66, detail=f"{len(moments)} cortes")
     emit_import_progress("previews", "Previews", "Renderizando previews...", 72, step=0, steps=len(moments))
     rendered = render_outputs(source.render_source, out_dir, moments, ffmpeg, args.skip_render, emit_preview_import_progress)
-    emit_import_progress("publish", "Publicacao", "Criando hook, capa e hashtags...", 93, detail="1 busca por import")
-    rendered = apply_publish_intelligence(rendered, source.label, config, args)
+    emit_import_progress("publish", "Publicacao IA", "Analisando SEO e tendencias...", 93, detail="SEO e hashtags")
+    rendered = apply_publish_intelligence(rendered, source.label, config, args, source.metadata)
     emit_import_progress("editor", "Editor", "Montando area de edicao...", 94)
     write_json(out_dir / "moments.json", rendered, source.label, duration, config)
     write_html(out_dir / "index.html", rendered, source.label)
@@ -6030,6 +6040,7 @@ def import_job_running_stages(source_kind: str, ai_provider: str) -> list[tuple[
         ("Audio", "Transcrevendo audio..."),
         ("Analise", ai_message),
         ("Sugestoes", "Gerando sugestoes de cortes..."),
+        ("Publicacao IA", "Analisando SEO e tendencias..."),
         ("Editor", "Montando area de edicao..."),
     ]
 
@@ -9223,22 +9234,24 @@ def rel(path: Path, base: Path) -> str:
 
 
 def apply_publish_intelligence(
-    moments: list[Moment], source_label: str, config: CuttedConfig, args: argparse.Namespace
+    moments: list[Moment], source_label: str, config: CuttedConfig,
+    args: argparse.Namespace, source_metadata: dict[str, object] | None = None
 ) -> list[Moment]:
     if not moments:
         return moments
+    context = publish_source_context(source_label, args, source_metadata)
     provider = requested_ai_provider(args)
     if provider in {"openai", "auto"} and openai_api_key():
         try:
-            payload = openai_publish_intelligence(source_label, config, moments)
+            payload = openai_publish_intelligence(context, config, moments)
             return merge_publish_intelligence(moments, payload, "openai-web")
         except Exception as error:
             print(f"[cutted] Publish intelligence fallback: {error}", file=sys.stderr)
-    return fallback_publish_intelligence(moments, source_label, "local-fallback")
+    return fallback_publish_intelligence(moments, context, "local-fallback")
 
 
 def openai_publish_intelligence(
-    source_label: str, config: CuttedConfig, moments: list[Moment]
+    context: PublishSourceContext, config: CuttedConfig, moments: list[Moment]
 ) -> dict[str, object]:
     model = openai_model()
     body = {
@@ -9246,7 +9259,7 @@ def openai_publish_intelligence(
         "tools": [{"type": "web_search", "search_context_size": "low"}],
         "input": [
             {"role": "system", "content": publish_intelligence_system_prompt()},
-            {"role": "user", "content": publish_intelligence_user_prompt(source_label, config, moments)},
+            {"role": "user", "content": publish_intelligence_user_prompt(context, config, moments)},
         ],
         "text": {
             "format": {
@@ -9270,20 +9283,31 @@ def openai_publish_intelligence(
 def publish_intelligence_system_prompt() -> str:
     return (
         "Voce e o estrategista de publicacao do CUTED para clips curtos. "
-        "Use no maximo uma busca web para entender o contexto atual e produza "
-        "metadados em portugues do Brasil. Nao invente fatos especificos: "
-        "relacione trends apenas quando houver encaixe claro com o transcript. "
-        "Escolha capa apenas entre o frame existente do corte; nao redesenhe."
+        "Use no maximo uma busca web para entender SEO e tendencias atuais. "
+        "O titulo original do video ou nome do arquivo e contexto, nao copy final. "
+        "Reescreva tudo em portugues natural do Brasil, com acentuacao, pontuacao "
+        "e frases completas. Nunca copie marcas cruas da transcricao como >>, "
+        "timestamps, falas cortadas ou pontuacao quebrada. Hashtags devem vir "
+        "principalmente do transcript e peak_text do corte; use o titulo original "
+        "so para identificar tema, convidado ou evento. Relacione trends apenas "
+        "quando houver encaixe claro com o que foi falado. Escolha capa apenas "
+        "entre o frame existente do corte; nao redesenhe."
     )
 
 
 def publish_intelligence_user_prompt(
-    source_label: str, config: CuttedConfig, moments: list[Moment]
+    context: PublishSourceContext, config: CuttedConfig, moments: list[Moment]
 ) -> str:
     payload = {
-        "source_label": source_label[:PUBLISH_SOURCE_TEXT_LIMIT],
+        "source_context": publish_source_context_payload(context),
         "preset": config.preset or "default",
         "one_search_budget": True,
+        "style_rules": [
+            "title: curto, publicavel, sem copiar transcricao crua",
+            "hook: uma chamada forte para os 2 primeiros segundos",
+            "description: 1 ou 2 frases limpas explicando o corte",
+            "hashtags: 4 a 6 tags relevantes baseadas no que foi falado",
+        ],
         "clips": publish_clip_rows(moments),
     }
     return json.dumps(payload, ensure_ascii=False)
@@ -9294,12 +9318,41 @@ def publish_clip_rows(moments: list[Moment]) -> list[dict[str, object]]:
     for moment in moments:
         rows.append({
             "rank": moment.rank,
-            "title": moment.title,
-            "peak_text": trim_publish_text(moment.peak_text, 260),
-            "transcript": trim_publish_text(moment.transcript, PUBLISH_CLIP_TEXT_LIMIT),
+            "title": clean_publish_line(moment.title, "", 140),
+            "peak_text": trim_publish_text(clean_transcript_artifacts(moment.peak_text), 260),
+            "transcript": trim_publish_text(clean_transcript_artifacts(moment.transcript), PUBLISH_CLIP_TEXT_LIMIT),
             "frame_file": moment.frame_file or "",
         })
     return rows
+
+
+def publish_source_context(
+    source_label: str, args: argparse.Namespace, metadata: dict[str, object] | None
+) -> PublishSourceContext:
+    data = metadata if isinstance(metadata, dict) else {}
+    kind = clean_publish_line(data.get("kind"), "local", 40)
+    title = clean_publish_line(data.get("label") or source_label, source_label, 180)
+    return PublishSourceContext(
+        label=clean_publish_line(source_label, title, 180),
+        kind=kind,
+        title=title,
+        user_context=clean_publish_line(getattr(args, "context_prompt", ""), "", PUBLISH_SOURCE_TEXT_LIMIT),
+        source_url=clean_publish_line(getattr(args, "youtube_url", ""), "", 320),
+    )
+
+
+def publish_source_context_payload(context: PublishSourceContext) -> dict[str, object]:
+    return {
+        "kind": context.kind,
+        "title": context.title,
+        "label": context.label,
+        "user_context": context.user_context,
+        "source_url": context.source_url,
+        "priority": (
+            "Use this origin context to identify people, topic and event. "
+            "Do not copy it as the clip title unless the clip transcript supports it."
+        ),
+    }
 
 
 def publish_intelligence_schema() -> dict[str, object]:
@@ -9383,7 +9436,8 @@ def publish_rows_by_rank(value: object) -> dict[int, dict[str, object]]:
 def publish_metadata_for_moment(
     moment: Moment, row: dict[str, object] | None, trend: dict[str, object]
 ) -> dict[str, object]:
-    fallback = fallback_publish_for_moment(moment, trend, str(trend.get("source") or "local-fallback"))
+    context = trend_source_context(trend)
+    fallback = fallback_publish_for_moment(moment, trend, context)
     if not row:
         return fallback
     hashtags = normalize_hashtags(row.get("hashtags"), fallback["hashtags"])
@@ -9396,7 +9450,7 @@ def publish_metadata_for_moment(
 
 def normalize_publish_trend(value: object, source: str) -> dict[str, object]:
     if not isinstance(value, dict):
-        return fallback_publish_trend("", source)
+        return fallback_publish_trend(coerce_publish_source_context(""), source)
     return {
         "query": clean_publish_line(value.get("query"), "", 160),
         "summary": clean_publish_line(value.get("summary"), "Contexto atual aplicado com baixa confianca.", 280),
@@ -9404,18 +9458,39 @@ def normalize_publish_trend(value: object, source: str) -> dict[str, object]:
         "source_urls": clean_url_list(value.get("source_urls"), 5),
         "confidence": clamp_float(value.get("confidence"), 0.0, 1.0, 0.45),
         "source": source,
+        "origin_title": clean_publish_line(value.get("origin_title"), "", 180),
+        "origin_kind": clean_publish_line(value.get("origin_kind"), "", 40),
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "search_budget": "single",
     }
 
 
-def fallback_publish_intelligence(moments: list[Moment], source_label: str, source: str) -> list[Moment]:
-    trend = fallback_publish_trend(source_label, source)
-    return [replace(moment, publish_metadata=fallback_publish_for_moment(moment, trend, source)) for moment in moments]
+def trend_source_context(trend: dict[str, object]) -> PublishSourceContext:
+    title = clean_publish_line(trend.get("origin_title"), "", 180)
+    kind = clean_publish_line(trend.get("origin_kind"), "local", 40)
+    return PublishSourceContext(label=title, kind=kind, title=title, user_context="", source_url="")
 
 
-def fallback_publish_trend(source_label: str, source: str) -> dict[str, object]:
-    topic = clean_publish_line(source_label, "video curto", 120)
+def fallback_publish_intelligence(
+    moments: list[Moment], context: PublishSourceContext | str, source: str
+) -> list[Moment]:
+    source_context = coerce_publish_source_context(context)
+    trend = fallback_publish_trend(source_context, source)
+    return [
+        replace(moment, publish_metadata=fallback_publish_for_moment(moment, trend, source_context))
+        for moment in moments
+    ]
+
+
+def coerce_publish_source_context(value: PublishSourceContext | str) -> PublishSourceContext:
+    if isinstance(value, PublishSourceContext):
+        return value
+    title = clean_publish_line(value, "video curto", 180)
+    return PublishSourceContext(label=title, kind="local", title=title, user_context="", source_url="")
+
+
+def fallback_publish_trend(context: PublishSourceContext, source: str) -> dict[str, object]:
+    topic = clean_publish_line(context.title or context.label, "video curto", 120)
     return {
         "query": f"trends reels shorts tiktok {topic}".strip(),
         "summary": "Sugestoes geradas pelo transcript local; sem busca web aplicada neste import.",
@@ -9423,19 +9498,58 @@ def fallback_publish_trend(source_label: str, source: str) -> dict[str, object]:
         "source_urls": [],
         "confidence": 0.25,
         "source": source,
+        "origin_title": context.title,
+        "origin_kind": context.kind,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "search_budget": "single",
     }
 
 
-def fallback_publish_for_moment(moment: Moment, trend: dict[str, object], source: str) -> dict[str, object]:
-    base = clean_publish_line(moment.peak_text or moment.title, "O ponto mais forte do corte", 92)
-    title = clean_publish_line(moment.title or base, base, 78)
-    hook = base if base.endswith("?") else f"{base}?"
-    description = clean_publish_line(moment.transcript, f"Corte rapido sobre {title}.", 220)
-    hashtags = fallback_hashtags(f"{moment.title} {moment.peak_text} {moment.transcript}")
+def fallback_publish_for_moment(
+    moment: Moment, trend: dict[str, object], context: PublishSourceContext
+) -> dict[str, object]:
+    base = publish_core_sentence(moment)
+    title = fallback_publish_title(moment, context, base)
+    hook = fallback_publish_hook(base, title)
+    description = fallback_publish_description(moment, title)
+    hashtags = fallback_hashtags_for_moment(moment, context)
     cover = normalize_publish_cover(None, moment)
     return build_publish_metadata(hook, title, description, hashtags, cover, trend, 0.25)
+
+
+def publish_core_sentence(moment: Moment) -> str:
+    peak = clean_publish_line(moment.peak_text, "", 120)
+    transcript = first_publish_sentence(moment.transcript, 140)
+    return peak or transcript or clean_publish_line(moment.title, "O ponto mais forte do corte", 92)
+
+
+def fallback_publish_title(moment: Moment, context: PublishSourceContext, base: str) -> str:
+    source_hint = best_source_entity(context.title)
+    text = first_publish_sentence(moment.transcript or moment.peak_text, 86)
+    if source_hint and source_hint.lower() in strip_accents(f"{moment.transcript} {moment.peak_text}").lower():
+        return clean_publish_line(f"{source_hint}: {text or base}", base, 82)
+    return clean_publish_line(text or base, base, 82)
+
+
+def fallback_publish_hook(base: str, title: str) -> str:
+    hook = clean_publish_line(base, title, 96).rstrip(".,;:")
+    if publish_line_has_weak_ending(hook):
+        hook = clean_publish_line(title, "O que aconteceu nesse corte", 80).rstrip(".,;:")
+    return hook if hook.endswith(("?", "!")) else f"{hook}?"
+
+
+def fallback_publish_description(moment: Moment, title: str) -> str:
+    sentence = first_publish_sentence(moment.transcript, 180)
+    if sentence and sentence.lower() != title.lower():
+        return sentence
+    topic = title.rstrip(".,;:!?")
+    return f"Corte rapido sobre {topic}."
+
+
+def publish_line_has_weak_ending(value: str) -> bool:
+    normalized = strip_accents(value).lower().strip(" .,;:!?")
+    weak = ("porque", "por que", "mas", "so que", "tem que", "vai", "assim", "tipo")
+    return any(normalized.endswith(item) for item in weak)
 
 
 def build_publish_metadata(
@@ -9474,21 +9588,108 @@ def publish_caption_hint(hook: str, description: str, hashtags: list[str]) -> st
 
 
 def fallback_hashtags(text: str) -> list[str]:
-    defaults = ["#IA", "#InteligenciaArtificial", "#Podcast"]
-    topics = [f"#{word}" for word in publish_topic_words(text, 4)]
+    topics = [f"#{word}" for word in publish_topic_words(text, 5)]
+    defaults = contextual_default_hashtags(text)
     return normalize_hashtags(topics + defaults, defaults)
+
+
+def fallback_hashtags_for_moment(moment: Moment, context: PublishSourceContext) -> list[str]:
+    transcript_text = f"{moment.transcript} {moment.peak_text}"
+    transcript_tags = [f"#{word}" for word in publish_topic_words(transcript_text, 5)]
+    source_tags = source_title_hashtags(context.title, 5)
+    defaults = contextual_default_hashtags(transcript_text + " " + context.title)
+    if len(source_tags) >= 5:
+        return normalize_hashtags(source_tags, defaults)
+    return normalize_hashtags(source_tags + transcript_tags + defaults, defaults)
+
+
+def source_title_hashtags(title: str, limit: int) -> list[str]:
+    cleaned = strip_accents(clean_transcript_artifacts(title)).lower()
+    words = re.findall(r"[a-z0-9]{3,}", cleaned)
+    tags: list[str] = []
+    index = 0
+    while index < len(words) and len(tags) < limit:
+        word = words[index]
+        if word == "clima" and index + 1 < len(words) and words[index + 1] == "esquentou":
+            append_unique_tag(tags, "#ClimaEsquentou")
+            index += 2
+            continue
+        if valid_source_title_word(word):
+            append_unique_tag(tags, f"#{publish_hashtag_word(word)}")
+        index += 1
+    return tags
+
+
+def valid_source_title_word(word: str) -> bool:
+    return word not in publish_stop_words() and word not in {"cobrou", "clima", "esquentou"}
+
+
+def append_unique_tag(tags: list[str], tag: str) -> None:
+    if tag not in tags:
+        tags.append(tag)
+
+
+def contextual_default_hashtags(text: str) -> list[str]:
+    normalized = strip_accents(text).lower()
+    tags = ["#Podcast", "#Cortes"]
+    if re.search(r"\bia\b|inteligencia artificial|artificial intelligence", normalized):
+        tags.insert(0, "#IA")
+    if "youtube" in normalized:
+        tags.append("#YouTube")
+    return tags
 
 
 def publish_topic_words(text: str, limit: int) -> list[str]:
     normalized = strip_accents(text).lower()
     words = re.findall(r"[a-z0-9]{3,}", normalized)
-    stop = {"para", "como", "porque", "entao", "sobre", "isso", "essa", "esse", "video", "fala", "muito"}
+    stop = publish_stop_words()
     counts: dict[str, int] = {}
     for word in words:
         if word not in stop:
             counts[word] = counts.get(word, 0) + 1
     ranked = sorted(counts.items(), key=lambda item: (-item[1], -len(item[0]), item[0]))
-    return [word.capitalize() for word, _count in ranked[:limit]]
+    return [publish_hashtag_word(word) for word, _count in ranked[:limit]]
+
+
+def publish_stop_words() -> set[str]:
+    return {
+        "aqui", "acho", "agora", "ainda", "assim", "cada", "cara", "como", "coisa", "com",
+        "dela", "dele", "deles", "dessa", "desse", "disso", "entao", "essa", "esse", "esta",
+        "falar", "fala", "falando", "gente", "isso", "mais", "menos", "muito", "nao", "para",
+        "pela", "pelo", "porque", "qual", "quando", "que", "sobre", "tambem", "tem", "tipo",
+        "tia", "verdade", "video", "voce",
+    }
+
+
+def publish_hashtag_word(word: str) -> str:
+    aliases = {"inteligencia": "InteligenciaArtificial", "artificial": "InteligenciaArtificial"}
+    return aliases.get(word, word[:1].upper() + word[1:])
+
+
+def first_publish_sentence(value: object, limit: int) -> str:
+    text = clean_transcript_artifacts(value)
+    parts = re.split(r"(?<=[.!?])\s+", text)
+    for part in parts:
+        cleaned = clean_publish_line(part, "", limit)
+        if len(cleaned) >= 18:
+            return cleaned
+    return clean_publish_line(text, "", limit)
+
+
+def clean_transcript_artifacts(value: object) -> str:
+    text = str(value or "")
+    text = re.sub(r"(^|\s)>+\s*", " ", text)
+    text = re.sub(r"\[[^\]]{1,32}\]", " ", text)
+    text = re.sub(r"\b\d{1,2}:\d{2}(?::\d{2})?\b", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def best_source_entity(source_title: str) -> str:
+    cleaned = clean_transcript_artifacts(source_title)
+    words = re.findall(r"[A-Za-zÀ-ÿ0-9]{3,}", cleaned)
+    candidates = [word.title() for word in words if strip_accents(word).lower() not in publish_stop_words()]
+    return " ".join(candidates[:2]) if candidates else ""
 
 
 def strip_accents(value: str) -> str:
@@ -9501,9 +9702,18 @@ def normalize_hashtags(value: object, fallback: object) -> list[str]:
     tags: list[str] = []
     for item in raw if isinstance(raw, list) else []:
         cleaned = re.sub(r"[^0-9A-Za-z_À-ÿ]", "", str(item).lstrip("#")).strip()
-        if cleaned and f"#{cleaned}" not in tags:
+        if valid_publish_hashtag(cleaned) and f"#{cleaned}" not in tags:
             tags.append(f"#{cleaned}")
-    return tags[:PUBLISH_MAX_HASHTAGS] or ["#IA", "#Podcast"]
+    return tags[:PUBLISH_MAX_HASHTAGS] or list(PUBLISH_DEFAULT_HASHTAGS)
+
+
+def valid_publish_hashtag(value: str) -> bool:
+    normalized = strip_accents(value).lower()
+    if normalized.isdigit():
+        return False
+    if len(normalized) < 3:
+        return normalized in {"ia"}
+    return normalized not in publish_stop_words()
 
 
 def clean_string_list(value: object, limit: int) -> list[str]:
@@ -9517,10 +9727,25 @@ def clean_url_list(value: object, limit: int) -> list[str]:
 
 
 def clean_publish_line(value: object, fallback: str, limit: int) -> str:
-    cleaned = re.sub(r"\s+", " ", str(value or "").strip())
+    cleaned = clean_transcript_artifacts(value)
+    cleaned = re.sub(r"^(ah|ai|aí|entao|então|né|ne)[,.\s]+", "", cleaned, flags=re.IGNORECASE)
+    cleaned = cleaned.lstrip(" ,.!?;:")
+    cleaned = re.sub(r"\s+([,.!?;:])", r"\1", cleaned)
+    cleaned = re.sub(r"([!?.,;:]){2,}", r"\1", cleaned)
+    cleaned = re.sub(r",\s*([!?])", r"\1", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -–—")
     if not cleaned:
         cleaned = fallback
-    return trim_publish_text(cleaned, limit)
+    return sentence_case_publish(trim_publish_text(cleaned, limit))
+
+
+def sentence_case_publish(value: str) -> str:
+    if not value:
+        return value
+    for index, char in enumerate(value):
+        if char.isalpha():
+            return value[:index] + char.upper() + value[index + 1:]
+    return value
 
 
 def trim_publish_text(value: object, limit: int) -> str:
