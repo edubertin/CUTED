@@ -253,6 +253,43 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("exportCameraPathForEdit(edit, values.duration, values.trimStart, duration)", html)
         self.assertNotIn("cameraPathForEdit(edit, moment.adjusted_duration);", html)
 
+    def test_export_prefers_generated_publish_metadata(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("moment.publish_metadata && typeof moment.publish_metadata === \"object\"", html)
+        self.assertIn("const edit = publishEditForRank(moment.rank)", html)
+        self.assertIn("Object.assign({}, generated", html)
+        self.assertIn("publishCaptionHintFromEdit(edit, generated", html)
+        self.assertIn("cover: publishCoverFromEdit(edit, generated, moment)", html)
+        self.assertIn("const zoom = normalizePublishCoverZoom(edit.coverZoom", html)
+        self.assertIn("zoom,", html)
+        self.assertIn("x: normalizePublishCoverPosition(edit.coverX ?? cover.x, zoom)", html)
+        self.assertIn("y: normalizePublishCoverPosition(edit.coverY ?? cover.y, zoom)", html)
+        self.assertIn('parts.join("\\n\\n")', html)
+
+    def test_publish_panel_edits_are_bound_to_card_state(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("function bindPublishPanel(card)", html)
+        self.assertIn("data-publish-field", html)
+        self.assertIn("data-publish-cover-option", html)
+        self.assertIn("data-publish-cover-zoom", html)
+        self.assertIn("data-publish-cover-preview", html)
+        self.assertIn("function bindPublishCoverDrag(card)", html)
+        self.assertIn("function movePublishCoverDrag(card, drag, event)", html)
+        self.assertIn("publish.coverFrame", html)
+        self.assertIn("publish.coverZoom", html)
+        self.assertIn("publish.coverX", html)
+        self.assertIn("publish.coverY", html)
+        self.assertIn("publish[input.dataset.publishField]", html)
+        self.assertIn("setCardState(card.dataset.rank, { publish })", html)
+
+    def test_import_progress_names_publish_seo_stage(self) -> None:
+        stages = CUTTED.import_job_running_stages("youtube", "openai")
+
+        self.assertIn(("Publicacao IA", "Analisando SEO e tendencias..."), stages)
+        self.assertIn('data-import-step="publish"', CUTTED.project_home_import_loading_html("assets/brand/cuted-logo-transparent.png"))
+
     def test_partial_captioned_files_are_recovered_before_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             gallery_dir = Path(tmp)
