@@ -31,6 +31,22 @@ def sample_moment() -> CUTTED.Moment:
     )
 
 
+def raw_podcast_moment() -> CUTTED.Moment:
+    return CUTTED.Moment(
+        rank=2,
+        start=44.0,
+        end=70.0,
+        peak=50.0,
+        score=0.88,
+        title=">> Já até queimado, né? Porque é 400 V",
+        reason="Discussao sobre cobranca e clima tenso.",
+        transcript=">> Já até queimado, né? Porque é 400 V. A Tati Cariani cobrou o Bistecone e o Toguro na frente de todo mundo.",
+        peak_text=">> A Tati Cariani cobrou o Bistecone",
+        clip_file="clips/clip-002.mp4",
+        frame_file="frames/clip-002.jpg",
+    )
+
+
 class PublishIntelligenceTests(unittest.TestCase):
     def test_fallback_publish_intelligence_populates_moment_metadata(self) -> None:
         [moment] = CUTTED.fallback_publish_intelligence([sample_moment()], "Podcast de IA", "local-fallback")
@@ -82,6 +98,39 @@ class PublishIntelligenceTests(unittest.TestCase):
         self.assertIn('data-publish-panel="copy"', html)
         self.assertIn("Publicacao IA", html)
         self.assertIn("frames/clip-001.jpg", html)
+
+    def test_fallback_cleans_transcript_markers_and_uses_origin_context(self) -> None:
+        context = CUTTED.PublishSourceContext(
+            label="TATI CARIANI COBROU BISTECONE E TOGURO",
+            kind="youtube",
+            title="TATI CARIANI COBROU BISTECONE E TOGURO - O CLIMA ESQUENTOU",
+            user_context="Priorize tensao e nomes citados.",
+            source_url="https://youtube.example/watch",
+        )
+
+        [moment] = CUTTED.fallback_publish_intelligence([raw_podcast_moment()], context, "local-fallback")
+        metadata = moment.publish_metadata or {}
+        joined = " ".join(str(metadata.get(key) or "") for key in ("title", "hook", "description"))
+
+        self.assertNotIn(">>", joined)
+        self.assertIn("#Tati", metadata["hashtags"])
+        self.assertIn("#Cariani", metadata["hashtags"])
+        self.assertNotIn("#IA", metadata["hashtags"])
+
+    def test_clean_publish_line_normalizes_broken_punctuation(self) -> None:
+        cleaned = CUTTED.clean_publish_line(">> Então,?  isso  aconteceu!!", "", 80)
+
+        self.assertEqual(cleaned, "Isso aconteceu!")
+
+    def test_fallback_hook_avoids_weak_ending(self) -> None:
+        hook = CUTTED.fallback_publish_hook("Não, não tem. Na verdade, tem que", "Tati cobrou Bistecone")
+
+        self.assertEqual(hook, "Tati cobrou Bistecone?")
+
+    def test_source_title_hashtags_preserve_youtube_context(self) -> None:
+        tags = CUTTED.source_title_hashtags("TATI CARIANI COBROU BISTECONE E TOGURO - O CLIMA ESQUENTOU", 5)
+
+        self.assertEqual(tags, ["#Tati", "#Cariani", "#Bistecone", "#Toguro", "#ClimaEsquentou"])
 
 
 if __name__ == "__main__":

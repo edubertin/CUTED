@@ -260,6 +260,11 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("Object.assign({}, generated", html)
         self.assertIn("generated.caption_hint || captionHint", html)
 
+    def test_import_progress_names_publish_seo_stage(self) -> None:
+        stages = CUTTED.import_job_running_stages("youtube", "openai")
+
+        self.assertIn(("Publicacao IA", "Analisando SEO e tendencias..."), stages)
+
     def test_partial_captioned_files_are_recovered_before_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             gallery_dir = Path(tmp)
