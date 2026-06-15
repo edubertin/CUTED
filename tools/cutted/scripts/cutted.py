@@ -9979,6 +9979,7 @@ def project_home_import_loading_html(logo_src: str) -> str:
         <li data-import-step="analysis"><span></span>Analise</li>
         <li data-import-step="suggestions"><span></span>Cortes</li>
         <li data-import-step="previews"><span></span>Previews</li>
+        <li data-import-step="publish"><span></span>SEO</li>
         <li data-import-step="editor"><span></span>Editor</li>
       </ol>
       <button type="button" data-import-loading-back hidden>Voltar</button>
@@ -10225,6 +10226,7 @@ def publish_panels_html(moment: Moment) -> tuple[str, str]:
     trend = metadata.get("trend_context") if isinstance(metadata.get("trend_context"), dict) else {}
     trend_summary = html.escape(str(trend.get("summary") if isinstance(trend, dict) else "" or "Sugestao local do corte."))
     tags = publish_hashtags_html(metadata.get("hashtags"))
+    tag_value = html.escape(" ".join(publish_hashtags_list(metadata.get("hashtags"))), quote=True)
     cover_img = f'<img src="{poster}" alt="Capa sugerida do corte {moment.rank}">' if poster else "<span></span>"
     return (
         f"""<aside class="publish-panel publish-cover-panel" data-publish-panel="cover">
@@ -10233,10 +10235,22 @@ def publish_panels_html(moment: Moment) -> tuple[str, str]:
           <p>{reason}</p>
         </aside>""",
         f"""<aside class="publish-panel publish-copy-panel" data-publish-panel="copy">
-          <strong>Publicacao IA</strong>
-          <h2>{title}</h2>
-          <p class="publish-hook">{hook}</p>
-          <p>{description}</p>
+          <div class="publish-panel-head">
+            <strong>Publicacao IA</strong>
+            <button type="button" data-publish-reset title="Restaurar sugestao">Reset</button>
+          </div>
+          <label class="publish-field">Titulo
+            <input data-publish-field="title" type="text" value="{title}">
+          </label>
+          <label class="publish-field">Hook
+            <input data-publish-field="hook" type="text" value="{hook}">
+          </label>
+          <label class="publish-field">Descricao
+            <textarea data-publish-field="description" rows="3">{description}</textarea>
+          </label>
+          <label class="publish-field">Hashtags
+            <input data-publish-field="hashtags" type="text" value="{tag_value}">
+          </label>
           <div class="publish-tags">{tags}</div>
           <small>{trend_summary}</small>
         </aside>""",
@@ -10244,11 +10258,15 @@ def publish_panels_html(moment: Moment) -> tuple[str, str]:
 
 
 def publish_hashtags_html(value: object) -> str:
-    tags = value if isinstance(value, list) else []
-    cleaned = [html.escape(str(tag)) for tag in tags if str(tag).strip()]
+    cleaned = [html.escape(str(tag)) for tag in publish_hashtags_list(value)]
     if not cleaned:
         cleaned = ["#IA", "#Podcast"]
     return "".join(f"<span>{tag}</span>" for tag in cleaned[:PUBLISH_MAX_HASHTAGS])
+
+
+def publish_hashtags_list(value: object) -> list[str]:
+    tags = value if isinstance(value, list) else []
+    return [str(tag).strip() for tag in tags if str(tag).strip()]
 
 
 def media_html(moment: Moment) -> str:
@@ -11197,6 +11215,7 @@ body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,
 .header-actions{position:absolute;right:26px;top:50%;display:flex;justify-content:flex-end;align-items:center;gap:10px;width:auto;margin:0;transform:translateY(-50%)}header{grid-template-columns:1fr!important;justify-items:center;padding:18px 26px 2px!important}.header-actions .header-icon-button,#reset-ui.header-icon-button,#finalize-videos.header-icon-button,#open-settings.header-icon-button{width:56px!important;height:56px!important;min-width:56px!important;border-color:rgba(17,162,207,.42)!important;background:linear-gradient(145deg,rgba(17,162,207,.16),rgba(175,207,42,.08) 48%,rgba(5,5,5,.84)),rgba(5,5,5,.88)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.12),0 0 18px rgba(17,162,207,.12),0 14px 34px rgba(0,0,0,.36)!important;transition:transform 170ms ease,border-color 170ms ease,box-shadow 170ms ease,color 170ms ease!important}.header-actions .header-icon-button:before,#finalize-videos.header-render-button:before,#open-settings.header-settings-button.is-openai-ready:before{background:radial-gradient(circle at 45% 22%,rgba(17,162,207,.24),transparent 58%),radial-gradient(circle at 70% 72%,rgba(175,207,42,.18),transparent 62%)!important;opacity:.66!important;transition:opacity 170ms ease,transform 170ms ease!important}.header-actions .header-icon-button:hover,.header-actions .header-icon-button:focus-visible{border-color:rgba(175,207,42,.7)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.16),0 0 24px rgba(17,162,207,.24),0 0 26px rgba(175,207,42,.16),0 18px 40px rgba(0,0,0,.42)!important;transform:translateY(-2px) scale(1.035)}.header-actions .header-icon-button:hover:before,.header-actions .header-icon-button:focus-visible:before{opacity:1!important;transform:scale(1.12) rotate(2deg)!important}.header-actions .header-render-button,#finalize-videos.header-render-button{width:56px!important;height:56px!important;min-width:56px!important;animation:none!important}.header-actions .header-render-button svg,#finalize-videos.header-render-button svg{width:30px;height:30px;stroke-width:1.85;animation:none!important;filter:none!important}#open-settings.header-settings-button.is-openai-ready{border-color:rgba(17,162,207,.42)!important;background:linear-gradient(145deg,rgba(17,162,207,.16),rgba(175,207,42,.08) 48%,rgba(5,5,5,.84)),rgba(5,5,5,.88)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.12),0 0 18px rgba(17,162,207,.12),0 14px 34px rgba(0,0,0,.36)!important}#open-settings.header-settings-button.is-openai-ready svg{animation:cuted-openai-gear-spin 5.8s linear infinite;filter:drop-shadow(0 0 8px rgba(175,207,42,.24))}.header-actions .header-render-button.is-rendering,#finalize-videos.header-render-button.is-rendering{border-color:rgba(175,207,42,.78)!important;background:linear-gradient(180deg,rgba(175,207,42,.2),rgba(17,162,207,.065)),rgba(12,14,9,.72)!important;color:var(--color-brand-green)!important;box-shadow:inset 0 1px rgba(255,255,255,.24),0 0 28px rgba(175,207,42,.34),0 0 42px rgba(17,162,207,.14),0 16px 38px rgba(0,0,0,.36)!important;animation:cuted-render-button-pulse 1.65s ease-in-out infinite!important}.header-actions .header-render-button.is-rendering:before,#finalize-videos.header-render-button.is-rendering:before{background:radial-gradient(circle at 58% 25%,rgba(175,207,42,.28),transparent 60%),radial-gradient(circle at 32% 70%,rgba(17,162,207,.12),transparent 56%)!important;opacity:1!important;transform:scale(1.12);animation:cuted-render-button-scan 1.4s ease-in-out infinite}.header-actions .header-render-button.is-rendering svg,#finalize-videos.header-render-button.is-rendering svg{animation:cuted-render-icon-drift 1.9s ease-in-out infinite!important;filter:drop-shadow(0 0 9px rgba(175,207,42,.42))!important}@media(max-width:1080px){.header-actions{position:static;justify-content:center;width:100%;margin:0;transform:none}.brand-logo{width:min(520px,88vw)}header{grid-template-columns:1fr!important;gap:8px;padding:12px!important}}@media(max-width:860px){.header-actions{justify-content:center;width:100%;margin:0;transform:none}header{grid-template-columns:1fr!important;padding:12px!important}}
 .clip-control-surface .cuted-render-zone.is-ready .cuted-ready-region{flex:0 0 46px;width:46px;min-width:46px}.clip-control-surface .cuted-render-zone.is-ready .cuted-ready-pill{width:46px}
 .card[open] .editor-shell{grid-template-columns:minmax(210px,260px) minmax(340px,1fr) minmax(260px,330px);gap:14px;align-items:start;padding:0 18px 18px;margin-top:-10px}.card[open] .editor-preview{grid-column:2}.publish-panel{display:grid;gap:10px;align-content:start;min-width:0;max-height:72vh;overflow:auto;padding:12px;border:1px solid rgba(231,231,232,.12);border-radius:12px;background:linear-gradient(180deg,rgba(231,231,232,.075),rgba(231,231,232,.025)),rgba(5,5,5,.52);box-shadow:inset 0 1px rgba(255,255,255,.08),0 12px 34px rgba(0,0,0,.24);backdrop-filter:blur(16px) saturate(1.1)}.publish-panel strong{color:rgba(231,231,232,.72);font-size:11px;letter-spacing:.08em;text-transform:uppercase}.publish-panel h2{margin:0;color:var(--color-text);font-size:17px;line-height:1.18;letter-spacing:0}.publish-panel p{margin:0;color:rgba(231,231,232,.72);font-size:12px;line-height:1.38}.publish-panel small{color:rgba(231,231,232,.5);font-size:11px;line-height:1.34}.publish-cover-frame{position:relative;overflow:hidden;aspect-ratio:9/16;border:1px solid rgba(231,231,232,.1);border-radius:8px;background:#050505}.publish-cover-frame img{display:block;width:100%;height:100%;object-fit:cover}.publish-cover-frame span{display:block;width:100%;height:100%;background:linear-gradient(135deg,rgba(17,162,207,.18),rgba(175,207,42,.08))}.publish-hook{padding:9px 10px;border-left:3px solid rgba(175,207,42,.78);border-radius:8px;background:rgba(175,207,42,.075);color:var(--color-text)!important;font-weight:800}.publish-tags{display:flex;gap:6px;flex-wrap:wrap}.publish-tags span{display:inline-flex;align-items:center;min-height:24px;max-width:100%;padding:4px 7px;border:1px solid rgba(17,162,207,.24);border-radius:999px;background:rgba(17,162,207,.09);color:rgba(231,231,232,.84);font-size:11px;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr);margin-top:0}.card[open] .editor-preview{grid-column:1}.publish-panel{max-height:none}.publish-cover-panel{grid-row:2}.publish-copy-panel{grid-row:3}.publish-cover-frame{max-width:180px}}@media(max-width:860px){.card[open] .editor-shell{padding:0 12px 16px}.publish-panel{border-radius:10px}.publish-cover-frame{max-width:150px}}
+.card[open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(340px,calc(72vh * 9 / 16)) minmax(260px,330px);gap:8px;align-items:center;justify-content:center}.card[data-preview-format=facebook][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(390px,calc(72vh * 4 / 5)) minmax(260px,330px)}.card[data-preview-format=youtube][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(520px,720px) minmax(260px,330px)}.publish-panel{gap:9px;align-content:center;align-self:center;padding:11px}.publish-cover-panel{justify-self:end}.publish-copy-panel{justify-self:start}.publish-panel-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.publish-panel-head button{min-height:26px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-field{display:grid;gap:5px;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-field input,.publish-field textarea{width:100%;min-height:34px;padding:7px 9px;border:1px solid rgba(231,231,232,.14);border-radius:8px;background:rgba(0,0,0,.42);color:var(--color-text);font:inherit;font-size:12px;line-height:1.28;letter-spacing:0}.publish-field textarea{resize:vertical;min-height:72px}.publish-field input:focus,.publish-field textarea:focus{border-color:rgba(17,162,207,.58);outline:0;box-shadow:0 0 0 2px rgba(17,162,207,.16)}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr)}.publish-panel{align-content:start}.publish-cover-panel{justify-self:center}.publish-copy-panel{justify-self:stretch}}
 """
 
 
@@ -11251,8 +11270,8 @@ function clearAppNotice(){
 }
 function cardState(rank){
   const raw = state[rank];
-  if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), camera_path: [], director_plan: null, cameraMotionMs: defaultCameraMotionMs, effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], bumpers: defaultBumpers(), platformEdits: {} };
-  const next = Object.assign({ status: null, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), camera_path: [], director_plan: null, cameraMotionMs: defaultCameraMotionMs, effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], bumpers: defaultBumpers(), platformEdits: {} }, raw || {});
+  if (typeof raw === "string") return { status: raw, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), camera_path: [], director_plan: null, cameraMotionMs: defaultCameraMotionMs, effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], bumpers: defaultBumpers(), platformEdits: {}, publish: {} };
+  const next = Object.assign({ status: null, trimStart: 0, trimEnd: 0, platforms: [], camera: defaultCamera(), camera_path: [], director_plan: null, cameraMotionMs: defaultCameraMotionMs, effect: defaultEffect(), overlay: defaultOverlay(), overlays: [], bumpers: defaultBumpers(), platformEdits: {}, publish: {} }, raw || {});
   next.platforms = next.status === "discarded" ? [] : uniquePlatforms(next.platforms);
   next.camera = normalizeCamera(next.camera);
   next.director_plan = normalizeDirectorPlan(next.director_plan);
@@ -11262,6 +11281,7 @@ function cardState(rank){
   next.bumpers = normalizeBumpers(next.bumpers);
   next.cameraMotionMs = normalizeCameraMotionMs(next.cameraMotionMs);
   next.platformEdits = normalizePlatformEdits(next.platformEdits, next);
+  next.publish = normalizePublishEdit(next.publish);
   return next;
 }
 function setCardState(rank, patch){ state[rank] = Object.assign(cardState(rank), patch); save(); }
@@ -13402,6 +13422,45 @@ function paint(card){
   card.classList.toggle("discarded",current.status==="discarded");
   const status = card.querySelector("[data-status-pill]");
   if (status) status.textContent = statusLabel(current.status);
+  if (card.dataset.publishBound === "1") syncPublishPanel(card);
+}
+function syncPublishPanel(card){
+  const moment = (window.CUTTED_DATA.moments || []).find(item => String(item.rank) === String(card.dataset.rank));
+  if (!moment) return;
+  const metadata = publishMetadata(activePlatformForRank(card.dataset.rank), moment);
+  setPublishFieldValue(card, "title", metadata.title || "");
+  setPublishFieldValue(card, "hook", metadata.hook || "");
+  setPublishFieldValue(card, "description", metadata.description || "");
+  setPublishFieldValue(card, "hashtags", (metadata.hashtags || []).join(" "));
+  const tags = card.querySelector(".publish-tags");
+  if (tags) tags.innerHTML = (metadata.hashtags || []).map(tag => `<span>${escapeHtml(tag)}</span>`).join("");
+}
+function setPublishFieldValue(card, field, value){
+  const input = card.querySelector(`[data-publish-field="${field}"]`);
+  if (!input || document.activeElement === input) return;
+  input.value = value;
+}
+function bindPublishPanel(card){
+  if (card.dataset.publishBound === "1") return;
+  card.dataset.publishBound = "1";
+  syncPublishPanel(card);
+  card.querySelectorAll("[data-publish-field]").forEach(input => {
+    input.addEventListener("input", () => {
+      const current = cardState(card.dataset.rank);
+      const publish = normalizePublishEdit(current.publish);
+      publish[input.dataset.publishField] = input.dataset.publishField === "hashtags"
+        ? normalizePublishHashtags(input.value)
+        : cleanPublishField(input.value, input.dataset.publishField === "description" ? 360 : 140);
+      setCardState(card.dataset.rank, { publish });
+      syncPublishPanel(card);
+      renderCaptionQueue();
+    });
+  });
+  card.querySelector("[data-publish-reset]")?.addEventListener("click", () => {
+    setCardState(card.dataset.rank, { publish: {} });
+    syncPublishPanel(card);
+    renderCaptionQueue();
+  });
 }
 function trimValues(card){
   const start = Number(card.dataset.start);
@@ -14334,23 +14393,68 @@ function uniquePlatforms(values){
   });
 }
 function publishMetadata(platform, moment){
+  const edit = publishEditForRank(moment.rank);
   if (moment.publish_metadata && typeof moment.publish_metadata === "object") {
     const generated = moment.publish_metadata;
-    const hashtags = Array.isArray(generated.hashtags) && generated.hashtags.length
+    const hashtags = edit.hashtags.length
+      ? edit.hashtags
+      : Array.isArray(generated.hashtags) && generated.hashtags.length
       ? generated.hashtags
       : suggestHashtags(platform, `${moment.title} ${moment.peak_text} ${moment.transcript}`);
-    return Object.assign({}, generated, {
+    const result = Object.assign({}, generated, {
+      title: edit.title || generated.title,
+      hook: edit.hook || generated.hook,
+      description: edit.description || generated.description,
       hashtags,
-      caption_hint: generated.caption_hint || captionHint(platform, moment, hashtags),
+      caption_hint: publishCaptionHintFromEdit(edit, generated, platform, moment, hashtags),
       strategy: generated.strategy || platformStrategy(platform)
     });
+    return result;
   }
-  const hashtags = suggestHashtags(platform, `${moment.title} ${moment.peak_text} ${moment.transcript}`);
+  const hashtags = edit.hashtags.length ? edit.hashtags : suggestHashtags(platform, `${moment.title} ${moment.peak_text} ${moment.transcript}`);
   return {
+    title: edit.title || moment.title,
+    hook: edit.hook || "",
+    description: edit.description || "",
     hashtags,
-    caption_hint: captionHint(platform, moment, hashtags),
+    caption_hint: publishCaptionHintFromEdit(edit, null, platform, moment, hashtags),
     strategy: platformStrategy(platform)
   };
+}
+function normalizePublishEdit(value){
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    title: cleanPublishField(source.title, 110),
+    hook: cleanPublishField(source.hook, 140),
+    description: cleanPublishField(source.description, 360),
+    hashtags: normalizePublishHashtags(source.hashtags)
+  };
+}
+function publishEditForRank(rank){
+  return normalizePublishEdit(cardState(String(rank)).publish);
+}
+function cleanPublishField(value, limit){
+  const cleaned = String(value || "").replace(/\\s+/g, " ").trim();
+  return cleaned.length > limit ? `${cleaned.slice(0, Math.max(0, limit - 1)).trim()}…` : cleaned;
+}
+function normalizePublishHashtags(value){
+  const raw = Array.isArray(value) ? value.join(" ") : String(value || "");
+  const seen = new Set();
+  return raw.split(/[\\s,]+/).map(item => item.trim()).filter(Boolean).map(item => {
+    const clean = item.replace(/^#+/, "").replace(/[^\\p{L}\\p{N}_]/gu, "");
+    return clean ? `#${clean}` : "";
+  }).filter(tag => {
+    const key = tag.toLowerCase();
+    if (!tag || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 8);
+}
+function publishCaptionHintFromEdit(edit, generated, platform, moment, hashtags){
+  const hook = edit.hook || generated?.hook || "";
+  const description = edit.description || generated?.description || "";
+  const parts = [hook, description, hashtags.join(" ")].filter(Boolean);
+  return parts.length ? parts.join("\\n\\n") : (generated?.caption_hint || captionHint(platform, moment, hashtags));
 }
 function suggestHashtags(platform, text){
   const topicTags = extractTopicTags(text);
@@ -16181,6 +16285,7 @@ document.querySelectorAll(".card").forEach(card => {
   }
   syncPreviewPlaybackState(card);
   syncPreviewVolumeButton(card);
+  bindPublishPanel(card);
   card.querySelectorAll("[data-trim]").forEach(input => input.addEventListener("input", () => {
     const current = cardState(card.dataset.rank);
     const duration = Number(card.dataset.duration);

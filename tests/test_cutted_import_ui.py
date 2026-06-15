@@ -257,13 +257,24 @@ class CuttedImportUiTests(unittest.TestCase):
         html = gallery_html()
 
         self.assertIn("moment.publish_metadata && typeof moment.publish_metadata === \"object\"", html)
+        self.assertIn("const edit = publishEditForRank(moment.rank)", html)
         self.assertIn("Object.assign({}, generated", html)
-        self.assertIn("generated.caption_hint || captionHint", html)
+        self.assertIn("publishCaptionHintFromEdit(edit, generated", html)
+        self.assertIn('parts.join("\\n\\n")', html)
+
+    def test_publish_panel_edits_are_bound_to_card_state(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("function bindPublishPanel(card)", html)
+        self.assertIn("data-publish-field", html)
+        self.assertIn("publish[input.dataset.publishField]", html)
+        self.assertIn("setCardState(card.dataset.rank, { publish })", html)
 
     def test_import_progress_names_publish_seo_stage(self) -> None:
         stages = CUTTED.import_job_running_stages("youtube", "openai")
 
         self.assertIn(("Publicacao IA", "Analisando SEO e tendencias..."), stages)
+        self.assertIn('data-import-step="publish"', CUTTED.project_home_import_loading_html("assets/brand/cuted-logo-transparent.png"))
 
     def test_partial_captioned_files_are_recovered_before_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

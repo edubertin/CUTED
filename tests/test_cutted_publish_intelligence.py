@@ -97,6 +97,8 @@ class PublishIntelligenceTests(unittest.TestCase):
         self.assertIn('data-publish-panel="cover"', html)
         self.assertIn('data-publish-panel="copy"', html)
         self.assertIn("Publicacao IA", html)
+        self.assertIn('data-publish-field="title"', html)
+        self.assertIn('data-publish-field="hashtags"', html)
         self.assertIn("frames/clip-001.jpg", html)
 
     def test_fallback_cleans_transcript_markers_and_uses_origin_context(self) -> None:
