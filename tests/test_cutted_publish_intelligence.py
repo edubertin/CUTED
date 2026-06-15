@@ -58,6 +58,9 @@ class PublishIntelligenceTests(unittest.TestCase):
         self.assertIn("#IA", metadata["hashtags"])
         self.assertEqual(metadata["cover"]["selected_frame"], "frames/clip-001.jpg")
         self.assertIn("frames/clip-001-cover-inicio.jpg", metadata["cover"]["candidates"])
+        self.assertEqual(metadata["cover"]["zoom"], 1.0)
+        self.assertEqual(metadata["cover"]["x"], 50.0)
+        self.assertEqual(metadata["cover"]["y"], 50.0)
         self.assertEqual(metadata["trend_context"]["search_budget"], "single")
 
     def test_merge_publish_intelligence_uses_ai_payload_with_cover_frame(self) -> None:
@@ -102,6 +105,9 @@ class PublishIntelligenceTests(unittest.TestCase):
         self.assertIn('data-publish-field="title"', html)
         self.assertIn('data-publish-field="hashtags"', html)
         self.assertIn('data-publish-cover-option="frames/clip-001-cover-inicio.jpg"', html)
+        self.assertIn('data-publish-cover-zoom', html)
+        self.assertIn('data-publish-cover-zoom-reset', html)
+        self.assertIn('data-publish-cover-preview', html)
         self.assertIn("frames/clip-001.jpg", html)
 
     def test_publish_clip_rows_include_cover_candidates(self) -> None:
