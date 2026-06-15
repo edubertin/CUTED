@@ -59,6 +59,8 @@ Expected responsibilities:
 - transcript snippets
 - preview clip paths
 - frame paths
+- optional `publish_metadata` generated during import for hook, title,
+  description, hashtags, cover frame, and the single-search trend context
 
 ## `caption-queue.json`
 
@@ -91,6 +93,11 @@ bumpers
 platform_edits
 publish_metadata
 ```
+
+`publish_metadata` is first written into `moments.json` and then copied into
+`caption-queue.json` for each selected platform. The MVP uses one web/trend
+search for the whole import when OpenAI is configured, caches that context per
+clip, and falls back to transcript-only suggestions without blocking import.
 
 ## `selected-clips.json`
 

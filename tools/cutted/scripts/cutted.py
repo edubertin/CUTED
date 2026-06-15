@@ -17,12 +17,13 @@ import subprocess
 import sys
 import threading
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
 import webbrowser
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -182,6 +183,11 @@ OPENAI_TEXT_PRICES_USD_PER_1M = {
 OPENAI_TRANSCRIBE_PRICES_USD_PER_MINUTE = {
     "whisper-1": 0.006,
 }
+PUBLISH_INTELLIGENCE_VERSION = "publish-intelligence-v1"
+PUBLISH_INTELLIGENCE_TIMEOUT_SECONDS = 35
+PUBLISH_CLIP_TEXT_LIMIT = 900
+PUBLISH_SOURCE_TEXT_LIMIT = 1800
+PUBLISH_MAX_HASHTAGS = 8
 MAX_SELECTION_OVERLAP = 0.35
 MAX_SELECTION_TEXT_SIMILARITY = 0.72
 SELECTION_CLUSTER_SECONDS = 120.0
@@ -218,6 +224,7 @@ class Moment:
     frame_file: str | None
     caption_segments: tuple[Segment, ...] = ()
     waveform_file: str | None = None
+    publish_metadata: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -509,6 +516,8 @@ def analyze(args: argparse.Namespace) -> None:
     emit_import_progress("suggestions", "Sugestoes", "Gerando sugestoes de cortes...", 66, detail=f"{len(moments)} cortes")
     emit_import_progress("previews", "Previews", "Renderizando previews...", 72, step=0, steps=len(moments))
     rendered = render_outputs(source.render_source, out_dir, moments, ffmpeg, args.skip_render, emit_preview_import_progress)
+    emit_import_progress("publish", "Publicacao", "Criando hook, capa e hashtags...", 93, detail="1 busca por import")
+    rendered = apply_publish_intelligence(rendered, source.label, config, args)
     emit_import_progress("editor", "Editor", "Montando area de edicao...", 94)
     write_json(out_dir / "moments.json", rendered, source.label, duration, config)
     write_html(out_dir / "index.html", rendered, source.label)
@@ -9213,6 +9222,317 @@ def rel(path: Path, base: Path) -> str:
     return path.relative_to(base).as_posix()
 
 
+def apply_publish_intelligence(
+    moments: list[Moment], source_label: str, config: CuttedConfig, args: argparse.Namespace
+) -> list[Moment]:
+    if not moments:
+        return moments
+    provider = requested_ai_provider(args)
+    if provider in {"openai", "auto"} and openai_api_key():
+        try:
+            payload = openai_publish_intelligence(source_label, config, moments)
+            return merge_publish_intelligence(moments, payload, "openai-web")
+        except Exception as error:
+            print(f"[cutted] Publish intelligence fallback: {error}", file=sys.stderr)
+    return fallback_publish_intelligence(moments, source_label, "local-fallback")
+
+
+def openai_publish_intelligence(
+    source_label: str, config: CuttedConfig, moments: list[Moment]
+) -> dict[str, object]:
+    model = openai_model()
+    body = {
+        "model": model,
+        "tools": [{"type": "web_search", "search_context_size": "low"}],
+        "input": [
+            {"role": "system", "content": publish_intelligence_system_prompt()},
+            {"role": "user", "content": publish_intelligence_user_prompt(source_label, config, moments)},
+        ],
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "cuted_publish_intelligence",
+                "strict": True,
+                "schema": publish_intelligence_schema(),
+            }
+        },
+    }
+    data = openai_json_request(
+        "https://api.openai.com/v1/responses",
+        openai_api_key(),
+        body,
+        timeout=PUBLISH_INTELLIGENCE_TIMEOUT_SECONDS,
+    )
+    record_openai_text_usage("publish_intelligence", model, data.get("usage"))
+    return parsed_openai_structured_response(data)
+
+
+def publish_intelligence_system_prompt() -> str:
+    return (
+        "Voce e o estrategista de publicacao do CUTED para clips curtos. "
+        "Use no maximo uma busca web para entender o contexto atual e produza "
+        "metadados em portugues do Brasil. Nao invente fatos especificos: "
+        "relacione trends apenas quando houver encaixe claro com o transcript. "
+        "Escolha capa apenas entre o frame existente do corte; nao redesenhe."
+    )
+
+
+def publish_intelligence_user_prompt(
+    source_label: str, config: CuttedConfig, moments: list[Moment]
+) -> str:
+    payload = {
+        "source_label": source_label[:PUBLISH_SOURCE_TEXT_LIMIT],
+        "preset": config.preset or "default",
+        "one_search_budget": True,
+        "clips": publish_clip_rows(moments),
+    }
+    return json.dumps(payload, ensure_ascii=False)
+
+
+def publish_clip_rows(moments: list[Moment]) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for moment in moments:
+        rows.append({
+            "rank": moment.rank,
+            "title": moment.title,
+            "peak_text": trim_publish_text(moment.peak_text, 260),
+            "transcript": trim_publish_text(moment.transcript, PUBLISH_CLIP_TEXT_LIMIT),
+            "frame_file": moment.frame_file or "",
+        })
+    return rows
+
+
+def publish_intelligence_schema() -> dict[str, object]:
+    clip_schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["rank", "hook", "title", "description", "hashtags", "cover", "confidence"],
+        "properties": {
+            "rank": {"type": "integer"},
+            "hook": {"type": "string"},
+            "title": {"type": "string"},
+            "description": {"type": "string"},
+            "hashtags": {"type": "array", "items": {"type": "string"}},
+            "cover": publish_cover_schema(),
+            "confidence": {"type": "number"},
+        },
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["trend_context", "clips"],
+        "properties": {
+            "trend_context": publish_trend_schema(),
+            "clips": {"type": "array", "items": clip_schema},
+        },
+    }
+
+
+def publish_trend_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["query", "summary", "matched_terms", "source_urls", "confidence"],
+        "properties": {
+            "query": {"type": "string"},
+            "summary": {"type": "string"},
+            "matched_terms": {"type": "array", "items": {"type": "string"}},
+            "source_urls": {"type": "array", "items": {"type": "string"}},
+            "confidence": {"type": "number"},
+        },
+    }
+
+
+def publish_cover_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["selected_frame", "candidates", "reason"],
+        "properties": {
+            "selected_frame": {"type": "string"},
+            "candidates": {"type": "array", "items": {"type": "string"}},
+            "reason": {"type": "string"},
+        },
+    }
+
+
+def merge_publish_intelligence(
+    moments: list[Moment], payload: dict[str, object], source: str
+) -> list[Moment]:
+    trend = normalize_publish_trend(payload.get("trend_context"), source)
+    rows = publish_rows_by_rank(payload.get("clips"))
+    return [
+        replace(moment, publish_metadata=publish_metadata_for_moment(moment, rows.get(moment.rank), trend))
+        for moment in moments
+    ]
+
+
+def publish_rows_by_rank(value: object) -> dict[int, dict[str, object]]:
+    if not isinstance(value, list):
+        return {}
+    rows: dict[int, dict[str, object]] = {}
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        rank = int(item.get("rank")) if isinstance(item.get("rank"), (int, float)) else 0
+        if rank > 0:
+            rows[rank] = item
+    return rows
+
+
+def publish_metadata_for_moment(
+    moment: Moment, row: dict[str, object] | None, trend: dict[str, object]
+) -> dict[str, object]:
+    fallback = fallback_publish_for_moment(moment, trend, str(trend.get("source") or "local-fallback"))
+    if not row:
+        return fallback
+    hashtags = normalize_hashtags(row.get("hashtags"), fallback["hashtags"])
+    hook = clean_publish_line(row.get("hook"), str(fallback["hook"]), 96)
+    title = clean_publish_line(row.get("title"), str(fallback["title"]), 90)
+    description = clean_publish_line(row.get("description"), str(fallback["description"]), 260)
+    cover = normalize_publish_cover(row.get("cover"), moment)
+    return build_publish_metadata(hook, title, description, hashtags, cover, trend, row.get("confidence"))
+
+
+def normalize_publish_trend(value: object, source: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        return fallback_publish_trend("", source)
+    return {
+        "query": clean_publish_line(value.get("query"), "", 160),
+        "summary": clean_publish_line(value.get("summary"), "Contexto atual aplicado com baixa confianca.", 280),
+        "matched_terms": clean_string_list(value.get("matched_terms"), 8),
+        "source_urls": clean_url_list(value.get("source_urls"), 5),
+        "confidence": clamp_float(value.get("confidence"), 0.0, 1.0, 0.45),
+        "source": source,
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "search_budget": "single",
+    }
+
+
+def fallback_publish_intelligence(moments: list[Moment], source_label: str, source: str) -> list[Moment]:
+    trend = fallback_publish_trend(source_label, source)
+    return [replace(moment, publish_metadata=fallback_publish_for_moment(moment, trend, source)) for moment in moments]
+
+
+def fallback_publish_trend(source_label: str, source: str) -> dict[str, object]:
+    topic = clean_publish_line(source_label, "video curto", 120)
+    return {
+        "query": f"trends reels shorts tiktok {topic}".strip(),
+        "summary": "Sugestoes geradas pelo transcript local; sem busca web aplicada neste import.",
+        "matched_terms": [],
+        "source_urls": [],
+        "confidence": 0.25,
+        "source": source,
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "search_budget": "single",
+    }
+
+
+def fallback_publish_for_moment(moment: Moment, trend: dict[str, object], source: str) -> dict[str, object]:
+    base = clean_publish_line(moment.peak_text or moment.title, "O ponto mais forte do corte", 92)
+    title = clean_publish_line(moment.title or base, base, 78)
+    hook = base if base.endswith("?") else f"{base}?"
+    description = clean_publish_line(moment.transcript, f"Corte rapido sobre {title}.", 220)
+    hashtags = fallback_hashtags(f"{moment.title} {moment.peak_text} {moment.transcript}")
+    cover = normalize_publish_cover(None, moment)
+    return build_publish_metadata(hook, title, description, hashtags, cover, trend, 0.25)
+
+
+def build_publish_metadata(
+    hook: str, title: str, description: str, hashtags: list[str],
+    cover: dict[str, object], trend: dict[str, object], confidence: object
+) -> dict[str, object]:
+    return {
+        "version": PUBLISH_INTELLIGENCE_VERSION,
+        "hook": hook,
+        "title": title,
+        "description": description,
+        "hashtags": hashtags,
+        "caption_hint": publish_caption_hint(hook, description, hashtags),
+        "strategy": "Usar o hook nos 2 primeiros segundos e validar hashtags antes de publicar.",
+        "cover": cover,
+        "trend_context": trend,
+        "confidence": clamp_float(confidence, 0.0, 1.0, 0.25),
+    }
+
+
+def normalize_publish_cover(value: object, moment: Moment) -> dict[str, object]:
+    frame = moment.frame_file or ""
+    if isinstance(value, dict):
+        selected = str(value.get("selected_frame") or frame)
+        candidates = clean_string_list(value.get("candidates"), 3) or ([frame] if frame else [])
+        reason = clean_publish_line(value.get("reason"), "Frame de pico extraido do corte.", 140)
+    else:
+        selected = frame
+        candidates = [frame] if frame else []
+        reason = "Frame de pico extraido do corte."
+    return {"selected_frame": selected, "candidates": candidates, "reason": reason}
+
+
+def publish_caption_hint(hook: str, description: str, hashtags: list[str]) -> str:
+    return "\n\n".join(part for part in [hook, description, " ".join(hashtags)] if part).strip()
+
+
+def fallback_hashtags(text: str) -> list[str]:
+    defaults = ["#IA", "#InteligenciaArtificial", "#Podcast"]
+    topics = [f"#{word}" for word in publish_topic_words(text, 4)]
+    return normalize_hashtags(topics + defaults, defaults)
+
+
+def publish_topic_words(text: str, limit: int) -> list[str]:
+    normalized = strip_accents(text).lower()
+    words = re.findall(r"[a-z0-9]{3,}", normalized)
+    stop = {"para", "como", "porque", "entao", "sobre", "isso", "essa", "esse", "video", "fala", "muito"}
+    counts: dict[str, int] = {}
+    for word in words:
+        if word not in stop:
+            counts[word] = counts.get(word, 0) + 1
+    ranked = sorted(counts.items(), key=lambda item: (-item[1], -len(item[0]), item[0]))
+    return [word.capitalize() for word, _count in ranked[:limit]]
+
+
+def strip_accents(value: str) -> str:
+    normalized = unicodedata.normalize("NFD", str(value or ""))
+    return "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+
+
+def normalize_hashtags(value: object, fallback: object) -> list[str]:
+    raw = value if isinstance(value, list) else fallback
+    tags: list[str] = []
+    for item in raw if isinstance(raw, list) else []:
+        cleaned = re.sub(r"[^0-9A-Za-z_À-ÿ]", "", str(item).lstrip("#")).strip()
+        if cleaned and f"#{cleaned}" not in tags:
+            tags.append(f"#{cleaned}")
+    return tags[:PUBLISH_MAX_HASHTAGS] or ["#IA", "#Podcast"]
+
+
+def clean_string_list(value: object, limit: int) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value[:limit] if str(item).strip()]
+
+
+def clean_url_list(value: object, limit: int) -> list[str]:
+    return [url for url in clean_string_list(value, limit) if url.startswith(("http://", "https://"))]
+
+
+def clean_publish_line(value: object, fallback: str, limit: int) -> str:
+    cleaned = re.sub(r"\s+", " ", str(value or "").strip())
+    if not cleaned:
+        cleaned = fallback
+    return trim_publish_text(cleaned, limit)
+
+
+def trim_publish_text(value: object, limit: int) -> str:
+    text = re.sub(r"\s+", " ", str(value or "").strip())
+    return text if len(text) <= limit else text[: max(0, limit - 1)].rstrip() + "…"
+
+
+def clamp_float(value: object, minimum: float, maximum: float, fallback: float) -> float:
+    number = float(value) if isinstance(value, (int, float)) else fallback
+    return min(max(number, minimum), maximum)
+
+
 def write_json(path: Path, moments: list[Moment], source: str, duration: float, config: CuttedConfig) -> None:
     payload = {
         "source": source,
@@ -9242,6 +9562,7 @@ def moment_to_dict(moment: Moment) -> dict[str, object]:
         "title": moment.title, "reason": moment.reason, "transcript": moment.transcript,
         "peak_text": moment.peak_text, "clip_file": moment.clip_file, "frame_file": moment.frame_file,
         "waveform_file": moment.waveform_file,
+        "publish_metadata": moment.publish_metadata or {},
         "caption_segments": [segment_to_dict(item) for item in moment.caption_segments],
     }
 
@@ -9626,6 +9947,7 @@ def clean_clip_title(value: str) -> str:
 
 def card_html(moment: Moment) -> str:
     video_tag = media_html(moment)
+    cover_panel, copy_panel = publish_panels_html(moment)
     duration = max(0.0, moment.end - moment.start)
     open_attr = " open" if moment.rank == 1 else ""
     title = html.escape(clean_clip_title(moment.title))
@@ -9638,6 +9960,7 @@ def card_html(moment: Moment) -> str:
         <span class="clip-row-timeline preview-camera-timeline" data-card-row-timeline data-preview-camera-timeline aria-label="Timeline do corte"></span>
       </summary>
       <div class="editor-shell">
+        {cover_panel}
         <div class="editor-preview">
           <div class="preview-frame">
             <div class="media camera-surface" data-overlay-surface>
@@ -9658,8 +9981,49 @@ def card_html(moment: Moment) -> str:
             </div>
           </div>
         </div>
+        {copy_panel}
       </div>
     </details>"""
+
+
+def publish_panels_html(moment: Moment) -> tuple[str, str]:
+    metadata = moment.publish_metadata or {}
+    cover = metadata.get("cover") if isinstance(metadata.get("cover"), dict) else {}
+    frame_value = cover.get("selected_frame") if isinstance(cover, dict) else ""
+    frame = str(frame_value or moment.frame_file or "")
+    poster = html.escape(cache_busted_url(frame, preview_cache_token(moment))) if frame else ""
+    reason_value = cover.get("reason") if isinstance(cover, dict) else ""
+    reason = html.escape(str(reason_value or "Frame de pico do corte."))
+    hook = html.escape(str(metadata.get("hook") or moment.peak_text or moment.title))
+    title = html.escape(str(metadata.get("title") or clean_clip_title(moment.title)))
+    description = html.escape(str(metadata.get("description") or moment.reason or moment.transcript))
+    trend = metadata.get("trend_context") if isinstance(metadata.get("trend_context"), dict) else {}
+    trend_summary = html.escape(str(trend.get("summary") if isinstance(trend, dict) else "" or "Sugestao local do corte."))
+    tags = publish_hashtags_html(metadata.get("hashtags"))
+    cover_img = f'<img src="{poster}" alt="Capa sugerida do corte {moment.rank}">' if poster else "<span></span>"
+    return (
+        f"""<aside class="publish-panel publish-cover-panel" data-publish-panel="cover">
+          <strong>Capa IA</strong>
+          <div class="publish-cover-frame">{cover_img}</div>
+          <p>{reason}</p>
+        </aside>""",
+        f"""<aside class="publish-panel publish-copy-panel" data-publish-panel="copy">
+          <strong>Publicacao IA</strong>
+          <h2>{title}</h2>
+          <p class="publish-hook">{hook}</p>
+          <p>{description}</p>
+          <div class="publish-tags">{tags}</div>
+          <small>{trend_summary}</small>
+        </aside>""",
+    )
+
+
+def publish_hashtags_html(value: object) -> str:
+    tags = value if isinstance(value, list) else []
+    cleaned = [html.escape(str(tag)) for tag in tags if str(tag).strip()]
+    if not cleaned:
+        cleaned = ["#IA", "#Podcast"]
+    return "".join(f"<span>{tag}</span>" for tag in cleaned[:PUBLISH_MAX_HASHTAGS])
 
 
 def media_html(moment: Moment) -> str:
@@ -10607,6 +10971,7 @@ body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,
 .workspace-exit-backdrop{position:fixed!important;inset:0!important;z-index:4950!important;display:grid!important;place-items:center!important;padding:32px;background:radial-gradient(circle at 45% 38%,rgba(17,162,207,.18),transparent 30%),radial-gradient(circle at 62% 62%,rgba(175,207,42,.12),transparent 28%),rgba(0,0,0,.72)!important;backdrop-filter:blur(18px) saturate(1.18)!important;opacity:0;pointer-events:none;transition:opacity 180ms ease}.workspace-exit-backdrop[hidden]{display:none!important}.workspace-exit-backdrop.is-open{opacity:1;pointer-events:auto}.workspace-exit-backdrop.is-closing{opacity:0;pointer-events:none}.workspace-exit-panel{position:relative;isolation:isolate;width:min(620px,calc(100vw - 48px));overflow:hidden;padding:20px;border:1px solid rgba(17,162,207,.34);border-radius:22px;background:linear-gradient(145deg,rgba(231,231,232,.11),rgba(5,5,5,.83) 46%,rgba(11,15,10,.9)),rgba(5,5,5,.94);box-shadow:0 0 0 1px rgba(255,255,255,.055),0 0 42px rgba(17,162,207,.2),0 0 58px rgba(175,207,42,.12),0 32px 86px rgba(0,0,0,.72);transform:translateY(18px) scale(.965);opacity:0;outline:none;transition:transform 210ms cubic-bezier(.2,.9,.2,1),opacity 180ms ease}.workspace-exit-backdrop.is-open .workspace-exit-panel{transform:translateY(0) scale(1);opacity:1}.workspace-exit-aura{position:absolute;inset:-46px;z-index:-1;background:conic-gradient(from 120deg,transparent,rgba(17,162,207,.2),transparent 34%,rgba(175,207,42,.18),transparent 64%);opacity:.48;filter:blur(12px);animation:settings-aura-drift 8.5s linear infinite}.workspace-exit-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;padding-bottom:16px;border-bottom:1px solid rgba(231,231,232,.1)}.workspace-exit-head strong{display:block;font-size:22px;line-height:1.05}.workspace-exit-head p,.workspace-exit-body p{margin:5px 0 0;color:rgba(231,231,232,.62);font-size:13px;line-height:1.35}.workspace-exit-body{display:grid;gap:8px;padding:16px 0}.workspace-exit-close{display:grid;place-items:center;width:40px;height:40px;min-width:40px;padding:0;border:1px solid rgba(231,231,232,.16);border-radius:14px;background:rgba(231,231,232,.06);color:rgba(231,231,232,.75);font-weight:900}.workspace-exit-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}.workspace-exit-actions button{min-height:42px;border-radius:999px;padding:0 18px;border:1px solid rgba(231,231,232,.16);background:rgba(231,231,232,.07);color:rgba(231,231,232,.82);font-weight:900}.workspace-exit-actions button.primary{border-color:rgba(175,207,42,.56);background:var(--color-brand-white);color:var(--color-brand-black)}
 .header-actions{position:absolute;right:26px;top:50%;display:flex;justify-content:flex-end;align-items:center;gap:10px;width:auto;margin:0;transform:translateY(-50%)}header{grid-template-columns:1fr!important;justify-items:center;padding:18px 26px 2px!important}.header-actions .header-icon-button,#reset-ui.header-icon-button,#finalize-videos.header-icon-button,#open-settings.header-icon-button{width:56px!important;height:56px!important;min-width:56px!important;border-color:rgba(17,162,207,.42)!important;background:linear-gradient(145deg,rgba(17,162,207,.16),rgba(175,207,42,.08) 48%,rgba(5,5,5,.84)),rgba(5,5,5,.88)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.12),0 0 18px rgba(17,162,207,.12),0 14px 34px rgba(0,0,0,.36)!important;transition:transform 170ms ease,border-color 170ms ease,box-shadow 170ms ease,color 170ms ease!important}.header-actions .header-icon-button:before,#finalize-videos.header-render-button:before,#open-settings.header-settings-button.is-openai-ready:before{background:radial-gradient(circle at 45% 22%,rgba(17,162,207,.24),transparent 58%),radial-gradient(circle at 70% 72%,rgba(175,207,42,.18),transparent 62%)!important;opacity:.66!important;transition:opacity 170ms ease,transform 170ms ease!important}.header-actions .header-icon-button:hover,.header-actions .header-icon-button:focus-visible{border-color:rgba(175,207,42,.7)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.16),0 0 24px rgba(17,162,207,.24),0 0 26px rgba(175,207,42,.16),0 18px 40px rgba(0,0,0,.42)!important;transform:translateY(-2px) scale(1.035)}.header-actions .header-icon-button:hover:before,.header-actions .header-icon-button:focus-visible:before{opacity:1!important;transform:scale(1.12) rotate(2deg)!important}.header-actions .header-render-button,#finalize-videos.header-render-button{width:56px!important;height:56px!important;min-width:56px!important;animation:none!important}.header-actions .header-render-button svg,#finalize-videos.header-render-button svg{width:30px;height:30px;stroke-width:1.85;animation:none!important;filter:none!important}#open-settings.header-settings-button.is-openai-ready{border-color:rgba(17,162,207,.42)!important;background:linear-gradient(145deg,rgba(17,162,207,.16),rgba(175,207,42,.08) 48%,rgba(5,5,5,.84)),rgba(5,5,5,.88)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.12),0 0 18px rgba(17,162,207,.12),0 14px 34px rgba(0,0,0,.36)!important}#open-settings.header-settings-button.is-openai-ready svg{animation:cuted-openai-gear-spin 5.8s linear infinite;filter:drop-shadow(0 0 8px rgba(175,207,42,.24))}.header-actions .header-render-button.is-rendering,#finalize-videos.header-render-button.is-rendering{border-color:rgba(175,207,42,.78)!important;background:linear-gradient(180deg,rgba(175,207,42,.2),rgba(17,162,207,.065)),rgba(12,14,9,.72)!important;color:var(--color-brand-green)!important;box-shadow:inset 0 1px rgba(255,255,255,.24),0 0 28px rgba(175,207,42,.34),0 0 42px rgba(17,162,207,.14),0 16px 38px rgba(0,0,0,.36)!important;animation:cuted-render-button-pulse 1.65s ease-in-out infinite!important}.header-actions .header-render-button.is-rendering:before,#finalize-videos.header-render-button.is-rendering:before{background:radial-gradient(circle at 58% 25%,rgba(175,207,42,.28),transparent 60%),radial-gradient(circle at 32% 70%,rgba(17,162,207,.12),transparent 56%)!important;opacity:1!important;transform:scale(1.12);animation:cuted-render-button-scan 1.4s ease-in-out infinite}.header-actions .header-render-button.is-rendering svg,#finalize-videos.header-render-button.is-rendering svg{animation:cuted-render-icon-drift 1.9s ease-in-out infinite!important;filter:drop-shadow(0 0 9px rgba(175,207,42,.42))!important}@media(max-width:1080px){.header-actions{position:static;justify-content:center;width:100%;margin:0;transform:none}.brand-logo{width:min(520px,88vw)}header{grid-template-columns:1fr!important;gap:8px;padding:12px!important}}@media(max-width:860px){.header-actions{justify-content:center;width:100%;margin:0;transform:none}header{grid-template-columns:1fr!important;padding:12px!important}}
 .clip-control-surface .cuted-render-zone.is-ready .cuted-ready-region{flex:0 0 46px;width:46px;min-width:46px}.clip-control-surface .cuted-render-zone.is-ready .cuted-ready-pill{width:46px}
+.card[open] .editor-shell{grid-template-columns:minmax(210px,260px) minmax(340px,1fr) minmax(260px,330px);gap:14px;align-items:start;padding:0 18px 18px;margin-top:-10px}.card[open] .editor-preview{grid-column:2}.publish-panel{display:grid;gap:10px;align-content:start;min-width:0;max-height:72vh;overflow:auto;padding:12px;border:1px solid rgba(231,231,232,.12);border-radius:12px;background:linear-gradient(180deg,rgba(231,231,232,.075),rgba(231,231,232,.025)),rgba(5,5,5,.52);box-shadow:inset 0 1px rgba(255,255,255,.08),0 12px 34px rgba(0,0,0,.24);backdrop-filter:blur(16px) saturate(1.1)}.publish-panel strong{color:rgba(231,231,232,.72);font-size:11px;letter-spacing:.08em;text-transform:uppercase}.publish-panel h2{margin:0;color:var(--color-text);font-size:17px;line-height:1.18;letter-spacing:0}.publish-panel p{margin:0;color:rgba(231,231,232,.72);font-size:12px;line-height:1.38}.publish-panel small{color:rgba(231,231,232,.5);font-size:11px;line-height:1.34}.publish-cover-frame{position:relative;overflow:hidden;aspect-ratio:9/16;border:1px solid rgba(231,231,232,.1);border-radius:8px;background:#050505}.publish-cover-frame img{display:block;width:100%;height:100%;object-fit:cover}.publish-cover-frame span{display:block;width:100%;height:100%;background:linear-gradient(135deg,rgba(17,162,207,.18),rgba(175,207,42,.08))}.publish-hook{padding:9px 10px;border-left:3px solid rgba(175,207,42,.78);border-radius:8px;background:rgba(175,207,42,.075);color:var(--color-text)!important;font-weight:800}.publish-tags{display:flex;gap:6px;flex-wrap:wrap}.publish-tags span{display:inline-flex;align-items:center;min-height:24px;max-width:100%;padding:4px 7px;border:1px solid rgba(17,162,207,.24);border-radius:999px;background:rgba(17,162,207,.09);color:rgba(231,231,232,.84);font-size:11px;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr);margin-top:0}.card[open] .editor-preview{grid-column:1}.publish-panel{max-height:none}.publish-cover-panel{grid-row:2}.publish-copy-panel{grid-row:3}.publish-cover-frame{max-width:180px}}@media(max-width:860px){.card[open] .editor-shell{padding:0 12px 16px}.publish-panel{border-radius:10px}.publish-cover-frame{max-width:150px}}
 """
 
 
@@ -13744,6 +14109,17 @@ function uniquePlatforms(values){
   });
 }
 function publishMetadata(platform, moment){
+  if (moment.publish_metadata && typeof moment.publish_metadata === "object") {
+    const generated = moment.publish_metadata;
+    const hashtags = Array.isArray(generated.hashtags) && generated.hashtags.length
+      ? generated.hashtags
+      : suggestHashtags(platform, `${moment.title} ${moment.peak_text} ${moment.transcript}`);
+    return Object.assign({}, generated, {
+      hashtags,
+      caption_hint: generated.caption_hint || captionHint(platform, moment, hashtags),
+      strategy: generated.strategy || platformStrategy(platform)
+    });
+  }
   const hashtags = suggestHashtags(platform, `${moment.title} ${moment.peak_text} ${moment.transcript}`);
   return {
     hashtags,
