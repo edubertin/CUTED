@@ -28,6 +28,7 @@ def sample_moment() -> CUTTED.Moment:
         peak_text="Voce ainda vai trabalhar junto com IA",
         clip_file="clips/clip-001.mp4",
         frame_file="frames/clip-001.jpg",
+        cover_candidates=("frames/clip-001.jpg", "frames/clip-001-cover-inicio.jpg", "frames/clip-001-cover-fim.jpg"),
     )
 
 
@@ -56,6 +57,7 @@ class PublishIntelligenceTests(unittest.TestCase):
         self.assertEqual(metadata["version"], "publish-intelligence-v1")
         self.assertIn("#IA", metadata["hashtags"])
         self.assertEqual(metadata["cover"]["selected_frame"], "frames/clip-001.jpg")
+        self.assertIn("frames/clip-001-cover-inicio.jpg", metadata["cover"]["candidates"])
         self.assertEqual(metadata["trend_context"]["search_budget"], "single")
 
     def test_merge_publish_intelligence_uses_ai_payload_with_cover_frame(self) -> None:
@@ -99,7 +101,14 @@ class PublishIntelligenceTests(unittest.TestCase):
         self.assertIn("Publicacao IA", html)
         self.assertIn('data-publish-field="title"', html)
         self.assertIn('data-publish-field="hashtags"', html)
+        self.assertIn('data-publish-cover-option="frames/clip-001-cover-inicio.jpg"', html)
         self.assertIn("frames/clip-001.jpg", html)
+
+    def test_publish_clip_rows_include_cover_candidates(self) -> None:
+        [row] = CUTTED.publish_clip_rows([sample_moment()])
+
+        self.assertEqual(row["cover_candidates"][0], "frames/clip-001.jpg")
+        self.assertIn("frames/clip-001-cover-fim.jpg", row["cover_candidates"])
 
     def test_fallback_cleans_transcript_markers_and_uses_origin_context(self) -> None:
         context = CUTTED.PublishSourceContext(
