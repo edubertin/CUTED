@@ -350,6 +350,14 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertAlmostEqual(punctuated_duration, clean_final_duration)
         self.assertAlmostEqual(timings[-1][3], 3.0)
 
+    def test_preview_animation_uses_frame_sync_for_captions(self) -> None:
+        source = MODULE_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("function syncPreviewPlaybackFrame", source)
+        self.assertIn("startCameraFrameSync(video, () => syncPreviewPlaybackFrame(card))", source)
+        self.assertIn("stopCameraFrameSync(video, () => syncPreviewPlaybackFrame(card))", source)
+        self.assertIn("syncPreviewCaptions(card, current)", source)
+
     def test_render_resource_profiles_apply_threads_and_priority(self) -> None:
         rows = [{"rank": 1}, {"rank": 2}]
 
