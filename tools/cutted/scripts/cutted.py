@@ -319,6 +319,15 @@ class CaptionEvent:
     text: str
 
 
+@dataclass(frozen=True)
+class AnimatedCaptionWindow:
+    start: float
+    end: float
+    previous: str
+    active: str
+    next: str
+
+
 @dataclass
 class ImportJob:
     id: str
@@ -7097,11 +7106,15 @@ def ass_document_with_style(
     row: dict[str, object]
 ) -> str:
     style = caption_style_from_row(row, preset)
+    animated = style.get("mode") == "animated"
     dialogue = (
-        ass_animated_dialogue_lines(events, duration, chars_per_line)
-        if style.get("mode") == "animated"
+        ass_animated_dialogue_lines(events, duration, chars_per_line, preset, style)
+        if animated
         else ass_dialogue_lines(events, duration, chars_per_line, max_lines)
     )
+    style_lines = [ass_style_line(preset, style)]
+    if animated:
+        style_lines.append(ass_caption_side_style_line(preset, style))
     return "\n".join([
         "[Script Info]",
         "ScriptType: v4.00+",
@@ -7113,7 +7126,7 @@ def ass_document_with_style(
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
         "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, "
         "MarginR, MarginV, Encoding",
-        ass_style_line(preset, style),
+        *style_lines,
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -7140,6 +7153,18 @@ def ass_style_line(preset: PlatformPreset, style: dict[str, object] | None = Non
         "Style: Default,Arial,"
         f"{font_size},{primary},&H0000FFFF,&H00000000,{back_color},-1,0,0,0,100,100,0,0,{border_style},"
         f"{outline},0,2,80,80,{margin_v},1"
+    )
+
+
+def ass_caption_side_style_line(preset: PlatformPreset, style: dict[str, object]) -> str:
+    base_size = int(style.get("size") or (72 if preset.height >= 1600 else 54))
+    font_size = max(22, int(base_size * 0.74))
+    outline = 6 if preset.height >= 1600 else 4
+    primary = ass_color(str(style.get("text_color") or "#ffffff"), "18")
+    return (
+        "Style: CaptionSide,Arial,"
+        f"{font_size},{primary},&H0000FFFF,&H00000000,&H99000000,-1,0,0,0,100,100,0,0,1,"
+        f"{outline},0,5,80,80,{caption_margin_v(preset, style)},1"
     )
 
 
@@ -7221,15 +7246,53 @@ def ass_dialogue_lines(events: list[CaptionEvent], duration: float, chars_per_li
     return lines
 
 
-def ass_animated_dialogue_lines(events: list[CaptionEvent], duration: float, chars_per_line: int) -> list[str]:
+def ass_animated_dialogue_lines(
+    events: list[CaptionEvent], duration: float, chars_per_line: int, preset: PlatformPreset, style: dict[str, object]
+) -> list[str]:
     lines: list[str] = []
-    for event in animated_caption_word_events(events, duration, chars_per_line):
-        start = min(max(event.start, 0.0), duration)
-        end = min(max(event.end, start + 0.1), duration)
-        text = ass_escape_text(event.text)
-        pop = r"{\fad(25,70)\t(0,90,\fscx108\fscy108)\t(90,170,\fscx100\fscy100)}"
-        lines.append(f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Default,,0,0,0,,{pop}{text}")
+    active_size = max(24, int(int(style.get("size") or (72 if preset.height >= 1600 else 54)) * 0.82))
+    side_size = max(22, int(int(style.get("size") or active_size) * 0.74))
+    center_x = preset.width // 2
+    center_y = ass_animated_caption_center_y(preset, style, active_size)
+    for window in animated_caption_window_events(events, duration, chars_per_line):
+        start = min(max(window.start, 0.0), duration)
+        end = min(max(window.end, start + 0.1), duration)
+        if window.previous:
+            prev_x = int(clamp(center_x - ass_caption_side_offset(window.previous, window.active, active_size, side_size), 70, preset.width - 70))
+            lines.append(ass_animated_dialogue_line(0, start, end, "CaptionSide", window.previous, prev_x, center_y, ""))
+        if window.next:
+            next_x = int(clamp(center_x + ass_caption_side_offset(window.next, window.active, active_size, side_size), 70, preset.width - 70))
+            lines.append(ass_animated_dialogue_line(0, start, end, "CaptionSide", window.next, next_x, center_y, ""))
+        pop = r"\fad(25,70)\t(0,90,\fscx112\fscy112)\t(90,190,\fscx100\fscy100)"
+        lines.append(ass_animated_dialogue_line(1, start, end, "Default", window.active, center_x, center_y, pop))
     return lines
+
+
+def ass_animated_dialogue_line(
+    layer: int, start: float, end: float, style_name: str, text: str, x: int, y: int, tags: str
+) -> str:
+    text_value = ass_escape_text(text)
+    position = rf"{{\an5\pos({x},{y}){tags}}}"
+    return f"Dialogue: {layer},{ass_time(start)},{ass_time(end)},{style_name},,0,0,0,,{position}{text_value}"
+
+
+def ass_animated_caption_center_y(preset: PlatformPreset, style: dict[str, object], font_size: int) -> int:
+    margin = caption_margin_v(preset, style)
+    return int(max(font_size, preset.height - margin - (font_size * 0.55)) + 0.5)
+
+
+def ass_caption_side_offset(side: str, active: str, active_size: int, side_size: int) -> int:
+    active_width = ass_caption_word_width(active, active_size)
+    side_width = ass_caption_word_width(side, side_size)
+    gap = max(14, int(active_size * 0.34))
+    return int((active_width / 2) + (side_width / 2) + gap + 0.5)
+
+
+def ass_caption_word_width(text: str, font_size: int) -> float:
+    wide = sum(1 for char in text if char in "mwMW@#%&")
+    narrow = sum(1 for char in text if char in "ilI.,'!|")
+    normal = max(len(text) - wide - narrow, 0)
+    return (normal * 0.56 + wide * 0.78 + narrow * 0.28) * font_size
 
 
 def animated_caption_word_events(events: list[CaptionEvent], duration: float, chars_per_line: int) -> list[CaptionEvent]:
@@ -7247,6 +7310,31 @@ def animated_caption_word_events(events: list[CaptionEvent], duration: float, ch
             word_end = end if index == len(words) - 1 else start + ((index + 1) * slot)
             if word_end - word_start >= 0.08:
                 result.append(CaptionEvent(round(word_start, 3), round(word_end, 3), word))
+    return result
+
+
+def animated_caption_window_events(events: list[CaptionEvent], duration: float, chars_per_line: int) -> list[AnimatedCaptionWindow]:
+    result: list[AnimatedCaptionWindow] = []
+    max_word_length = max(8, min(chars_per_line, 18))
+    for event in events:
+        words = split_animated_caption_words(event.text, max_word_length)
+        if not words:
+            continue
+        start = clamp(event.start, 0.0, duration)
+        end = clamp(event.end, start + 0.12, duration)
+        slot = (end - start) / max(len(words), 1)
+        for index, word in enumerate(words):
+            word_start = start + (index * slot)
+            word_end = end if index == len(words) - 1 else start + ((index + 1) * slot)
+            if word_end - word_start < 0.08:
+                continue
+            result.append(AnimatedCaptionWindow(
+                round(word_start, 3),
+                round(word_end, 3),
+                words[index - 1] if index > 0 else "",
+                word,
+                words[index + 1] if index + 1 < len(words) else "",
+            ))
     return result
 
 
@@ -11628,8 +11716,8 @@ body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,
 .card[open] .editor-shell{grid-template-columns:minmax(210px,260px) minmax(340px,1fr) minmax(260px,330px);gap:14px;align-items:start;padding:0 18px 18px;margin-top:-10px}.card[open] .editor-preview{grid-column:2}.publish-panel{display:grid;gap:10px;align-content:start;min-width:0;max-height:72vh;overflow:auto;padding:12px;border:1px solid rgba(231,231,232,.12);border-radius:12px;background:linear-gradient(180deg,rgba(231,231,232,.075),rgba(231,231,232,.025)),rgba(5,5,5,.52);box-shadow:inset 0 1px rgba(255,255,255,.08),0 12px 34px rgba(0,0,0,.24);backdrop-filter:blur(16px) saturate(1.1)}.publish-panel strong{color:rgba(231,231,232,.72);font-size:11px;letter-spacing:.08em;text-transform:uppercase}.publish-panel h2{margin:0;color:var(--color-text);font-size:17px;line-height:1.18;letter-spacing:0}.publish-panel p{margin:0;color:rgba(231,231,232,.72);font-size:12px;line-height:1.38}.publish-panel small{color:rgba(231,231,232,.5);font-size:11px;line-height:1.34}.publish-cover-frame{position:relative;overflow:hidden;aspect-ratio:9/16;border:1px solid rgba(231,231,232,.1);border-radius:8px;background:#050505}.publish-cover-frame img{display:block;width:100%;height:100%;object-fit:cover}.publish-cover-frame span{display:block;width:100%;height:100%;background:linear-gradient(135deg,rgba(17,162,207,.18),rgba(175,207,42,.08))}.publish-cover-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.publish-cover-options button{min-height:58px;padding:2px;border:1px solid rgba(231,231,232,.14);border-radius:8px;background:rgba(0,0,0,.38);overflow:hidden}.publish-cover-options button.active{border-color:rgba(175,207,42,.82);box-shadow:0 0 0 2px rgba(175,207,42,.16)}.publish-cover-options img{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:5px}.publish-hook{padding:9px 10px;border-left:3px solid rgba(175,207,42,.78);border-radius:8px;background:rgba(175,207,42,.075);color:var(--color-text)!important;font-weight:800}.publish-tags{display:flex;gap:6px;flex-wrap:wrap}.publish-tags span{display:inline-flex;align-items:center;min-height:24px;max-width:100%;padding:4px 7px;border:1px solid rgba(17,162,207,.24);border-radius:999px;background:rgba(17,162,207,.09);color:rgba(231,231,232,.84);font-size:11px;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr);margin-top:0}.card[open] .editor-preview{grid-column:1}.publish-panel{max-height:none}.publish-cover-panel{grid-row:2}.publish-copy-panel{grid-row:3}.publish-cover-frame{max-width:180px}}@media(max-width:860px){.card[open] .editor-shell{padding:0 12px 16px}.publish-panel{border-radius:10px}.publish-cover-frame{max-width:150px}}
 .card[open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(340px,calc(72vh * 9 / 16)) minmax(260px,330px);gap:8px;align-items:center;justify-content:center}.card[data-preview-format=facebook][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(390px,calc(72vh * 4 / 5)) minmax(260px,330px)}.card[data-preview-format=youtube][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(520px,720px) minmax(260px,330px)}.publish-panel{gap:9px;align-content:center;align-self:center;padding:11px}.publish-cover-panel{justify-self:end}.publish-copy-panel{justify-self:start}.publish-panel-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.publish-panel-head button{min-height:26px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-field{display:grid;gap:5px;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-field input,.publish-field textarea{width:100%;min-height:34px;padding:7px 9px;border:1px solid rgba(231,231,232,.14);border-radius:8px;background:rgba(0,0,0,.42);color:var(--color-text);font:inherit;font-size:12px;line-height:1.28;letter-spacing:0}.publish-field textarea{resize:vertical;min-height:72px}.publish-field input:focus,.publish-field textarea:focus{border-color:rgba(17,162,207,.58);outline:0;box-shadow:0 0 0 2px rgba(17,162,207,.16)}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr)}.publish-panel{align-content:start}.publish-cover-panel{justify-self:center}.publish-copy-panel{justify-self:stretch}}
 .publish-cover-stage{position:relative}.publish-cover-frame{touch-action:none}.publish-cover-frame[data-publish-cover-can-drag="1"]{cursor:grab}.publish-cover-frame[data-publish-cover-dragging="1"]{cursor:grabbing}.publish-cover-frame>img{user-select:none;-webkit-user-drag:none;transform:scale(var(--publish-cover-zoom,1));transform-origin:var(--publish-cover-x,50%) var(--publish-cover-y,50%);transition:transform 120ms ease;will-change:transform}.publish-cover-frame[data-publish-cover-dragging="1"]>img{transition:none}.publish-cover-layer-list{position:absolute;inset:0;z-index:2;pointer-events:none}.publish-cover-layer{position:absolute;display:grid;align-items:center;min-height:24px;padding:5px 7px;border-radius:6px;color:var(--cover-layer-color,#fff);font-weight:800;line-height:1.05;overflow:hidden;text-overflow:ellipsis;cursor:move;pointer-events:auto;touch-action:none}.publish-cover-layer.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.publish-cover-layer span{overflow:hidden;text-overflow:ellipsis}.publish-cover-layer[data-cover-layer-kind=text]{background:rgba(var(--cover-layer-bg,0,0,0),var(--cover-layer-bg-opacity,.7))}.publish-cover-layer[data-cover-layer-kind=speech]{border-radius:11px;background:rgba(var(--cover-layer-bg,255,255,255),var(--cover-layer-bg-opacity,.94));box-shadow:0 8px 18px rgba(0,0,0,.22);color:var(--cover-layer-color,#050505);font-weight:900;overflow:visible}.publish-cover-layer[data-cover-layer-kind=speech]:after{position:absolute;left:18%;bottom:-8px;width:15px;height:12px;border-radius:0 0 14px 0;background:inherit;content:"";transform:skewX(-18deg)}.publish-cover-layer[data-cover-layer-kind=image]{padding:0;background:transparent}.publish-cover-layer[data-cover-layer-kind=image] img{display:block;width:100%;height:auto;object-fit:contain;transform:none;transform-origin:center;opacity:var(--cover-layer-opacity,1);pointer-events:none}.publish-cover-resize{position:absolute;right:2px;bottom:2px;width:18px;height:18px;padding:0;border:1px solid rgba(255,255,255,.56);border-radius:5px;background:rgba(0,0,0,.34);cursor:nwse-resize}.publish-cover-adjust{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.publish-cover-adjust label{display:grid;grid-template-columns:auto 1fr auto;gap:7px;align-items:center;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-cover-adjust output{min-width:38px;color:rgba(231,231,232,.84);font-size:11px;text-align:right}.publish-cover-adjust input{width:100%;accent-color:var(--color-brand-green)}.publish-cover-adjust button{min-height:28px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-cover-menu{z-index:7;width:min(320px,96%);max-height:min(380px,calc(100vh - 24px))}
-.preview-caption-layer{bottom:var(--preview-caption-bottom,16.25%)}.card[data-preview-format=facebook] .preview-caption-layer{bottom:var(--preview-caption-bottom,8.8%)}.card[data-preview-format=youtube] .preview-caption-layer{bottom:var(--preview-caption-bottom,11%)}.preview-caption-layer[data-mode=animated] span{display:inline-grid;place-items:center;max-width:min(92%,14em);padding:.14em .42em!important;border-radius:.24em;background:var(--preview-caption-bg,rgba(0,0,0,.82));font-size:calc(var(--preview-caption-size,28px) * .82);line-height:1;text-shadow:0 2px 8px rgba(0,0,0,.75);-webkit-text-stroke:0;white-space:nowrap;animation:cuted-caption-pop 180ms cubic-bezier(.2,.9,.2,1)}.preview-caption-layer[data-mode=animated] .preview-caption-pop{box-shadow:0 8px 22px rgba(0,0,0,.34),0 0 0 1px rgba(255,255,255,.12)}@keyframes cuted-caption-pop{0%{opacity:.72;transform:translateY(7px) scale(.88)}72%{opacity:1;transform:translateY(-3px) scale(1.08)}100%{opacity:1;transform:translateY(0) scale(1)}}
-.overlay-menu[data-overlay-menu-mode=add]{display:block;width:max-content;min-width:0;max-width:calc(100vw - 28px);max-height:none;overflow:visible;padding:6px;border-radius:999px;background:linear-gradient(135deg,rgba(17,162,207,.16),rgba(175,207,42,.08)),rgba(5,5,5,.9);box-shadow:0 12px 30px rgba(0,0,0,.42),0 0 18px rgba(17,162,207,.18);backdrop-filter:blur(18px) saturate(1.16)}.overlay-menu[data-overlay-menu-mode=add] .overlay-icon-actions{display:flex;gap:6px;align-items:center}.overlay-icon-action{display:grid!important;place-items:center;width:38px;height:38px;min-width:38px;min-height:38px;padding:0!important;border-radius:12px!important;background:rgba(231,231,232,.075)!important;color:rgba(231,231,232,.9)!important;font-size:11px!important;font-weight:950!important;letter-spacing:0!important;line-height:1!important}.overlay-icon-action:hover,.overlay-icon-action:focus-visible{border-color:rgba(175,207,42,.68)!important;color:var(--color-brand-green)!important;box-shadow:0 0 16px rgba(175,207,42,.2)}.publish-cover-menu[data-overlay-menu-mode=add]{width:max-content;max-height:none}.clip-control-surface .cuted-control-bar{min-height:82px}.clip-control-surface .cuted-render-zone{min-height:58px}.clip-control-surface .cuted-tool-group{flex-basis:330px;min-height:58px}.clip-control-surface .cuted-tile-button{flex-basis:54px;width:54px;height:50px;font-size:24px}.card[open] .clip-row-timeline.preview-camera-timeline--live .timeline-shell{min-height:214px}.card[open] .clip-row-timeline.preview-camera-timeline--live{min-height:216px;margin:-10px 0 0}
+.preview-caption-layer{bottom:var(--preview-caption-bottom,16.25%)}.card[data-preview-format=facebook] .preview-caption-layer{bottom:var(--preview-caption-bottom,8.8%)}.card[data-preview-format=youtube] .preview-caption-layer{bottom:var(--preview-caption-bottom,11%)}.preview-caption-layer[data-mode=animated] .preview-caption-window{display:inline-grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:.18em;width:min(92%,16em);font-size:calc(var(--preview-caption-size,28px) * .76);line-height:1;text-shadow:0 2px 8px rgba(0,0,0,.75);-webkit-text-stroke:0;white-space:nowrap;animation:cuted-caption-window-step 190ms cubic-bezier(.2,.9,.2,1)}.preview-caption-word{display:inline-grid;place-items:center;min-width:.72em;max-width:100%;overflow:hidden;text-overflow:ellipsis}.preview-caption-side{opacity:.76;color:var(--preview-caption-color,#fff);font-size:.9em}.preview-caption-prev{justify-self:end}.preview-caption-next{justify-self:start}.preview-caption-active{justify-self:center;max-width:7.4em;padding:.15em .44em;border-radius:.25em;background:var(--preview-caption-bg,rgba(0,0,0,.82));color:var(--preview-caption-color,#fff);box-shadow:0 8px 22px rgba(0,0,0,.34),0 0 0 1px rgba(255,255,255,.12);animation:cuted-caption-pop 220ms cubic-bezier(.2,.9,.2,1)}@keyframes cuted-caption-pop{0%{opacity:.72;transform:translateY(7px) scale(.88)}64%{opacity:1;transform:translateY(-5px) scale(1.12)}100%{opacity:1;transform:translateY(0) scale(1)}}@keyframes cuted-caption-window-step{0%{transform:translateX(.18em);filter:blur(.8px)}100%{transform:translateX(0);filter:blur(0)}}
+.overlay-menu[data-overlay-menu-mode=add]{display:block;width:max-content;min-width:0;max-width:calc(100vw - 28px);max-height:none;overflow:visible;padding:6px;border-radius:999px;background:linear-gradient(135deg,rgba(17,162,207,.16),rgba(175,207,42,.08)),rgba(5,5,5,.9);box-shadow:0 12px 30px rgba(0,0,0,.42),0 0 18px rgba(17,162,207,.18);backdrop-filter:blur(18px) saturate(1.16)}.overlay-menu[data-overlay-menu-mode=add] .overlay-icon-actions{display:flex;gap:6px;align-items:center}.overlay-icon-action{display:grid!important;place-items:center;width:38px;height:38px;min-width:38px;min-height:38px;padding:0!important;border-radius:12px!important;background:rgba(231,231,232,.075)!important;color:rgba(231,231,232,.9)!important;font-size:11px!important;font-weight:950!important;letter-spacing:0!important;line-height:1!important}.overlay-icon-action:hover,.overlay-icon-action:focus-visible{border-color:rgba(175,207,42,.68)!important;color:var(--color-brand-green)!important;box-shadow:0 0 16px rgba(175,207,42,.2)}.overlay-icon-close{width:30px!important;height:30px!important;min-width:30px!important;min-height:30px!important;border-radius:999px!important;color:rgba(231,231,232,.68)!important;font-size:14px!important}.overlay-icon-close:hover,.overlay-icon-close:focus-visible{border-color:rgba(255,111,111,.5)!important;color:#ffb2b2!important;box-shadow:0 0 16px rgba(255,111,111,.16)!important}.publish-cover-menu[data-overlay-menu-mode=add]{width:max-content;max-height:none}.clip-control-surface .cuted-control-bar{min-height:82px}.clip-control-surface .cuted-render-zone{min-height:58px}.clip-control-surface .cuted-tool-group{flex-basis:330px;min-height:58px}.clip-control-surface .cuted-tile-button{flex-basis:54px;width:54px;height:50px;font-size:24px}.card[open] .clip-row-timeline.preview-camera-timeline--live .timeline-shell{min-height:214px}.card[open] .clip-row-timeline.preview-camera-timeline--live{min-height:216px;margin:-10px 0 0}
 """
 
 
@@ -13586,6 +13674,7 @@ function overlayPlaceButtonsHtml(){
       <button class="overlay-icon-action" data-overlay-place-speech type="button" aria-label="Fala" title="Fala"><span aria-hidden="true">F</span></button>
       <button class="overlay-icon-action" data-overlay-place-image type="button" aria-label="Imagem transparente" title="Imagem"><span aria-hidden="true">IMG</span></button>
       <button class="overlay-icon-action" data-overlay-place-camera type="button" aria-label="Camera" title="Camera"><span aria-hidden="true">CAM</span></button>
+      <button class="overlay-icon-action overlay-icon-close" data-overlay-close type="button" aria-label="Fechar menu de camadas" title="Fechar"><span aria-hidden="true">x</span></button>
     </div>`;
 }
 function coverPlaceButtonsHtml(){
@@ -13593,6 +13682,7 @@ function coverPlaceButtonsHtml(){
       <button class="overlay-icon-action" data-publish-cover-add="text" type="button" aria-label="Texto" title="Texto"><span aria-hidden="true">T</span></button>
       <button class="overlay-icon-action" data-publish-cover-add="speech" type="button" aria-label="Fala" title="Fala"><span aria-hidden="true">F</span></button>
       <button class="overlay-icon-action" data-publish-cover-add="image" type="button" aria-label="Imagem transparente" title="Imagem"><span aria-hidden="true">IMG</span></button>
+      <button class="overlay-icon-action overlay-icon-close" data-overlay-close type="button" aria-label="Fechar menu da capa" title="Fechar"><span aria-hidden="true">x</span></button>
     </div>`;
 }
 function overlayInspectorHtml(layer){
@@ -16735,12 +16825,29 @@ function distributedPreviewCaptionEvents(chunks, duration){
   }));
 }
 function previewAnimatedCaptionHtml(event, position){
-  const words = String(event.text || "").split(/\\s+/).filter(Boolean);
-  if (!words.length) return "";
+  const wordWindow = previewAnimatedCaptionWindow(event, position);
+  if (!wordWindow) return "";
+  return `<span class="preview-caption-window" data-caption-pop-key="${event.start.toFixed(2)}-${wordWindow.index}">
+    <span class="preview-caption-word preview-caption-side preview-caption-prev">${escapeHtml(wordWindow.previous)}</span>
+    <span class="preview-caption-word preview-caption-active">${escapeHtml(wordWindow.active)}</span>
+    <span class="preview-caption-word preview-caption-side preview-caption-next">${escapeHtml(wordWindow.next)}</span>
+  </span>`;
+}
+function previewAnimatedCaptionWindow(event, position){
+  const words = String(event.text || "").split(/\\s+/).filter(Boolean).map(previewAnimatedCaptionWord);
+  if (!words.length) return null;
   const progress = clampNumber((position - event.start) / Math.max(event.end - event.start, .1), 0, .999);
   const index = clampNumber(Math.floor(progress * words.length), 0, words.length - 1);
-  const word = words[index] || words[0];
-  return `<span class="preview-caption-pop" data-caption-pop-key="${event.start.toFixed(2)}-${index}">${escapeHtml(word)}</span>`;
+  return {
+    index,
+    previous: index > 0 ? words[index - 1] : "",
+    active: words[index] || words[0],
+    next: index + 1 < words.length ? words[index + 1] : ""
+  };
+}
+function previewAnimatedCaptionWord(word){
+  const text = String(word || "");
+  return text.length <= 18 ? text : `${text.slice(0, 17)}...`;
 }
 function previewCaptionSourceText(row){
   const transcript = String(row.transcript || "").trim();

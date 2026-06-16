@@ -151,6 +151,9 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("storeCaptionStyle(style)", html)
         self.assertIn("captionMode() === \"animated\" ? \"Animada\"", html)
         self.assertIn("function previewAnimatedCaptionHtml", html)
+        self.assertIn("function previewAnimatedCaptionWindow", html)
+        self.assertIn("preview-caption-active", html)
+        self.assertIn("preview-caption-side", html)
 
     def test_preview_caption_text_repairs_portuguese_mojibake(self) -> None:
         html = gallery_html()
@@ -208,12 +211,20 @@ class CuttedImportUiTests(unittest.TestCase):
             "caption_segments": [{"start": 0.0, "end": 2.0, "text": "fala rapida agora"}],
         }
         events = CUTTED.caption_events(row, 28, 2, 2.0)
+        windows = CUTTED.animated_caption_window_events(events, 2.0, 28)
         ass = CUTTED.ass_document_with_style(events, 2.0, preset, 28, 2, row)
 
         self.assertIn("Arial,59,", ass)
+        self.assertIn("Style: CaptionSide", ass)
         self.assertIn(",3,7,0,2,80,80,346,1", ass)
         self.assertIn("fala", ass)
-        self.assertIn("\\fscx108", ass)
+        self.assertEqual(windows[0].active, "fala")
+        self.assertEqual(windows[0].next, "rapida")
+        self.assertEqual(windows[1].previous, "fala")
+        self.assertEqual(windows[1].active, "rapida")
+        self.assertEqual(windows[1].next, "agora")
+        self.assertIn("\\fscx112", ass)
+        self.assertIn("\\pos(540,", ass)
 
     def test_render_resource_profiles_apply_threads_and_priority(self) -> None:
         rows = [{"rank": 1}, {"rank": 2}]
