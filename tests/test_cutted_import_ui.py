@@ -151,7 +151,13 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("storeCaptionStyle(style)", html)
         self.assertIn("captionMode() === \"animated\" ? \"Animada\"", html)
         self.assertIn("function previewAnimatedCaptionHtml", html)
+        self.assertIn("function previewAnimatedCaptionRender", html)
         self.assertIn("function previewAnimatedCaptionWindow", html)
+        self.assertIn("function previewAnimatedCaptionWordTimings", html)
+        self.assertIn("function previewAnimatedCaptionWordWeight", html)
+        self.assertIn("layer.dataset.captionPopKey !== rendered.key", html)
+        self.assertIn('delete layer.dataset.captionPopKey', html)
+        self.assertIn('captionBackgroundCss(style.backgroundColor, style.mode === "animated")', html)
         self.assertIn("preview-caption-active", html)
         self.assertIn("preview-caption-side", html)
 
@@ -225,6 +231,17 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertEqual(windows[1].next, "agora")
         self.assertIn("\\fscx112", ass)
         self.assertIn("\\pos(540,", ass)
+
+    def test_animated_caption_timing_weights_words_and_punctuation(self) -> None:
+        timings = CUTTED.animated_caption_word_timings(["e", "sincronizacao", "fim."], 0.0, 3.0)
+
+        short_duration = timings[0][3] - timings[0][2]
+        long_duration = timings[1][3] - timings[1][2]
+        punctuated_duration = timings[2][3] - timings[2][2]
+
+        self.assertGreater(long_duration, short_duration)
+        self.assertGreater(punctuated_duration, short_duration)
+        self.assertAlmostEqual(timings[-1][3], 3.0)
 
     def test_render_resource_profiles_apply_threads_and_priority(self) -> None:
         rows = [{"rank": 1}, {"rank": 2}]
