@@ -7304,13 +7304,33 @@ def animated_caption_word_events(events: list[CaptionEvent], duration: float, ch
             continue
         start = clamp(event.start, 0.0, duration)
         end = clamp(event.end, start + 0.12, duration)
-        slot = (end - start) / max(len(words), 1)
-        for index, word in enumerate(words):
-            word_start = start + (index * slot)
-            word_end = end if index == len(words) - 1 else start + ((index + 1) * slot)
+        for index, word, word_start, word_end in animated_caption_word_timings(words, start, end):
             if word_end - word_start >= 0.08:
                 result.append(CaptionEvent(round(word_start, 3), round(word_end, 3), word))
     return result
+
+
+def animated_caption_word_timings(words: list[str], start: float, end: float) -> list[tuple[int, str, float, float]]:
+    duration = max(end - start, 0.12)
+    weights = [animated_caption_word_weight(word) for word in words]
+    total = sum(weights) or float(len(words) or 1)
+    cursor = start
+    timings: list[tuple[int, str, float, float]] = []
+    for index, word in enumerate(words):
+        word_end = end if index == len(words) - 1 else min(end, cursor + (duration * weights[index] / total))
+        timings.append((index, word, cursor, word_end))
+        cursor = word_end
+    return timings
+
+
+def animated_caption_word_weight(word: str) -> float:
+    core = re.sub(r"\W+", "", word, flags=re.UNICODE)
+    base = max(0.7, min(math.sqrt(max(len(core), 1)), 3.0))
+    if re.search(r"[.!?…]+$", word):
+        return base + 0.45
+    if re.search(r"[,;:]+$", word):
+        return base + 0.22
+    return base
 
 
 def animated_caption_window_events(events: list[CaptionEvent], duration: float, chars_per_line: int) -> list[AnimatedCaptionWindow]:
@@ -7322,10 +7342,7 @@ def animated_caption_window_events(events: list[CaptionEvent], duration: float, 
             continue
         start = clamp(event.start, 0.0, duration)
         end = clamp(event.end, start + 0.12, duration)
-        slot = (end - start) / max(len(words), 1)
-        for index, word in enumerate(words):
-            word_start = start + (index * slot)
-            word_end = end if index == len(words) - 1 else start + ((index + 1) * slot)
+        for index, word, word_start, word_end in animated_caption_word_timings(words, start, end):
             if word_end - word_start < 0.08:
                 continue
             result.append(AnimatedCaptionWindow(
@@ -11717,7 +11734,7 @@ body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,
 .card[open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(340px,calc(72vh * 9 / 16)) minmax(260px,330px);gap:8px;align-items:center;justify-content:center}.card[data-preview-format=facebook][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(390px,calc(72vh * 4 / 5)) minmax(260px,330px)}.card[data-preview-format=youtube][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(520px,720px) minmax(260px,330px)}.publish-panel{gap:9px;align-content:center;align-self:center;padding:11px}.publish-cover-panel{justify-self:end}.publish-copy-panel{justify-self:start}.publish-panel-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.publish-panel-head button{min-height:26px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-field{display:grid;gap:5px;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-field input,.publish-field textarea{width:100%;min-height:34px;padding:7px 9px;border:1px solid rgba(231,231,232,.14);border-radius:8px;background:rgba(0,0,0,.42);color:var(--color-text);font:inherit;font-size:12px;line-height:1.28;letter-spacing:0}.publish-field textarea{resize:vertical;min-height:72px}.publish-field input:focus,.publish-field textarea:focus{border-color:rgba(17,162,207,.58);outline:0;box-shadow:0 0 0 2px rgba(17,162,207,.16)}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr)}.publish-panel{align-content:start}.publish-cover-panel{justify-self:center}.publish-copy-panel{justify-self:stretch}}
 .publish-cover-stage{position:relative}.publish-cover-frame{touch-action:none}.publish-cover-frame[data-publish-cover-can-drag="1"]{cursor:grab}.publish-cover-frame[data-publish-cover-dragging="1"]{cursor:grabbing}.publish-cover-frame>img{user-select:none;-webkit-user-drag:none;transform:scale(var(--publish-cover-zoom,1));transform-origin:var(--publish-cover-x,50%) var(--publish-cover-y,50%);transition:transform 120ms ease;will-change:transform}.publish-cover-frame[data-publish-cover-dragging="1"]>img{transition:none}.publish-cover-layer-list{position:absolute;inset:0;z-index:2;pointer-events:none}.publish-cover-layer{position:absolute;display:grid;align-items:center;min-height:24px;padding:5px 7px;border-radius:6px;color:var(--cover-layer-color,#fff);font-weight:800;line-height:1.05;overflow:hidden;text-overflow:ellipsis;cursor:move;pointer-events:auto;touch-action:none}.publish-cover-layer.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.publish-cover-layer span{overflow:hidden;text-overflow:ellipsis}.publish-cover-layer[data-cover-layer-kind=text]{background:rgba(var(--cover-layer-bg,0,0,0),var(--cover-layer-bg-opacity,.7))}.publish-cover-layer[data-cover-layer-kind=speech]{border-radius:11px;background:rgba(var(--cover-layer-bg,255,255,255),var(--cover-layer-bg-opacity,.94));box-shadow:0 8px 18px rgba(0,0,0,.22);color:var(--cover-layer-color,#050505);font-weight:900;overflow:visible}.publish-cover-layer[data-cover-layer-kind=speech]:after{position:absolute;left:18%;bottom:-8px;width:15px;height:12px;border-radius:0 0 14px 0;background:inherit;content:"";transform:skewX(-18deg)}.publish-cover-layer[data-cover-layer-kind=image]{padding:0;background:transparent}.publish-cover-layer[data-cover-layer-kind=image] img{display:block;width:100%;height:auto;object-fit:contain;transform:none;transform-origin:center;opacity:var(--cover-layer-opacity,1);pointer-events:none}.publish-cover-resize{position:absolute;right:2px;bottom:2px;width:18px;height:18px;padding:0;border:1px solid rgba(255,255,255,.56);border-radius:5px;background:rgba(0,0,0,.34);cursor:nwse-resize}.publish-cover-adjust{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.publish-cover-adjust label{display:grid;grid-template-columns:auto 1fr auto;gap:7px;align-items:center;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-cover-adjust output{min-width:38px;color:rgba(231,231,232,.84);font-size:11px;text-align:right}.publish-cover-adjust input{width:100%;accent-color:var(--color-brand-green)}.publish-cover-adjust button{min-height:28px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-cover-menu{z-index:7;width:min(320px,96%);max-height:min(380px,calc(100vh - 24px))}
 .preview-caption-layer{bottom:var(--preview-caption-bottom,16.25%)}.card[data-preview-format=facebook] .preview-caption-layer{bottom:var(--preview-caption-bottom,8.8%)}.card[data-preview-format=youtube] .preview-caption-layer{bottom:var(--preview-caption-bottom,11%)}.preview-caption-layer[data-mode=animated] .preview-caption-window{display:inline-grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:.18em;width:min(92%,16em);font-size:calc(var(--preview-caption-size,28px) * .76);line-height:1;text-shadow:0 2px 8px rgba(0,0,0,.75);-webkit-text-stroke:0;white-space:nowrap;animation:cuted-caption-window-step 190ms cubic-bezier(.2,.9,.2,1)}.preview-caption-word{display:inline-grid;place-items:center;min-width:.72em;max-width:100%;overflow:hidden;text-overflow:ellipsis}.preview-caption-side{opacity:.76;color:var(--preview-caption-color,#fff);font-size:.9em}.preview-caption-prev{justify-self:end}.preview-caption-next{justify-self:start}.preview-caption-active{justify-self:center;max-width:7.4em;padding:.15em .44em;border-radius:.25em;background:var(--preview-caption-bg,rgba(0,0,0,.82));color:var(--preview-caption-color,#fff);box-shadow:0 8px 22px rgba(0,0,0,.34),0 0 0 1px rgba(255,255,255,.12);animation:cuted-caption-pop 220ms cubic-bezier(.2,.9,.2,1)}@keyframes cuted-caption-pop{0%{opacity:.72;transform:translateY(7px) scale(.88)}64%{opacity:1;transform:translateY(-5px) scale(1.12)}100%{opacity:1;transform:translateY(0) scale(1)}}@keyframes cuted-caption-window-step{0%{transform:translateX(.18em);filter:blur(.8px)}100%{transform:translateX(0);filter:blur(0)}}
-.overlay-menu[data-overlay-menu-mode=add]{display:block;width:max-content;min-width:0;max-width:calc(100vw - 28px);max-height:none;overflow:visible;padding:6px;border-radius:999px;background:linear-gradient(135deg,rgba(17,162,207,.16),rgba(175,207,42,.08)),rgba(5,5,5,.9);box-shadow:0 12px 30px rgba(0,0,0,.42),0 0 18px rgba(17,162,207,.18);backdrop-filter:blur(18px) saturate(1.16)}.overlay-menu[data-overlay-menu-mode=add] .overlay-icon-actions{display:flex;gap:6px;align-items:center}.overlay-icon-action{display:grid!important;place-items:center;width:38px;height:38px;min-width:38px;min-height:38px;padding:0!important;border-radius:12px!important;background:rgba(231,231,232,.075)!important;color:rgba(231,231,232,.9)!important;font-size:11px!important;font-weight:950!important;letter-spacing:0!important;line-height:1!important}.overlay-icon-action:hover,.overlay-icon-action:focus-visible{border-color:rgba(175,207,42,.68)!important;color:var(--color-brand-green)!important;box-shadow:0 0 16px rgba(175,207,42,.2)}.overlay-icon-close{width:30px!important;height:30px!important;min-width:30px!important;min-height:30px!important;border-radius:999px!important;color:rgba(231,231,232,.68)!important;font-size:14px!important}.overlay-icon-close:hover,.overlay-icon-close:focus-visible{border-color:rgba(255,111,111,.5)!important;color:#ffb2b2!important;box-shadow:0 0 16px rgba(255,111,111,.16)!important}.publish-cover-menu[data-overlay-menu-mode=add]{width:max-content;max-height:none}.clip-control-surface .cuted-control-bar{min-height:82px}.clip-control-surface .cuted-render-zone{min-height:58px}.clip-control-surface .cuted-tool-group{flex-basis:330px;min-height:58px}.clip-control-surface .cuted-tile-button{flex-basis:54px;width:54px;height:50px;font-size:24px}.card[open] .clip-row-timeline.preview-camera-timeline--live .timeline-shell{min-height:214px}.card[open] .clip-row-timeline.preview-camera-timeline--live{min-height:216px;margin:-10px 0 0}
+.overlay-menu[data-overlay-menu-mode=add]{display:block;width:max-content;min-width:0;max-width:calc(100vw - 28px);max-height:none;overflow:visible;padding:6px;border-radius:999px;background:linear-gradient(135deg,rgba(17,162,207,.16),rgba(175,207,42,.08)),rgba(5,5,5,.9);box-shadow:0 12px 30px rgba(0,0,0,.42),0 0 18px rgba(17,162,207,.18);backdrop-filter:blur(18px) saturate(1.16)}.overlay-menu[data-overlay-menu-mode=add] .overlay-icon-actions{display:flex;gap:6px;align-items:center}.overlay-icon-action{display:grid!important;place-items:center;width:38px;height:38px;min-width:38px;min-height:38px;padding:0!important;border-radius:12px!important;background:rgba(231,231,232,.075)!important;color:rgba(231,231,232,.9)!important;font-size:11px!important;font-weight:950!important;letter-spacing:0!important;line-height:1!important}.overlay-icon-action:hover,.overlay-icon-action:focus-visible{border-color:rgba(175,207,42,.68)!important;color:var(--color-brand-green)!important;box-shadow:0 0 16px rgba(175,207,42,.2)}.overlay-icon-close{width:30px!important;height:30px!important;min-width:30px!important;min-height:30px!important;border-radius:999px!important;color:rgba(231,231,232,.68)!important;font-size:14px!important}.overlay-icon-close:hover,.overlay-icon-close:focus-visible{border-color:rgba(255,111,111,.5)!important;color:#ffb2b2!important;box-shadow:0 0 16px rgba(255,111,111,.16)!important}.overlay-menu[hidden],.publish-cover-menu[hidden]{display:none!important}.publish-cover-menu[data-overlay-menu-mode=add]{width:max-content;max-height:none}.clip-control-surface .cuted-control-bar{min-height:82px}.clip-control-surface .cuted-render-zone{min-height:58px}.clip-control-surface .cuted-tool-group{flex-basis:330px;min-height:58px}.clip-control-surface .cuted-tile-button{flex-basis:54px;width:54px;height:50px;font-size:24px}.card[open] .clip-row-timeline.preview-camera-timeline--live .timeline-shell{min-height:214px}.card[open] .clip-row-timeline.preview-camera-timeline--live{min-height:216px;margin:-10px 0 0}
 """
 
 
@@ -13966,7 +13983,9 @@ function bindOverlayPlacement(card){
 }
 function closeOverlayMenu(card){
   const menu = card.querySelector("[data-overlay-menu]");
-  if (menu) menu.hidden = true;
+  if (!menu) return;
+  menu.hidden = true;
+  if (menu.dataset.overlayMenuMode === "add") menu.innerHTML = "";
 }
 function showOverlayAddMenu(card, left, top){
   const surface = card.querySelector("[data-overlay-surface]");
@@ -14075,7 +14094,11 @@ function bindOverlayMenuBasics(card){
   const surface = card.querySelector("[data-overlay-surface]");
   const menu = card.querySelector("[data-overlay-menu]");
   if (!surface || !menu) return;
-  menu.querySelector("[data-overlay-close]")?.addEventListener("click", () => closeOverlayMenu(card));
+  menu.querySelector("[data-overlay-close]")?.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    closeOverlayMenu(card);
+  });
   bindOverlayMenuDrag(surface, menu);
 }
 function bindOverlayInspectorControls(card, layer, platform = overlayPlatformForItem(card)){
@@ -14433,7 +14456,11 @@ function bindPublishCoverMenuBasics(card){
   const surface = publishCoverMenuSurface(card);
   const menu = card.querySelector("[data-publish-cover-menu]");
   if (!surface || !menu) return;
-  menu.querySelector("[data-overlay-close]")?.addEventListener("click", () => closePublishCoverMenu(card));
+  menu.querySelector("[data-overlay-close]")?.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    closePublishCoverMenu(card);
+  });
   bindOverlayMenuDrag(surface, menu);
 }
 function publishCoverMenuPoint(card, clientX, clientY){
@@ -16725,18 +16752,28 @@ function syncPreviewCaptions(card, time = null){
   if (!captions.enabled) {
     layer.dataset.visible = "false";
     layer.innerHTML = "";
+    delete layer.dataset.captionPopKey;
     return;
   }
   const context = previewCaptionContextForCard(card, time);
   if (!context?.event) {
     layer.dataset.visible = "false";
     layer.innerHTML = "";
+    delete layer.dataset.captionPopKey;
     return;
   }
   layer.dataset.mode = captions.style.mode === "animated" ? "animated" : "static";
   if (captions.style.mode === "animated") {
-    layer.innerHTML = previewAnimatedCaptionHtml(context.event, context.position);
+    const rendered = previewAnimatedCaptionRender(context.event, context.position);
+    if (!rendered.html) {
+      layer.innerHTML = "";
+      delete layer.dataset.captionPopKey;
+    } else if (layer.dataset.captionPopKey !== rendered.key || !layer.innerHTML.trim()) {
+      layer.innerHTML = rendered.html;
+      layer.dataset.captionPopKey = rendered.key;
+    }
   } else {
+    delete layer.dataset.captionPopKey;
     const lines = wrapPreviewCaptionLines(context.event.text, captions.style.width, captionLines());
     layer.innerHTML = `<span>${lines.map(escapeHtml).join("<br>")}</span>`;
   }
@@ -16751,15 +16788,15 @@ function applyPreviewCaptionStyle(card, layer){
   layer.style.setProperty("--preview-caption-size", `${fontSize.toFixed(2)}px`);
   layer.style.setProperty("--preview-caption-bottom", `${clampNumber(Number(style.bottom || defaultCaptionBottom()), 6, 32).toFixed(1)}%`);
   layer.style.setProperty("--preview-caption-color", style.textColor);
-  layer.style.setProperty("--preview-caption-bg", captionBackgroundCss(style.backgroundColor));
+  layer.style.setProperty("--preview-caption-bg", captionBackgroundCss(style.backgroundColor, style.mode === "animated"));
   layer.style.setProperty("--preview-caption-padding", style.backgroundColor === "transparent" ? "0" : ".12em .28em");
 }
 function previewCaptionPlatformWidth(card){
   const format = card?.dataset?.previewFormat || document.body.dataset.format || "tiktok";
   return format === "youtube" ? 1920 : 1080;
 }
-function captionBackgroundCss(value){
-  if (value === "transparent") return "transparent";
+function captionBackgroundCss(value, forceFallback = false){
+  if (value === "transparent") return forceFallback ? "#000000cc" : "transparent";
   const color = normalizeCaptionColor(value, "#000000");
   return `${color}cc`;
 }
@@ -16825,19 +16862,25 @@ function distributedPreviewCaptionEvents(chunks, duration){
   }));
 }
 function previewAnimatedCaptionHtml(event, position){
+  return previewAnimatedCaptionRender(event, position).html;
+}
+function previewAnimatedCaptionRender(event, position){
   const wordWindow = previewAnimatedCaptionWindow(event, position);
-  if (!wordWindow) return "";
-  return `<span class="preview-caption-window" data-caption-pop-key="${event.start.toFixed(2)}-${wordWindow.index}">
+  if (!wordWindow) return { key: "", html: "" };
+  const key = `${event.start.toFixed(2)}-${wordWindow.index}`;
+  const html = `<span class="preview-caption-window" data-caption-pop-key="${key}">
     <span class="preview-caption-word preview-caption-side preview-caption-prev">${escapeHtml(wordWindow.previous)}</span>
     <span class="preview-caption-word preview-caption-active">${escapeHtml(wordWindow.active)}</span>
     <span class="preview-caption-word preview-caption-side preview-caption-next">${escapeHtml(wordWindow.next)}</span>
   </span>`;
+  return { key, html };
 }
 function previewAnimatedCaptionWindow(event, position){
   const words = String(event.text || "").split(/\\s+/).filter(Boolean).map(previewAnimatedCaptionWord);
   if (!words.length) return null;
-  const progress = clampNumber((position - event.start) / Math.max(event.end - event.start, .1), 0, .999);
-  const index = clampNumber(Math.floor(progress * words.length), 0, words.length - 1);
+  const timings = previewAnimatedCaptionWordTimings(event, words);
+  const slot = timings.find(item => position >= item.start && position < item.end) || timings[timings.length - 1];
+  const index = slot ? slot.index : 0;
   return {
     index,
     previous: index > 0 ? words[index - 1] : "",
@@ -16848,6 +16891,27 @@ function previewAnimatedCaptionWindow(event, position){
 function previewAnimatedCaptionWord(word){
   const text = String(word || "");
   return text.length <= 18 ? text : `${text.slice(0, 17)}...`;
+}
+function previewAnimatedCaptionWordTimings(event, words){
+  const start = Number(event.start || 0);
+  const end = Math.max(Number(event.end || start + .12), start + .12);
+  const duration = end - start;
+  const weights = words.map(previewAnimatedCaptionWordWeight);
+  const total = weights.reduce((sum, value) => sum + value, 0) || Math.max(words.length, 1);
+  let cursor = start;
+  return words.map((word, index) => {
+    const wordEnd = index === words.length - 1 ? end : Math.min(end, cursor + (duration * weights[index] / total));
+    const timing = { index, word, start: cursor, end: wordEnd };
+    cursor = wordEnd;
+    return timing;
+  });
+}
+function previewAnimatedCaptionWordWeight(word){
+  const core = String(word || "").replace(/[^\\p{L}\\p{N}_]+/gu, "");
+  const base = clampNumber(Math.sqrt(Math.max(core.length, 1)), .7, 3);
+  if (/[.!?…]+$/.test(word)) return base + .45;
+  if (/[,;:]+$/.test(word)) return base + .22;
+  return base;
 }
 function previewCaptionSourceText(row){
   const transcript = String(row.transcript || "").trim();
