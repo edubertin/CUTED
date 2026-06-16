@@ -5,7 +5,7 @@
     captionsEnabled: false,
     captionMenuOpen: false,
     captionPaletteOpen: null,
-    captionStyle: { size: 72, width: 28, bottom: 16, mode: "off", textColor: "#ffffff", backgroundColor: "transparent" },
+    captionStyle: { size: 72, width: 28, bottom: 16, mode: "off", textColor: "#ffffff", backgroundColor: "transparent", highlightBackgroundColor: "#000000" },
     effectMenuOpen: false,
     effectStyle: "clean",
     formatMenuOpen: false,
@@ -179,7 +179,7 @@
       captionMode,
       captionsEnabled: captionMode !== "off",
       captionMenuOpen: Boolean(state.captionMenuOpen),
-      captionPaletteOpen: ["text", "background"].includes(state.captionPaletteOpen) ? state.captionPaletteOpen : null,
+      captionPaletteOpen: captionPickerKind(state.captionPaletteOpen),
       captionStyle: normalizeCaptionStyle({ ...state.captionStyle, mode: captionMode }),
       effectMenuOpen: Boolean(state.effectMenuOpen),
       effectStyle,
@@ -231,7 +231,10 @@
       bottom: clamp(Number(input.bottom || input.height || 16), 6, 32),
       mode,
       textColor: normalizeHexColor(input.textColor, "#ffffff"),
-      backgroundColor: normalizeCaptionBackground(input.backgroundColor)
+      backgroundColor: normalizeCaptionBackground(input.backgroundColor),
+      highlightBackgroundColor: normalizeCaptionHighlightBackground(
+        input.highlightBackgroundColor || input.highlight_background_color || input.activeBackgroundColor || input.active_background_color || input.backgroundColor
+      )
     };
   }
 
@@ -246,6 +249,26 @@
     const raw = String(value || "").trim().toLowerCase();
     if (!raw || raw === "transparent" || raw === "none") return "transparent";
     return normalizeHexColor(raw, "#000000");
+  }
+
+  function normalizeCaptionHighlightBackground(value) {
+    return normalizeHexColor(value, "#000000");
+  }
+
+  function captionPickerKind(value) {
+    return ["text", "background", "highlight"].includes(value) ? value : null;
+  }
+
+  function captionPickerStyleKey(kind) {
+    if (kind === "background") return "backgroundColor";
+    if (kind === "highlight") return "highlightBackgroundColor";
+    return "textColor";
+  }
+
+  function captionPickerStatus(kind) {
+    if (kind === "background") return "Background palette";
+    if (kind === "highlight") return "Middle background";
+    return "Text palette";
   }
 
   function normalizeHexColor(value, fallback) {
@@ -556,18 +579,19 @@
     elements.captionPickers.forEach((picker) => {
       picker.addEventListener("click", () => {
         if (isLocked()) return;
-        const target = picker.dataset.cutedCaptionPicker === "background" ? "background" : "text";
+        const target = captionPickerKind(picker.dataset.cutedCaptionPicker) || "text";
         state.captionPaletteOpen = state.captionPaletteOpen === target ? null : target;
-        setCaptionStatus(target === "background" ? "Background palette" : "Text palette");
+        setCaptionStatus(captionPickerStatus(target));
         sync();
       });
     });
     elements.captionSwatches.forEach((button) => {
       button.addEventListener("click", () => {
         if (isLocked()) return;
-        const key = state.captionPaletteOpen === "background" ? "backgroundColor" : "textColor";
+        const key = captionPickerStyleKey(state.captionPaletteOpen);
         const value = button.dataset.cutedCaptionValue || "transparent";
-        updateCaptionStyle({ [key]: value }, key === "backgroundColor" ? "Background color" : "Text color");
+        const label = key === "backgroundColor" ? "Background color" : key === "highlightBackgroundColor" ? "Middle background" : "Text color";
+        updateCaptionStyle({ [key]: value }, label);
       });
     });
     elements.approveButton.addEventListener("click", () => {
@@ -795,7 +819,7 @@
     elements.captionWidthInput.value = String(Math.round(state.captionStyle.width));
     elements.captionBottomInput.value = String(Math.round(state.captionStyle.bottom));
     elements.captionPickers.forEach((picker) => {
-      const key = picker.dataset.cutedCaptionPicker === "background" ? "backgroundColor" : "textColor";
+      const key = captionPickerStyleKey(picker.dataset.cutedCaptionPicker);
       const value = state.captionStyle[key];
       picker.style.setProperty("--caption-picker-color", value === "transparent" ? "transparent" : value);
       picker.dataset.transparent = String(value === "transparent");
@@ -805,8 +829,8 @@
     elements.captionPalette.dataset.kind = state.captionPaletteOpen || "text";
     elements.captionSwatches.forEach((button) => {
       const isTransparent = button.dataset.cutedCaptionValue === "transparent";
-      const key = state.captionPaletteOpen === "background" ? "backgroundColor" : "textColor";
-      button.hidden = !state.captionPaletteOpen || (state.captionPaletteOpen === "text" && isTransparent);
+      const key = captionPickerStyleKey(state.captionPaletteOpen);
+      button.hidden = !state.captionPaletteOpen || (state.captionPaletteOpen !== "background" && isTransparent);
       button.classList.toggle("is-active", button.dataset.cutedCaptionValue === state.captionStyle[key]);
     });
   }
@@ -1071,6 +1095,7 @@
         <div class="cuted-caption-color-grid">
           ${renderCaptionColorPicker("text", "A", "#ffffff")}
           ${renderCaptionColorPicker("background", "BG", "#000000")}
+          ${renderCaptionColorPicker("highlight", "MID", "#000000")}
         </div>
         ${renderCaptionPalette()}
       </div>
