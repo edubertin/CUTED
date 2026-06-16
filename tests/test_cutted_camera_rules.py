@@ -539,8 +539,15 @@ class CuttedCameraRuleTests(unittest.TestCase):
             image = Image.open(output).convert("RGB")
 
         self.assertGreater(image.getpixel((245, 410))[0], 210)
-        self.assertGreater(image.getpixel((302, 452))[0], 210)
+        self.assertLess(image.getpixel((302, 452))[0], 40)
         self.assertGreater(image.getpixel((330, 810))[0], 180)
+
+    def test_publish_cover_pillow_uses_preview_scaled_font(self) -> None:
+        preset = CUTTED.PLATFORM_PRESETS["tiktok"]
+
+        self.assertEqual(CUTTED.pillow_cover_font_size({"font_size": 34}, preset), 61)
+        self.assertEqual(CUTTED.pillow_cover_preview_px(11, preset), 47)
+        self.assertEqual(CUTTED.pillow_cover_preview_px(-8, preset), -34)
 
     def test_publish_cover_pillow_crop_matches_preview_object_fit_order(self) -> None:
         try:
