@@ -190,6 +190,7 @@ PUBLISH_SOURCE_TEXT_LIMIT = 1800
 PUBLISH_MAX_HASHTAGS = 6
 PUBLISH_DEFAULT_HASHTAGS = ["#Podcast", "#Cortes"]
 CUTTED_CAPTION_BOTTOM_OFFSET_MULTIPLIER = 1.25
+ANIMATED_CAPTION_LEAD_SECONDS = 0.14
 COVER_LAYER_VERTICAL_LIFT = 0.30
 MAX_SELECTION_OVERLAP = 0.35
 MAX_SELECTION_TEXT_SIMILARITY = 0.72
@@ -6996,6 +6997,68 @@ def clean_caption_text(text: str) -> str:
     return clean.strip(" -")
 
 
+ANIMATED_CAPTION_PROPER_NOUN_STOPWORDS = {
+    "a", "as", "o", "os", "um", "uma", "uns", "umas", "de", "da", "das", "do", "dos",
+    "e", "ou", "mas", "porque", "por", "para", "pra", "com", "sem", "em", "no", "na",
+    "nos", "nas", "ao", "aos", "aí", "ai", "então", "entao", "só", "so", "que", "quem",
+    "qual", "quando", "onde", "como", "isso", "essa", "esse", "isto", "esta", "este",
+    "eu", "tu", "ele", "ela", "nós", "nos", "vocês", "voces", "você", "voce", "meu",
+    "minha", "seu", "sua", "me", "te", "se", "lhe", "não", "nao", "sim", "é", "eh",
+    "foi", "era", "ser", "ter", "tem", "tá", "ta", "tava", "vai", "vou", "vão", "vao",
+    "fui", "faz", "fazer", "dá", "da", "dar", "precisa", "preciso", "precisava", "acho",
+    "tipo", "cara", "né", "ne", "olha", "bom", "certo", "agora",
+}
+
+
+def clean_animated_caption_text(text: str) -> str:
+    clean = clean_caption_text(text)
+    proper_nouns = animated_caption_proper_nouns(clean)
+    words = [animated_caption_display_word(word, proper_nouns) for word in clean.split()]
+    return " ".join(word for word in words if word)
+
+
+def animated_caption_proper_nouns(text: str) -> set[str]:
+    matches = list(re.finditer(r"[\wÀ-ÖØ-öø-ÿ]+", text, flags=re.UNICODE))
+    result: set[str] = set()
+    for index, match in enumerate(matches):
+        word = match.group(0)
+        if not animated_caption_is_capitalized_word(word):
+            continue
+        key = animated_caption_word_key(word)
+        if key in ANIMATED_CAPTION_PROPER_NOUN_STOPWORDS:
+            continue
+        sentence_start = match.start() == 0 or bool(re.search(r"[.!?…]\s*$", text[:match.start()]))
+        previous_capitalized = index > 0 and animated_caption_is_capitalized_word(matches[index - 1].group(0))
+        next_capitalized = index + 1 < len(matches) and animated_caption_is_capitalized_word(matches[index + 1].group(0))
+        if not sentence_start or previous_capitalized or next_capitalized:
+            result.add(key)
+    return result
+
+
+def animated_caption_display_word(word: str, proper_nouns: set[str]) -> str:
+    clean = re.sub(r"[^\wÀ-ÖØ-öø-ÿ]+", "", word, flags=re.UNICODE)
+    if not clean:
+        return ""
+    key = animated_caption_word_key(clean)
+    if animated_caption_is_acronym(clean) or key in proper_nouns:
+        return clean
+    return clean.lower()
+
+
+def animated_caption_word_key(word: str) -> str:
+    return re.sub(r"[^\wÀ-ÖØ-öø-ÿ]+", "", word, flags=re.UNICODE).casefold()
+
+
+def animated_caption_is_capitalized_word(word: str) -> bool:
+    letters = [char for char in word if char.isalpha()]
+    return bool(letters) and letters[0].isupper() and not animated_caption_is_acronym(word)
+
+
+def animated_caption_is_acronym(word: str) -> bool:
+    letters = [char for char in word if char.isalpha()]
+    return 1 < len(letters) <= 6 and "".join(letters).isupper()
+
+
 CAPTION_MOJIBAKE_REPLACEMENTS = {
     "\u00c3\u00a1": "\u00e1",
     "\u00c3\u00a0": "\u00e0",
@@ -7144,7 +7207,8 @@ def ass_style_line(preset: PlatformPreset, style: dict[str, object] | None = Non
     margin_v = caption_margin_v(preset, style)
     outline = 7 if preset.height >= 1600 else 5
     primary = ass_color(str(style.get("text_color") or "#ffffff"), "00")
-    background = str(style.get("background_color") or "transparent")
+    background_key = "highlight_background_color" if mode == "animated" else "background_color"
+    background = str(style.get(background_key) or style.get("background_color") or "transparent")
     if mode == "animated" and background == "transparent":
         background = "#000000"
     border_style = 3 if background != "transparent" else 1
@@ -7158,12 +7222,15 @@ def ass_style_line(preset: PlatformPreset, style: dict[str, object] | None = Non
 
 def ass_caption_side_style_line(preset: PlatformPreset, style: dict[str, object]) -> str:
     base_size = int(style.get("size") or (72 if preset.height >= 1600 else 54))
-    font_size = max(22, int(base_size * 0.74))
+    font_size = max(22, int(base_size * 0.66))
     outline = 6 if preset.height >= 1600 else 4
     primary = ass_color(str(style.get("text_color") or "#ffffff"), "18")
+    background = str(style.get("background_color") or "transparent")
+    border_style = 3 if background != "transparent" else 1
+    back_color = ass_color(background if background != "transparent" else "#000000", "66" if border_style == 3 else "99")
     return (
         "Style: CaptionSide,Arial,"
-        f"{font_size},{primary},&H0000FFFF,&H00000000,&H99000000,-1,0,0,0,100,100,0,0,1,"
+        f"{font_size},{primary},&H0000FFFF,&H00000000,{back_color},-1,0,0,0,100,100,0,0,{border_style},"
         f"{outline},0,5,80,80,{caption_margin_v(preset, style)},1"
     )
 
@@ -7179,13 +7246,23 @@ def caption_style_from_row(row: dict[str, object], preset: PlatformPreset) -> di
     raw = row.get("caption_style")
     if not isinstance(raw, dict):
         return {}
+    mode = normalize_caption_mode(raw.get("mode") or raw.get("captionMode") or raw.get("caption_mode"))
+    background = normalize_caption_background_color(raw.get("backgroundColor") or raw.get("background_color"))
+    highlight = normalize_caption_background_color(
+        raw.get("highlightBackgroundColor")
+        or raw.get("highlight_background_color")
+        or raw.get("activeBackgroundColor")
+        or raw.get("active_background_color")
+        or background
+    )
     return {
         "size": clamp_int(raw.get("size"), 24, 140, 72 if preset.height >= 1600 else 54),
         "width": clamp_int(raw.get("width"), 12, 56, 28),
         "bottom": clamp_float(raw.get("bottom") or raw.get("height"), 6.0, 32.0, default_caption_bottom_percent(preset)),
-        "mode": normalize_caption_mode(raw.get("mode") or raw.get("captionMode") or raw.get("caption_mode")),
+        "mode": mode,
         "text_color": normalize_hex_color(raw.get("textColor") or raw.get("text_color"), "#ffffff"),
-        "background_color": normalize_caption_background_color(raw.get("backgroundColor") or raw.get("background_color")),
+        "background_color": background,
+        "highlight_background_color": highlight,
     }
 
 
@@ -7251,18 +7328,21 @@ def ass_animated_dialogue_lines(
 ) -> list[str]:
     lines: list[str] = []
     active_size = max(24, int(int(style.get("size") or (72 if preset.height >= 1600 else 54)) * 0.82))
-    side_size = max(22, int(int(style.get("size") or active_size) * 0.74))
+    side_size = max(22, int(int(style.get("size") or active_size) * 0.66))
     center_x = preset.width // 2
     center_y = ass_animated_caption_center_y(preset, style, active_size)
+    side_y = center_y + max(3, int(active_size * 0.08))
     for window in animated_caption_window_events(events, duration, chars_per_line):
-        start = min(max(window.start, 0.0), duration)
-        end = min(max(window.end, start + 0.1), duration)
+        start = min(max(window.start - ANIMATED_CAPTION_LEAD_SECONDS, 0.0), duration)
+        end = min(max(window.end - ANIMATED_CAPTION_LEAD_SECONDS, start + 0.1), duration)
+        if end <= start:
+            continue
         if window.previous:
             prev_x = int(clamp(center_x - ass_caption_side_offset(window.previous, window.active, active_size, side_size), 70, preset.width - 70))
-            lines.append(ass_animated_dialogue_line(0, start, end, "CaptionSide", window.previous, prev_x, center_y, ""))
+            lines.append(ass_animated_dialogue_line(0, start, end, "CaptionSide", window.previous, prev_x, side_y, ""))
         if window.next:
             next_x = int(clamp(center_x + ass_caption_side_offset(window.next, window.active, active_size, side_size), 70, preset.width - 70))
-            lines.append(ass_animated_dialogue_line(0, start, end, "CaptionSide", window.next, next_x, center_y, ""))
+            lines.append(ass_animated_dialogue_line(0, start, end, "CaptionSide", window.next, next_x, side_y, ""))
         pop = r"\fad(25,70)\t(0,90,\fscx112\fscy112)\t(90,190,\fscx100\fscy100)"
         lines.append(ass_animated_dialogue_line(1, start, end, "Default", window.active, center_x, center_y, pop))
     return lines
@@ -7284,7 +7364,7 @@ def ass_animated_caption_center_y(preset: PlatformPreset, style: dict[str, objec
 def ass_caption_side_offset(side: str, active: str, active_size: int, side_size: int) -> int:
     active_width = ass_caption_word_width(active, active_size)
     side_width = ass_caption_word_width(side, side_size)
-    gap = max(14, int(active_size * 0.34))
+    gap = max(22, int(active_size * 0.62))
     return int((active_width / 2) + (side_width / 2) + gap + 0.5)
 
 
@@ -7325,12 +7405,7 @@ def animated_caption_word_timings(words: list[str], start: float, end: float) ->
 
 def animated_caption_word_weight(word: str) -> float:
     core = re.sub(r"\W+", "", word, flags=re.UNICODE)
-    base = max(0.7, min(math.sqrt(max(len(core), 1)), 3.0))
-    if re.search(r"[.!?…]+$", word):
-        return base + 0.45
-    if re.search(r"[,;:]+$", word):
-        return base + 0.22
-    return base
+    return max(0.7, min(math.sqrt(max(len(core), 1)), 3.0))
 
 
 def animated_caption_window_events(events: list[CaptionEvent], duration: float, chars_per_line: int) -> list[AnimatedCaptionWindow]:
@@ -7356,7 +7431,7 @@ def animated_caption_window_events(events: list[CaptionEvent], duration: float, 
 
 
 def split_animated_caption_words(text: str, max_word_length: int) -> list[str]:
-    words = [word.strip() for word in re.split(r"\s+", text) if word.strip()]
+    words = [word.strip() for word in re.split(r"\s+", clean_animated_caption_text(text)) if word.strip()]
     return [word if len(word) <= max_word_length else f"{word[:max_word_length - 1]}..." for word in words]
 
 
@@ -11733,7 +11808,7 @@ body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,
 .card[open] .editor-shell{grid-template-columns:minmax(210px,260px) minmax(340px,1fr) minmax(260px,330px);gap:14px;align-items:start;padding:0 18px 18px;margin-top:-10px}.card[open] .editor-preview{grid-column:2}.publish-panel{display:grid;gap:10px;align-content:start;min-width:0;max-height:72vh;overflow:auto;padding:12px;border:1px solid rgba(231,231,232,.12);border-radius:12px;background:linear-gradient(180deg,rgba(231,231,232,.075),rgba(231,231,232,.025)),rgba(5,5,5,.52);box-shadow:inset 0 1px rgba(255,255,255,.08),0 12px 34px rgba(0,0,0,.24);backdrop-filter:blur(16px) saturate(1.1)}.publish-panel strong{color:rgba(231,231,232,.72);font-size:11px;letter-spacing:.08em;text-transform:uppercase}.publish-panel h2{margin:0;color:var(--color-text);font-size:17px;line-height:1.18;letter-spacing:0}.publish-panel p{margin:0;color:rgba(231,231,232,.72);font-size:12px;line-height:1.38}.publish-panel small{color:rgba(231,231,232,.5);font-size:11px;line-height:1.34}.publish-cover-frame{position:relative;overflow:hidden;aspect-ratio:9/16;border:1px solid rgba(231,231,232,.1);border-radius:8px;background:#050505}.publish-cover-frame img{display:block;width:100%;height:100%;object-fit:cover}.publish-cover-frame span{display:block;width:100%;height:100%;background:linear-gradient(135deg,rgba(17,162,207,.18),rgba(175,207,42,.08))}.publish-cover-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.publish-cover-options button{min-height:58px;padding:2px;border:1px solid rgba(231,231,232,.14);border-radius:8px;background:rgba(0,0,0,.38);overflow:hidden}.publish-cover-options button.active{border-color:rgba(175,207,42,.82);box-shadow:0 0 0 2px rgba(175,207,42,.16)}.publish-cover-options img{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:5px}.publish-hook{padding:9px 10px;border-left:3px solid rgba(175,207,42,.78);border-radius:8px;background:rgba(175,207,42,.075);color:var(--color-text)!important;font-weight:800}.publish-tags{display:flex;gap:6px;flex-wrap:wrap}.publish-tags span{display:inline-flex;align-items:center;min-height:24px;max-width:100%;padding:4px 7px;border:1px solid rgba(17,162,207,.24);border-radius:999px;background:rgba(17,162,207,.09);color:rgba(231,231,232,.84);font-size:11px;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr);margin-top:0}.card[open] .editor-preview{grid-column:1}.publish-panel{max-height:none}.publish-cover-panel{grid-row:2}.publish-copy-panel{grid-row:3}.publish-cover-frame{max-width:180px}}@media(max-width:860px){.card[open] .editor-shell{padding:0 12px 16px}.publish-panel{border-radius:10px}.publish-cover-frame{max-width:150px}}
 .card[open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(340px,calc(72vh * 9 / 16)) minmax(260px,330px);gap:8px;align-items:center;justify-content:center}.card[data-preview-format=facebook][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(390px,calc(72vh * 4 / 5)) minmax(260px,330px)}.card[data-preview-format=youtube][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(520px,720px) minmax(260px,330px)}.publish-panel{gap:9px;align-content:center;align-self:center;padding:11px}.publish-cover-panel{justify-self:end}.publish-copy-panel{justify-self:start}.publish-panel-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.publish-panel-head button{min-height:26px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-field{display:grid;gap:5px;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-field input,.publish-field textarea{width:100%;min-height:34px;padding:7px 9px;border:1px solid rgba(231,231,232,.14);border-radius:8px;background:rgba(0,0,0,.42);color:var(--color-text);font:inherit;font-size:12px;line-height:1.28;letter-spacing:0}.publish-field textarea{resize:vertical;min-height:72px}.publish-field input:focus,.publish-field textarea:focus{border-color:rgba(17,162,207,.58);outline:0;box-shadow:0 0 0 2px rgba(17,162,207,.16)}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr)}.publish-panel{align-content:start}.publish-cover-panel{justify-self:center}.publish-copy-panel{justify-self:stretch}}
 .publish-cover-stage{position:relative}.publish-cover-frame{touch-action:none}.publish-cover-frame[data-publish-cover-can-drag="1"]{cursor:grab}.publish-cover-frame[data-publish-cover-dragging="1"]{cursor:grabbing}.publish-cover-frame>img{user-select:none;-webkit-user-drag:none;transform:scale(var(--publish-cover-zoom,1));transform-origin:var(--publish-cover-x,50%) var(--publish-cover-y,50%);transition:transform 120ms ease;will-change:transform}.publish-cover-frame[data-publish-cover-dragging="1"]>img{transition:none}.publish-cover-layer-list{position:absolute;inset:0;z-index:2;pointer-events:none}.publish-cover-layer{position:absolute;display:grid;align-items:center;min-height:24px;padding:5px 7px;border-radius:6px;color:var(--cover-layer-color,#fff);font-weight:800;line-height:1.05;overflow:hidden;text-overflow:ellipsis;cursor:move;pointer-events:auto;touch-action:none}.publish-cover-layer.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.publish-cover-layer span{overflow:hidden;text-overflow:ellipsis}.publish-cover-layer[data-cover-layer-kind=text]{background:rgba(var(--cover-layer-bg,0,0,0),var(--cover-layer-bg-opacity,.7))}.publish-cover-layer[data-cover-layer-kind=speech]{border-radius:11px;background:rgba(var(--cover-layer-bg,255,255,255),var(--cover-layer-bg-opacity,.94));box-shadow:0 8px 18px rgba(0,0,0,.22);color:var(--cover-layer-color,#050505);font-weight:900;overflow:visible}.publish-cover-layer[data-cover-layer-kind=speech]:after{position:absolute;left:18%;bottom:-8px;width:15px;height:12px;border-radius:0 0 14px 0;background:inherit;content:"";transform:skewX(-18deg)}.publish-cover-layer[data-cover-layer-kind=image]{padding:0;background:transparent}.publish-cover-layer[data-cover-layer-kind=image] img{display:block;width:100%;height:auto;object-fit:contain;transform:none;transform-origin:center;opacity:var(--cover-layer-opacity,1);pointer-events:none}.publish-cover-resize{position:absolute;right:2px;bottom:2px;width:18px;height:18px;padding:0;border:1px solid rgba(255,255,255,.56);border-radius:5px;background:rgba(0,0,0,.34);cursor:nwse-resize}.publish-cover-adjust{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.publish-cover-adjust label{display:grid;grid-template-columns:auto 1fr auto;gap:7px;align-items:center;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-cover-adjust output{min-width:38px;color:rgba(231,231,232,.84);font-size:11px;text-align:right}.publish-cover-adjust input{width:100%;accent-color:var(--color-brand-green)}.publish-cover-adjust button{min-height:28px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-cover-menu{z-index:7;width:min(320px,96%);max-height:min(380px,calc(100vh - 24px))}
-.preview-caption-layer{bottom:var(--preview-caption-bottom,16.25%)}.card[data-preview-format=facebook] .preview-caption-layer{bottom:var(--preview-caption-bottom,8.8%)}.card[data-preview-format=youtube] .preview-caption-layer{bottom:var(--preview-caption-bottom,11%)}.preview-caption-layer[data-mode=animated] .preview-caption-window{display:inline-grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:.18em;width:min(92%,16em);font-size:calc(var(--preview-caption-size,28px) * .76);line-height:1;text-shadow:0 2px 8px rgba(0,0,0,.75);-webkit-text-stroke:0;white-space:nowrap;animation:cuted-caption-window-step 190ms cubic-bezier(.2,.9,.2,1)}.preview-caption-word{display:inline-grid;place-items:center;min-width:.72em;max-width:100%;overflow:hidden;text-overflow:ellipsis}.preview-caption-side{opacity:.76;color:var(--preview-caption-color,#fff);font-size:.9em}.preview-caption-prev{justify-self:end}.preview-caption-next{justify-self:start}.preview-caption-active{justify-self:center;max-width:7.4em;padding:.15em .44em;border-radius:.25em;background:var(--preview-caption-bg,rgba(0,0,0,.82));color:var(--preview-caption-color,#fff);box-shadow:0 8px 22px rgba(0,0,0,.34),0 0 0 1px rgba(255,255,255,.12);animation:cuted-caption-pop 220ms cubic-bezier(.2,.9,.2,1)}@keyframes cuted-caption-pop{0%{opacity:.72;transform:translateY(7px) scale(.88)}64%{opacity:1;transform:translateY(-5px) scale(1.12)}100%{opacity:1;transform:translateY(0) scale(1)}}@keyframes cuted-caption-window-step{0%{transform:translateX(.18em);filter:blur(.8px)}100%{transform:translateX(0);filter:blur(0)}}
+.preview-caption-layer{bottom:var(--preview-caption-bottom,16.25%)}.card[data-preview-format=facebook] .preview-caption-layer{bottom:var(--preview-caption-bottom,8.8%)}.card[data-preview-format=youtube] .preview-caption-layer{bottom:var(--preview-caption-bottom,11%)}.preview-caption-layer[data-mode=animated] .preview-caption-window{display:inline-grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:.54em;width:min(94%,18em);padding:0;border-radius:0;background:transparent;color:var(--preview-caption-color,#fff);font-size:calc(var(--preview-caption-size,28px) * .76);line-height:1;text-shadow:0 2px 8px rgba(0,0,0,.75);-webkit-text-stroke:0;white-space:nowrap;box-decoration-break:slice;-webkit-box-decoration-break:slice;animation:cuted-caption-window-step 190ms cubic-bezier(.2,.9,.2,1)}.preview-caption-layer[data-mode=animated] .preview-caption-word{display:inline-grid;place-items:center;min-width:.56em;max-width:100%;padding:.1em .32em;border-radius:.22em;background:var(--preview-caption-bg,transparent);color:var(--preview-caption-color,#fff);font-size:1em;overflow:hidden;text-overflow:ellipsis;box-decoration-break:slice;-webkit-box-decoration-break:slice}.preview-caption-layer[data-mode=animated] .preview-caption-side{opacity:.72;font-size:.76em;transform:translateY(.1em)}.preview-caption-layer[data-mode=animated] .preview-caption-side:empty{min-width:0;padding:0;background:transparent}.preview-caption-layer[data-mode=animated] .preview-caption-prev{justify-self:end}.preview-caption-layer[data-mode=animated] .preview-caption-next{justify-self:start}.preview-caption-layer[data-mode=animated] .preview-caption-active{justify-self:center;max-width:7.4em;padding:.15em .44em;border-radius:.25em;background:var(--preview-caption-highlight-bg,var(--preview-caption-bg,rgba(0,0,0,.82)));color:var(--preview-caption-color,#fff);font-size:1em;box-shadow:0 8px 22px rgba(0,0,0,.34),0 0 0 1px rgba(255,255,255,.12);animation:cuted-caption-pop 220ms cubic-bezier(.2,.9,.2,1)}@keyframes cuted-caption-pop{0%{opacity:.72;transform:translateY(7px) scale(.88)}64%{opacity:1;transform:translateY(-5px) scale(1.12)}100%{opacity:1;transform:translateY(0) scale(1)}}@keyframes cuted-caption-window-step{0%{transform:translateX(.18em);filter:blur(.8px)}100%{transform:translateX(0);filter:blur(0)}}
 .overlay-menu[data-overlay-menu-mode=add]{display:block;width:max-content;min-width:0;max-width:calc(100vw - 28px);max-height:none;overflow:visible;padding:6px;border-radius:999px;background:linear-gradient(135deg,rgba(17,162,207,.16),rgba(175,207,42,.08)),rgba(5,5,5,.9);box-shadow:0 12px 30px rgba(0,0,0,.42),0 0 18px rgba(17,162,207,.18);backdrop-filter:blur(18px) saturate(1.16)}.overlay-menu[data-overlay-menu-mode=add] .overlay-icon-actions{display:flex;gap:6px;align-items:center}.overlay-icon-action{display:grid!important;place-items:center;width:38px;height:38px;min-width:38px;min-height:38px;padding:0!important;border-radius:12px!important;background:rgba(231,231,232,.075)!important;color:rgba(231,231,232,.9)!important;font-size:11px!important;font-weight:950!important;letter-spacing:0!important;line-height:1!important}.overlay-icon-action:hover,.overlay-icon-action:focus-visible{border-color:rgba(175,207,42,.68)!important;color:var(--color-brand-green)!important;box-shadow:0 0 16px rgba(175,207,42,.2)}.overlay-icon-close{width:30px!important;height:30px!important;min-width:30px!important;min-height:30px!important;border-radius:999px!important;color:rgba(231,231,232,.68)!important;font-size:14px!important}.overlay-icon-close:hover,.overlay-icon-close:focus-visible{border-color:rgba(255,111,111,.5)!important;color:#ffb2b2!important;box-shadow:0 0 16px rgba(255,111,111,.16)!important}.overlay-menu[hidden],.publish-cover-menu[hidden]{display:none!important}.publish-cover-menu[data-overlay-menu-mode=add]{width:max-content;max-height:none}.clip-control-surface .cuted-control-bar{min-height:82px}.clip-control-surface .cuted-render-zone{min-height:58px}.clip-control-surface .cuted-tool-group{flex-basis:330px;min-height:58px}.clip-control-surface .cuted-tile-button{flex-basis:54px;width:54px;height:50px;font-size:24px}.card[open] .clip-row-timeline.preview-camera-timeline--live .timeline-shell{min-height:214px}.card[open] .clip-row-timeline.preview-camera-timeline--live{min-height:216px;margin:-10px 0 0}
 """
 
@@ -11961,13 +12036,17 @@ function normalizeCaptionSettings(value, fallback = null){
 }
 function normalizeCaptionStyleObject(value){
   const source = value && typeof value === "object" ? value : {};
+  const backgroundColor = normalizeCaptionBackground(source.backgroundColor || source.background_color);
   return {
     size: clampNumber(Number(source.size || defaultCaptionSize()), 24, 140),
     width: clampNumber(Number(source.width || 28), 12, 56),
     bottom: clampNumber(Number(source.bottom || source.height || defaultCaptionBottom()), 6, 32),
     mode: normalizeCaptionMode(source.mode || source.captionMode),
     textColor: normalizeCaptionColor(source.textColor || source.text_color, "#ffffff"),
-    backgroundColor: normalizeCaptionBackground(source.backgroundColor || source.background_color)
+    backgroundColor,
+    highlightBackgroundColor: normalizeCaptionHighlightBackground(
+      source.highlightBackgroundColor || source.highlight_background_color || source.activeBackgroundColor || source.active_background_color || backgroundColor
+    )
   };
 }
 function normalizeCaptionMode(value){
@@ -16706,6 +16785,12 @@ function captionTextColor(){
 function captionBackgroundColor(){
   return normalizeCaptionBackground(localStorage.getItem("cutted-caption-background-color"));
 }
+function captionHighlightBackgroundColor(){
+  const stored = localStorage.getItem("cutted-caption-highlight-background-color");
+  if (stored) return normalizeCaptionHighlightBackground(stored);
+  const background = captionBackgroundColor();
+  return background === "transparent" ? "#000000" : normalizeCaptionHighlightBackground(background);
+}
 function captionStyle(){
   return {
     size: captionSize(),
@@ -16713,7 +16798,8 @@ function captionStyle(){
     bottom: captionBottom(),
     mode: captionMode(),
     textColor: captionTextColor(),
-    backgroundColor: captionBackgroundColor()
+    backgroundColor: captionBackgroundColor(),
+    highlightBackgroundColor: captionHighlightBackgroundColor()
   };
 }
 function captionEnabled(){
@@ -16728,6 +16814,9 @@ function normalizeCaptionBackground(value){
   if (!raw || raw === "transparent" || raw === "none") return "transparent";
   return normalizeCaptionColor(raw, "#000000");
 }
+function normalizeCaptionHighlightBackground(value){
+  return normalizeCaptionColor(value, "#000000");
+}
 function storeCaptionStyle(style){
   if (!style || typeof style !== "object") return;
   if (Number.isFinite(Number(style.size))) localStorage.setItem("cutted-caption-size", String(clampNumber(Number(style.size), 24, 140)));
@@ -16736,6 +16825,7 @@ function storeCaptionStyle(style){
   if (style.mode) localStorage.setItem("cutted-caption-mode", normalizeCaptionMode(style.mode));
   if (style.textColor) localStorage.setItem("cutted-caption-text-color", normalizeCaptionColor(style.textColor, captionTextColor()));
   if (style.backgroundColor) localStorage.setItem("cutted-caption-background-color", normalizeCaptionBackground(style.backgroundColor));
+  if (style.highlightBackgroundColor) localStorage.setItem("cutted-caption-highlight-background-color", normalizeCaptionHighlightBackground(style.highlightBackgroundColor));
 }
 function captionSettingsForCard(card){
   if (!card?.dataset?.rank) return defaultCaptionSettings();
@@ -16788,7 +16878,8 @@ function applyPreviewCaptionStyle(card, layer){
   layer.style.setProperty("--preview-caption-size", `${fontSize.toFixed(2)}px`);
   layer.style.setProperty("--preview-caption-bottom", `${clampNumber(Number(style.bottom || defaultCaptionBottom()), 6, 32).toFixed(1)}%`);
   layer.style.setProperty("--preview-caption-color", style.textColor);
-  layer.style.setProperty("--preview-caption-bg", captionBackgroundCss(style.backgroundColor, style.mode === "animated"));
+  layer.style.setProperty("--preview-caption-bg", captionBackgroundCss(style.backgroundColor));
+  layer.style.setProperty("--preview-caption-highlight-bg", captionBackgroundCss(style.highlightBackgroundColor || "#000000", true));
   layer.style.setProperty("--preview-caption-padding", style.backgroundColor === "transparent" ? "0" : ".12em .28em");
 }
 function previewCaptionPlatformWidth(card){
@@ -16814,8 +16905,12 @@ function previewCaptionContextForCard(card, time = null){
   const raw = time === null && video && Number.isFinite(video.currentTime) ? video.currentTime : time;
   const current = clampPreviewTime(values, Number(raw ?? values.trimStart));
   const position = Math.max(0, current - values.trimStart);
-  const event = events.find(item => position >= item.start && position < item.end) || null;
-  return event ? { event, position } : null;
+  const lookupPosition = captionSettingsForCard(card).style.mode === "animated" ? position + animatedCaptionLeadSeconds() : position;
+  const event = events.find(item => lookupPosition >= item.start && lookupPosition < item.end) || null;
+  return event ? { event, position: lookupPosition } : null;
+}
+function animatedCaptionLeadSeconds(){
+  return .14;
 }
 function previewMomentForCard(card){
   const rank = String(card?.dataset?.rank || "");
@@ -16876,7 +16971,7 @@ function previewAnimatedCaptionRender(event, position){
   return { key, html };
 }
 function previewAnimatedCaptionWindow(event, position){
-  const words = String(event.text || "").split(/\\s+/).filter(Boolean).map(previewAnimatedCaptionWord);
+  const words = cleanPreviewAnimatedCaptionText(event.text).split(/\\s+/).filter(Boolean).map(previewAnimatedCaptionWord);
   if (!words.length) return null;
   const timings = previewAnimatedCaptionWordTimings(event, words);
   const slot = timings.find(item => position >= item.start && position < item.end) || timings[timings.length - 1];
@@ -16891,6 +16986,59 @@ function previewAnimatedCaptionWindow(event, position){
 function previewAnimatedCaptionWord(word){
   const text = String(word || "");
   return text.length <= 18 ? text : `${text.slice(0, 17)}...`;
+}
+const PREVIEW_ANIMATED_CAPTION_PROPER_NOUN_STOPWORDS = new Set([
+  "a", "as", "o", "os", "um", "uma", "uns", "umas", "de", "da", "das", "do", "dos",
+  "e", "ou", "mas", "porque", "por", "para", "pra", "com", "sem", "em", "no", "na",
+  "nos", "nas", "ao", "aos", "ai", "aí", "entao", "então", "so", "só", "que", "quem",
+  "qual", "quando", "onde", "como", "isso", "essa", "esse", "isto", "esta", "este",
+  "eu", "tu", "ele", "ela", "nos", "nós", "voces", "vocês", "voce", "você", "meu",
+  "minha", "seu", "sua", "me", "te", "se", "lhe", "nao", "não", "sim", "e", "é", "eh",
+  "foi", "era", "ser", "ter", "tem", "ta", "tá", "tava", "vai", "vou", "vao", "vão",
+  "fui", "faz", "fazer", "da", "dá", "dar", "precisa", "preciso", "precisava", "acho",
+  "tipo", "cara", "ne", "né", "olha", "bom", "certo", "agora"
+]);
+function cleanPreviewAnimatedCaptionText(text){
+  const clean = cleanPreviewCaptionText(text);
+  const properNouns = previewAnimatedCaptionProperNouns(clean);
+  return clean.split(/\\s+/)
+    .map(word => previewAnimatedCaptionDisplayWord(word, properNouns))
+    .filter(Boolean)
+    .join(" ");
+}
+function previewAnimatedCaptionProperNouns(text){
+  const matches = Array.from(String(text || "").matchAll(/[\\p{L}\\p{N}_]+/gu));
+  const result = new Set();
+  matches.forEach((match, index) => {
+    const word = match[0];
+    if (!previewAnimatedCaptionIsCapitalizedWord(word)) return;
+    const key = previewAnimatedCaptionWordKey(word);
+    if (PREVIEW_ANIMATED_CAPTION_PROPER_NOUN_STOPWORDS.has(key)) return;
+    const before = String(text || "").slice(0, match.index || 0);
+    const sentenceStart = !before.trim() || /[.!?…]\\s*$/.test(before);
+    const previousCapitalized = index > 0 && previewAnimatedCaptionIsCapitalizedWord(matches[index - 1][0]);
+    const nextCapitalized = index + 1 < matches.length && previewAnimatedCaptionIsCapitalizedWord(matches[index + 1][0]);
+    if (!sentenceStart || previousCapitalized || nextCapitalized) result.add(key);
+  });
+  return result;
+}
+function previewAnimatedCaptionDisplayWord(word, properNouns){
+  const clean = String(word || "").replace(/[^\\p{L}\\p{N}_]+/gu, "");
+  if (!clean) return "";
+  const key = previewAnimatedCaptionWordKey(clean);
+  if (previewAnimatedCaptionIsAcronym(clean) || properNouns.has(key)) return clean;
+  return clean.toLocaleLowerCase("pt-BR");
+}
+function previewAnimatedCaptionWordKey(word){
+  return String(word || "").replace(/[^\\p{L}\\p{N}_]+/gu, "").toLocaleLowerCase("pt-BR");
+}
+function previewAnimatedCaptionIsCapitalizedWord(word){
+  const letters = Array.from(String(word || "").matchAll(/\\p{L}/gu)).map(match => match[0]);
+  return Boolean(letters.length) && letters[0] === letters[0].toLocaleUpperCase("pt-BR") && !previewAnimatedCaptionIsAcronym(word);
+}
+function previewAnimatedCaptionIsAcronym(word){
+  const letters = Array.from(String(word || "").matchAll(/\\p{L}/gu)).map(match => match[0]).join("");
+  return letters.length > 1 && letters.length <= 6 && letters === letters.toLocaleUpperCase("pt-BR");
 }
 function previewAnimatedCaptionWordTimings(event, words){
   const start = Number(event.start || 0);
@@ -16908,10 +17056,7 @@ function previewAnimatedCaptionWordTimings(event, words){
 }
 function previewAnimatedCaptionWordWeight(word){
   const core = String(word || "").replace(/[^\\p{L}\\p{N}_]+/gu, "");
-  const base = clampNumber(Math.sqrt(Math.max(core.length, 1)), .7, 3);
-  if (/[.!?…]+$/.test(word)) return base + .45;
-  if (/[,;:]+$/.test(word)) return base + .22;
-  return base;
+  return clampNumber(Math.sqrt(Math.max(core.length, 1)), .7, 3);
 }
 function previewCaptionSourceText(row){
   const transcript = String(row.transcript || "").trim();
@@ -17043,6 +17188,7 @@ function syncCaptionInputs(){
   document.querySelectorAll("[data-caption-bottom]").forEach(input => { input.value = String(captionBottom()); });
   document.querySelectorAll("[data-caption-text-color]").forEach(input => { input.value = captionTextColor(); });
   document.querySelectorAll("[data-caption-background-color]").forEach(input => { input.value = captionBackgroundColor() === "transparent" ? "#000000" : captionBackgroundColor(); });
+  document.querySelectorAll("[data-caption-highlight-background-color]").forEach(input => { input.value = captionHighlightBackgroundColor(); });
   document.querySelectorAll("[data-caption-enabled]").forEach(input => { input.checked = captionEnabled(); });
   document.querySelectorAll("[data-caption-current]").forEach(item => { item.textContent = captionMode() === "animated" ? "Animada" : captionEnabled() ? "Ativada" : "Desligada"; });
 }
@@ -17533,6 +17679,7 @@ function clearNewProjectState(){
   localStorage.removeItem("cutted-caption-mode");
   localStorage.removeItem("cutted-caption-text-color");
   localStorage.removeItem("cutted-caption-background-color");
+  localStorage.removeItem("cutted-caption-highlight-background-color");
   localStorage.removeItem("cutted-caption-enabled");
 }
 function resetCardPanels(card){
@@ -17871,7 +18018,7 @@ document.querySelector("[data-render-results]")?.addEventListener("click", event
   if (!copyButton) return;
   copyResultPath(copyButton.dataset.copyPath || "", copyButton);
 });
-document.querySelectorAll("[data-caption-lines],[data-caption-width],[data-caption-size],[data-caption-bottom],[data-caption-text-color],[data-caption-background-color],[data-caption-enabled]").forEach(input => {
+document.querySelectorAll("[data-caption-lines],[data-caption-width],[data-caption-size],[data-caption-bottom],[data-caption-text-color],[data-caption-background-color],[data-caption-highlight-background-color],[data-caption-enabled]").forEach(input => {
   const update = () => {
     if (input.matches("[data-caption-lines]")) localStorage.setItem("cutted-caption-lines", input.value);
     if (input.matches("[data-caption-width]")) localStorage.setItem("cutted-caption-width", input.value);
@@ -17879,6 +18026,7 @@ document.querySelectorAll("[data-caption-lines],[data-caption-width],[data-capti
     if (input.matches("[data-caption-bottom]")) localStorage.setItem("cutted-caption-bottom", input.value);
     if (input.matches("[data-caption-text-color]")) localStorage.setItem("cutted-caption-text-color", normalizeCaptionColor(input.value, "#ffffff"));
     if (input.matches("[data-caption-background-color]")) localStorage.setItem("cutted-caption-background-color", normalizeCaptionBackground(input.value));
+    if (input.matches("[data-caption-highlight-background-color]")) localStorage.setItem("cutted-caption-highlight-background-color", normalizeCaptionHighlightBackground(input.value));
     if (input.matches("[data-caption-enabled]")) {
       localStorage.setItem("cutted-caption-enabled", input.checked ? "1" : "0");
       localStorage.setItem("cutted-caption-mode", input.checked ? "on" : "off");

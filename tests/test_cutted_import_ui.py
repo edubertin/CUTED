@@ -153,13 +153,22 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("function previewAnimatedCaptionHtml", html)
         self.assertIn("function previewAnimatedCaptionRender", html)
         self.assertIn("function previewAnimatedCaptionWindow", html)
+        self.assertIn("function cleanPreviewAnimatedCaptionText", html)
+        self.assertIn("function animatedCaptionLeadSeconds", html)
         self.assertIn("function previewAnimatedCaptionWordTimings", html)
         self.assertIn("function previewAnimatedCaptionWordWeight", html)
+        self.assertIn('position + animatedCaptionLeadSeconds()', html)
         self.assertIn("layer.dataset.captionPopKey !== rendered.key", html)
         self.assertIn('delete layer.dataset.captionPopKey', html)
-        self.assertIn('captionBackgroundCss(style.backgroundColor, style.mode === "animated")', html)
-        self.assertIn("preview-caption-active", html)
-        self.assertIn("preview-caption-side", html)
+        self.assertIn('captionBackgroundCss(style.backgroundColor)', html)
+        self.assertIn('captionBackgroundCss(style.highlightBackgroundColor || "#000000", true)', html)
+        self.assertIn("--preview-caption-highlight-bg", html)
+        self.assertIn("gap:.54em", html)
+        self.assertIn("font-size:.76em", html)
+        self.assertIn(".preview-caption-layer[data-mode=animated] .preview-caption-active", html)
+        self.assertIn(".preview-caption-layer[data-mode=animated] .preview-caption-side", html)
+        self.assertIn("background:var(--preview-caption-bg,transparent)", html)
+        self.assertIn("background:var(--preview-caption-highlight-bg", html)
 
     def test_preview_caption_text_repairs_portuguese_mojibake(self) -> None:
         html = gallery_html()
@@ -169,6 +178,16 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("function repairPreviewCaptionEncoding", html)
         self.assertIn("replacePreviewCaptionMojibakeSequences", html)
         self.assertIn("return repairPreviewCaptionEncoding(text)", html)
+
+    def test_animated_caption_text_uses_social_display_style(self) -> None:
+        raw = ">> Mas, Tati Cariani falou com IA; Porque isso."
+
+        self.assertEqual(CUTTED.clean_caption_text(raw), "Mas, Tati Cariani falou com IA; Porque isso.")
+        self.assertEqual(CUTTED.clean_animated_caption_text(raw), "mas Tati Cariani falou com IA porque isso")
+        self.assertEqual(
+            CUTTED.split_animated_caption_words(raw, 18),
+            ["mas", "Tati", "Cariani", "falou", "com", "IA", "porque", "isso"],
+        )
 
     def test_closed_caption_control_bar_menu_is_available(self) -> None:
         asset_dir = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar"
@@ -185,12 +204,15 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("data-cuted-caption-bottom", script)
         self.assertIn('renderCaptionColorPicker("text", "A", "#ffffff")', script)
         self.assertIn('renderCaptionColorPicker("background", "BG", "#000000")', script)
+        self.assertIn('renderCaptionColorPicker("highlight", "MID", "#000000")', script)
+        self.assertIn("highlightBackgroundColor", script)
         self.assertIn("renderCaptionPalette", script)
         self.assertIn("data-cuted-caption-swatch", script)
         self.assertIn("renderCaptionSwatch", script)
         self.assertIn("onCaptionStyleChange", script)
         self.assertIn(".cuted-caption-menu", styles)
         self.assertIn(".cuted-caption-palette", styles)
+        self.assertIn(".cuted-caption-picker-highlight", styles)
         self.assertIn(".cuted-caption-switch", styles)
         self.assertIn(".cuted-caption-swatch", styles)
 
@@ -207,23 +229,32 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("&H66000000", line)
         self.assertIn(",3,7,0,2,80,80,313,1", line)
         self.assertEqual(style["width"], 34)
+        self.assertEqual(style["highlight_background_color"], "#000000")
         self.assertEqual(style["mode"], "on")
 
     def test_animated_caption_style_exports_word_pop_events(self) -> None:
         preset = CUTTED.PLATFORM_PRESETS["tiktok"]
         row = {
-            "adjusted_duration": 2.0,
-            "caption_style": {"mode": "animated", "size": 72, "bottom": 18},
-            "caption_segments": [{"start": 0.0, "end": 2.0, "text": "fala rapida agora"}],
+            "adjusted_duration": 2.4,
+            "caption_style": {"mode": "animated", "size": 72, "bottom": 18, "backgroundColor": "#111318", "highlightBackgroundColor": "#ffcc00"},
+            "caption_segments": [{"start": 0.5, "end": 2.0, "text": "Fala rapida, agora."}],
         }
-        events = CUTTED.caption_events(row, 28, 2, 2.0)
-        windows = CUTTED.animated_caption_window_events(events, 2.0, 28)
-        ass = CUTTED.ass_document_with_style(events, 2.0, preset, 28, 2, row)
+        events = CUTTED.caption_events(row, 28, 2, 2.4)
+        windows = CUTTED.animated_caption_window_events(events, 2.4, 28)
+        ass = CUTTED.ass_document_with_style(events, 2.4, preset, 28, 2, row)
 
         self.assertIn("Arial,59,", ass)
+        self.assertIn("Arial,47,", ass)
+        self.assertIn("&H6600CCFF", ass)
+        self.assertIn("&H66181311", ass)
         self.assertIn("Style: CaptionSide", ass)
+        self.assertIn(",3,6,0,5,80,80,346,1", ass)
         self.assertIn(",3,7,0,2,80,80,346,1", ass)
         self.assertIn("fala", ass)
+        self.assertNotIn("Fala", ass)
+        self.assertNotIn("rapida,", ass)
+        self.assertNotIn("agora.", ass)
+        self.assertIn("0:00:00.36", ass)
         self.assertEqual(windows[0].active, "fala")
         self.assertEqual(windows[0].next, "rapida")
         self.assertEqual(windows[1].previous, "fala")
@@ -234,13 +265,15 @@ class CuttedImportUiTests(unittest.TestCase):
 
     def test_animated_caption_timing_weights_words_and_punctuation(self) -> None:
         timings = CUTTED.animated_caption_word_timings(["e", "sincronizacao", "fim."], 0.0, 3.0)
+        clean_timings = CUTTED.animated_caption_word_timings(["e", "sincronizacao", "fim"], 0.0, 3.0)
 
         short_duration = timings[0][3] - timings[0][2]
         long_duration = timings[1][3] - timings[1][2]
         punctuated_duration = timings[2][3] - timings[2][2]
+        clean_final_duration = clean_timings[2][3] - clean_timings[2][2]
 
         self.assertGreater(long_duration, short_duration)
-        self.assertGreater(punctuated_duration, short_duration)
+        self.assertAlmostEqual(punctuated_duration, clean_final_duration)
         self.assertAlmostEqual(timings[-1][3], 3.0)
 
     def test_render_resource_profiles_apply_threads_and_priority(self) -> None:
