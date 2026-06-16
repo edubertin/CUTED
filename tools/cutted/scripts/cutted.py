@@ -196,9 +196,14 @@ PUBLISH_MAX_HASHTAGS = 6
 PUBLISH_DEFAULT_HASHTAGS = ["#Podcast", "#Cortes"]
 CUTTED_CAPTION_BOTTOM_OFFSET_MULTIPLIER = 1.25
 ANIMATED_CAPTION_LEAD_SECONDS = 0.14
+ANIMATED_CAPTION_TARGET_MIN_WORD_SECONDS = 0.18
+ANIMATED_CAPTION_FAST_WORD_SECONDS = 0.16
+ANIMATED_CAPTION_MAX_GROUP_WORDS = 3
+ANIMATED_CAPTION_BOX_OPACITY = 0.80
+ANIMATED_CAPTION_BOX_SHADOW_OPACITY = 0.28
 COVER_LAYER_VERTICAL_LIFT = 0.30
 COVER_FRAME_TAIL_SECONDS = 0.5
-RENDER_JOB_FINGERPRINT_VERSION = "cuted-render-queue-v4-cover-caption-parity"
+RENDER_JOB_FINGERPRINT_VERSION = "cuted-render-queue-v7-smart-caption-readability"
 STALE_RENDER_SERVER_ERROR = (
     "Servidor CUTED antigo. Reinicie o app antes de renderizar para usar as ultimas mudancas."
 )
@@ -7115,6 +7120,21 @@ ANIMATED_CAPTION_PROPER_NOUN_STOPWORDS = {
 }
 
 
+ANIMATED_CAPTION_FILLER_WORDS = {
+    "ah", "aham", "uhum", "hum", "eh", "Ã©", "e", "aÃ­", "ai", "entÃ£o", "entao",
+    "tipo", "assim", "nÃ©", "ne", "cara", "mano", "bom", "olha", "certo",
+}
+
+
+ANIMATED_CAPTION_ATTACH_PREVIOUS: set[str] = set()
+
+
+ANIMATED_CAPTION_ATTACH_NEXT = {
+    "a", "as", "o", "os", "um", "uma", "uns", "umas", "me", "te", "se", "meu", "minha", "seu", "sua",
+    "de", "da", "das", "do", "dos", "com", "sem", "pra", "para", "por", "em", "no", "na", "nos", "nas", "ao", "aos",
+}
+
+
 def clean_animated_caption_text(text: str) -> str:
     clean = clean_caption_text(text)
     proper_nouns = animated_caption_proper_nouns(clean)
@@ -7180,6 +7200,80 @@ def animated_caption_is_capitalized_word(word: str) -> bool:
 def animated_caption_is_acronym(word: str) -> bool:
     letters = [char for char in word if char.isalpha()]
     return 1 < len(letters) <= 6 and "".join(letters).isupper()
+
+
+def animated_caption_is_numeric_token(word: str) -> bool:
+    return bool(re.search(r"\d", word))
+
+
+def animated_caption_is_low_value_word(word: str) -> bool:
+    return animated_caption_word_key(word) in ANIMATED_CAPTION_FILLER_WORDS
+
+
+def smart_animated_caption_words(text: str, max_word_length: int, duration: float) -> list[str]:
+    words = split_animated_caption_words(text, max_word_length)
+    if not words:
+        return []
+    words = smart_animated_caption_drop_fillers(words, duration)
+    return smart_animated_caption_group_words(words, duration)
+
+
+def smart_animated_caption_drop_fillers(words: list[str], duration: float) -> list[str]:
+    word_seconds = duration / max(len(words), 1)
+    if word_seconds >= ANIMATED_CAPTION_FAST_WORD_SECONDS:
+        return words
+    filtered = [word for word in words if animated_caption_is_numeric_token(word) or not animated_caption_is_low_value_word(word)]
+    return filtered or words
+
+
+def smart_animated_caption_group_words(words: list[str], duration: float) -> list[str]:
+    word_seconds = duration / max(len(words), 1)
+    if word_seconds >= ANIMATED_CAPTION_TARGET_MIN_WORD_SECONDS:
+        return words
+    groups: list[str] = []
+    for word in words:
+        if smart_animated_caption_should_attach_to_previous(groups, word):
+            groups[-1] = f"{groups[-1]} {word}"
+            continue
+        if smart_animated_caption_should_attach_next(groups, words):
+            groups.append(word)
+            continue
+        groups.append(word)
+    return smart_animated_caption_balance_groups(groups)
+
+
+def smart_animated_caption_should_attach_to_previous(groups: list[str], word: str) -> bool:
+    if not groups:
+        return False
+    key = animated_caption_word_key(word)
+    if key in ANIMATED_CAPTION_ATTACH_PREVIOUS:
+        return smart_animated_caption_group_size(groups[-1]) < ANIMATED_CAPTION_MAX_GROUP_WORDS
+    previous = groups[-1].split()[-1]
+    if animated_caption_word_key(previous) in ANIMATED_CAPTION_ATTACH_NEXT:
+        return smart_animated_caption_group_size(groups[-1]) < ANIMATED_CAPTION_MAX_GROUP_WORDS
+    return key == animated_caption_word_key(previous) and smart_animated_caption_group_size(groups[-1]) < ANIMATED_CAPTION_MAX_GROUP_WORDS
+
+
+def smart_animated_caption_should_attach_next(groups: list[str], words: list[str]) -> bool:
+    index = sum(smart_animated_caption_group_size(group) for group in groups)
+    if index >= len(words):
+        return False
+    return animated_caption_word_key(words[index]) in ANIMATED_CAPTION_ATTACH_NEXT and index + 1 < len(words)
+
+
+def smart_animated_caption_balance_groups(groups: list[str]) -> list[str]:
+    result: list[str] = []
+    for group in groups:
+        key = animated_caption_word_key(group)
+        if result and key in ANIMATED_CAPTION_ATTACH_PREVIOUS and smart_animated_caption_group_size(result[-1]) < ANIMATED_CAPTION_MAX_GROUP_WORDS:
+            result[-1] = f"{result[-1]} {group}"
+            continue
+        result.append(group)
+    return result
+
+
+def smart_animated_caption_group_size(group: str) -> int:
+    return len([word for word in group.split() if word])
 
 
 CAPTION_MOJIBAKE_REPLACEMENTS = {
@@ -7302,6 +7396,7 @@ def ass_document_with_style(
     if animated:
         style_lines.append(ass_caption_active_style_line(preset, style))
         style_lines.append(ass_caption_side_style_line(preset, style))
+        style_lines.append(ass_caption_box_style_line(preset))
     return "\n".join([
         "[Script Info]",
         "ScriptType: v4.00+",
@@ -7350,13 +7445,9 @@ def ass_caption_active_style_line(preset: PlatformPreset, style: dict[str, objec
     font_size = max(24, int(base_size * 0.82))
     outline = 7 if preset.height >= 1600 else 5
     primary = ass_color(str(style.get("text_color") or "#ffffff"), "00")
-    background = str(style.get("highlight_background_color") or style.get("background_color") or "transparent")
-    if background == "transparent":
-        background = "#000000"
-    box_color = ass_color(background, "33")
     return (
         "Style: CaptionActive,Arial,"
-        f"{font_size},{primary},&H0000FFFF,{box_color},{box_color},-1,0,0,0,100,100,0,0,3,"
+        f"{font_size},{primary},&H0000FFFF,&H66000000,&H99000000,-1,0,0,0,100,100,0,0,1,"
         f"{outline},0,5,80,80,{caption_margin_v(preset, style)},1"
     )
 
@@ -7374,6 +7465,13 @@ def ass_caption_side_style_line(preset: PlatformPreset, style: dict[str, object]
         "Style: CaptionSide,Arial,"
         f"{font_size},{primary},&H0000FFFF,{outline_color},{back_color},-1,0,0,0,100,100,0,0,{border_style},"
         f"{outline},0,5,80,80,{caption_margin_v(preset, style)},1"
+    )
+
+
+def ass_caption_box_style_line(preset: PlatformPreset) -> str:
+    return (
+        "Style: CaptionBox,Arial,"
+        "1,&H00FFFFFF,&H0000FFFF,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1"
     )
 
 
@@ -7455,6 +7553,17 @@ def ass_color(value: str, alpha: str) -> str:
     return f"&H{alpha}{blue}{green}{red}".upper()
 
 
+def ass_alpha_from_opacity(opacity: float) -> str:
+    alpha = int(round((1.0 - clamp(opacity, 0.0, 1.0)) * 255))
+    return f"{alpha:02X}"
+
+
+def ass_rgb_color(value: str) -> str:
+    color = normalize_hex_color(value, "#000000").lstrip("#")
+    red, green, blue = color[0:2], color[2:4], color[4:6]
+    return f"&H{blue}{green}{red}&".upper()
+
+
 def ass_dialogue_lines(events: list[CaptionEvent], duration: float, chars_per_line: int, max_lines: int) -> list[str]:
     lines: list[str] = []
     for event in events:
@@ -7486,8 +7595,62 @@ def ass_animated_dialogue_lines(
             next_x = int(clamp(center_x + ass_caption_side_offset(window.next, window.active, active_size, side_size), 70, preset.width - 70))
             lines.append(ass_animated_dialogue_line(0, start, end, "CaptionSide", window.next, next_x, side_y, ""))
         pop = r"\fad(25,70)\t(0,90,\fscx112\fscy112)\t(90,190,\fscx100\fscy100)"
-        lines.append(ass_animated_dialogue_line(1, start, end, "CaptionActive", window.active, center_x, center_y, pop))
+        lines.extend(ass_animated_caption_box_lines(start, end, window.active, center_x, center_y, active_size, style))
+        lines.append(ass_animated_dialogue_line(3, start, end, "CaptionActive", window.active, center_x, center_y, pop))
     return lines
+
+
+def ass_animated_caption_box_lines(
+    start: float, end: float, text: str, center_x: int, center_y: int, font_size: int,
+    style: dict[str, object],
+) -> list[str]:
+    width = int(ass_caption_word_width(text, font_size) + font_size * 0.88 + 0.5)
+    height = int(font_size * 1.28 + 0.5)
+    radius = max(6, int(font_size * 0.25 + 0.5))
+    shape = ass_rounded_rect_path(width, height, radius)
+    color = ass_rgb_color(str(style.get("highlight_background_color") or "#000000"))
+    top_left_x = center_x - (width // 2)
+    top_left_y = center_y - (height // 2) + max(5, int(font_size * 0.16 + 0.5))
+    shadow_y = top_left_y + max(5, font_size // 9)
+    shadow_alpha = ass_alpha_from_opacity(ANIMATED_CAPTION_BOX_SHADOW_OPACITY)
+    fill_alpha = ass_alpha_from_opacity(ANIMATED_CAPTION_BOX_OPACITY)
+    border_alpha = ass_alpha_from_opacity(0.12)
+    shadow = ass_vector_dialogue_line(1, start, end, top_left_x, shadow_y, shape, "&H000000&", shadow_alpha, "", "")
+    fill = ass_vector_dialogue_line(
+        2, start, end, top_left_x, top_left_y, shape, color, fill_alpha, r"\fad(25,70)", rf"\bord2\3c&HFFFFFF&\3a&H{border_alpha}"
+    )
+    return [shadow, fill]
+
+
+def ass_vector_dialogue_line(
+    layer: int, start: float, end: float, x: int, y: int, shape: str, color: str, alpha: str, tags: str, border: str
+) -> str:
+    vector_tags = rf"{{\an7\pos({x},{y})\p1\1c{color}\1a&H{alpha}&\bord0\shad0{border}{tags}}}"
+    return f"Dialogue: {layer},{ass_time(start)},{ass_time(end)},CaptionBox,,0,0,0,,{vector_tags}{shape}"
+
+
+def ass_rounded_rect_path(width: int, height: int, radius: int) -> str:
+    width = max(2, width)
+    height = max(2, height)
+    radius = max(1, min(radius, width // 2, height // 2))
+    points = ass_rounded_rect_points(width, height, radius)
+    first, *rest = points
+    return " ".join([f"m {first[0]} {first[1]}", *(f"l {x} {y}" for x, y in rest)])
+
+
+def ass_rounded_rect_points(width: int, height: int, radius: int) -> list[tuple[int, int]]:
+    points: list[tuple[int, int]] = []
+    corners = (
+        (width - radius, radius, -90, 0),
+        (width - radius, height - radius, 0, 90),
+        (radius, height - radius, 90, 180),
+        (radius, radius, 180, 270),
+    )
+    for cx, cy, start_angle, end_angle in corners:
+        for step in range(5):
+            angle = math.radians(start_angle + (end_angle - start_angle) * step / 4)
+            points.append((int(round(cx + math.cos(angle) * radius)), int(round(cy + math.sin(angle) * radius))))
+    return points
 
 
 def ass_animated_dialogue_line(
@@ -7521,11 +7684,11 @@ def animated_caption_word_events(events: list[CaptionEvent], duration: float, ch
     result: list[CaptionEvent] = []
     max_word_length = max(8, min(chars_per_line, 18))
     for event in events:
-        words = split_animated_caption_words(event.text, max_word_length)
-        if not words:
-            continue
         start = clamp(event.start, 0.0, duration)
         end = clamp(event.end, start + 0.12, duration)
+        words = smart_animated_caption_words(event.text, max_word_length, end - start)
+        if not words:
+            continue
         for index, word, word_start, word_end in animated_caption_word_timings(words, start, end):
             if word_end - word_start >= 0.08:
                 result.append(CaptionEvent(round(word_start, 3), round(word_end, 3), word))
@@ -7554,11 +7717,11 @@ def animated_caption_window_events(events: list[CaptionEvent], duration: float, 
     result: list[AnimatedCaptionWindow] = []
     max_word_length = max(8, min(chars_per_line, 18))
     for event in events:
-        words = split_animated_caption_words(event.text, max_word_length)
-        if not words:
-            continue
         start = clamp(event.start, 0.0, duration)
         end = clamp(event.end, start + 0.12, duration)
+        words = smart_animated_caption_words(event.text, max_word_length, end - start)
+        if not words:
+            continue
         for index, word, word_start, word_end in animated_caption_word_timings(words, start, end):
             if word_end - word_start < 0.08:
                 continue
@@ -7971,16 +8134,24 @@ def render_publish_cover_image_with_pillow(source: Path, output: Path, cover: di
 
 def pillow_cover_base_image(image: object, cover: dict[str, object], preset: PlatformPreset, image_module: object) -> object:
     zoom = clamp(float(cover.get("zoom") if cover.get("zoom") is not None else 1.0), 1.0, 1.8)
-    target_w = int(round(preset.width * zoom))
-    target_h = int(round(preset.height * zoom))
-    scale = max(target_w / max(image.width, 1), target_h / max(image.height, 1))
+    base = pillow_cover_object_fit_image(image, preset, image_module)
+    if zoom <= 1.001:
+        return base
+    resized = base.resize((int(round(preset.width * zoom)), int(round(preset.height * zoom))), pillow_resampling_filter(image_module))
+    crop_x = clamp(float(cover.get("x") if cover.get("x") is not None else 50.0), 0.0, 100.0) / 100.0
+    crop_y = clamp(float(cover.get("y") if cover.get("y") is not None else 50.0), 0.0, 100.0) / 100.0
+    left = int(round(preset.width * (zoom - 1.0) * crop_x))
+    top = int(round(preset.height * (zoom - 1.0) * crop_y))
+    return resized.crop((left, top, left + preset.width, top + preset.height))
+
+
+def pillow_cover_object_fit_image(image: object, preset: PlatformPreset, image_module: object) -> object:
+    scale = max(preset.width / max(image.width, 1), preset.height / max(image.height, 1))
     resized_w = max(preset.width, int(math.ceil(image.width * scale)))
     resized_h = max(preset.height, int(math.ceil(image.height * scale)))
     resized = image.resize((resized_w, resized_h), pillow_resampling_filter(image_module))
-    crop_x = clamp(float(cover.get("x") if cover.get("x") is not None else 50.0), 0.0, 100.0) / 100.0
-    crop_y = clamp(float(cover.get("y") if cover.get("y") is not None else 50.0), 0.0, 100.0) / 100.0
-    left = int(round(max(resized_w - preset.width, 0) * crop_x))
-    top = int(round(max(resized_h - preset.height, 0) * crop_y))
+    left = int(round(max(resized_w - preset.width, 0) * 0.5))
+    top = int(round(max(resized_h - preset.height, 0) * 0.5))
     return resized.crop((left, top, left + preset.width, top + preset.height))
 
 
@@ -8070,18 +8241,36 @@ def pillow_draw_cover_text_background(
     bg_opacity = clamp(float(layer.get("background_opacity") if layer.get("background_opacity") is not None else 94.0) / 100.0, 0.0, 1.0)
     background = pillow_rgba(layer.get("background_color"), "#ffffff" if speech else "#000000", opacity * bg_opacity)
     radius = max(6, int(round(font_size * (0.5 if speech else 0.18))))
-    draw.rounded_rectangle((x, y, x + box_w, y + box_h), radius=radius, fill=background)
     if speech:
+        shadow = (0, 0, 0, int(round(255 * opacity * 0.22)))
+        shadow_offset = max(5, int(round(font_size * 0.22)))
+        draw.rounded_rectangle((x, y + shadow_offset, x + box_w, y + box_h + shadow_offset), radius=radius, fill=shadow)
+        pillow_draw_cover_speech_tail(draw, (x, y + shadow_offset, box_w, box_h), font_size, shadow)
+    if speech:
+        border_width = max(2, int(round(font_size * 0.07)))
+        border = pillow_rgba(layer.get("border_color"), "#dff7ff", opacity * 0.88)
+        pillow_draw_cover_speech_tail(draw, (x, y, box_w, box_h), font_size, border, border_width)
+        draw.rounded_rectangle((x, y, x + box_w, y + box_h), radius=radius, fill=background, outline=border, width=border_width)
         pillow_draw_cover_speech_tail(draw, (x, y, box_w, box_h), font_size, background)
+    else:
+        draw.rounded_rectangle((x, y, x + box_w, y + box_h), radius=radius, fill=background)
 
 
-def pillow_draw_cover_speech_tail(draw: object, rect: tuple[int, int, int, int], font_size: int, color: tuple[int, int, int, int]) -> None:
+def pillow_draw_cover_speech_tail(
+    draw: object, rect: tuple[int, int, int, int], font_size: int, color: tuple[int, int, int, int], expand: int = 0
+) -> None:
     x, y, box_w, box_h = rect
-    tail_w = max(22, int(round(font_size * 0.72)))
-    tail_h = max(18, int(round(font_size * 0.58)))
-    tail_x = x + max(int(round(box_w * 0.18)), int(round(font_size * 0.62)))
-    tail_y = y + box_h - max(2, int(round(tail_h * 0.22)))
-    points = [(tail_x, tail_y), (tail_x + tail_w, tail_y), (tail_x + int(tail_w * 0.32), tail_y + tail_h)]
+    tail_w = max(16, int(round(font_size * 0.48))) + expand * 2
+    tail_h = max(14, int(round(font_size * 0.42))) + expand * 2
+    tail_x = x + max(int(round(box_w * 0.18)), int(round(font_size * 0.62))) - expand
+    tail_y = y + box_h - max(2, int(round(tail_h * 0.18))) - expand
+    skew = max(3, int(round(font_size * 0.12)))
+    points = [
+        (tail_x, tail_y),
+        (tail_x + tail_w, tail_y),
+        (tail_x + tail_w - skew, tail_y + tail_h),
+        (tail_x + skew, tail_y + tail_h),
+    ]
     draw.polygon(points, fill=color)
 
 
@@ -17350,7 +17539,7 @@ function previewAnimatedCaptionRender(event, position){
   return { key, html };
 }
 function previewAnimatedCaptionWindow(event, position){
-  const words = cleanPreviewAnimatedCaptionText(event.text).split(/\\s+/).filter(Boolean).map(previewAnimatedCaptionWord);
+  const words = previewSmartAnimatedCaptionWords(event);
   if (!words.length) return null;
   const timings = previewAnimatedCaptionWordTimings(event, words);
   const slot = timings.find(item => position >= item.start && position < item.end) || timings[timings.length - 1];
@@ -17366,6 +17555,9 @@ function previewAnimatedCaptionWord(word){
   const text = String(word || "");
   return text.length <= 18 ? text : `${text.slice(0, 17)}...`;
 }
+const PREVIEW_ANIMATED_CAPTION_TARGET_MIN_WORD_SECONDS = .18;
+const PREVIEW_ANIMATED_CAPTION_FAST_WORD_SECONDS = .16;
+const PREVIEW_ANIMATED_CAPTION_MAX_GROUP_WORDS = 3;
 const PREVIEW_ANIMATED_CAPTION_PROPER_NOUN_STOPWORDS = new Set([
   "a", "as", "o", "os", "um", "uma", "uns", "umas", "de", "da", "das", "do", "dos",
   "e", "ou", "mas", "porque", "por", "para", "pra", "com", "sem", "em", "no", "na",
@@ -17377,6 +17569,16 @@ const PREVIEW_ANIMATED_CAPTION_PROPER_NOUN_STOPWORDS = new Set([
   "fui", "faz", "fazer", "da", "dá", "dar", "precisa", "preciso", "precisava", "acho",
   "tipo", "cara", "ne", "né", "olha", "bom", "certo", "agora"
 ]);
+const PREVIEW_ANIMATED_CAPTION_FILLER_WORDS = new Set([
+  "ah", "aham", "uhum", "hum", "eh", "Ã©", "e", "ai", "aÃ­", "entao", "entÃ£o",
+  "tipo", "assim", "ne", "nÃ©", "cara", "mano", "bom", "olha", "certo"
+]);
+const PREVIEW_ANIMATED_CAPTION_ATTACH_PREVIOUS = new Set([
+]);
+const PREVIEW_ANIMATED_CAPTION_ATTACH_NEXT = new Set([
+  "a", "as", "o", "os", "um", "uma", "uns", "umas", "me", "te", "se", "meu", "minha", "seu", "sua",
+  "de", "da", "das", "do", "dos", "com", "sem", "pra", "para", "por", "em", "no", "na", "nos", "nas", "ao", "aos"
+]);
 function cleanPreviewAnimatedCaptionText(text){
   const clean = cleanPreviewCaptionText(text);
   const properNouns = previewAnimatedCaptionProperNouns(clean);
@@ -17384,6 +17586,59 @@ function cleanPreviewAnimatedCaptionText(text){
     .map(word => previewAnimatedCaptionDisplayWord(word, properNouns))
     .filter(Boolean)
     .join(" ");
+}
+function previewSmartAnimatedCaptionWords(event){
+  const start = Number(event?.start || 0);
+  const end = Math.max(Number(event?.end || start + .12), start + .12);
+  let words = cleanPreviewAnimatedCaptionText(event?.text || "").split(/\\s+/).filter(Boolean).map(previewAnimatedCaptionWord);
+  if (!words.length) return [];
+  words = previewSmartAnimatedCaptionDropFillers(words, end - start);
+  return previewSmartAnimatedCaptionGroupWords(words, end - start);
+}
+function previewSmartAnimatedCaptionDropFillers(words, duration){
+  const wordSeconds = duration / Math.max(words.length, 1);
+  if (wordSeconds >= PREVIEW_ANIMATED_CAPTION_FAST_WORD_SECONDS) return words;
+  const filtered = words.filter(word => previewAnimatedCaptionIsNumericToken(word) || !PREVIEW_ANIMATED_CAPTION_FILLER_WORDS.has(previewAnimatedCaptionWordKey(word)));
+  return filtered.length ? filtered : words;
+}
+function previewSmartAnimatedCaptionGroupWords(words, duration){
+  const wordSeconds = duration / Math.max(words.length, 1);
+  if (wordSeconds >= PREVIEW_ANIMATED_CAPTION_TARGET_MIN_WORD_SECONDS) return words;
+  const groups = [];
+  words.forEach(word => {
+    if (previewSmartAnimatedCaptionShouldAttachToPrevious(groups, word)) {
+      groups[groups.length - 1] = `${groups[groups.length - 1]} ${word}`;
+      return;
+    }
+    groups.push(word);
+  });
+  return previewSmartAnimatedCaptionBalanceGroups(groups);
+}
+function previewSmartAnimatedCaptionShouldAttachToPrevious(groups, word){
+  if (!groups.length) return false;
+  const key = previewAnimatedCaptionWordKey(word);
+  const previous = groups[groups.length - 1].split(/\\s+/).filter(Boolean).pop() || "";
+  if (PREVIEW_ANIMATED_CAPTION_ATTACH_PREVIOUS.has(key)) return previewSmartAnimatedCaptionGroupSize(groups[groups.length - 1]) < PREVIEW_ANIMATED_CAPTION_MAX_GROUP_WORDS;
+  if (PREVIEW_ANIMATED_CAPTION_ATTACH_NEXT.has(previewAnimatedCaptionWordKey(previous))) return previewSmartAnimatedCaptionGroupSize(groups[groups.length - 1]) < PREVIEW_ANIMATED_CAPTION_MAX_GROUP_WORDS;
+  return key === previewAnimatedCaptionWordKey(previous) && previewSmartAnimatedCaptionGroupSize(groups[groups.length - 1]) < PREVIEW_ANIMATED_CAPTION_MAX_GROUP_WORDS;
+}
+function previewSmartAnimatedCaptionBalanceGroups(groups){
+  const result = [];
+  groups.forEach(group => {
+    const key = previewAnimatedCaptionWordKey(group);
+    if (result.length && PREVIEW_ANIMATED_CAPTION_ATTACH_PREVIOUS.has(key) && previewSmartAnimatedCaptionGroupSize(result[result.length - 1]) < PREVIEW_ANIMATED_CAPTION_MAX_GROUP_WORDS) {
+      result[result.length - 1] = `${result[result.length - 1]} ${group}`;
+      return;
+    }
+    result.push(group);
+  });
+  return result;
+}
+function previewSmartAnimatedCaptionGroupSize(group){
+  return String(group || "").split(/\\s+/).filter(Boolean).length;
+}
+function previewAnimatedCaptionIsNumericToken(word){
+  return /\\d/.test(String(word || ""));
 }
 function previewAnimatedCaptionProperNouns(text){
   const matches = Array.from(String(text || "").matchAll(/[\\p{L}\\p{N}_]+/gu));

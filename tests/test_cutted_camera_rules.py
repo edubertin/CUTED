@@ -542,6 +542,35 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertGreater(image.getpixel((302, 452))[0], 210)
         self.assertGreater(image.getpixel((330, 810))[0], 180)
 
+    def test_publish_cover_pillow_crop_matches_preview_object_fit_order(self) -> None:
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not available.")
+        preset = CUTTED.PLATFORM_PRESETS["tiktok"]
+        source = Image.new("RGB", (1920, 1080))
+        pixels = [
+            (int(round(x / 1919 * 255)), 64, 255 - int(round(x / 1919 * 255)))
+            for _y in range(1080)
+            for x in range(1920)
+        ]
+        source.putdata(pixels)
+
+        rendered = CUTTED.pillow_cover_base_image(
+            source.convert("RGBA"),
+            {"zoom": 1.4, "x": 100, "y": 42.6},
+            preset,
+            Image,
+        ).convert("RGB")
+
+        center_red = rendered.getpixel((preset.width // 2, preset.height // 2))[0]
+        left_red = rendered.getpixel((32, preset.height // 2))[0]
+        right_red = rendered.getpixel((preset.width - 33, preset.height // 2))[0]
+        self.assertGreater(center_red, 125)
+        self.assertLess(center_red, 155)
+        self.assertLess(left_red, center_red)
+        self.assertGreater(right_red, center_red)
+
     def test_page_mounts_live_timeline_with_legacy_fallback(self) -> None:
         html = CUTTED.page_html(
             "Teste",
