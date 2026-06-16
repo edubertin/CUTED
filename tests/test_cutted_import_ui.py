@@ -149,7 +149,8 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("captions_enabled: captions.enabled", html)
         self.assertIn("function captionSettingsForCard(card)", html)
         self.assertIn("storeCaptionStyle(style)", html)
-        self.assertIn("captionEnabled() ? \"Ativada\" : \"Desligada\"", html)
+        self.assertIn("captionMode() === \"animated\" ? \"Animada\"", html)
+        self.assertIn("function previewAnimatedCaptionHtml", html)
 
     def test_preview_caption_text_repairs_portuguese_mojibake(self) -> None:
         html = gallery_html()
@@ -169,8 +170,10 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("captionPaletteOpen", script)
         self.assertIn("renderCaptionMenu", script)
         self.assertIn("data-cuted-caption-toggle", script)
+        self.assertIn("data-cuted-caption-mode=\"animated\"", script)
         self.assertIn("data-cuted-caption-size", script)
         self.assertIn("data-cuted-caption-width", script)
+        self.assertIn("data-cuted-caption-bottom", script)
         self.assertIn('renderCaptionColorPicker("text", "A", "#ffffff")', script)
         self.assertIn('renderCaptionColorPicker("background", "BG", "#000000")', script)
         self.assertIn("renderCaptionPalette", script)
@@ -193,8 +196,24 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("Arial,88,", line)
         self.assertIn("&H00CFA211", line)
         self.assertIn("&H66000000", line)
-        self.assertIn(",3,7,0,2,80,80,250,1", line)
+        self.assertIn(",3,7,0,2,80,80,313,1", line)
         self.assertEqual(style["width"], 34)
+        self.assertEqual(style["mode"], "on")
+
+    def test_animated_caption_style_exports_word_pop_events(self) -> None:
+        preset = CUTTED.PLATFORM_PRESETS["tiktok"]
+        row = {
+            "adjusted_duration": 2.0,
+            "caption_style": {"mode": "animated", "size": 72, "bottom": 18},
+            "caption_segments": [{"start": 0.0, "end": 2.0, "text": "fala rapida agora"}],
+        }
+        events = CUTTED.caption_events(row, 28, 2, 2.0)
+        ass = CUTTED.ass_document_with_style(events, 2.0, preset, 28, 2, row)
+
+        self.assertIn("Arial,59,", ass)
+        self.assertIn(",3,7,0,2,80,80,346,1", ass)
+        self.assertIn("fala", ass)
+        self.assertIn("\\fscx108", ass)
 
     def test_render_resource_profiles_apply_threads_and_priority(self) -> None:
         rows = [{"rank": 1}, {"rank": 2}]

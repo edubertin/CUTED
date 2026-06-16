@@ -6933,7 +6933,8 @@ def caption_events_from_segments(row: dict[str, object], chars_per_line: int, ma
     if not isinstance(segments, list):
         return []
     start = float(row.get("adjusted_start") or row.get("start") or 0.0)
-    end = float(row.get("adjusted_end") or row.get("end") or 0.0)
+    fallback_end = start + float(row.get("adjusted_duration") or 0.0)
+    end = float(row.get("adjusted_end") or row.get("end") or fallback_end)
     events = [event_from_segment(item, start, end, chars_per_line, max_lines) for item in segments]
     return [event for event in events if event is not None]
 
@@ -7095,6 +7096,12 @@ def ass_document_with_style(
     events: list[CaptionEvent], duration: float, preset: PlatformPreset, chars_per_line: int, max_lines: int,
     row: dict[str, object]
 ) -> str:
+    style = caption_style_from_row(row, preset)
+    dialogue = (
+        ass_animated_dialogue_lines(events, duration, chars_per_line)
+        if style.get("mode") == "animated"
+        else ass_dialogue_lines(events, duration, chars_per_line, max_lines)
+    )
     return "\n".join([
         "[Script Info]",
         "ScriptType: v4.00+",
@@ -7106,22 +7113,27 @@ def ass_document_with_style(
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
         "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, "
         "MarginR, MarginV, Encoding",
-        ass_style_line(preset, caption_style_from_row(row, preset)),
+        ass_style_line(preset, style),
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
-        *ass_dialogue_lines(events, duration, chars_per_line, max_lines),
+        *dialogue,
         "",
     ])
 
 
 def ass_style_line(preset: PlatformPreset, style: dict[str, object] | None = None) -> str:
     style = style or {}
+    mode = str(style.get("mode") or "on")
     font_size = int(style.get("size") or (72 if preset.height >= 1600 else 54))
-    margin_v = caption_margin_v(preset)
+    if mode == "animated":
+        font_size = max(24, int(font_size * 0.82))
+    margin_v = caption_margin_v(preset, style)
     outline = 7 if preset.height >= 1600 else 5
     primary = ass_color(str(style.get("text_color") or "#ffffff"), "00")
     background = str(style.get("background_color") or "transparent")
+    if mode == "animated" and background == "transparent":
+        background = "#000000"
     border_style = 3 if background != "transparent" else 1
     back_color = ass_color(background if background != "transparent" else "#000000", "66" if border_style == 3 else "99")
     return (
@@ -7131,7 +7143,9 @@ def ass_style_line(preset: PlatformPreset, style: dict[str, object] | None = Non
     )
 
 
-def caption_margin_v(preset: PlatformPreset) -> int:
+def caption_margin_v(preset: PlatformPreset, style: dict[str, object] | None = None) -> int:
+    if style and style.get("bottom") is not None:
+        return int(preset.height * clamp_float(style.get("bottom"), 6.0, 32.0, 16.0) / 100.0 + 0.5)
     base_margin = 250 if preset.height >= 1600 else 95
     return int(base_margin * CUTTED_CAPTION_BOTTOM_OFFSET_MULTIPLIER + 0.5)
 
@@ -7143,9 +7157,32 @@ def caption_style_from_row(row: dict[str, object], preset: PlatformPreset) -> di
     return {
         "size": clamp_int(raw.get("size"), 24, 140, 72 if preset.height >= 1600 else 54),
         "width": clamp_int(raw.get("width"), 12, 56, 28),
+        "bottom": clamp_float(raw.get("bottom") or raw.get("height"), 6.0, 32.0, default_caption_bottom_percent(preset)),
+        "mode": normalize_caption_mode(raw.get("mode") or raw.get("captionMode") or raw.get("caption_mode")),
         "text_color": normalize_hex_color(raw.get("textColor") or raw.get("text_color"), "#ffffff"),
         "background_color": normalize_caption_background_color(raw.get("backgroundColor") or raw.get("background_color")),
     }
+
+
+def default_caption_bottom_percent(preset: PlatformPreset) -> float:
+    return round(caption_margin_v(preset) / max(preset.height, 1) * 100.0, 2)
+
+
+def normalize_caption_mode(value: object) -> str:
+    text = str(value or "").strip().lower()
+    if text in {"animated", "animada"}:
+        return "animated"
+    if text in {"off", "false", "0"}:
+        return "off"
+    return "on"
+
+
+def clamp_float(value: object, minimum: float, maximum: float, fallback: float) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return fallback
+    return max(minimum, min(maximum, number))
 
 
 def clamp_int(value: object, minimum: int, maximum: int, fallback: int) -> int:
@@ -7182,6 +7219,40 @@ def ass_dialogue_lines(events: list[CaptionEvent], duration: float, chars_per_li
         text = ass_escape_text(wrap_caption_text(event.text, chars_per_line, max_lines))
         lines.append(f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Default,,0,0,0,,{text}")
     return lines
+
+
+def ass_animated_dialogue_lines(events: list[CaptionEvent], duration: float, chars_per_line: int) -> list[str]:
+    lines: list[str] = []
+    for event in animated_caption_word_events(events, duration, chars_per_line):
+        start = min(max(event.start, 0.0), duration)
+        end = min(max(event.end, start + 0.1), duration)
+        text = ass_escape_text(event.text)
+        pop = r"{\fad(25,70)\t(0,90,\fscx108\fscy108)\t(90,170,\fscx100\fscy100)}"
+        lines.append(f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Default,,0,0,0,,{pop}{text}")
+    return lines
+
+
+def animated_caption_word_events(events: list[CaptionEvent], duration: float, chars_per_line: int) -> list[CaptionEvent]:
+    result: list[CaptionEvent] = []
+    max_word_length = max(8, min(chars_per_line, 18))
+    for event in events:
+        words = split_animated_caption_words(event.text, max_word_length)
+        if not words:
+            continue
+        start = clamp(event.start, 0.0, duration)
+        end = clamp(event.end, start + 0.12, duration)
+        slot = (end - start) / max(len(words), 1)
+        for index, word in enumerate(words):
+            word_start = start + (index * slot)
+            word_end = end if index == len(words) - 1 else start + ((index + 1) * slot)
+            if word_end - word_start >= 0.08:
+                result.append(CaptionEvent(round(word_start, 3), round(word_end, 3), word))
+    return result
+
+
+def split_animated_caption_words(text: str, max_word_length: int) -> list[str]:
+    words = [word.strip() for word in re.split(r"\s+", text) if word.strip()]
+    return [word if len(word) <= max_word_length else f"{word[:max_word_length - 1]}..." for word in words]
 
 
 def wrap_caption_text(text: str, chars_per_line: int, max_lines: int) -> str:
@@ -11557,6 +11628,8 @@ body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,
 .card[open] .editor-shell{grid-template-columns:minmax(210px,260px) minmax(340px,1fr) minmax(260px,330px);gap:14px;align-items:start;padding:0 18px 18px;margin-top:-10px}.card[open] .editor-preview{grid-column:2}.publish-panel{display:grid;gap:10px;align-content:start;min-width:0;max-height:72vh;overflow:auto;padding:12px;border:1px solid rgba(231,231,232,.12);border-radius:12px;background:linear-gradient(180deg,rgba(231,231,232,.075),rgba(231,231,232,.025)),rgba(5,5,5,.52);box-shadow:inset 0 1px rgba(255,255,255,.08),0 12px 34px rgba(0,0,0,.24);backdrop-filter:blur(16px) saturate(1.1)}.publish-panel strong{color:rgba(231,231,232,.72);font-size:11px;letter-spacing:.08em;text-transform:uppercase}.publish-panel h2{margin:0;color:var(--color-text);font-size:17px;line-height:1.18;letter-spacing:0}.publish-panel p{margin:0;color:rgba(231,231,232,.72);font-size:12px;line-height:1.38}.publish-panel small{color:rgba(231,231,232,.5);font-size:11px;line-height:1.34}.publish-cover-frame{position:relative;overflow:hidden;aspect-ratio:9/16;border:1px solid rgba(231,231,232,.1);border-radius:8px;background:#050505}.publish-cover-frame img{display:block;width:100%;height:100%;object-fit:cover}.publish-cover-frame span{display:block;width:100%;height:100%;background:linear-gradient(135deg,rgba(17,162,207,.18),rgba(175,207,42,.08))}.publish-cover-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.publish-cover-options button{min-height:58px;padding:2px;border:1px solid rgba(231,231,232,.14);border-radius:8px;background:rgba(0,0,0,.38);overflow:hidden}.publish-cover-options button.active{border-color:rgba(175,207,42,.82);box-shadow:0 0 0 2px rgba(175,207,42,.16)}.publish-cover-options img{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:5px}.publish-hook{padding:9px 10px;border-left:3px solid rgba(175,207,42,.78);border-radius:8px;background:rgba(175,207,42,.075);color:var(--color-text)!important;font-weight:800}.publish-tags{display:flex;gap:6px;flex-wrap:wrap}.publish-tags span{display:inline-flex;align-items:center;min-height:24px;max-width:100%;padding:4px 7px;border:1px solid rgba(17,162,207,.24);border-radius:999px;background:rgba(17,162,207,.09);color:rgba(231,231,232,.84);font-size:11px;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr);margin-top:0}.card[open] .editor-preview{grid-column:1}.publish-panel{max-height:none}.publish-cover-panel{grid-row:2}.publish-copy-panel{grid-row:3}.publish-cover-frame{max-width:180px}}@media(max-width:860px){.card[open] .editor-shell{padding:0 12px 16px}.publish-panel{border-radius:10px}.publish-cover-frame{max-width:150px}}
 .card[open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(340px,calc(72vh * 9 / 16)) minmax(260px,330px);gap:8px;align-items:center;justify-content:center}.card[data-preview-format=facebook][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(390px,calc(72vh * 4 / 5)) minmax(260px,330px)}.card[data-preview-format=youtube][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(520px,720px) minmax(260px,330px)}.publish-panel{gap:9px;align-content:center;align-self:center;padding:11px}.publish-cover-panel{justify-self:end}.publish-copy-panel{justify-self:start}.publish-panel-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.publish-panel-head button{min-height:26px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-field{display:grid;gap:5px;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-field input,.publish-field textarea{width:100%;min-height:34px;padding:7px 9px;border:1px solid rgba(231,231,232,.14);border-radius:8px;background:rgba(0,0,0,.42);color:var(--color-text);font:inherit;font-size:12px;line-height:1.28;letter-spacing:0}.publish-field textarea{resize:vertical;min-height:72px}.publish-field input:focus,.publish-field textarea:focus{border-color:rgba(17,162,207,.58);outline:0;box-shadow:0 0 0 2px rgba(17,162,207,.16)}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr)}.publish-panel{align-content:start}.publish-cover-panel{justify-self:center}.publish-copy-panel{justify-self:stretch}}
 .publish-cover-stage{position:relative}.publish-cover-frame{touch-action:none}.publish-cover-frame[data-publish-cover-can-drag="1"]{cursor:grab}.publish-cover-frame[data-publish-cover-dragging="1"]{cursor:grabbing}.publish-cover-frame>img{user-select:none;-webkit-user-drag:none;transform:scale(var(--publish-cover-zoom,1));transform-origin:var(--publish-cover-x,50%) var(--publish-cover-y,50%);transition:transform 120ms ease;will-change:transform}.publish-cover-frame[data-publish-cover-dragging="1"]>img{transition:none}.publish-cover-layer-list{position:absolute;inset:0;z-index:2;pointer-events:none}.publish-cover-layer{position:absolute;display:grid;align-items:center;min-height:24px;padding:5px 7px;border-radius:6px;color:var(--cover-layer-color,#fff);font-weight:800;line-height:1.05;overflow:hidden;text-overflow:ellipsis;cursor:move;pointer-events:auto;touch-action:none}.publish-cover-layer.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.publish-cover-layer span{overflow:hidden;text-overflow:ellipsis}.publish-cover-layer[data-cover-layer-kind=text]{background:rgba(var(--cover-layer-bg,0,0,0),var(--cover-layer-bg-opacity,.7))}.publish-cover-layer[data-cover-layer-kind=speech]{border-radius:11px;background:rgba(var(--cover-layer-bg,255,255,255),var(--cover-layer-bg-opacity,.94));box-shadow:0 8px 18px rgba(0,0,0,.22);color:var(--cover-layer-color,#050505);font-weight:900;overflow:visible}.publish-cover-layer[data-cover-layer-kind=speech]:after{position:absolute;left:18%;bottom:-8px;width:15px;height:12px;border-radius:0 0 14px 0;background:inherit;content:"";transform:skewX(-18deg)}.publish-cover-layer[data-cover-layer-kind=image]{padding:0;background:transparent}.publish-cover-layer[data-cover-layer-kind=image] img{display:block;width:100%;height:auto;object-fit:contain;transform:none;transform-origin:center;opacity:var(--cover-layer-opacity,1);pointer-events:none}.publish-cover-resize{position:absolute;right:2px;bottom:2px;width:18px;height:18px;padding:0;border:1px solid rgba(255,255,255,.56);border-radius:5px;background:rgba(0,0,0,.34);cursor:nwse-resize}.publish-cover-adjust{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.publish-cover-adjust label{display:grid;grid-template-columns:auto 1fr auto;gap:7px;align-items:center;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-cover-adjust output{min-width:38px;color:rgba(231,231,232,.84);font-size:11px;text-align:right}.publish-cover-adjust input{width:100%;accent-color:var(--color-brand-green)}.publish-cover-adjust button{min-height:28px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-cover-menu{z-index:7;width:min(320px,96%);max-height:min(380px,calc(100vh - 24px))}
+.preview-caption-layer{bottom:var(--preview-caption-bottom,16.25%)}.card[data-preview-format=facebook] .preview-caption-layer{bottom:var(--preview-caption-bottom,8.8%)}.card[data-preview-format=youtube] .preview-caption-layer{bottom:var(--preview-caption-bottom,11%)}.preview-caption-layer[data-mode=animated] span{display:inline-grid;place-items:center;max-width:min(92%,14em);padding:.14em .42em!important;border-radius:.24em;background:var(--preview-caption-bg,rgba(0,0,0,.82));font-size:calc(var(--preview-caption-size,28px) * .82);line-height:1;text-shadow:0 2px 8px rgba(0,0,0,.75);-webkit-text-stroke:0;white-space:nowrap;animation:cuted-caption-pop 180ms cubic-bezier(.2,.9,.2,1)}.preview-caption-layer[data-mode=animated] .preview-caption-pop{box-shadow:0 8px 22px rgba(0,0,0,.34),0 0 0 1px rgba(255,255,255,.12)}@keyframes cuted-caption-pop{0%{opacity:.72;transform:translateY(7px) scale(.88)}72%{opacity:1;transform:translateY(-3px) scale(1.08)}100%{opacity:1;transform:translateY(0) scale(1)}}
+.overlay-menu[data-overlay-menu-mode=add]{display:block;width:max-content;min-width:0;max-width:calc(100vw - 28px);max-height:none;overflow:visible;padding:6px;border-radius:999px;background:linear-gradient(135deg,rgba(17,162,207,.16),rgba(175,207,42,.08)),rgba(5,5,5,.9);box-shadow:0 12px 30px rgba(0,0,0,.42),0 0 18px rgba(17,162,207,.18);backdrop-filter:blur(18px) saturate(1.16)}.overlay-menu[data-overlay-menu-mode=add] .overlay-icon-actions{display:flex;gap:6px;align-items:center}.overlay-icon-action{display:grid!important;place-items:center;width:38px;height:38px;min-width:38px;min-height:38px;padding:0!important;border-radius:12px!important;background:rgba(231,231,232,.075)!important;color:rgba(231,231,232,.9)!important;font-size:11px!important;font-weight:950!important;letter-spacing:0!important;line-height:1!important}.overlay-icon-action:hover,.overlay-icon-action:focus-visible{border-color:rgba(175,207,42,.68)!important;color:var(--color-brand-green)!important;box-shadow:0 0 16px rgba(175,207,42,.2)}.publish-cover-menu[data-overlay-menu-mode=add]{width:max-content;max-height:none}.clip-control-surface .cuted-control-bar{min-height:82px}.clip-control-surface .cuted-render-zone{min-height:58px}.clip-control-surface .cuted-tool-group{flex-basis:330px;min-height:58px}.clip-control-surface .cuted-tile-button{flex-basis:54px;width:54px;height:50px;font-size:24px}.card[open] .clip-row-timeline.preview-camera-timeline--live .timeline-shell{min-height:214px}.card[open] .clip-row-timeline.preview-camera-timeline--live{min-height:216px;margin:-10px 0 0}
 """
 
 
@@ -11770,14 +11843,15 @@ function defaultCaptionSettings(){
 function normalizeCaptionSettings(value, fallback = null){
   const source = value && typeof value === "object" ? value : {};
   const base = fallback && typeof fallback === "object" ? fallback : defaultCaptionSettings();
+  const style = normalizeCaptionStyleObject(Object.assign({}, base.style || {}, source.style || {}));
   const enabled = Object.prototype.hasOwnProperty.call(source, "enabled")
     ? Boolean(source.enabled)
     : Object.prototype.hasOwnProperty.call(base, "enabled")
       ? Boolean(base.enabled)
       : captionEnabled();
   return {
-    enabled,
-    style: normalizeCaptionStyleObject(Object.assign({}, base.style || {}, source.style || {}))
+    enabled: style.mode === "off" ? false : enabled,
+    style: Object.assign(style, { mode: enabled ? style.mode === "off" ? "on" : style.mode : "off" })
   };
 }
 function normalizeCaptionStyleObject(value){
@@ -11785,9 +11859,18 @@ function normalizeCaptionStyleObject(value){
   return {
     size: clampNumber(Number(source.size || defaultCaptionSize()), 24, 140),
     width: clampNumber(Number(source.width || 28), 12, 56),
+    bottom: clampNumber(Number(source.bottom || source.height || defaultCaptionBottom()), 6, 32),
+    mode: normalizeCaptionMode(source.mode || source.captionMode),
     textColor: normalizeCaptionColor(source.textColor || source.text_color, "#ffffff"),
     backgroundColor: normalizeCaptionBackground(source.backgroundColor || source.background_color)
   };
+}
+function normalizeCaptionMode(value){
+  const mode = String(value || "").trim().toLowerCase();
+  if (mode === "animated" || mode === "animada") return "animated";
+  if (mode === "on" || mode === "static") return "on";
+  if (mode === "off" || mode === "false" || mode === "0") return "off";
+  return "on";
 }
 function defaultCamera(){ return cameraSequence(cameraParts.map(part => defaultCameraSegment(part.key))); }
 function defaultCameraSegment(part){ return { part, part_label: cameraPartLabel(part), key: "center", label: cameraMeta.center.label, strength: 60 }; }
@@ -13018,6 +13101,7 @@ function controlSurfaceStateForCard(card){
     aspectRatio: controlSurfaceAspectRatio(platform),
     bumpers: bumpersForRank(rank, platform),
     busy,
+    captionMode: edit.captions.style.mode,
     captionsEnabled: edit.captions.enabled,
     captionStyle: edit.captions.style,
     clipInfo: controlSurfaceClipInfo(card),
@@ -13119,15 +13203,19 @@ function setControlSurfaceCaptions(enabled, style = null){
     const rank = card.dataset.rank;
     const platform = activePlatformForRank(rank);
     const current = platformEditForRank(rank, platform).captions;
+    const nextStyle = normalizeCaptionStyleObject(Object.assign({}, style || current.style));
+    const nextEnabled = nextStyle.mode === "off" ? false : Boolean(enabled);
     setPlatformEditForRank(rank, platform, {
       captions: normalizeCaptionSettings({
-        enabled,
-        style: style || current.style
+        enabled: nextEnabled,
+        style: nextStyle
       }, current)
     });
   });
-  localStorage.setItem("cutted-caption-enabled", enabled ? "1" : "0");
-  storeCaptionStyle(style);
+  const nextMode = normalizeCaptionMode(style?.mode || (enabled ? "on" : "off"));
+  localStorage.setItem("cutted-caption-enabled", nextMode === "off" ? "0" : "1");
+  localStorage.setItem("cutted-caption-mode", nextMode);
+  storeCaptionStyle(Object.assign({}, style || {}, { mode: nextMode }));
   syncCaptionInputs();
   syncPreviewCaptionsForOpenCards();
   renderCaptionQueue();
@@ -13493,20 +13581,18 @@ function activeRankForLayer(layer){
   return card?.dataset.rank || "";
 }
 function overlayPlaceButtonsHtml(){
-  return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>Adicionar camada</strong><button data-overlay-close>Fechar</button></div>
-    <div class="overlay-menu-actions">
-      <button data-overlay-place-text>Texto</button>
-      <button data-overlay-place-speech>Fala</button>
-      <button data-overlay-place-image>Imagem transparente</button>
-      <button data-overlay-place-camera>Camera</button>
+  return `<div class="overlay-icon-actions" aria-label="Adicionar camada">
+      <button class="overlay-icon-action" data-overlay-place-text type="button" aria-label="Texto" title="Texto"><span aria-hidden="true">T</span></button>
+      <button class="overlay-icon-action" data-overlay-place-speech type="button" aria-label="Fala" title="Fala"><span aria-hidden="true">F</span></button>
+      <button class="overlay-icon-action" data-overlay-place-image type="button" aria-label="Imagem transparente" title="Imagem"><span aria-hidden="true">IMG</span></button>
+      <button class="overlay-icon-action" data-overlay-place-camera type="button" aria-label="Camera" title="Camera"><span aria-hidden="true">CAM</span></button>
     </div>`;
 }
 function coverPlaceButtonsHtml(){
-  return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>Adicionar na capa</strong><button data-overlay-close>Fechar</button></div>
-    <div class="overlay-menu-actions">
-      <button data-publish-cover-add="text">Texto</button>
-      <button data-publish-cover-add="speech">Fala</button>
-      <button data-publish-cover-add="image">Imagem transparente</button>
+  return `<div class="overlay-icon-actions overlay-icon-actions-cover" aria-label="Adicionar na capa">
+      <button class="overlay-icon-action" data-publish-cover-add="text" type="button" aria-label="Texto" title="Texto"><span aria-hidden="true">T</span></button>
+      <button class="overlay-icon-action" data-publish-cover-add="speech" type="button" aria-label="Fala" title="Fala"><span aria-hidden="true">F</span></button>
+      <button class="overlay-icon-action" data-publish-cover-add="image" type="button" aria-label="Imagem transparente" title="Imagem"><span aria-hidden="true">IMG</span></button>
     </div>`;
 }
 function overlayInspectorHtml(layer){
@@ -13797,6 +13883,7 @@ function showOverlayAddMenu(card, left, top){
   const menu = card.querySelector("[data-overlay-menu]");
   if (!surface || !menu) return;
   menu.innerHTML = overlayPlaceButtonsHtml();
+  menu.dataset.overlayMenuMode = "add";
   bindOverlayMenuBasics(card);
   menu.querySelector("[data-overlay-place-text]")?.addEventListener("click", event => {
     event.preventDefault();
@@ -13852,6 +13939,7 @@ function showOverlayInspectorForLayer(card, layerId, left = null, top = null){
   if (!layer) return;
   card.dataset.selectedOverlayLayer = layer.id;
   menu.innerHTML = overlayInspectorHtml(layer);
+  menu.dataset.overlayMenuMode = "inspect";
   bindOverlayMenuBasics(card);
   bindOverlayInspectorControls(card, layer, platform);
   const box = card.querySelector(`[data-overlay-layer="${CSS.escape(layer.id)}"]`);
@@ -14277,6 +14365,7 @@ function showPublishCoverAddMenu(card, clientX, clientY){
   card.dataset.coverMenuY = String(point.y);
   delete card.dataset.selectedCoverLayer;
   menu.innerHTML = coverPlaceButtonsHtml();
+  menu.dataset.overlayMenuMode = "add";
   bindPublishCoverMenuBasics(card);
   bindPublishCoverAddButtons(card);
   positionOverlayMenu(surface, menu, point.left, point.top);
@@ -14296,6 +14385,7 @@ function showPublishCoverInspector(card, layerId){
   const layer = selectedCoverLayerForCard(card);
   if (!layer) return;
   menu.innerHTML = coverInspectorHtml(layer);
+  menu.dataset.overlayMenuMode = "inspect";
   bindPublishCoverMenuBasics(card);
   bindPublishCoverInspectorControls(card, layer);
   menu.hidden = false;
@@ -16479,6 +16569,20 @@ function defaultCaptionSize(){
   const format = document.body.dataset.format || "tiktok";
   return format === "youtube" || format === "facebook" ? 54 : 72;
 }
+function captionBottom(){
+  return Number(localStorage.getItem("cutted-caption-bottom") || defaultCaptionBottom());
+}
+function defaultCaptionBottom(){
+  const format = document.body.dataset.format || "tiktok";
+  if (format === "youtube") return 11;
+  if (format === "facebook") return 9;
+  return 16;
+}
+function captionMode(){
+  const saved = localStorage.getItem("cutted-caption-mode");
+  if (saved === "animated" || saved === "on" || saved === "off") return saved;
+  return localStorage.getItem("cutted-caption-enabled") === "0" ? "off" : "on";
+}
 function captionTextColor(){
   return normalizeCaptionColor(localStorage.getItem("cutted-caption-text-color"), "#ffffff");
 }
@@ -16489,12 +16593,14 @@ function captionStyle(){
   return {
     size: captionSize(),
     width: captionWidth(),
+    bottom: captionBottom(),
+    mode: captionMode(),
     textColor: captionTextColor(),
     backgroundColor: captionBackgroundColor()
   };
 }
 function captionEnabled(){
-  return localStorage.getItem("cutted-caption-enabled") !== "0";
+  return captionMode() !== "off";
 }
 function normalizeCaptionColor(value, fallback){
   const raw = String(value || "").trim();
@@ -16509,6 +16615,8 @@ function storeCaptionStyle(style){
   if (!style || typeof style !== "object") return;
   if (Number.isFinite(Number(style.size))) localStorage.setItem("cutted-caption-size", String(clampNumber(Number(style.size), 24, 140)));
   if (Number.isFinite(Number(style.width))) localStorage.setItem("cutted-caption-width", String(clampNumber(Number(style.width), 12, 56)));
+  if (Number.isFinite(Number(style.bottom))) localStorage.setItem("cutted-caption-bottom", String(clampNumber(Number(style.bottom), 6, 32)));
+  if (style.mode) localStorage.setItem("cutted-caption-mode", normalizeCaptionMode(style.mode));
   if (style.textColor) localStorage.setItem("cutted-caption-text-color", normalizeCaptionColor(style.textColor, captionTextColor()));
   if (style.backgroundColor) localStorage.setItem("cutted-caption-background-color", normalizeCaptionBackground(style.backgroundColor));
 }
@@ -16529,14 +16637,19 @@ function syncPreviewCaptions(card, time = null){
     layer.innerHTML = "";
     return;
   }
-  const event = previewCaptionEventForCard(card, time);
-  if (!event) {
+  const context = previewCaptionContextForCard(card, time);
+  if (!context?.event) {
     layer.dataset.visible = "false";
     layer.innerHTML = "";
     return;
   }
-  const lines = wrapPreviewCaptionLines(event.text, captions.style.width, captionLines());
-  layer.innerHTML = `<span>${lines.map(escapeHtml).join("<br>")}</span>`;
+  layer.dataset.mode = captions.style.mode === "animated" ? "animated" : "static";
+  if (captions.style.mode === "animated") {
+    layer.innerHTML = previewAnimatedCaptionHtml(context.event, context.position);
+  } else {
+    const lines = wrapPreviewCaptionLines(context.event.text, captions.style.width, captionLines());
+    layer.innerHTML = `<span>${lines.map(escapeHtml).join("<br>")}</span>`;
+  }
   layer.dataset.visible = "true";
 }
 function applyPreviewCaptionStyle(card, layer){
@@ -16546,6 +16659,7 @@ function applyPreviewCaptionStyle(card, layer){
   const platformWidth = previewCaptionPlatformWidth(card);
   const fontSize = mediaWidth > 0 ? clampNumber((style.size / platformWidth) * mediaWidth, 14, 72) : style.size;
   layer.style.setProperty("--preview-caption-size", `${fontSize.toFixed(2)}px`);
+  layer.style.setProperty("--preview-caption-bottom", `${clampNumber(Number(style.bottom || defaultCaptionBottom()), 6, 32).toFixed(1)}%`);
   layer.style.setProperty("--preview-caption-color", style.textColor);
   layer.style.setProperty("--preview-caption-bg", captionBackgroundCss(style.backgroundColor));
   layer.style.setProperty("--preview-caption-padding", style.backgroundColor === "transparent" ? "0" : ".12em .28em");
@@ -16560,6 +16674,9 @@ function captionBackgroundCss(value){
   return `${color}cc`;
 }
 function previewCaptionEventForCard(card, time = null){
+  return previewCaptionContextForCard(card, time)?.event || null;
+}
+function previewCaptionContextForCard(card, time = null){
   const moment = previewMomentForCard(card);
   if (!moment) return null;
   const row = adjustedMoment(moment);
@@ -16570,7 +16687,8 @@ function previewCaptionEventForCard(card, time = null){
   const raw = time === null && video && Number.isFinite(video.currentTime) ? video.currentTime : time;
   const current = clampPreviewTime(values, Number(raw ?? values.trimStart));
   const position = Math.max(0, current - values.trimStart);
-  return events.find(event => position >= event.start && position < event.end) || null;
+  const event = events.find(item => position >= item.start && position < item.end) || null;
+  return event ? { event, position } : null;
 }
 function previewMomentForCard(card){
   const rank = String(card?.dataset?.rank || "");
@@ -16586,7 +16704,7 @@ function previewCaptionEvents(row){
 function previewCaptionEventsFromSegments(row){
   const segments = Array.isArray(row.caption_segments) ? row.caption_segments : [];
   const clipStart = Number(row.adjusted_start || row.start || 0);
-  const clipEnd = Number(row.adjusted_end || row.end || clipStart);
+  const clipEnd = Number(row.adjusted_end || row.end || (clipStart + Number(row.adjusted_duration || 0)));
   return segments.map(item => previewCaptionEventFromSegment(item, clipStart, clipEnd)).filter(Boolean);
 }
 function previewCaptionEventFromSegment(item, clipStart, clipEnd){
@@ -16615,6 +16733,14 @@ function distributedPreviewCaptionEvents(chunks, duration){
     end: Number((index === chunks.length - 1 ? duration : (index + 1) * slot).toFixed(3)),
     text
   }));
+}
+function previewAnimatedCaptionHtml(event, position){
+  const words = String(event.text || "").split(/\\s+/).filter(Boolean);
+  if (!words.length) return "";
+  const progress = clampNumber((position - event.start) / Math.max(event.end - event.start, .1), 0, .999);
+  const index = clampNumber(Math.floor(progress * words.length), 0, words.length - 1);
+  const word = words[index] || words[0];
+  return `<span class="preview-caption-pop" data-caption-pop-key="${event.start.toFixed(2)}-${index}">${escapeHtml(word)}</span>`;
 }
 function previewCaptionSourceText(row){
   const transcript = String(row.transcript || "").trim();
@@ -16743,10 +16869,11 @@ function syncCaptionInputs(){
   document.querySelectorAll("[data-caption-lines]").forEach(input => { input.value = String(captionLines()); });
   document.querySelectorAll("[data-caption-width]").forEach(input => { input.value = String(captionWidth()); });
   document.querySelectorAll("[data-caption-size]").forEach(input => { input.value = String(captionSize()); });
+  document.querySelectorAll("[data-caption-bottom]").forEach(input => { input.value = String(captionBottom()); });
   document.querySelectorAll("[data-caption-text-color]").forEach(input => { input.value = captionTextColor(); });
   document.querySelectorAll("[data-caption-background-color]").forEach(input => { input.value = captionBackgroundColor() === "transparent" ? "#000000" : captionBackgroundColor(); });
   document.querySelectorAll("[data-caption-enabled]").forEach(input => { input.checked = captionEnabled(); });
-  document.querySelectorAll("[data-caption-current]").forEach(item => { item.textContent = captionEnabled() ? "Ativada" : "Desligada"; });
+  document.querySelectorAll("[data-caption-current]").forEach(item => { item.textContent = captionMode() === "animated" ? "Animada" : captionEnabled() ? "Ativada" : "Desligada"; });
 }
 function captionCommand(){
   const chars = captionWidth();
@@ -17231,6 +17358,8 @@ function clearNewProjectState(){
   localStorage.removeItem("cutted-caption-lines");
   localStorage.removeItem("cutted-caption-width");
   localStorage.removeItem("cutted-caption-size");
+  localStorage.removeItem("cutted-caption-bottom");
+  localStorage.removeItem("cutted-caption-mode");
   localStorage.removeItem("cutted-caption-text-color");
   localStorage.removeItem("cutted-caption-background-color");
   localStorage.removeItem("cutted-caption-enabled");
@@ -17571,14 +17700,18 @@ document.querySelector("[data-render-results]")?.addEventListener("click", event
   if (!copyButton) return;
   copyResultPath(copyButton.dataset.copyPath || "", copyButton);
 });
-document.querySelectorAll("[data-caption-lines],[data-caption-width],[data-caption-size],[data-caption-text-color],[data-caption-background-color],[data-caption-enabled]").forEach(input => {
+document.querySelectorAll("[data-caption-lines],[data-caption-width],[data-caption-size],[data-caption-bottom],[data-caption-text-color],[data-caption-background-color],[data-caption-enabled]").forEach(input => {
   const update = () => {
     if (input.matches("[data-caption-lines]")) localStorage.setItem("cutted-caption-lines", input.value);
     if (input.matches("[data-caption-width]")) localStorage.setItem("cutted-caption-width", input.value);
     if (input.matches("[data-caption-size]")) localStorage.setItem("cutted-caption-size", input.value);
+    if (input.matches("[data-caption-bottom]")) localStorage.setItem("cutted-caption-bottom", input.value);
     if (input.matches("[data-caption-text-color]")) localStorage.setItem("cutted-caption-text-color", normalizeCaptionColor(input.value, "#ffffff"));
     if (input.matches("[data-caption-background-color]")) localStorage.setItem("cutted-caption-background-color", normalizeCaptionBackground(input.value));
-    if (input.matches("[data-caption-enabled]")) localStorage.setItem("cutted-caption-enabled", input.checked ? "1" : "0");
+    if (input.matches("[data-caption-enabled]")) {
+      localStorage.setItem("cutted-caption-enabled", input.checked ? "1" : "0");
+      localStorage.setItem("cutted-caption-mode", input.checked ? "on" : "off");
+    }
     syncCaptionInputs();
     syncPreviewCaptionsForOpenCards();
     renderFinalStage();
