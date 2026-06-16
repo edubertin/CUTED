@@ -295,6 +295,10 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIn("function speechOverlayTimingForCard", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("syncTimedOverlayVisibility(card, current)", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("data-overlay-timeline", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("container.appendChild(track)", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("data-overlay-visible=false", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("setOverlayBoxVisibility", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("position:absolute;left:76px;right:76px;bottom:16px", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertNotIn("data-preview-volume-down", html)
         self.assertNotIn("data-preview-volume-up", html)
         self.assertNotIn("data-preview-volume-zero", html)
@@ -353,6 +357,32 @@ class CuttedCameraRuleTests(unittest.TestCase):
 
         self.assertIn("between(t,2.000,6.000)", rendered_text)
         self.assertIn("between(t,3.500,5.000)", rendered_image)
+
+    def test_materialized_image_overlay_keeps_timing_for_render(self) -> None:
+        image_bytes = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lzLqWQAAAABJRU5ErkJggg=="
+        )
+        layer = {
+            "kind": "image",
+            "label": "Logo",
+            "image_data_url": f"data:image/png;base64,{base64.b64encode(image_bytes).decode('ascii')}",
+            "start_seconds": 4.0,
+            "duration_seconds": 2.0,
+        }
+        data = {"caption_queue": [{"overlays": [layer]}]}
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            CUTTED.materialize_queue_image_assets(data, Path(tmp_dir))
+
+            self.assertTrue(Path(layer["image_file"]).exists())
+            self.assertEqual(layer["image_data_url"], "")
+            self.assertEqual(layer["start_seconds"], 4.0)
+            self.assertEqual(layer["duration_seconds"], 2.0)
+            rendered = CUTTED.image_overlay_compose_filter(
+                CUTTED.image_overlay_from_raw(layer), CUTTED.PLATFORM_PRESETS["tiktok"], "base", "img", "out"
+            )
+
+        self.assertIn("between(t,4.000,6.000)", rendered)
 
     def test_page_mounts_live_timeline_with_legacy_fallback(self) -> None:
         html = CUTTED.page_html(
