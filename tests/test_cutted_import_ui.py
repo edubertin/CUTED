@@ -240,7 +240,11 @@ class CuttedImportUiTests(unittest.TestCase):
             CUTTED.split_animated_caption_words(numeric, 18),
             ["eu", "ganhei", "10.000", "e", "paguei", "4.299,00", "em", "3.2", "segundos", "com", "80%", "pronto"],
         )
+        self.assertEqual(CUTTED.smart_animated_caption_words("amor de Deus", 18, 0.42), ["amor", "de Deus"])
+        self.assertEqual(CUTTED.smart_animated_caption_words("tipo eu tenho so de Deus", 18, 0.70), ["eu", "tenho", "so", "de Deus"])
+        self.assertEqual(CUTTED.smart_animated_caption_words("eu ganhei 10.000 de reais", 18, 0.72), ["eu", "ganhei", "10.000", "de reais"])
         self.assertIn("previewAnimatedCaptionCleanWord", source)
+        self.assertIn("previewSmartAnimatedCaptionWords", source)
         self.assertIn("spaceAfterPreviewCaptionPunctuation", source)
 
     def test_closed_caption_control_bar_menu_is_available(self) -> None:
@@ -306,8 +310,9 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("&H33181311,&H33181311", ass)
         self.assertIn("Style: CaptionActive", ass)
         self.assertIn("Style: CaptionSide", ass)
+        self.assertIn("Style: CaptionBox", ass)
         self.assertIn(",3,6,0,5,80,80,346,1", ass)
-        self.assertIn(",3,7,0,5,80,80,346,1", ass)
+        self.assertIn(",1,7,0,5,80,80,346,1", ass)
         self.assertIn(",3,7,0,2,80,80,346,1", ass)
         self.assertIn("fala", ass)
         self.assertNotIn("Fala", ass)
@@ -322,6 +327,15 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("\\fscx112", ass)
         self.assertIn("\\pos(540,", ass)
         self.assertIn("CaptionActive", ass)
+        self.assertIn("\\p1\\1c&H00CCFF&\\1a&H33&", ass)
+        self.assertIn("\\bord2\\3c&HFFFFFF&\\3a&HE0", ass)
+        self.assertEqual(CUTTED.ass_alpha_from_opacity(0.80), "33")
+        self.assertEqual(CUTTED.ass_alpha_from_opacity(0.12), "E0")
+        self.assertIn("Dialogue: 3", ass)
+        self.assertIn(",CaptionBox,,0,0,0,,{\\an7\\pos(", ass)
+        self.assertNotIn(",CaptionBox,,0,0,0,,{\\an5", ass)
+        self.assertNotRegex(ass, r"Dialogue: [12],[^\\n]+,Default,,0,0,0,,\\{[^}]*\\p1")
+        self.assertNotRegex(ass, r"\\p1[^\\n]+\\fscx112")
 
     def test_animated_caption_timing_weights_words_and_punctuation(self) -> None:
         timings = CUTTED.animated_caption_word_timings(["e", "sincronizacao", "fim."], 0.0, 3.0)
