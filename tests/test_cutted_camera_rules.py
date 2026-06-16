@@ -310,10 +310,21 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIn("width:clamp(16px,var(--overlay-time-width),24px)", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("height:26px;min-width:16px;min-height:26px", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn(".overlay-timeline-item:before", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("data-publish-cover-stage", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("data-publish-cover-menu", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn('data-publish-cover-add="text"', CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn('data-publish-cover-add="speech"', CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn('data-publish-cover-add="image"', CUTTED.page_html("Teste", html, "{}", ""))
-        self.assertIn("data-publish-cover-inspector", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function coverPlaceButtonsHtml", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function showPublishCoverAddMenu", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function closePublishCoverMenu", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("const coverLayerVerticalLift = .30", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function liftedCoverLayerY", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("bottom:16.25%", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("bottom:8.8%", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("bottom:11%", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertNotIn("publish-cover-tools", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertNotIn("data-publish-cover-inspector", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("data-publish-cover-image", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("data-publish-cover-layer-list", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("function addPublishCoverLayer", CUTTED.page_html("Teste", html, "{}", ""))
@@ -362,6 +373,15 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIn("drawtext", rendered)
         self.assertIn("O clima esquentou", rendered)
         self.assertIn("between(t,1.250,3.750)", rendered)
+
+    def test_caption_render_margin_is_lifted(self) -> None:
+        tiktok = CUTTED.PLATFORM_PRESETS["tiktok"]
+        youtube = CUTTED.PLATFORM_PRESETS["youtube"]
+
+        self.assertEqual(CUTTED.caption_margin_v(tiktok), 313)
+        self.assertEqual(CUTTED.caption_margin_v(youtube), 119)
+        self.assertIn(",2,80,80,313,1", CUTTED.ass_style_line(tiktok))
+        self.assertIn(",2,80,80,119,1", CUTTED.ass_style_line(youtube))
 
     def test_timed_overlay_contract_applies_to_text_and_image(self) -> None:
         text = CUTTED.overlay_layer_from_raw({
@@ -439,6 +459,7 @@ class CuttedCameraRuleTests(unittest.TestCase):
 
         self.assertEqual(layers[0]["start_seconds"], 0.0)
         self.assertEqual(layers[0]["duration_seconds"], 9999.0)
+        self.assertEqual(layers[0]["y"], 0.0)
         self.assertIn("scale=1350:2400:force_original_aspect_ratio=increase", rendered)
         self.assertIn("crop=1080:1920", rendered)
         self.assertIn("Capa forte", rendered)

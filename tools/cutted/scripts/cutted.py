@@ -189,6 +189,8 @@ PUBLISH_CLIP_TEXT_LIMIT = 900
 PUBLISH_SOURCE_TEXT_LIMIT = 1800
 PUBLISH_MAX_HASHTAGS = 6
 PUBLISH_DEFAULT_HASHTAGS = ["#Podcast", "#Cortes"]
+CUTTED_CAPTION_BOTTOM_OFFSET_MULTIPLIER = 1.25
+COVER_LAYER_VERTICAL_LIFT = 0.30
 MAX_SELECTION_OVERLAP = 0.35
 MAX_SELECTION_TEXT_SIMILARITY = 0.72
 SELECTION_CLUSTER_SECONDS = 120.0
@@ -7116,7 +7118,7 @@ def ass_document_with_style(
 def ass_style_line(preset: PlatformPreset, style: dict[str, object] | None = None) -> str:
     style = style or {}
     font_size = int(style.get("size") or (72 if preset.height >= 1600 else 54))
-    margin_v = 250 if preset.height >= 1600 else 95
+    margin_v = caption_margin_v(preset)
     outline = 7 if preset.height >= 1600 else 5
     primary = ass_color(str(style.get("text_color") or "#ffffff"), "00")
     background = str(style.get("background_color") or "transparent")
@@ -7127,6 +7129,11 @@ def ass_style_line(preset: PlatformPreset, style: dict[str, object] | None = Non
         f"{font_size},{primary},&H0000FFFF,&H00000000,{back_color},-1,0,0,0,100,100,0,0,{border_style},"
         f"{outline},0,2,80,80,{margin_v},1"
     )
+
+
+def caption_margin_v(preset: PlatformPreset) -> int:
+    base_margin = 250 if preset.height >= 1600 else 95
+    return int(base_margin * CUTTED_CAPTION_BOTTOM_OFFSET_MULTIPLIER + 0.5)
 
 
 def caption_style_from_row(row: dict[str, object], preset: PlatformPreset) -> dict[str, object]:
@@ -7535,9 +7542,14 @@ def cover_overlay_layers(cover: dict[str, object]) -> list[dict[str, object]]:
 
 def static_cover_overlay_layer(layer: dict[str, object]) -> dict[str, object]:
     normalized = overlay_layer_from_raw(layer)
+    normalized["y"] = lifted_cover_layer_y(float(normalized.get("y") or 0.0))
     normalized["start_seconds"] = 0.0
     normalized["duration_seconds"] = 9999.0
     return normalized
+
+
+def lifted_cover_layer_y(y: float) -> float:
+    return clamp(y - COVER_LAYER_VERTICAL_LIFT, 0.0, 1.0)
 
 
 def render_platform_clip(
@@ -10520,20 +10532,16 @@ def publish_panels_html(moment: Moment) -> tuple[str, str]:
     return (
         f"""<aside class="publish-panel publish-cover-panel" data-publish-panel="cover">
           <strong>Capa IA</strong>
-          <div class="publish-cover-frame" data-publish-cover-preview>{cover_img}<div class="publish-cover-layer-list" data-publish-cover-layer-list></div></div>
+          <div class="publish-cover-stage" data-publish-cover-stage>
+            <div class="publish-cover-frame" data-publish-cover-preview>{cover_img}<div class="publish-cover-layer-list" data-publish-cover-layer-list></div></div>
+            <div class="overlay-menu publish-cover-menu" data-publish-cover-menu hidden></div>
+          </div>
           <div class="publish-cover-adjust">
             <label>Zoom <output data-publish-cover-zoom-value>{cover_zoom}%</output>
               <input data-publish-cover-zoom type="range" min="100" max="180" step="5" value="{cover_zoom}">
             </label>
             <button type="button" data-publish-cover-zoom-reset title="Restaurar zoom">Reset</button>
           </div>
-          <div class="publish-cover-tools">
-            <button type="button" data-publish-cover-add="text">Texto</button>
-            <button type="button" data-publish-cover-add="speech">Fala</button>
-            <button type="button" data-publish-cover-add="image">Imagem</button>
-            <small data-publish-cover-layer-count>0 camadas</small>
-          </div>
-          <div class="publish-cover-inspector" data-publish-cover-inspector hidden></div>
           <input data-publish-cover-image type="file" accept="image/png,image/webp,image/jpeg" hidden>
           {cover_options}
           <p>{reason}</p>
@@ -11468,7 +11476,7 @@ main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-stack{display:grid;gap:10px}.tool-section{border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:0;overflow:hidden}.tool-section>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:10px 12px;cursor:pointer;list-style:none;color:var(--color-text);font-weight:800}.tool-section>summary::-webkit-details-marker{display:none}.tool-section>summary:after{content:"";width:8px;height:8px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg);opacity:.62;transition:transform .16s ease}.tool-section[open]>summary:after{transform:rotate(225deg)}.tool-section>summary small{color:var(--color-text-muted);font-size:12px;font-weight:600;text-align:right}.tool-section[open]>summary{border-bottom:1px solid rgba(231,231,232,.08)}.tool-section>*:not(summary){margin:12px}.timeline-editor{padding:0}.timeline-head,.timeline-timebar,.timeline-values{display:flex;justify-content:space-between;gap:12px;color:var(--color-text-muted);font-size:12px}.timeline-head output,.timeline-timebar output{color:var(--color-text);text-align:right}.timeline-timebar{margin-top:10px}.timeline-timebar span:last-child{color:#777;text-align:right}.timeline-scrub{position:relative;height:42px;margin-top:8px}.timeline-scrub-track{position:absolute;left:0;right:0;top:17px;height:8px;border:1px solid #343434;border-radius:999px;background:linear-gradient(90deg,var(--color-surface-muted),#252525);overflow:hidden}.timeline-selected{position:absolute;top:0;bottom:0;background:rgba(175,207,42,.22);border-left:1px solid var(--color-brand-green);border-right:1px solid var(--color-brand-green)}.timeline-playhead{position:absolute;top:-8px;bottom:-8px;width:2px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7)}.timeline-playhead:before{content:"";position:absolute;left:50%;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--color-brand-white);transform:translateX(-50%)}.timeline-scrub input{position:absolute;inset:0;width:100%;height:42px;margin:0;background:transparent;opacity:0;cursor:pointer}.timeline{position:relative;height:38px;margin-top:6px}.timeline-track{position:absolute;left:0;right:0;top:16px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:var(--color-brand-white);border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:38px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{margin-top:6px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .export-dock{display:grid;gap:8px;margin-top:2px;padding:12px;border:1px solid #303030;border-radius:8px;background:#111}.export-dock strong{display:block;font-size:13px}.export-dock span{color:#a8a8a8;font-size:12px}
 .platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:var(--color-text);border-color:var(--color-brand-green)}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.effect-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.75fr);gap:10px}.effect-subpanel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.effect-subpanel strong{font-size:12px}.bumper-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.bumper-upload{display:grid;gap:6px;align-content:start;min-height:64px;padding:9px;border:1px dashed var(--color-border-strong);border-radius:8px;background:var(--color-surface-control);cursor:pointer}.bumper-upload input{font-size:11px}.bumper-strip{display:flex;gap:6px;flex-wrap:wrap;min-height:28px}.bumper-empty{color:var(--color-text-muted);font-size:12px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:var(--color-brand-blue)}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.camera-path-editor,.camera-manual-panel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-path-head,.camera-panel-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.camera-path-head strong,.camera-panel-title strong{font-size:12px}.camera-path-head span,.camera-panel-title span{color:var(--color-text-muted);font-size:12px}.camera-smart-panel{display:grid;gap:9px;padding:10px;border:1px solid rgba(17,162,207,.28);border-radius:8px;background:linear-gradient(135deg,rgba(17,162,207,.12),rgba(175,207,42,.06))}.camera-smart-row,.camera-smart-ai{display:grid;gap:8px}.camera-smart-row{grid-template-columns:repeat(3,minmax(0,1fr))}.camera-smart-ai{grid-template-columns:repeat(5,minmax(0,1fr))}.camera-smart-panel button{display:grid;gap:3px;justify-items:center;background:rgba(17,162,207,.1);color:var(--color-text);border:1px solid rgba(17,162,207,.34);text-align:center}.camera-smart-panel button:hover{border-color:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.14)}.camera-path-track{position:relative;height:34px}.camera-path-rail{position:absolute;left:0;right:0;top:15px;height:5px;border-radius:999px;background:#292929}.camera-path-marker{position:absolute;top:7px;width:20px;height:20px;min-width:20px;padding:0;border-radius:999px;transform:translateX(-50%);background:var(--color-surface-control);border:1px solid var(--color-border-strong)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:var(--color-brand-blue);box-shadow:0 0 0 4px rgba(17,162,207,.18)}.camera-path-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-keyframe-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}.camera-auto-status{min-height:18px;color:var(--color-text-muted);font-size:12px}.camera-path-delete{color:var(--color-danger)!important}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:minmax(160px,1fr) 120px 150px;gap:12px;max-width:none}.caption-toggle{align-content:center}.caption-toggle input{justify-self:start;width:auto;min-height:20px;accent-color:var(--color-brand-blue)}
-.camera-smart-panel p{margin:0;color:var(--color-text-muted);font-size:12px}.camera-smart-panel button span{color:var(--color-text-muted);font-size:11px}.camera-director-action{min-height:72px;background:linear-gradient(135deg,rgba(17,162,207,.32),rgba(231,231,232,.08))!important;border-color:rgba(17,162,207,.72)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 34px rgba(17,162,207,.1)}.camera-director-action strong{font-size:15px}.camera-smart-row button{min-height:54px}.camera-smart-ai button{min-height:50px}.camera-advanced{display:grid;gap:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.025)}.camera-advanced summary{display:flex;justify-content:space-between;gap:10px;align-items:center;cursor:pointer;color:var(--color-text-soft)}.camera-advanced summary small{color:var(--color-text-muted);font-size:12px}.camera-advanced[open] summary{padding-bottom:8px;border-bottom:1px solid rgba(231,231,232,.08)}.camera-advanced .camera-manual-panel{padding:0;border:0;background:transparent}.camera-surface video{position:relative;z-index:1;object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1),transform var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1)}.camera-surface[data-camera-cut=hard] video:not(.camera-fit-bg){transition:none}.camera-surface .camera-fit-bg{position:absolute!important;inset:-7%;z-index:0!important;width:114%!important;height:114%!important;display:none!important;object-fit:cover!important;object-position:center!important;transform:none!important;filter:blur(22px) saturate(.88) brightness(.62)!important;pointer-events:none}.camera-surface .camera-fit-logo{position:absolute;top:11%;left:50%;z-index:1;width:38%!important;max-width:240px;height:auto!important;display:none!important;object-fit:contain!important;object-position:center;background:transparent!important;transform:translateX(-50%);opacity:.9;pointer-events:none}.camera-surface[data-camera-fit=contain]{background:#050505}.camera-surface[data-camera-fit=contain] .camera-fit-bg{display:block!important}.camera-surface[data-camera-fit=contain] .camera-fit-logo{display:block!important}.camera-surface[data-camera-fit=contain] video:not(.camera-fit-bg){z-index:2;object-fit:contain;transform:none;transform-origin:center;background:transparent}.camera-reticle{position:absolute;inset:14% 22%;z-index:3;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}.preview-caption-layer{position:absolute;left:7.4%;right:7.4%;bottom:13%;z-index:4;display:grid;justify-items:center;pointer-events:none;opacity:0;transform:translateY(8px);transition:opacity 120ms ease,transform 120ms ease}.preview-caption-layer[data-visible=true]{opacity:1;transform:translateY(0)}.preview-caption-layer span{display:block;max-width:100%;color:#fff;font-family:Arial,sans-serif;font-size:clamp(18px,6.67cqw,36px);font-weight:900;line-height:1.08;text-align:center;text-shadow:0 2px 0 #000,0 -2px 0 #000,2px 0 0 #000,-2px 0 0 #000,0 0 12px rgba(0,0,0,.9),0 8px 22px rgba(0,0,0,.66);-webkit-text-stroke:clamp(1.2px,.44cqw,2.4px) rgba(0,0,0,.88);paint-order:stroke fill;text-transform:none;white-space:normal}.card[data-preview-format=facebook] .preview-caption-layer{bottom:7.05%}.card[data-preview-format=facebook] .preview-caption-layer span{font-size:clamp(18px,5cqw,34px);-webkit-text-stroke:clamp(1.1px,.38cqw,2px) rgba(0,0,0,.88)}.card[data-preview-format=youtube] .preview-caption-layer{bottom:8.8%}.card[data-preview-format=youtube] .preview-caption-layer span{font-size:clamp(18px,2.82cqw,32px);-webkit-text-stroke:clamp(1px,.26cqw,1.8px) rgba(0,0,0,.88)}
+.camera-smart-panel p{margin:0;color:var(--color-text-muted);font-size:12px}.camera-smart-panel button span{color:var(--color-text-muted);font-size:11px}.camera-director-action{min-height:72px;background:linear-gradient(135deg,rgba(17,162,207,.32),rgba(231,231,232,.08))!important;border-color:rgba(17,162,207,.72)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 34px rgba(17,162,207,.1)}.camera-director-action strong{font-size:15px}.camera-smart-row button{min-height:54px}.camera-smart-ai button{min-height:50px}.camera-advanced{display:grid;gap:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.025)}.camera-advanced summary{display:flex;justify-content:space-between;gap:10px;align-items:center;cursor:pointer;color:var(--color-text-soft)}.camera-advanced summary small{color:var(--color-text-muted);font-size:12px}.camera-advanced[open] summary{padding-bottom:8px;border-bottom:1px solid rgba(231,231,232,.08)}.camera-advanced .camera-manual-panel{padding:0;border:0;background:transparent}.camera-surface video{position:relative;z-index:1;object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1),transform var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1)}.camera-surface[data-camera-cut=hard] video:not(.camera-fit-bg){transition:none}.camera-surface .camera-fit-bg{position:absolute!important;inset:-7%;z-index:0!important;width:114%!important;height:114%!important;display:none!important;object-fit:cover!important;object-position:center!important;transform:none!important;filter:blur(22px) saturate(.88) brightness(.62)!important;pointer-events:none}.camera-surface .camera-fit-logo{position:absolute;top:11%;left:50%;z-index:1;width:38%!important;max-width:240px;height:auto!important;display:none!important;object-fit:contain!important;object-position:center;background:transparent!important;transform:translateX(-50%);opacity:.9;pointer-events:none}.camera-surface[data-camera-fit=contain]{background:#050505}.camera-surface[data-camera-fit=contain] .camera-fit-bg{display:block!important}.camera-surface[data-camera-fit=contain] .camera-fit-logo{display:block!important}.camera-surface[data-camera-fit=contain] video:not(.camera-fit-bg){z-index:2;object-fit:contain;transform:none;transform-origin:center;background:transparent}.camera-reticle{position:absolute;inset:14% 22%;z-index:3;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}.preview-caption-layer{position:absolute;left:7.4%;right:7.4%;bottom:16.25%;z-index:4;display:grid;justify-items:center;pointer-events:none;opacity:0;transform:translateY(8px);transition:opacity 120ms ease,transform 120ms ease}.preview-caption-layer[data-visible=true]{opacity:1;transform:translateY(0)}.preview-caption-layer span{display:block;max-width:100%;color:#fff;font-family:Arial,sans-serif;font-size:clamp(18px,6.67cqw,36px);font-weight:900;line-height:1.08;text-align:center;text-shadow:0 2px 0 #000,0 -2px 0 #000,2px 0 0 #000,-2px 0 0 #000,0 0 12px rgba(0,0,0,.9),0 8px 22px rgba(0,0,0,.66);-webkit-text-stroke:clamp(1.2px,.44cqw,2.4px) rgba(0,0,0,.88);paint-order:stroke fill;text-transform:none;white-space:normal}.card[data-preview-format=facebook] .preview-caption-layer{bottom:8.8%}.card[data-preview-format=facebook] .preview-caption-layer span{font-size:clamp(18px,5cqw,34px);-webkit-text-stroke:clamp(1.1px,.38cqw,2px) rgba(0,0,0,.88)}.card[data-preview-format=youtube] .preview-caption-layer{bottom:11%}.card[data-preview-format=youtube] .preview-caption-layer span{font-size:clamp(18px,2.82cqw,32px);-webkit-text-stroke:clamp(1px,.26cqw,1.8px) rgba(0,0,0,.88)}
 .card[data-effect=light-grain] .media video,.card[data-effect=light-grain] .media img{filter:contrast(1.08) brightness(1.02)}.card[data-effect=old-film] .media video,.card[data-effect=old-film] .media img{filter:sepia(.48) contrast(1.2) saturate(.62) brightness(.92)}.card[data-effect=vhs] .media video,.card[data-effect=vhs] .media img{filter:saturate(.62) contrast(1.22) brightness(.9) hue-rotate(-7deg)}.card[data-effect=bw-old] .media video,.card[data-effect=bw-old] .media img{filter:grayscale(1) contrast(1.22) brightness(.9)}.card[data-effect=light-grain] .media:after,.card[data-effect=old-film] .media:after,.card[data-effect=vhs] .media:after,.card[data-effect=bw-old] .media:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--effect-opacity,.24);background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 70% 65%,rgba(0,0,0,.95) 0 1px,transparent 1.8px);background-size:4px 4px,6px 6px;mix-blend-mode:overlay}.card[data-effect=old-film] .media:before,.card[data-effect=bw-old] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at center,transparent 44%,rgba(0,0,0,.46) 100%)}.card[data-effect=vhs] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 4px);mix-blend-mode:overlay}
 .camera-surface[data-camera-fit=contain] video:not(.camera-fit-bg){object-position:center}
 .preview-caption-layer span{padding:var(--preview-caption-padding,0);border-radius:.16em;background:var(--preview-caption-bg,transparent);color:var(--preview-caption-color,#fff);font-size:var(--preview-caption-size,clamp(18px,6.67cqw,36px));box-decoration-break:clone;-webkit-box-decoration-break:clone}
@@ -11548,7 +11556,7 @@ body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,
 .clip-control-surface .cuted-render-zone.is-ready .cuted-ready-region{flex:0 0 46px;width:46px;min-width:46px}.clip-control-surface .cuted-render-zone.is-ready .cuted-ready-pill{width:46px}
 .card[open] .editor-shell{grid-template-columns:minmax(210px,260px) minmax(340px,1fr) minmax(260px,330px);gap:14px;align-items:start;padding:0 18px 18px;margin-top:-10px}.card[open] .editor-preview{grid-column:2}.publish-panel{display:grid;gap:10px;align-content:start;min-width:0;max-height:72vh;overflow:auto;padding:12px;border:1px solid rgba(231,231,232,.12);border-radius:12px;background:linear-gradient(180deg,rgba(231,231,232,.075),rgba(231,231,232,.025)),rgba(5,5,5,.52);box-shadow:inset 0 1px rgba(255,255,255,.08),0 12px 34px rgba(0,0,0,.24);backdrop-filter:blur(16px) saturate(1.1)}.publish-panel strong{color:rgba(231,231,232,.72);font-size:11px;letter-spacing:.08em;text-transform:uppercase}.publish-panel h2{margin:0;color:var(--color-text);font-size:17px;line-height:1.18;letter-spacing:0}.publish-panel p{margin:0;color:rgba(231,231,232,.72);font-size:12px;line-height:1.38}.publish-panel small{color:rgba(231,231,232,.5);font-size:11px;line-height:1.34}.publish-cover-frame{position:relative;overflow:hidden;aspect-ratio:9/16;border:1px solid rgba(231,231,232,.1);border-radius:8px;background:#050505}.publish-cover-frame img{display:block;width:100%;height:100%;object-fit:cover}.publish-cover-frame span{display:block;width:100%;height:100%;background:linear-gradient(135deg,rgba(17,162,207,.18),rgba(175,207,42,.08))}.publish-cover-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.publish-cover-options button{min-height:58px;padding:2px;border:1px solid rgba(231,231,232,.14);border-radius:8px;background:rgba(0,0,0,.38);overflow:hidden}.publish-cover-options button.active{border-color:rgba(175,207,42,.82);box-shadow:0 0 0 2px rgba(175,207,42,.16)}.publish-cover-options img{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:5px}.publish-hook{padding:9px 10px;border-left:3px solid rgba(175,207,42,.78);border-radius:8px;background:rgba(175,207,42,.075);color:var(--color-text)!important;font-weight:800}.publish-tags{display:flex;gap:6px;flex-wrap:wrap}.publish-tags span{display:inline-flex;align-items:center;min-height:24px;max-width:100%;padding:4px 7px;border:1px solid rgba(17,162,207,.24);border-radius:999px;background:rgba(17,162,207,.09);color:rgba(231,231,232,.84);font-size:11px;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr);margin-top:0}.card[open] .editor-preview{grid-column:1}.publish-panel{max-height:none}.publish-cover-panel{grid-row:2}.publish-copy-panel{grid-row:3}.publish-cover-frame{max-width:180px}}@media(max-width:860px){.card[open] .editor-shell{padding:0 12px 16px}.publish-panel{border-radius:10px}.publish-cover-frame{max-width:150px}}
 .card[open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(340px,calc(72vh * 9 / 16)) minmax(260px,330px);gap:8px;align-items:center;justify-content:center}.card[data-preview-format=facebook][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(390px,calc(72vh * 4 / 5)) minmax(260px,330px)}.card[data-preview-format=youtube][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(520px,720px) minmax(260px,330px)}.publish-panel{gap:9px;align-content:center;align-self:center;padding:11px}.publish-cover-panel{justify-self:end}.publish-copy-panel{justify-self:start}.publish-panel-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.publish-panel-head button{min-height:26px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-field{display:grid;gap:5px;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-field input,.publish-field textarea{width:100%;min-height:34px;padding:7px 9px;border:1px solid rgba(231,231,232,.14);border-radius:8px;background:rgba(0,0,0,.42);color:var(--color-text);font:inherit;font-size:12px;line-height:1.28;letter-spacing:0}.publish-field textarea{resize:vertical;min-height:72px}.publish-field input:focus,.publish-field textarea:focus{border-color:rgba(17,162,207,.58);outline:0;box-shadow:0 0 0 2px rgba(17,162,207,.16)}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr)}.publish-panel{align-content:start}.publish-cover-panel{justify-self:center}.publish-copy-panel{justify-self:stretch}}
-.publish-cover-frame{touch-action:none}.publish-cover-frame[data-publish-cover-can-drag="1"]{cursor:grab}.publish-cover-frame[data-publish-cover-dragging="1"]{cursor:grabbing}.publish-cover-frame>img{user-select:none;-webkit-user-drag:none;transform:scale(var(--publish-cover-zoom,1));transform-origin:var(--publish-cover-x,50%) var(--publish-cover-y,50%);transition:transform 120ms ease;will-change:transform}.publish-cover-frame[data-publish-cover-dragging="1"]>img{transition:none}.publish-cover-layer-list{position:absolute;inset:0;z-index:2;pointer-events:none}.publish-cover-layer{position:absolute;display:grid;align-items:center;min-height:24px;padding:5px 7px;border-radius:6px;color:var(--cover-layer-color,#fff);font-weight:800;line-height:1.05;overflow:hidden;text-overflow:ellipsis;cursor:move;pointer-events:auto;touch-action:none}.publish-cover-layer.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.publish-cover-layer span{overflow:hidden;text-overflow:ellipsis}.publish-cover-layer[data-cover-layer-kind=text]{background:rgba(var(--cover-layer-bg,0,0,0),var(--cover-layer-bg-opacity,.7))}.publish-cover-layer[data-cover-layer-kind=speech]{border-radius:11px;background:rgba(var(--cover-layer-bg,255,255,255),var(--cover-layer-bg-opacity,.94));box-shadow:0 8px 18px rgba(0,0,0,.22);color:var(--cover-layer-color,#050505);font-weight:900;overflow:visible}.publish-cover-layer[data-cover-layer-kind=speech]:after{position:absolute;left:18%;bottom:-8px;width:15px;height:12px;border-radius:0 0 14px 0;background:inherit;content:"";transform:skewX(-18deg)}.publish-cover-layer[data-cover-layer-kind=image]{padding:0;background:transparent}.publish-cover-layer[data-cover-layer-kind=image] img{display:block;width:100%;height:auto;object-fit:contain;transform:none;transform-origin:center;opacity:var(--cover-layer-opacity,1);pointer-events:none}.publish-cover-resize{position:absolute;right:2px;bottom:2px;width:18px;height:18px;padding:0;border:1px solid rgba(255,255,255,.56);border-radius:5px;background:rgba(0,0,0,.34);cursor:nwse-resize}.publish-cover-adjust{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.publish-cover-adjust label{display:grid;grid-template-columns:auto 1fr auto;gap:7px;align-items:center;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-cover-adjust output{min-width:38px;color:rgba(231,231,232,.84);font-size:11px;text-align:right}.publish-cover-adjust input{width:100%;accent-color:var(--color-brand-green)}.publish-cover-adjust button{min-height:28px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-cover-tools{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;align-items:center}.publish-cover-tools button{min-height:30px;padding:5px 8px;border-radius:999px;font-size:11px}.publish-cover-tools small{grid-column:1/-1;color:rgba(231,231,232,.54);font-size:11px;white-space:nowrap}.publish-cover-inspector{display:grid;gap:8px;padding:8px;border:1px solid rgba(231,231,232,.1);border-radius:8px;background:rgba(0,0,0,.28)}.publish-cover-inspector[hidden]{display:none}
+.publish-cover-stage{position:relative}.publish-cover-frame{touch-action:none}.publish-cover-frame[data-publish-cover-can-drag="1"]{cursor:grab}.publish-cover-frame[data-publish-cover-dragging="1"]{cursor:grabbing}.publish-cover-frame>img{user-select:none;-webkit-user-drag:none;transform:scale(var(--publish-cover-zoom,1));transform-origin:var(--publish-cover-x,50%) var(--publish-cover-y,50%);transition:transform 120ms ease;will-change:transform}.publish-cover-frame[data-publish-cover-dragging="1"]>img{transition:none}.publish-cover-layer-list{position:absolute;inset:0;z-index:2;pointer-events:none}.publish-cover-layer{position:absolute;display:grid;align-items:center;min-height:24px;padding:5px 7px;border-radius:6px;color:var(--cover-layer-color,#fff);font-weight:800;line-height:1.05;overflow:hidden;text-overflow:ellipsis;cursor:move;pointer-events:auto;touch-action:none}.publish-cover-layer.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.publish-cover-layer span{overflow:hidden;text-overflow:ellipsis}.publish-cover-layer[data-cover-layer-kind=text]{background:rgba(var(--cover-layer-bg,0,0,0),var(--cover-layer-bg-opacity,.7))}.publish-cover-layer[data-cover-layer-kind=speech]{border-radius:11px;background:rgba(var(--cover-layer-bg,255,255,255),var(--cover-layer-bg-opacity,.94));box-shadow:0 8px 18px rgba(0,0,0,.22);color:var(--cover-layer-color,#050505);font-weight:900;overflow:visible}.publish-cover-layer[data-cover-layer-kind=speech]:after{position:absolute;left:18%;bottom:-8px;width:15px;height:12px;border-radius:0 0 14px 0;background:inherit;content:"";transform:skewX(-18deg)}.publish-cover-layer[data-cover-layer-kind=image]{padding:0;background:transparent}.publish-cover-layer[data-cover-layer-kind=image] img{display:block;width:100%;height:auto;object-fit:contain;transform:none;transform-origin:center;opacity:var(--cover-layer-opacity,1);pointer-events:none}.publish-cover-resize{position:absolute;right:2px;bottom:2px;width:18px;height:18px;padding:0;border:1px solid rgba(255,255,255,.56);border-radius:5px;background:rgba(0,0,0,.34);cursor:nwse-resize}.publish-cover-adjust{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.publish-cover-adjust label{display:grid;grid-template-columns:auto 1fr auto;gap:7px;align-items:center;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-cover-adjust output{min-width:38px;color:rgba(231,231,232,.84);font-size:11px;text-align:right}.publish-cover-adjust input{width:100%;accent-color:var(--color-brand-green)}.publish-cover-adjust button{min-height:28px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-cover-menu{z-index:7;width:min(320px,96%);max-height:min(380px,calc(100vh - 24px))}
 """
 
 
@@ -11572,6 +11580,7 @@ const emptyGalleryStorageKey = "cutted-empty-gallery";
 const maxOverlayImageBytes = 1800000;
 const maxOverlayImageSourceBytes = 6000000;
 const maxOverlayImagePixels = 1600;
+const coverLayerVerticalLift = .30;
 const maxBumperVideoBytes = 48000000;
 const cameraAnalysisFetchTimeoutMs = 180000;
 const cameraReadinessPollMs = 3500;
@@ -13492,6 +13501,14 @@ function overlayPlaceButtonsHtml(){
       <button data-overlay-place-camera>Camera</button>
     </div>`;
 }
+function coverPlaceButtonsHtml(){
+  return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>Adicionar na capa</strong><button data-overlay-close>Fechar</button></div>
+    <div class="overlay-menu-actions">
+      <button data-publish-cover-add="text">Texto</button>
+      <button data-publish-cover-add="speech">Fala</button>
+      <button data-publish-cover-add="image">Imagem transparente</button>
+    </div>`;
+}
 function overlayInspectorHtml(layer){
   if (!layer) return overlayPlaceButtonsHtml();
   if (layer.kind === "image") {
@@ -14029,7 +14046,7 @@ function syncPublishCoverPanel(card, moment, cover){
     button.classList.toggle("active", button.dataset.publishCoverOption === selected);
   });
   syncPublishCoverLayerPreview(card, cover);
-  syncPublishCoverInspector(card);
+  refreshPublishCoverFloatingMenu(card);
 }
 function syncPublishCoverLayerPreview(card, cover = null){
   const moment = (window.CUTTED_DATA.moments || []).find(item => String(item.rank) === String(card.dataset.rank));
@@ -14050,6 +14067,16 @@ function bindPublishCoverDrag(card){
   const frame = card.querySelector("[data-publish-cover-preview]");
   if (!frame) return;
   frame.addEventListener("pointerdown", event => beginPublishCoverDrag(card, event));
+}
+function bindPublishCoverPlacement(card){
+  const frame = card.querySelector("[data-publish-cover-preview]");
+  if (!frame || frame.dataset.publishCoverPlacementBound === "1") return;
+  frame.dataset.publishCoverPlacementBound = "1";
+  frame.addEventListener("click", event => {
+    if (card.dataset.publishCoverFrameMoved === "1") return;
+    if (event.target.closest("[data-publish-cover-layer]")) return;
+    showPublishCoverAddMenu(card, event.clientX, event.clientY);
+  });
 }
 function publishCoverForCard(card){
   const moment = (window.CUTTED_DATA.moments || []).find(item => String(item.rank) === String(card.dataset.rank));
@@ -14074,7 +14101,8 @@ function beginPublishCoverDrag(card, event){
     startY: normalizePublishCoverPosition(cover.y, zoom),
     width: Math.max(rect.width, 1),
     height: Math.max(rect.height, 1),
-    zoom
+    zoom,
+    moved: false
   };
   event.preventDefault();
   frame.dataset.publishCoverDragging = "1";
@@ -14087,6 +14115,8 @@ function beginPublishCoverDrag(card, event){
 }
 function movePublishCoverDrag(card, drag, event){
   event.preventDefault();
+  if (Math.abs(event.clientX - drag.startClientX) > 2 || Math.abs(event.clientY - drag.startClientY) > 2) drag.moved = true;
+  if (drag.moved) card.querySelector("[data-publish-cover-preview]")?.setAttribute("data-publish-cover-moved", "1");
   const publish = normalizePublishEdit(cardState(drag.rank).publish);
   publish.coverZoom = drag.zoom;
   publish.coverX = normalizePublishCoverPosition(drag.startX + publishCoverDragDelta(drag.startClientX, event.clientX, drag.width, drag.zoom), drag.zoom);
@@ -14095,6 +14125,12 @@ function movePublishCoverDrag(card, drag, event){
   syncPublishPanel(card);
 }
 function endPublishCoverDrag(frame, pointerId, move, end){
+  const card = frame.closest(".card");
+  if (card && frame.dataset.publishCoverMoved === "1") {
+    card.dataset.publishCoverFrameMoved = "1";
+    window.setTimeout(() => { delete card.dataset.publishCoverFrameMoved; }, 120);
+  }
+  delete frame.dataset.publishCoverMoved;
   frame.dataset.publishCoverDragging = "0";
   if (frame.hasPointerCapture?.(pointerId)) frame.releasePointerCapture(pointerId);
   frame.removeEventListener("pointermove", move);
@@ -14117,13 +14153,16 @@ function addPublishCoverLayer(card, kind){
     const input = card.querySelector("[data-publish-cover-image]");
     if (input) {
       delete input.dataset.coverReplaceLayer;
+      input.dataset.coverX = String(card.dataset.coverMenuX || .28);
+      input.dataset.coverY = String(card.dataset.coverMenuY || .28);
+      closePublishCoverMenu(card);
       input.click();
     }
     return;
   }
   const layer = kind === "speech" ? defaultSpeechOverlay() : defaultTextOverlay();
-  layer.x = kind === "speech" ? .18 : .16;
-  layer.y = kind === "speech" ? .18 : .12;
+  layer.x = clampNumber(Number(card.dataset.coverMenuX || (kind === "speech" ? .18 : .16)), 0, .84);
+  layer.y = clampNumber(Number(card.dataset.coverMenuY || (kind === "speech" ? .18 : .12)), 0, .9);
   layer.width = kind === "speech" ? .64 : .68;
   layer.start_seconds = 0;
   layer.duration_seconds = 3;
@@ -14151,8 +14190,8 @@ function addPublishCoverImageFromInput(card, input){
         key: "image",
         label: file.name,
         image_data_url: dataUrl,
-        x: .28,
-        y: .28,
+        x: clampNumber(Number(input.dataset.coverX || .28), 0, .92),
+        y: clampNumber(Number(input.dataset.coverY || .28), 0, .92),
         width: .42,
         opacity: 100,
         start_seconds: 0,
@@ -14169,6 +14208,8 @@ function addPublishCoverImageFromInput(card, input){
   }).finally(() => {
     input.value = "";
     delete input.dataset.coverReplaceLayer;
+    delete input.dataset.coverX;
+    delete input.dataset.coverY;
   });
 }
 function coverLayersForRank(rank){
@@ -14200,22 +14241,67 @@ function selectedCoverLayerForCard(card){
   const selected = String(card.dataset.selectedCoverLayer || "");
   return coverLayersForRank(card.dataset.rank).find(layer => layer.id === selected) || null;
 }
-function syncPublishCoverInspector(card){
-  const inspector = card.querySelector("[data-publish-cover-inspector]");
-  if (!inspector) return;
+function publishCoverMenuSurface(card){
+  return card.querySelector("[data-publish-cover-stage]") || card.querySelector("[data-publish-cover-preview]");
+}
+function closePublishCoverMenu(card){
+  const menu = card.querySelector("[data-publish-cover-menu]");
+  if (!menu) return;
+  menu.hidden = true;
+  menu.innerHTML = "";
+  delete card.dataset.selectedCoverLayer;
+}
+function bindPublishCoverMenuBasics(card){
+  const surface = publishCoverMenuSurface(card);
+  const menu = card.querySelector("[data-publish-cover-menu]");
+  if (!surface || !menu) return;
+  menu.querySelector("[data-overlay-close]")?.addEventListener("click", () => closePublishCoverMenu(card));
+  bindOverlayMenuDrag(surface, menu);
+}
+function publishCoverMenuPoint(card, clientX, clientY){
+  const frame = card.querySelector("[data-publish-cover-preview]");
+  const surface = publishCoverMenuSurface(card);
+  const frameRect = frame?.getBoundingClientRect();
+  const surfaceRect = surface?.getBoundingClientRect();
+  if (!frameRect || !surfaceRect) return { x: .28, y: .28, left: 8, top: 8 };
+  const x = clampNumber((clientX - frameRect.left) / Math.max(frameRect.width, 1), 0, .92);
+  const y = clampNumber((clientY - frameRect.top) / Math.max(frameRect.height, 1), 0, .92);
+  return { x, y, left: clientX - surfaceRect.left, top: clientY - surfaceRect.top };
+}
+function showPublishCoverAddMenu(card, clientX, clientY){
+  const surface = publishCoverMenuSurface(card);
+  const menu = card.querySelector("[data-publish-cover-menu]");
+  if (!surface || !menu) return;
+  const point = publishCoverMenuPoint(card, clientX, clientY);
+  card.dataset.coverMenuX = String(point.x);
+  card.dataset.coverMenuY = String(point.y);
+  delete card.dataset.selectedCoverLayer;
+  menu.innerHTML = coverPlaceButtonsHtml();
+  bindPublishCoverMenuBasics(card);
+  bindPublishCoverAddButtons(card);
+  positionOverlayMenu(surface, menu, point.left, point.top);
+  menu.hidden = false;
+}
+function refreshPublishCoverFloatingMenu(card){
   const layer = selectedCoverLayerForCard(card);
-  if (!layer) {
-    inspector.hidden = true;
-    inspector.innerHTML = "";
-    return;
-  }
-  inspector.hidden = false;
-  inspector.innerHTML = coverInspectorHtml(layer);
-  bindPublishCoverInspectorControls(card, layer);
+  const menu = card.querySelector("[data-publish-cover-menu]");
+  if (!menu || menu.hidden || !layer) return;
+  showPublishCoverInspector(card, layer.id);
 }
 function showPublishCoverInspector(card, layerId){
+  const surface = publishCoverMenuSurface(card);
+  const menu = card.querySelector("[data-publish-cover-menu]");
+  if (!surface || !menu) return;
   card.dataset.selectedCoverLayer = layerId;
-  syncPublishPanel(card);
+  const layer = selectedCoverLayerForCard(card);
+  if (!layer) return;
+  menu.innerHTML = coverInspectorHtml(layer);
+  bindPublishCoverMenuBasics(card);
+  bindPublishCoverInspectorControls(card, layer);
+  menu.hidden = false;
+  const box = card.querySelector(`[data-publish-cover-layer="${CSS.escape(layer.id)}"]`);
+  if (box) positionOverlayInspectorNearLayer(surface, menu, box);
+  else positionOverlayMenu(surface, menu, 8, 8);
 }
 function bindPublishCoverInspectorControls(card, layer){
   const rank = card.dataset.rank;
@@ -14224,36 +14310,40 @@ function bindPublishCoverInspectorControls(card, layer){
     syncPublishCoverLayerPreview(card);
     renderCaptionQueue();
   };
-  card.querySelector("[data-publish-cover-inspector] [data-overlay-close]")?.addEventListener("click", () => {
-    delete card.dataset.selectedCoverLayer;
-    syncPublishPanel(card);
-  });
-  const text = card.querySelector("[data-publish-cover-inspector] [data-layer-text]");
+  const menu = card.querySelector("[data-publish-cover-menu]");
+  const text = menu?.querySelector("[data-layer-text]");
   if (text) text.addEventListener("input", () => patch({ text: text.value, label: text.value }));
-  const fontSize = card.querySelector("[data-publish-cover-inspector] [data-layer-font-size]");
+  const fontSize = menu?.querySelector("[data-layer-font-size]");
   if (fontSize) fontSize.addEventListener("input", () => patch({ font_size: Number(fontSize.value) }));
-  const color = card.querySelector("[data-publish-cover-inspector] [data-layer-color]");
+  const color = menu?.querySelector("[data-layer-color]");
   if (color) color.addEventListener("input", () => patch({ color: color.value }));
-  const opacity = card.querySelector("[data-publish-cover-inspector] [data-layer-opacity]");
+  const opacity = menu?.querySelector("[data-layer-opacity]");
   if (opacity) opacity.addEventListener("input", () => patch({ opacity: Number(opacity.value) }));
-  const width = card.querySelector("[data-publish-cover-inspector] [data-layer-width]");
+  const width = menu?.querySelector("[data-layer-width]");
   if (width) width.addEventListener("input", () => patch({ width: Number(width.value) / 100 }));
-  const backgroundEnabled = card.querySelector("[data-publish-cover-inspector] [data-layer-background-enabled]");
+  const backgroundEnabled = menu?.querySelector("[data-layer-background-enabled]");
   if (backgroundEnabled) backgroundEnabled.addEventListener("change", () => patch({ background_enabled: backgroundEnabled.checked }));
-  const backgroundColor = card.querySelector("[data-publish-cover-inspector] [data-layer-background-color]");
+  const backgroundColor = menu?.querySelector("[data-layer-background-color]");
   if (backgroundColor) backgroundColor.addEventListener("input", () => patch({ background_color: backgroundColor.value }));
-  const backgroundOpacity = card.querySelector("[data-publish-cover-inspector] [data-layer-background-opacity]");
+  const backgroundOpacity = menu?.querySelector("[data-layer-background-opacity]");
   if (backgroundOpacity) backgroundOpacity.addEventListener("input", () => patch({ background_opacity: Number(backgroundOpacity.value) }));
-  card.querySelector("[data-publish-cover-inspector] [data-layer-replace-image]")?.addEventListener("click", () => {
+  menu?.querySelector("[data-layer-replace-image]")?.addEventListener("click", () => {
     const input = card.querySelector("[data-publish-cover-image]");
     if (!input) return;
     input.dataset.coverReplaceLayer = layer.id;
+    closePublishCoverMenu(card);
     input.click();
   });
-  card.querySelector("[data-publish-cover-inspector] [data-layer-remove]")?.addEventListener("click", () => {
+  menu?.querySelector("[data-layer-remove]")?.addEventListener("click", () => {
     removeCoverLayerForRank(rank, layer.id);
-    delete card.dataset.selectedCoverLayer;
-    syncPublishPanel(card);
+    closePublishCoverMenu(card);
+  });
+}
+function bindPublishCoverAddButtons(card){
+  const menu = card.querySelector("[data-publish-cover-menu]");
+  if (!menu) return;
+  menu.querySelectorAll("[data-publish-cover-add]").forEach(button => {
+    button.addEventListener("click", () => addPublishCoverLayer(card, button.dataset.publishCoverAdd));
   });
 }
 function bindPublishCoverLayerControls(card){
@@ -14306,9 +14396,9 @@ function bindPublishCoverLayerDrag(card, frame, layerNode){
       const left = clampNumber(drag.startLeft + dx, 0, Math.max(drag.frameWidth - layerRect.width, 0));
       const top = clampNumber(drag.startTop + dy, 0, Math.max(drag.frameHeight - layerRect.height, 0));
       patch.x = left / drag.frameWidth;
-      patch.y = top / drag.frameHeight;
+      patch.y = clampNumber(top / drag.frameHeight + coverLayerVerticalLift, 0, 1);
       layerNode.style.left = `${patch.x * 100}%`;
-      layerNode.style.top = `${patch.y * 100}%`;
+      layerNode.style.top = `${liftedCoverLayerY(patch.y) * 100}%`;
     }
     patchCoverLayerForRank(card.dataset.rank, layerNode.dataset.publishCoverLayer, patch, false);
     event.preventDefault();
@@ -14341,6 +14431,7 @@ function bindPublishPanel(card){
   card.dataset.publishBound = "1";
   syncPublishPanel(card);
   bindPublishCoverDrag(card);
+  bindPublishCoverPlacement(card);
   bindPublishCoverImageInput(card);
   card.querySelectorAll("[data-publish-field]").forEach(input => {
     input.addEventListener("input", () => {
@@ -14383,11 +14474,6 @@ function bindPublishPanel(card){
     setCardState(card.dataset.rank, { publish });
     syncPublishPanel(card);
     renderCaptionQueue();
-  });
-  card.querySelectorAll("[data-publish-cover-add]").forEach(button => {
-    button.addEventListener("click", () => {
-      addPublishCoverLayer(card, button.dataset.publishCoverAdd);
-    });
   });
   card.querySelector("[data-publish-reset]")?.addEventListener("click", () => {
     setCardState(card.dataset.rank, { publish: {} });
@@ -15525,10 +15611,13 @@ function normalizeCoverOverlayLayers(layers){
   const source = Array.isArray(layers) ? layers : [];
   return source.map(normalizeOverlayLayer).filter(layer => layer.key !== "none");
 }
+function liftedCoverLayerY(y){
+  return clampNumber(Number(y || 0) - coverLayerVerticalLift, 0, 1);
+}
 function publishCoverLayerHtml(layer){
   const current = normalizeOverlayLayer(layer);
   const left = clampNumber(current.x * 100, 0, 100);
-  const top = clampNumber(current.y * 100, 0, 100);
+  const top = clampNumber(liftedCoverLayerY(current.y) * 100, 0, 100);
   const width = clampNumber(current.width * 100, 8, 90);
   const opacity = clampNumber(current.opacity / 100, .1, 1);
   const fontSize = clampNumber((current.font_size || 34) * .42, 10, 24);
