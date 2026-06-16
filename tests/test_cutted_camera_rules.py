@@ -298,11 +298,32 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIn("container.appendChild(track)", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("data-overlay-visible=false", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("setOverlayBoxVisibility", CUTTED.page_html("Teste", html, "{}", ""))
-        self.assertIn("position:absolute;left:76px;right:76px;bottom:16px", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("data-layer-replace-image", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("overlay-inspector-section", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("overlay-image-source", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("max-height:min(420px,calc(100vh - 24px))", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function overlayTextSizeControlsHtml", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function overlaySpeechStyleHtml", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("overlayReplaceLayer", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("patchOverlayLayerForRank(card.dataset.rank, replaceLayerId", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("position:absolute;left:76px;right:76px;bottom:44px", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("width:clamp(16px,var(--overlay-time-width),24px)", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("height:26px;min-width:16px;min-height:26px", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn(".overlay-timeline-item:before", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertNotIn("overlay-timeline:before", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertNotIn("data-preview-volume-down", html)
         self.assertNotIn("data-preview-volume-up", html)
         self.assertNotIn("data-preview-volume-zero", html)
         self.assertNotIn("data-preview-volume-value", html)
+
+        live_timeline_js = (
+            MODULE_PATH.parent.parent / "assets" / "live-timeline" / "live-timeline.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("d=a?t-o-8:t+8", live_timeline_js)
+        self.assertIn("S=a?t-3:t+3", live_timeline_js)
+        self.assertIn("E=a?d+o:d", live_timeline_js)
+        self.assertIn("s.circle(e,t,n.selected?4.1:3)", live_timeline_js)
+        self.assertNotIn("t-o*.5-9", live_timeline_js)
 
     def test_speech_overlay_is_available_and_renders_as_bubble(self) -> None:
         layer = CUTTED.overlay_layer_from_raw({
