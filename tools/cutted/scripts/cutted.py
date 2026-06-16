@@ -202,8 +202,16 @@ ANIMATED_CAPTION_MAX_GROUP_WORDS = 3
 ANIMATED_CAPTION_BOX_OPACITY = 0.80
 ANIMATED_CAPTION_BOX_SHADOW_OPACITY = 0.28
 COVER_LAYER_VERTICAL_LIFT = 0.30
+COVER_PREVIEW_CANONICAL_WIDTH = 252.0
+COVER_LAYER_PREVIEW_FONT_SCALE = 0.42
+COVER_SPEECH_RADIUS_PREVIEW_PX = 11.0
+COVER_SPEECH_TAIL_WIDTH_PREVIEW_PX = 15.0
+COVER_SPEECH_TAIL_HEIGHT_PREVIEW_PX = 12.0
+COVER_SPEECH_TAIL_BOTTOM_PREVIEW_PX = -8.0
 COVER_FRAME_TAIL_SECONDS = 0.5
-RENDER_JOB_FINGERPRINT_VERSION = "cuted-render-queue-v7-smart-caption-readability"
+RENDER_JOB_FINGERPRINT_VERSION = "cuted-render-queue-v8-cover-parity"
+RENDER_QUEUE_WRITE_ATTEMPTS = 6
+RENDER_QUEUE_WRITE_RETRY_SECONDS = 0.08
 STALE_RENDER_SERVER_ERROR = (
     "Servidor CUTED antigo. Reinicie o app antes de renderizar para usar as ultimas mudancas."
 )
@@ -1680,9 +1688,34 @@ def persist_render_queue(gallery_dir: Path) -> None:
 def write_render_queue_manifest(gallery_dir: Path, jobs: list[dict[str, object]]) -> None:
     path = render_queue_manifest_path(gallery_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = path.with_suffix(".tmp")
-    temp_path.write_text(json.dumps({"version": 1, "jobs": jobs}, ensure_ascii=False, indent=2), encoding="utf-8")
-    temp_path.replace(path)
+    payload = json.dumps({"version": 1, "jobs": jobs}, ensure_ascii=False, indent=2)
+    for attempt in range(RENDER_QUEUE_WRITE_ATTEMPTS):
+        temp_path = render_queue_temp_manifest_path(path)
+        try:
+            temp_path.write_text(payload, encoding="utf-8")
+            temp_path.replace(path)
+            return
+        except OSError as error:
+            if not render_queue_write_error_is_retryable(error) or attempt + 1 >= RENDER_QUEUE_WRITE_ATTEMPTS:
+                raise
+            render_queue_cleanup_temp_manifest(temp_path)
+            time.sleep(RENDER_QUEUE_WRITE_RETRY_SECONDS * (attempt + 1))
+
+
+def render_queue_temp_manifest_path(path: Path) -> Path:
+    suffix = f"{os.getpid()}-{threading.get_ident()}-{uuid.uuid4().hex[:8]}"
+    return path.with_name(f"{path.stem}.{suffix}.tmp")
+
+
+def render_queue_write_error_is_retryable(error: OSError) -> bool:
+    return isinstance(error, PermissionError) or getattr(error, "winerror", None) == 5
+
+
+def render_queue_cleanup_temp_manifest(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError as error:
+        print(f"[cutted] render queue temp cleanup failed: {error}", file=sys.stderr)
 
 
 def render_queue_snapshot_without_lock(gallery_dir: Path) -> list[dict[str, object]]:
@@ -8178,19 +8211,28 @@ def pillow_draw_cover_image_layer(canvas: object, layer: dict[str, object], pres
     canvas.alpha_composite(image, (x, y))
 
 
+def pillow_cover_preview_px(value: float, preset: PlatformPreset) -> int:
+    return int(round(value * preset.width / COVER_PREVIEW_CANONICAL_WIDTH))
+
+
+def pillow_cover_font_size(layer: dict[str, object], preset: PlatformPreset) -> int:
+    preview_size = float(layer.get("font_size") or 34.0) * COVER_LAYER_PREVIEW_FONT_SCALE
+    return max(18, pillow_cover_preview_px(preview_size, preset))
+
+
 def pillow_draw_cover_text_layer(
     draw: object, layer: dict[str, object], preset: PlatformPreset, image_font: object, speech: bool
 ) -> None:
     text = str(layer.get("text") or layer.get("label") or "").strip()
     if not text:
         return
-    font_size = max(18, int(round(float(layer.get("font_size") or 34.0) * preset.width / 1080.0)))
+    font_size = pillow_cover_font_size(layer, preset)
     font = image_font.truetype(str(find_overlay_font()), font_size)
     box = pillow_cover_text_box(draw, layer, preset, font, font_size, speech)
     x, y, box_w, box_h, pad_x, pad_y, line_height, lines = box
     opacity = clamp(float(layer.get("opacity") or 100.0) / 100.0, 0.1, 1.0)
     if speech or bool(layer.get("background_enabled")):
-        pillow_draw_cover_text_background(draw, layer, (x, y, box_w, box_h), font_size, opacity, speech)
+        pillow_draw_cover_text_background(draw, layer, (x, y, box_w, box_h), font_size, opacity, speech, preset)
     text_color = pillow_rgba(layer.get("color"), "#050505" if speech else "#ffffff", opacity)
     for index, line in enumerate(lines):
         draw.text((x + pad_x, y + pad_y + index * line_height), line, fill=text_color, font=font)
@@ -8235,41 +8277,39 @@ def pillow_text_size(draw: object, text: str, font: object) -> tuple[int, int]:
 
 
 def pillow_draw_cover_text_background(
-    draw: object, layer: dict[str, object], rect: tuple[int, int, int, int], font_size: int, opacity: float, speech: bool
+    draw: object,
+    layer: dict[str, object],
+    rect: tuple[int, int, int, int],
+    font_size: int,
+    opacity: float,
+    speech: bool,
+    preset: PlatformPreset,
 ) -> None:
     x, y, box_w, box_h = rect
     bg_opacity = clamp(float(layer.get("background_opacity") if layer.get("background_opacity") is not None else 94.0) / 100.0, 0.0, 1.0)
     background = pillow_rgba(layer.get("background_color"), "#ffffff" if speech else "#000000", opacity * bg_opacity)
-    radius = max(6, int(round(font_size * (0.5 if speech else 0.18))))
+    radius = pillow_cover_preview_px(COVER_SPEECH_RADIUS_PREVIEW_PX, preset) if speech else max(6, int(round(font_size * 0.18)))
     if speech:
-        shadow = (0, 0, 0, int(round(255 * opacity * 0.22)))
-        shadow_offset = max(5, int(round(font_size * 0.22)))
-        draw.rounded_rectangle((x, y + shadow_offset, x + box_w, y + box_h + shadow_offset), radius=radius, fill=shadow)
-        pillow_draw_cover_speech_tail(draw, (x, y + shadow_offset, box_w, box_h), font_size, shadow)
-    if speech:
-        border_width = max(2, int(round(font_size * 0.07)))
-        border = pillow_rgba(layer.get("border_color"), "#dff7ff", opacity * 0.88)
-        pillow_draw_cover_speech_tail(draw, (x, y, box_w, box_h), font_size, border, border_width)
-        draw.rounded_rectangle((x, y, x + box_w, y + box_h), radius=radius, fill=background, outline=border, width=border_width)
-        pillow_draw_cover_speech_tail(draw, (x, y, box_w, box_h), font_size, background)
+        pillow_draw_cover_speech_tail(draw, (x, y, box_w, box_h), background, preset)
+        draw.rounded_rectangle((x, y, x + box_w, y + box_h), radius=radius, fill=background)
     else:
         draw.rounded_rectangle((x, y, x + box_w, y + box_h), radius=radius, fill=background)
 
 
 def pillow_draw_cover_speech_tail(
-    draw: object, rect: tuple[int, int, int, int], font_size: int, color: tuple[int, int, int, int], expand: int = 0
+    draw: object, rect: tuple[int, int, int, int], color: tuple[int, int, int, int], preset: PlatformPreset
 ) -> None:
     x, y, box_w, box_h = rect
-    tail_w = max(16, int(round(font_size * 0.48))) + expand * 2
-    tail_h = max(14, int(round(font_size * 0.42))) + expand * 2
-    tail_x = x + max(int(round(box_w * 0.18)), int(round(font_size * 0.62))) - expand
-    tail_y = y + box_h - max(2, int(round(tail_h * 0.18))) - expand
-    skew = max(3, int(round(font_size * 0.12)))
+    tail_w = pillow_cover_preview_px(COVER_SPEECH_TAIL_WIDTH_PREVIEW_PX, preset)
+    tail_h = pillow_cover_preview_px(COVER_SPEECH_TAIL_HEIGHT_PREVIEW_PX, preset)
+    tail_x = x + int(round(box_w * 0.18))
+    tail_y = y + box_h + pillow_cover_preview_px(COVER_SPEECH_TAIL_BOTTOM_PREVIEW_PX, preset)
+    skew = max(2, int(round(math.tan(math.radians(18.0)) * tail_h)))
     points = [
-        (tail_x, tail_y),
-        (tail_x + tail_w, tail_y),
-        (tail_x + tail_w - skew, tail_y + tail_h),
-        (tail_x + skew, tail_y + tail_h),
+        (tail_x + skew, tail_y),
+        (tail_x + tail_w + skew, tail_y),
+        (tail_x + tail_w, tail_y + tail_h),
+        (tail_x, tail_y + tail_h),
     ]
     draw.polygon(points, fill=color)
 

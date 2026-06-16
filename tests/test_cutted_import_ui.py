@@ -6,6 +6,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -336,6 +337,34 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertNotIn(",CaptionBox,,0,0,0,,{\\an5", ass)
         self.assertNotRegex(ass, r"Dialogue: [12],[^\\n]+,Default,,0,0,0,,\\{[^}]*\\p1")
         self.assertNotRegex(ass, r"\\p1[^\\n]+\\fscx112")
+
+    def test_render_fingerprint_invalidates_cover_parity_jobs(self) -> None:
+        self.assertIn("cover-parity", CUTTED.RENDER_JOB_FINGERPRINT_VERSION)
+
+    def test_render_queue_manifest_retries_transient_access_denied(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery_dir = Path(tmp)
+            attempts = {"count": 0}
+            original_replace = Path.replace
+            original_delay = CUTTED.RENDER_QUEUE_WRITE_RETRY_SECONDS
+
+            def flaky_replace(path: Path, target: Path) -> Path:
+                attempts["count"] += 1
+                if attempts["count"] == 1:
+                    raise PermissionError(5, "Access denied", str(target))
+                return original_replace(path, target)
+
+            try:
+                CUTTED.RENDER_QUEUE_WRITE_RETRY_SECONDS = 0
+                with mock.patch.object(Path, "replace", flaky_replace):
+                    CUTTED.write_render_queue_manifest(gallery_dir, [{"id": "render-test"}])
+            finally:
+                CUTTED.RENDER_QUEUE_WRITE_RETRY_SECONDS = original_delay
+
+            manifest = CUTTED.read_render_queue_manifest(gallery_dir)
+
+        self.assertEqual(attempts["count"], 2)
+        self.assertEqual(manifest["jobs"][0]["id"], "render-test")
 
     def test_animated_caption_timing_weights_words_and_punctuation(self) -> None:
         timings = CUTTED.animated_caption_word_timings(["e", "sincronizacao", "fim."], 0.0, 3.0)
