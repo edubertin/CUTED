@@ -15414,6 +15414,13 @@ function updateTimelinePlayhead(card, time = null){
   if (time === null && video && trimRangeActive(values) && Math.abs(Number(video.currentTime || 0) - current) > .05) {
     video.currentTime = current;
   }
+  syncPreviewPlaybackFrame(card, current);
+}
+function syncPreviewPlaybackFrame(card, time = null){
+  const values = trimValues(card);
+  const video = primaryCameraVideo(card);
+  const raw = time === null && video && Number.isFinite(video.currentTime) ? video.currentTime : time;
+  const current = clampPreviewTime(values, Number(raw ?? values.trimStart));
   const scrubInput = card.querySelector("[data-trim-scrub]");
   if (scrubInput) scrubInput.value = current.toFixed(1);
   const playhead = card.querySelector("[data-timeline-playhead]");
@@ -18615,17 +18622,17 @@ document.querySelectorAll(".card").forEach(card => {
       card.dataset.playbackMode = "range";
       delete card.dataset.timelineSeekIntent;
       if (Math.abs(video.currentTime - nextTime) > .05) video.currentTime = nextTime;
-      startCameraFrameSync(video, () => updateCameraSurfaceForCard(card));
+      startCameraFrameSync(video, () => syncPreviewPlaybackFrame(card));
       syncCameraFitBackground(card);
       syncPreviewPlaybackState(card);
     });
     video.addEventListener("pause", () => {
-      stopCameraFrameSync(video, () => updateCameraSurfaceForCard(card));
+      stopCameraFrameSync(video, () => syncPreviewPlaybackFrame(card));
       syncCameraFitBackground(card);
       syncPreviewPlaybackState(card);
     });
     video.addEventListener("ended", () => {
-      stopCameraFrameSync(video, () => updateCameraSurfaceForCard(card));
+      stopCameraFrameSync(video, () => syncPreviewPlaybackFrame(card));
       syncCameraFitBackground(card);
       syncPreviewPlaybackState(card);
     });
