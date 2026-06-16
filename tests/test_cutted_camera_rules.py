@@ -291,6 +291,8 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertNotIn("data-card-camera", html)
         self.assertIn("data-overlay-place-camera", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("data-overlay-place-speech", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("overlay-icon-actions", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn('menu.dataset.overlayMenuMode = "add";', CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("function overlayTimingForCard", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("function speechOverlayTimingForCard", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("syncTimedOverlayVisibility(card, current)", CUTTED.page_html("Teste", html, "{}", ""))
