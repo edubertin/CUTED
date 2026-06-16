@@ -36,6 +36,11 @@ PROJECT_CATALOG_LIMIT = 12
 PROJECT_CATALOG_SIZE_FILE_LIMIT = 3000
 PROJECTS_DIR_NAME = "projects"
 PROJECT_RENDERS_DIR_NAME = "renders"
+CUTTED_SERVER_SCRIPT_PATH = Path(__file__).resolve()
+try:
+    CUTTED_SERVER_SCRIPT_MTIME_NS = CUTTED_SERVER_SCRIPT_PATH.stat().st_mtime_ns
+except OSError:
+    CUTTED_SERVER_SCRIPT_MTIME_NS = 0
 GROUP_FIT_LOGO_TOP_RATIO = 0.11
 GROUP_FIT_LOGO_WIDTH_RATIO = 0.38
 GROUP_FIT_LOGO_OPACITY = 0.9
@@ -192,6 +197,11 @@ PUBLISH_DEFAULT_HASHTAGS = ["#Podcast", "#Cortes"]
 CUTTED_CAPTION_BOTTOM_OFFSET_MULTIPLIER = 1.25
 ANIMATED_CAPTION_LEAD_SECONDS = 0.14
 COVER_LAYER_VERTICAL_LIFT = 0.30
+COVER_FRAME_TAIL_SECONDS = 0.5
+RENDER_JOB_FINGERPRINT_VERSION = "cuted-render-queue-v4-cover-caption-parity"
+STALE_RENDER_SERVER_ERROR = (
+    "Servidor CUTED antigo. Reinicie o app antes de renderizar para usar as ultimas mudancas."
+)
 MAX_SELECTION_OVERLAP = 0.35
 MAX_SELECTION_TEXT_SIMILARITY = 0.72
 SELECTION_CLUSTER_SECONDS = 120.0
@@ -481,6 +491,7 @@ def parse_args() -> argparse.Namespace:
     caption.add_argument("--base-dir", type=Path, default=None)
     caption.add_argument("--chars-per-line", type=int, default=28)
     caption.add_argument("--max-lines", type=int, default=2)
+    caption.add_argument("--cover-frame", action=argparse.BooleanOptionalAction, default=False)
     serve = subparsers.add_parser("serve", help="Serve a generated gallery with local finalize API.")
     serve.add_argument("--dir", type=Path, required=True)
     serve.add_argument("--host", default="127.0.0.1")
@@ -1110,7 +1121,15 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
                 self.wfile.write(chunk)
                 remaining -= len(chunk)
 
+        def reject_stale_render_server(self) -> bool:
+            if not server_code_changed_since_start():
+                return False
+            send_json_response(self, 409, stale_server_payload())
+            return True
+
         def handle_finalize(self, request_base_dir: Path) -> None:
+            if self.reject_stale_render_server():
+                return
             try:
                 result = finalize_from_request(self, request_base_dir)
                 send_json_response(self, 200, result)
@@ -1145,6 +1164,8 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             send_json_response(self, 200 if result.get("ok") else 404, result)
 
         def handle_render_job(self, request_base_dir: Path) -> None:
+            if self.reject_stale_render_server():
+                return
             try:
                 result = start_render_job(self, request_base_dir)
                 send_json_response(self, 200, result)
@@ -1323,6 +1344,7 @@ def finalize_payload(
         chars_per_line=int(payload.get("chars_per_line") or 28),
         max_lines=int(payload.get("max_lines") or 2),
         captions_enabled=bool(payload.get("captions_enabled", True)),
+        cover_frame_enabled=bool(payload.get("cover_frame_enabled", False)),
     )
     captioned = caption_selected_rows(rows, gallery_dir, target_dir, find_ffmpeg(), options)
     captioned, export_dir = export_captioned_rows(captioned, gallery_dir)
@@ -1604,8 +1626,9 @@ def render_job_fingerprint(payload: dict[str, object], profile: str) -> str:
         "chars_per_line": payload.get("chars_per_line"),
         "max_lines": payload.get("max_lines"),
         "captions_enabled": payload.get("captions_enabled"),
+        "cover_frame_enabled": bool(payload.get("cover_frame_enabled", False)),
         "resource_profile": profile,
-        "renderer": "cuted-render-queue-v1",
+        "renderer": RENDER_JOB_FINGERPRINT_VERSION,
     }
     raw = json.dumps(relevant, ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
@@ -1621,6 +1644,7 @@ def render_job_summary(payload: dict[str, object]) -> dict[str, object]:
         "title": first.get("title") or first.get("peak_text") or "Render CUTED",
         "platform": first.get("platform_label") or first.get("platform") or "",
         "duration": first.get("adjusted_duration") or "",
+        "cover_frame_enabled": bool(payload.get("cover_frame_enabled", False)),
     }
 
 
@@ -1731,6 +1755,15 @@ def recovered_captioned_files(gallery_dir: Path) -> list[dict[str, object]]:
             "height": row.get("height") or preset.height,
             "file": str(file_path),
         })
+        cover_path = out_dir / f"clip-{rank:03d}-{platform}-cover.jpg"
+        if cover_path.exists() and cover_path.is_file():
+            row["cover_file"] = str(cover_path)
+        cover_frame_path = out_dir / f"clip-{rank:03d}-{platform}-cover-frame.mp4"
+        legacy_cover_frame_path = out_dir / f"clip-{rank:03d}-{platform}-captioned-cover-frame.mp4"
+        if cover_frame_path.exists() and cover_frame_path.is_file():
+            row["cover_frame_file"] = str(cover_frame_path)
+        elif legacy_cover_frame_path.exists() and legacy_cover_frame_path.is_file():
+            row["cover_frame_file"] = str(legacy_cover_frame_path)
         recovered.append(row)
     return recovered
 
@@ -5758,6 +5791,12 @@ def export_captioned_rows(rows: list[dict[str, object]], gallery_dir: Path) -> t
             cover_destination = unique_export_path(export_dir / cover_source.name)
             shutil.copy2(cover_source, cover_destination)
             exported_row["local_cover_file"] = str(cover_destination)
+        cover_frame_source_value = str(row.get("cover_frame_file") or "")
+        cover_frame_source = Path(cover_frame_source_value)
+        if cover_frame_source_value and cover_frame_source.exists():
+            cover_frame_destination = unique_export_path(export_dir / cover_frame_source.name)
+            shutil.copy2(cover_frame_source, cover_frame_destination)
+            exported_row["local_cover_frame_file"] = str(cover_frame_destination)
         exported.append(exported_row)
     return exported, export_dir
 
@@ -6470,20 +6509,29 @@ def finalized_file_urls(rows: list[dict[str, object]], base_dir: Path) -> list[d
         rel = file_path.resolve().relative_to(resolved_base_dir)
         final_path = exported_file_path(row, file_path)
         cover_path = exported_cover_file_path(row)
+        cover_frame_path = exported_cover_frame_file_path(row)
         cover_url = ""
         raw_cover_value = str(row.get("cover_file") or "")
         raw_cover = Path(raw_cover_value)
         if raw_cover_value and raw_cover.exists():
             cover_url = raw_cover.resolve().relative_to(resolved_base_dir).as_posix()
+        cover_frame_url = ""
+        raw_cover_frame_value = str(row.get("cover_frame_file") or "")
+        raw_cover_frame = Path(raw_cover_frame_value)
+        if raw_cover_frame_value and raw_cover_frame.exists():
+            cover_frame_url = raw_cover_frame.resolve().relative_to(resolved_base_dir).as_posix()
         files.append({
             **row,
             "url": rel.as_posix(),
             "preview_url": rel.as_posix(),
             "cover_url": cover_url,
+            "cover_frame_url": cover_frame_url,
             "download_name": final_path.name,
+            "download_cover_frame_name": cover_frame_path.name if cover_frame_path else "",
             "final_file": str(final_path),
             "final_dir": str(final_path.parent),
             "final_cover_file": str(cover_path) if cover_path else "",
+            "final_cover_frame_file": str(cover_frame_path) if cover_frame_path else "",
             "is_exported": final_path != file_path,
         })
     return files
@@ -6492,17 +6540,35 @@ def finalized_file_urls(rows: list[dict[str, object]], base_dir: Path) -> list[d
 def exported_file_path(row: dict[str, object], fallback: Path) -> Path:
     local_file = row.get("local_file")
     if isinstance(local_file, str) and local_file.strip():
-        return Path(local_file)
+        path = Path(local_file)
+        if path.exists():
+            return path
     return fallback
 
 
 def exported_cover_file_path(row: dict[str, object]) -> Path | None:
     local_cover = row.get("local_cover_file")
     if isinstance(local_cover, str) and local_cover.strip():
-        return Path(local_cover)
+        path = Path(local_cover)
+        if path.exists():
+            return path
     cover_file = row.get("cover_file")
     if isinstance(cover_file, str) and cover_file.strip():
-        return Path(cover_file)
+        path = Path(cover_file)
+        return path if path.exists() else None
+    return None
+
+
+def exported_cover_frame_file_path(row: dict[str, object]) -> Path | None:
+    local_cover_frame = row.get("local_cover_frame_file")
+    if isinstance(local_cover_frame, str) and local_cover_frame.strip():
+        path = Path(local_cover_frame)
+        if path.exists():
+            return path
+    cover_frame_file = row.get("cover_frame_file")
+    if isinstance(cover_frame_file, str) and cover_frame_file.strip():
+        path = Path(cover_frame_file)
+        return path if path.exists() else None
     return None
 
 
@@ -6513,6 +6579,28 @@ def send_json_response(handler: http.server.BaseHTTPRequestHandler, status: int,
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
+
+
+def current_server_script_mtime_ns() -> int:
+    try:
+        return CUTTED_SERVER_SCRIPT_PATH.stat().st_mtime_ns
+    except OSError:
+        return CUTTED_SERVER_SCRIPT_MTIME_NS
+
+
+def server_code_changed_since_start() -> bool:
+    current_mtime_ns = current_server_script_mtime_ns()
+    return bool(CUTTED_SERVER_SCRIPT_MTIME_NS and current_mtime_ns and current_mtime_ns != CUTTED_SERVER_SCRIPT_MTIME_NS)
+
+
+def stale_server_payload() -> dict[str, object]:
+    return {
+        "ok": False,
+        "code": "stale_render_server",
+        "error": STALE_RENDER_SERVER_ERROR,
+        "started_mtime_ns": CUTTED_SERVER_SCRIPT_MTIME_NS,
+        "current_mtime_ns": current_server_script_mtime_ns(),
+    }
 
 
 def caption_rows_from_data(data: object) -> list[dict[str, object]]:
@@ -6705,10 +6793,17 @@ def caption_selected_rows(
             write_ass_subtitles(subtitle_path, row, preset, args.chars_per_line, args.max_lines)
         bumper_info = render_captioned_clip(input_path, output_path, subtitle_path, row, preset, base_dir, out_dir, ffmpeg)
         cover_path = render_publish_cover_image(row, preset, base_dir, out_dir, ffmpeg)
-        result = captioned_row(row, preset, output_path, subtitle_path, cover_path)
+        cover_frame_path = render_cover_frame_tail_video(output_path, cover_path, row, preset, out_dir, ffmpeg) if caption_cover_frame_enabled(args) else None
+        result = captioned_row(row, preset, output_path, subtitle_path, cover_path, cover_frame_path)
         result.update(bumper_info)
+        if cover_frame_path:
+            result["cover_frame_duration"] = round(float(result.get("final_duration") or caption_duration(row)) + COVER_FRAME_TAIL_SECONDS, 3)
         captioned.append(result)
     return captioned
+
+
+def caption_cover_frame_enabled(args: argparse.Namespace) -> bool:
+    return bool(getattr(args, "cover_frame_enabled", False) or getattr(args, "cover_frame", False))
 
 
 def apply_render_resource_to_rows(rows: list[dict[str, object]], profile: str) -> None:
@@ -6991,10 +7086,20 @@ def clean_caption_text(text: str) -> str:
     clean = re.sub(r"(^|\s)(>{1,3}|-{1,2})\s*", " ", clean)
     clean = re.sub(r"\s+", " ", clean)
     clean = re.sub(r"\s+([,.;:!?])", r"\1", clean)
-    clean = re.sub(r"([,.;:!?])([^\s,.;:!?])", r"\1 \2", clean)
+    clean = re.sub(r"(\d)([.,:])\s+(?=\d)", r"\1\2", clean)
+    clean = re.sub(r"([,.;:!?])([^\s,.;:!?])", space_after_caption_punctuation, clean)
     clean = re.sub(r"^(né\??|aham|uhum|hum|então|mas)\s+", "", clean, flags=re.IGNORECASE)
     clean = re.sub(r"\b(\w+)(\s+\1\b){2,}", r"\1", clean, flags=re.IGNORECASE)
     return clean.strip(" -")
+
+
+def space_after_caption_punctuation(match: re.Match[str]) -> str:
+    punctuation, next_char = match.group(1), match.group(2)
+    previous_index = match.start(1) - 1
+    previous_char = match.string[previous_index] if previous_index >= 0 else ""
+    if punctuation in ".,:" and previous_char.isdigit() and next_char.isdigit():
+        return f"{punctuation}{next_char}"
+    return f"{punctuation} {next_char}"
 
 
 ANIMATED_CAPTION_PROPER_NOUN_STOPWORDS = {
@@ -7036,13 +7141,31 @@ def animated_caption_proper_nouns(text: str) -> set[str]:
 
 
 def animated_caption_display_word(word: str, proper_nouns: set[str]) -> str:
-    clean = re.sub(r"[^\wÀ-ÖØ-öø-ÿ]+", "", word, flags=re.UNICODE)
+    clean = animated_caption_clean_word(word)
     if not clean:
         return ""
     key = animated_caption_word_key(clean)
     if animated_caption_is_acronym(clean) or key in proper_nouns:
         return clean
     return clean.lower()
+
+
+def animated_caption_clean_word(word: str) -> str:
+    clean = re.sub(r"[^\wÀ-ÖØ-öø-ÿ.,:%]+", "", word, flags=re.UNICODE)
+    result: list[str] = []
+    for index, char in enumerate(clean):
+        if char in ".,:":
+            previous_digit = index > 0 and clean[index - 1].isdigit()
+            next_digit = index + 1 < len(clean) and clean[index + 1].isdigit()
+            if previous_digit and next_digit:
+                result.append(char)
+            continue
+        if char == "%":
+            if index > 0 and clean[index - 1].isdigit():
+                result.append(char)
+            continue
+        result.append(char)
+    return "".join(result)
 
 
 def animated_caption_word_key(word: str) -> str:
@@ -7177,6 +7300,7 @@ def ass_document_with_style(
     )
     style_lines = [ass_style_line(preset, style)]
     if animated:
+        style_lines.append(ass_caption_active_style_line(preset, style))
         style_lines.append(ass_caption_side_style_line(preset, style))
     return "\n".join([
         "[Script Info]",
@@ -7212,11 +7336,28 @@ def ass_style_line(preset: PlatformPreset, style: dict[str, object] | None = Non
     if mode == "animated" and background == "transparent":
         background = "#000000"
     border_style = 3 if background != "transparent" else 1
-    back_color = ass_color(background if background != "transparent" else "#000000", "66" if border_style == 3 else "99")
+    back_color = ass_color(background if background != "transparent" else "#000000", "33" if border_style == 3 else "99")
+    outline_color = back_color if border_style == 3 else "&H00000000"
     return (
         "Style: Default,Arial,"
-        f"{font_size},{primary},&H0000FFFF,&H00000000,{back_color},-1,0,0,0,100,100,0,0,{border_style},"
+        f"{font_size},{primary},&H0000FFFF,{outline_color},{back_color},-1,0,0,0,100,100,0,0,{border_style},"
         f"{outline},0,2,80,80,{margin_v},1"
+    )
+
+
+def ass_caption_active_style_line(preset: PlatformPreset, style: dict[str, object]) -> str:
+    base_size = int(style.get("size") or (72 if preset.height >= 1600 else 54))
+    font_size = max(24, int(base_size * 0.82))
+    outline = 7 if preset.height >= 1600 else 5
+    primary = ass_color(str(style.get("text_color") or "#ffffff"), "00")
+    background = str(style.get("highlight_background_color") or style.get("background_color") or "transparent")
+    if background == "transparent":
+        background = "#000000"
+    box_color = ass_color(background, "33")
+    return (
+        "Style: CaptionActive,Arial,"
+        f"{font_size},{primary},&H0000FFFF,{box_color},{box_color},-1,0,0,0,100,100,0,0,3,"
+        f"{outline},0,5,80,80,{caption_margin_v(preset, style)},1"
     )
 
 
@@ -7227,10 +7368,11 @@ def ass_caption_side_style_line(preset: PlatformPreset, style: dict[str, object]
     primary = ass_color(str(style.get("text_color") or "#ffffff"), "18")
     background = str(style.get("background_color") or "transparent")
     border_style = 3 if background != "transparent" else 1
-    back_color = ass_color(background if background != "transparent" else "#000000", "66" if border_style == 3 else "99")
+    back_color = ass_color(background if background != "transparent" else "#000000", "33" if border_style == 3 else "99")
+    outline_color = back_color if border_style == 3 else "&H00000000"
     return (
         "Style: CaptionSide,Arial,"
-        f"{font_size},{primary},&H0000FFFF,&H00000000,{back_color},-1,0,0,0,100,100,0,0,{border_style},"
+        f"{font_size},{primary},&H0000FFFF,{outline_color},{back_color},-1,0,0,0,100,100,0,0,{border_style},"
         f"{outline},0,5,80,80,{caption_margin_v(preset, style)},1"
     )
 
@@ -7344,7 +7486,7 @@ def ass_animated_dialogue_lines(
             next_x = int(clamp(center_x + ass_caption_side_offset(window.next, window.active, active_size, side_size), 70, preset.width - 70))
             lines.append(ass_animated_dialogue_line(0, start, end, "CaptionSide", window.next, next_x, side_y, ""))
         pop = r"\fad(25,70)\t(0,90,\fscx112\fscy112)\t(90,190,\fscx100\fscy100)"
-        lines.append(ass_animated_dialogue_line(1, start, end, "Default", window.active, center_x, center_y, pop))
+        lines.append(ass_animated_dialogue_line(1, start, end, "CaptionActive", window.active, center_x, center_y, pop))
     return lines
 
 
@@ -7493,7 +7635,7 @@ def subtitle_filter_path(subtitle_path: Path, out_dir: Path) -> str:
 
 def captioned_row(
     row: dict[str, object], preset: PlatformPreset, output_path: Path, subtitle_path: Path | None,
-    cover_path: Path | None = None,
+    cover_path: Path | None = None, cover_frame_path: Path | None = None,
 ) -> dict[str, object]:
     base_duration = caption_duration(row)
     return {
@@ -7512,6 +7654,8 @@ def captioned_row(
         "base_duration": base_duration,
         "final_duration": base_duration,
         "cover_file": str(cover_path) if cover_path else "",
+        "cover_frame_file": str(cover_frame_path) if cover_frame_path else "",
+        "cover_frame_duration": round(base_duration + COVER_FRAME_TAIL_SECONDS, 3) if cover_frame_path else 0.0,
         "publish_metadata": row.get("publish_metadata") if isinstance(row.get("publish_metadata"), dict) else {},
         "camera": camera_from_row(row),
         "camera_path": camera_path_from_row(row, base_duration),
@@ -7703,6 +7847,90 @@ def resolve_media_path(base_dir: Path, clip_file: str) -> Path:
     return path if path.is_absolute() else base_dir / path
 
 
+def render_cover_frame_tail_video(
+    video_path: Path,
+    cover_path: Path | None,
+    row: dict[str, object],
+    preset: PlatformPreset,
+    out_dir: Path,
+    ffmpeg: str,
+) -> Path | None:
+    if cover_path is None or not cover_path.exists() or not video_path.exists():
+        return None
+    output = out_dir / f"clip-{int(row.get('rank', 0)):03d}-{preset.key}-cover-frame.mp4"
+    work_dir = out_dir / "cover-frame-work" / f"{output.stem}-{uuid.uuid4().hex[:8]}"
+    work_dir.mkdir(parents=True, exist_ok=False)
+    try:
+        cover_segment = work_dir / "cover-frame.mp4"
+        render_cover_frame_segment(cover_path, cover_segment, media_has_audio(video_path, ffmpeg), preset, row, ffmpeg)
+        concat_path = work_dir / "concat.txt"
+        concat_path.write_text(concat_file_entry(video_path) + concat_file_entry(cover_segment), encoding="utf-8")
+        temp_output = work_dir / "cover-frame-final.mp4"
+        command = [
+            ffmpeg,
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_path),
+            "-c",
+            "copy",
+            "-movflags",
+            "+faststart",
+            str(temp_output),
+        ]
+        try:
+            run_ffmpeg_command(command, row, cwd=str(out_dir))
+        except subprocess.CalledProcessError:
+            temp_output = work_dir / "cover-frame-final-reencoded.mp4"
+            fallback = [
+                ffmpeg,
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(concat_path),
+                *mp4_output_args(row),
+                str(temp_output),
+            ]
+            run_ffmpeg_command(fallback, row, cwd=str(out_dir))
+        shutil.copy2(temp_output, output)
+        return output if output.exists() and output.stat().st_size > 0 else None
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
+
+
+def render_cover_frame_segment(
+    cover_path: Path,
+    output: Path,
+    include_audio: bool,
+    preset: PlatformPreset,
+    row: dict[str, object],
+    ffmpeg: str,
+) -> None:
+    duration = fmt_time(COVER_FRAME_TAIL_SECONDS)
+    video_filter_arg = ",".join([
+        f"scale={preset.width}:{preset.height}:force_original_aspect_ratio=increase",
+        f"crop={preset.width}:{preset.height}",
+        "setsar=1",
+        "fps=30",
+        "format=yuv420p",
+    ])
+    command = [ffmpeg, "-y", "-loop", "1", "-t", duration, "-i", str(cover_path)]
+    if include_audio:
+        command.extend(["-f", "lavfi", "-t", duration, "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"])
+        command.extend(["-t", duration, "-vf", video_filter_arg, "-map", "0:v:0", "-map", "1:a:0", "-shortest"])
+    else:
+        command.extend(["-t", duration, "-vf", video_filter_arg, "-map", "0:v:0"])
+    command.extend(mp4_output_args(row))
+    command.append(str(output))
+    run_ffmpeg_command(command, row)
+
+
 def render_publish_cover_image(
     row: dict[str, object], preset: PlatformPreset, base_dir: Path, out_dir: Path, ffmpeg: str
 ) -> Path | None:
@@ -7714,9 +7942,153 @@ def render_publish_cover_image(
     if not source.exists() or not source.is_file():
         return None
     output = out_dir / f"clip-{int(row.get('rank', 0)):03d}-{preset.key}-cover.jpg"
+    if render_publish_cover_image_with_pillow(source, output, cover, preset):
+        return output
     command = publish_cover_ffmpeg_command(source, output, cover, preset, ffmpeg)
     run_ffmpeg_command(command, row, cwd=str(out_dir))
     return output
+
+
+def render_publish_cover_image_with_pillow(source: Path, output: Path, cover: dict[str, object], preset: PlatformPreset) -> bool:
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        return False
+    with Image.open(source) as loaded:
+        canvas = pillow_cover_base_image(loaded.convert("RGBA"), cover, preset, Image)
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    for layer in cover_overlay_layers(cover):
+        if layer.get("kind") == "image":
+            pillow_draw_cover_image_layer(canvas, layer, preset, Image)
+        elif layer.get("kind") == "speech":
+            pillow_draw_cover_text_layer(draw, layer, preset, ImageFont, True)
+        elif layer.get("kind") == "text":
+            pillow_draw_cover_text_layer(draw, layer, preset, ImageFont, False)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    canvas.convert("RGB").save(output, "JPEG", quality=94, optimize=True)
+    return output.exists() and output.stat().st_size > 0
+
+
+def pillow_cover_base_image(image: object, cover: dict[str, object], preset: PlatformPreset, image_module: object) -> object:
+    zoom = clamp(float(cover.get("zoom") if cover.get("zoom") is not None else 1.0), 1.0, 1.8)
+    target_w = int(round(preset.width * zoom))
+    target_h = int(round(preset.height * zoom))
+    scale = max(target_w / max(image.width, 1), target_h / max(image.height, 1))
+    resized_w = max(preset.width, int(math.ceil(image.width * scale)))
+    resized_h = max(preset.height, int(math.ceil(image.height * scale)))
+    resized = image.resize((resized_w, resized_h), pillow_resampling_filter(image_module))
+    crop_x = clamp(float(cover.get("x") if cover.get("x") is not None else 50.0), 0.0, 100.0) / 100.0
+    crop_y = clamp(float(cover.get("y") if cover.get("y") is not None else 50.0), 0.0, 100.0) / 100.0
+    left = int(round(max(resized_w - preset.width, 0) * crop_x))
+    top = int(round(max(resized_h - preset.height, 0) * crop_y))
+    return resized.crop((left, top, left + preset.width, top + preset.height))
+
+
+def pillow_resampling_filter(image_module: object) -> object:
+    resampling = getattr(image_module, "Resampling", None)
+    return getattr(resampling, "LANCZOS", getattr(image_module, "LANCZOS", 1))
+
+
+def pillow_draw_cover_image_layer(canvas: object, layer: dict[str, object], preset: PlatformPreset, image_module: object) -> None:
+    image_file = str(layer.get("image_file") or "")
+    if not image_file:
+        return
+    with image_module.open(image_file) as loaded:
+        image = loaded.convert("RGBA")
+    width = max(1, int(round(preset.width * float(layer.get("width") or 0.28))))
+    height = max(1, int(round(image.height * (width / max(image.width, 1)))))
+    image = image.resize((width, height), pillow_resampling_filter(image_module))
+    opacity = clamp(float(layer.get("opacity") or 100.0) / 100.0, 0.1, 1.0)
+    if opacity < 0.999:
+        alpha = image.getchannel("A").point(lambda value: int(value * opacity))
+        image.putalpha(alpha)
+    x = min(int(round(preset.width * float(layer.get("x") or 0.0))), max(preset.width - width, 0))
+    y = min(int(round(preset.height * float(layer.get("y") or 0.0))), max(preset.height - height, 0))
+    canvas.alpha_composite(image, (x, y))
+
+
+def pillow_draw_cover_text_layer(
+    draw: object, layer: dict[str, object], preset: PlatformPreset, image_font: object, speech: bool
+) -> None:
+    text = str(layer.get("text") or layer.get("label") or "").strip()
+    if not text:
+        return
+    font_size = max(18, int(round(float(layer.get("font_size") or 34.0) * preset.width / 1080.0)))
+    font = image_font.truetype(str(find_overlay_font()), font_size)
+    box = pillow_cover_text_box(draw, layer, preset, font, font_size, speech)
+    x, y, box_w, box_h, pad_x, pad_y, line_height, lines = box
+    opacity = clamp(float(layer.get("opacity") or 100.0) / 100.0, 0.1, 1.0)
+    if speech or bool(layer.get("background_enabled")):
+        pillow_draw_cover_text_background(draw, layer, (x, y, box_w, box_h), font_size, opacity, speech)
+    text_color = pillow_rgba(layer.get("color"), "#050505" if speech else "#ffffff", opacity)
+    for index, line in enumerate(lines):
+        draw.text((x + pad_x, y + pad_y + index * line_height), line, fill=text_color, font=font)
+
+
+def pillow_cover_text_box(
+    draw: object, layer: dict[str, object], preset: PlatformPreset, font: object, font_size: int, speech: bool
+) -> tuple[int, int, int, int, int, int, int, list[str]]:
+    box_w = max(1, int(round(preset.width * float(layer.get("width") or 0.42))))
+    x = min(int(round(preset.width * float(layer.get("x") or 0.0))), max(preset.width - box_w, 0))
+    pad_x = max(10, int(round(font_size * (0.44 if speech else 0.35))))
+    pad_y = max(8, int(round(font_size * (0.32 if speech else 0.26))))
+    lines = pillow_wrap_text(draw, str(layer.get("text") or layer.get("label") or ""), font, max(box_w - pad_x * 2, 1))
+    line_height = max(font_size, pillow_text_size(draw, "Ag", font)[1]) + max(2, int(round(font_size * 0.12)))
+    min_height = int(round(font_size * (1.95 if speech else 1.65)))
+    box_h = max(min_height, len(lines) * line_height + pad_y * 2)
+    y = min(int(round(preset.height * float(layer.get("y") or 0.0))), max(preset.height - box_h, 0))
+    return x, y, box_w, box_h, pad_x, pad_y, line_height, lines
+
+
+def pillow_wrap_text(draw: object, text: str, font: object, max_width: int) -> list[str]:
+    words = text.split()
+    if not words:
+        return [text]
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if not current or pillow_text_size(draw, candidate, font)[0] <= max_width:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines[:2] or [text]
+
+
+def pillow_text_size(draw: object, text: str, font: object) -> tuple[int, int]:
+    left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
+    return max(1, right - left), max(1, bottom - top)
+
+
+def pillow_draw_cover_text_background(
+    draw: object, layer: dict[str, object], rect: tuple[int, int, int, int], font_size: int, opacity: float, speech: bool
+) -> None:
+    x, y, box_w, box_h = rect
+    bg_opacity = clamp(float(layer.get("background_opacity") if layer.get("background_opacity") is not None else 94.0) / 100.0, 0.0, 1.0)
+    background = pillow_rgba(layer.get("background_color"), "#ffffff" if speech else "#000000", opacity * bg_opacity)
+    radius = max(6, int(round(font_size * (0.5 if speech else 0.18))))
+    draw.rounded_rectangle((x, y, x + box_w, y + box_h), radius=radius, fill=background)
+    if speech:
+        pillow_draw_cover_speech_tail(draw, (x, y, box_w, box_h), font_size, background)
+
+
+def pillow_draw_cover_speech_tail(draw: object, rect: tuple[int, int, int, int], font_size: int, color: tuple[int, int, int, int]) -> None:
+    x, y, box_w, box_h = rect
+    tail_w = max(22, int(round(font_size * 0.72)))
+    tail_h = max(18, int(round(font_size * 0.58)))
+    tail_x = x + max(int(round(box_w * 0.18)), int(round(font_size * 0.62)))
+    tail_y = y + box_h - max(2, int(round(tail_h * 0.22)))
+    points = [(tail_x, tail_y), (tail_x + tail_w, tail_y), (tail_x + int(tail_w * 0.32), tail_y + tail_h)]
+    draw.polygon(points, fill=color)
+
+
+def pillow_rgba(value: object, fallback: str, opacity: float) -> tuple[int, int, int, int]:
+    color = normalize_hex_color(value, fallback).lstrip("#")
+    alpha = int(round(255 * clamp(opacity, 0.0, 1.0)))
+    return int(color[0:2], 16), int(color[2:4], 16), int(color[4:6], 16), alpha
 
 
 def publish_cover_from_row(row: dict[str, object]) -> dict[str, object]:
@@ -11056,6 +11428,10 @@ def page_html(
         <button type="button" data-render-profile="medium" class="active">Medio</button>
         <button type="button" data-render-profile="high">Alto</button>
       </div>
+      <label class="render-cover-frame-toggle">
+        <input type="checkbox" data-render-cover-frame>
+        <span><strong>Capa TikTok</strong><small>Cria uma copia com a capa no ultimo frame.</small></span>
+      </label>
       <div class="render-queue-status" data-render-queue-status>Nenhum render em andamento.</div>
       <div class="render-queue-list" data-render-queue-list></div>
     </section>
@@ -11802,6 +12178,7 @@ body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,
 .settings-backdrop{position:fixed!important;inset:0!important;z-index:5000!important;display:grid!important;place-items:center!important;padding:32px;background:radial-gradient(circle at 50% 42%,rgba(17,162,207,.18),transparent 30%),radial-gradient(circle at 64% 58%,rgba(175,207,42,.12),transparent 26%),rgba(0,0,0,.68)!important;backdrop-filter:blur(18px) saturate(1.18)!important;opacity:0;pointer-events:none;transition:opacity 180ms ease}.settings-backdrop[hidden]{display:none!important}.settings-backdrop.is-open{opacity:1;pointer-events:auto}.settings-backdrop.is-closing{opacity:0;pointer-events:none}.settings-panel{position:relative!important;isolation:isolate;width:min(640px,calc(100vw - 48px))!important;max-height:min(760px,calc(100vh - 56px));overflow:hidden auto;padding:20px!important;border:1px solid rgba(17,162,207,.34)!important;border-radius:22px!important;background:linear-gradient(145deg,rgba(231,231,232,.11),rgba(5,5,5,.8) 46%,rgba(11,15,10,.88)),rgba(5,5,5,.92)!important;box-shadow:0 0 0 1px rgba(255,255,255,.055),0 0 42px rgba(17,162,207,.2),0 0 58px rgba(175,207,42,.12),0 32px 86px rgba(0,0,0,.72)!important;transform:translateY(18px) scale(.965);opacity:0;outline:none;transition:transform 210ms cubic-bezier(.2,.9,.2,1),opacity 180ms ease}.settings-backdrop.is-open .settings-panel{transform:translateY(0) scale(1);opacity:1}.settings-backdrop.is-closing .settings-panel{transform:translateY(12px) scale(.975);opacity:0}.settings-aura{position:absolute;inset:-46px;z-index:-1;background:conic-gradient(from 130deg,transparent,rgba(17,162,207,.22),transparent 32%,rgba(175,207,42,.18),transparent 62%);opacity:.54;filter:blur(12px);animation:settings-aura-drift 8s linear infinite}.settings-head{position:relative;display:flex!important;align-items:flex-start!important;justify-content:space-between!important;gap:18px;padding:0 0 16px;border-bottom:1px solid rgba(231,231,232,.1)}.settings-title-row{display:flex;align-items:center;gap:14px;min-width:0}.settings-orb{display:grid;place-items:center;width:52px;height:52px;min-width:52px;border:1px solid rgba(175,207,42,.44);border-radius:16px;background:radial-gradient(circle at 50% 32%,rgba(175,207,42,.22),transparent 62%),rgba(8,11,8,.78);color:var(--color-brand-green);box-shadow:inset 0 1px rgba(255,255,255,.16),0 0 26px rgba(175,207,42,.18)}.settings-orb svg{width:27px;height:27px;fill:none;stroke:currentColor;stroke-width:1.9;animation:cuted-openai-gear-spin 7.2s linear infinite}.settings-head strong{display:block;color:var(--color-text);font-size:22px;line-height:1.05}.settings-head p{margin:5px 0 0!important;color:rgba(231,231,232,.62)!important;font-size:13px;line-height:1.25}.settings-close-button{display:grid!important;place-items:center;width:40px!important;height:40px!important;min-width:40px!important;padding:0!important;border:1px solid rgba(231,231,232,.16)!important;border-radius:14px!important;background:rgba(231,231,232,.06)!important;color:rgba(231,231,232,.75)!important;font-weight:900!important}.settings-close-button:hover,.settings-close-button:focus-visible{border-color:rgba(255,111,111,.42)!important;color:#ff9d9d!important;box-shadow:0 0 22px rgba(255,111,111,.18)}.settings-form{display:grid!important;gap:14px!important;margin-top:16px!important}.settings-status{padding:12px 14px!important;border:1px solid rgba(17,162,207,.26)!important;border-radius:14px!important;background:linear-gradient(90deg,rgba(17,162,207,.12),rgba(175,207,42,.065)),rgba(0,0,0,.3)!important;color:rgba(231,231,232,.82)!important;font-size:13px}.settings-field{display:grid!important;gap:7px!important;color:rgba(231,231,232,.68)!important;font-size:12px!important;font-weight:800;letter-spacing:.01em}.settings-form input,.settings-form select{min-height:44px!important;border:1px solid rgba(231,231,232,.14)!important;border-radius:14px!important;background:rgba(0,0,0,.52)!important;color:var(--color-text)!important;padding:10px 12px!important;box-shadow:inset 0 1px rgba(255,255,255,.05)!important}.settings-form input:focus,.settings-form select:focus{border-color:rgba(17,162,207,.62)!important;outline:none;box-shadow:0 0 0 3px rgba(17,162,207,.16),inset 0 1px rgba(255,255,255,.07)!important}.settings-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important}.settings-usage{display:grid!important;gap:5px!important;padding:12px 14px!important;border:1px solid rgba(231,231,232,.12)!important;border-radius:14px!important;background:rgba(231,231,232,.045)!important;color:rgba(231,231,232,.6)!important;font-size:12px!important}.settings-usage strong{color:rgba(231,231,232,.86)}.settings-actions{display:flex!important;justify-content:flex-end!important;gap:10px!important;flex-wrap:wrap!important;padding-top:2px}.settings-actions button{min-height:42px!important;border-radius:999px!important;padding:0 18px!important}.settings-actions button[type=submit]{border-color:rgba(175,207,42,.56)!important;background:linear-gradient(90deg,rgba(175,207,42,.95),rgba(17,162,207,.88))!important;color:#050505!important;font-weight:900!important}.settings-actions [data-settings-test]{border-color:rgba(17,162,207,.36)!important;background:rgba(17,162,207,.08)!important;color:var(--color-text)!important}.settings-form small{color:rgba(231,231,232,.5)!important;font-size:11px!important}@keyframes settings-aura-drift{to{transform:rotate(360deg)}}@media(max-width:760px){.settings-backdrop{padding:18px}.settings-panel{width:calc(100vw - 28px)!important;padding:16px!important}.settings-grid{grid-template-columns:1fr!important}.settings-head strong{font-size:20px}}
 .settings-panel{scrollbar-width:none}.settings-panel::-webkit-scrollbar{width:0;height:0}
 .render-queue-backdrop{position:fixed!important;inset:0!important;z-index:4900!important;display:grid!important;place-items:center!important;padding:32px;background:radial-gradient(circle at 46% 38%,rgba(17,162,207,.18),transparent 30%),radial-gradient(circle at 63% 62%,rgba(175,207,42,.12),transparent 28%),rgba(0,0,0,.7)!important;backdrop-filter:blur(18px) saturate(1.18)!important;opacity:0;pointer-events:none;transition:opacity 180ms ease}.render-queue-backdrop[hidden]{display:none!important}.render-queue-backdrop.is-open{opacity:1;pointer-events:auto}.render-queue-backdrop.is-closing{opacity:0;pointer-events:none}.render-queue-panel{position:relative;isolation:isolate;width:min(760px,calc(100vw - 56px));max-height:min(780px,calc(100vh - 56px));overflow:hidden;padding:20px;border:1px solid rgba(17,162,207,.34);border-radius:22px;background:linear-gradient(145deg,rgba(231,231,232,.11),rgba(5,5,5,.82) 46%,rgba(11,15,10,.9)),rgba(5,5,5,.94);box-shadow:0 0 0 1px rgba(255,255,255,.055),0 0 42px rgba(17,162,207,.2),0 0 58px rgba(175,207,42,.12),0 32px 86px rgba(0,0,0,.72);transform:translateY(18px) scale(.965);opacity:0;outline:none;transition:transform 210ms cubic-bezier(.2,.9,.2,1),opacity 180ms ease}.render-queue-backdrop.is-open .render-queue-panel{transform:translateY(0) scale(1);opacity:1}.render-queue-aura{position:absolute;inset:-46px;z-index:-1;background:conic-gradient(from 120deg,transparent,rgba(17,162,207,.2),transparent 34%,rgba(175,207,42,.18),transparent 64%);opacity:.48;filter:blur(12px);animation:settings-aura-drift 8.5s linear infinite}.render-queue-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;padding-bottom:16px;border-bottom:1px solid rgba(231,231,232,.1)}.render-queue-head strong{display:block;font-size:22px;line-height:1.05}.render-queue-head p{margin:5px 0 0;color:rgba(231,231,232,.62);font-size:13px}.render-queue-close{display:grid;place-items:center;width:40px;height:40px;min-width:40px;padding:0;border:1px solid rgba(231,231,232,.16);border-radius:14px;background:rgba(231,231,232,.06);color:rgba(231,231,232,.75);font-weight:900}.render-resource-switch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:16px 0}.render-resource-switch button{min-height:42px;border:1px solid rgba(231,231,232,.16);border-radius:14px;background:rgba(231,231,232,.055);color:rgba(231,231,232,.74);font-weight:900}.render-resource-switch button.active{border-color:rgba(175,207,42,.58);background:linear-gradient(90deg,rgba(175,207,42,.2),rgba(17,162,207,.08));color:var(--color-text);box-shadow:0 0 22px rgba(175,207,42,.14)}.render-queue-status{min-height:42px;padding:12px 14px;border:1px solid rgba(17,162,207,.26);border-radius:14px;background:linear-gradient(90deg,rgba(17,162,207,.12),rgba(175,207,42,.065)),rgba(0,0,0,.3);color:rgba(231,231,232,.82);font-size:13px}.render-queue-list{display:grid;gap:10px;max-height:min(486px,calc(100vh - 288px));margin-top:12px;overflow:auto;padding-right:4px;scrollbar-width:thin;scrollbar-color:rgba(175,207,42,.55) rgba(255,255,255,.055)}.render-queue-list::-webkit-scrollbar{width:8px}.render-queue-list::-webkit-scrollbar-thumb{border-radius:999px;background:linear-gradient(180deg,rgba(17,162,207,.72),rgba(175,207,42,.72))}.render-job-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:13px 14px;border:1px solid rgba(231,231,232,.12);border-radius:16px;background:linear-gradient(180deg,rgba(231,231,232,.07),rgba(231,231,232,.025)),rgba(0,0,0,.34)}.render-job-card[data-status=ready]{border-color:rgba(175,207,42,.38)}.render-job-card[data-status=failed],.render-job-card[data-status=cancelled]{border-color:rgba(255,111,111,.36)}.render-job-main{display:grid;gap:7px;min-width:0}.render-job-title{display:flex;gap:8px;align-items:center;min-width:0}.render-job-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.render-job-pill{display:inline-flex;align-items:center;min-height:22px;padding:3px 8px;border-radius:999px;background:rgba(17,162,207,.12);color:rgba(36,220,255,.9);font-size:11px;font-weight:900;text-transform:uppercase}.render-job-card[data-status=cancelled] .render-job-pill,.render-job-card[data-status=failed] .render-job-pill{background:rgba(255,111,111,.12);color:#ff9d9d}.render-job-meta{color:rgba(231,231,232,.58);font-size:12px}.render-job-progress{position:relative;height:5px;overflow:hidden;border-radius:999px;background:rgba(231,231,232,.1)}.render-job-progress span{position:absolute;inset:0 auto 0 0;width:var(--progress);border-radius:inherit;background:linear-gradient(90deg,var(--color-brand-blue),var(--color-brand-green));box-shadow:0 0 14px rgba(17,162,207,.34)}.render-job-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.render-job-actions button{min-height:34px;padding:7px 11px;border:1px solid rgba(231,231,232,.16);border-radius:999px;background:rgba(231,231,232,.07);color:rgba(231,231,232,.82);font-weight:800}.render-job-actions button.primary{border-color:rgba(175,207,42,.52);background:rgba(175,207,42,.14);color:var(--color-brand-green)}.render-job-actions [data-render-cancel],.render-job-actions [data-render-remove]{border-color:rgba(255,111,111,.34);background:rgba(255,111,111,.08);color:#ffb3b3}.render-empty{padding:18px;border:1px dashed rgba(231,231,232,.16);border-radius:16px;color:rgba(231,231,232,.58);text-align:center}
+.render-cover-frame-toggle{display:flex;gap:10px;align-items:center;margin:-4px 0 14px;padding:10px 12px;border:1px solid rgba(231,231,232,.13);border-radius:14px;background:rgba(231,231,232,.045);color:rgba(231,231,232,.82);cursor:pointer}.render-cover-frame-toggle input{width:18px;height:18px;accent-color:var(--color-brand-green)}.render-cover-frame-toggle span{display:grid;gap:2px}.render-cover-frame-toggle strong{font-size:13px}.render-cover-frame-toggle small{color:rgba(231,231,232,.54);font-size:11px;line-height:1.25}
 .workspace-exit-backdrop{position:fixed!important;inset:0!important;z-index:4950!important;display:grid!important;place-items:center!important;padding:32px;background:radial-gradient(circle at 45% 38%,rgba(17,162,207,.18),transparent 30%),radial-gradient(circle at 62% 62%,rgba(175,207,42,.12),transparent 28%),rgba(0,0,0,.72)!important;backdrop-filter:blur(18px) saturate(1.18)!important;opacity:0;pointer-events:none;transition:opacity 180ms ease}.workspace-exit-backdrop[hidden]{display:none!important}.workspace-exit-backdrop.is-open{opacity:1;pointer-events:auto}.workspace-exit-backdrop.is-closing{opacity:0;pointer-events:none}.workspace-exit-panel{position:relative;isolation:isolate;width:min(620px,calc(100vw - 48px));overflow:hidden;padding:20px;border:1px solid rgba(17,162,207,.34);border-radius:22px;background:linear-gradient(145deg,rgba(231,231,232,.11),rgba(5,5,5,.83) 46%,rgba(11,15,10,.9)),rgba(5,5,5,.94);box-shadow:0 0 0 1px rgba(255,255,255,.055),0 0 42px rgba(17,162,207,.2),0 0 58px rgba(175,207,42,.12),0 32px 86px rgba(0,0,0,.72);transform:translateY(18px) scale(.965);opacity:0;outline:none;transition:transform 210ms cubic-bezier(.2,.9,.2,1),opacity 180ms ease}.workspace-exit-backdrop.is-open .workspace-exit-panel{transform:translateY(0) scale(1);opacity:1}.workspace-exit-aura{position:absolute;inset:-46px;z-index:-1;background:conic-gradient(from 120deg,transparent,rgba(17,162,207,.2),transparent 34%,rgba(175,207,42,.18),transparent 64%);opacity:.48;filter:blur(12px);animation:settings-aura-drift 8.5s linear infinite}.workspace-exit-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;padding-bottom:16px;border-bottom:1px solid rgba(231,231,232,.1)}.workspace-exit-head strong{display:block;font-size:22px;line-height:1.05}.workspace-exit-head p,.workspace-exit-body p{margin:5px 0 0;color:rgba(231,231,232,.62);font-size:13px;line-height:1.35}.workspace-exit-body{display:grid;gap:8px;padding:16px 0}.workspace-exit-close{display:grid;place-items:center;width:40px;height:40px;min-width:40px;padding:0;border:1px solid rgba(231,231,232,.16);border-radius:14px;background:rgba(231,231,232,.06);color:rgba(231,231,232,.75);font-weight:900}.workspace-exit-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}.workspace-exit-actions button{min-height:42px;border-radius:999px;padding:0 18px;border:1px solid rgba(231,231,232,.16);background:rgba(231,231,232,.07);color:rgba(231,231,232,.82);font-weight:900}.workspace-exit-actions button.primary{border-color:rgba(175,207,42,.56);background:var(--color-brand-white);color:var(--color-brand-black)}
 .header-actions{position:absolute;right:26px;top:50%;display:flex;justify-content:flex-end;align-items:center;gap:10px;width:auto;margin:0;transform:translateY(-50%)}header{grid-template-columns:1fr!important;justify-items:center;padding:18px 26px 2px!important}.header-actions .header-icon-button,#reset-ui.header-icon-button,#finalize-videos.header-icon-button,#open-settings.header-icon-button{width:56px!important;height:56px!important;min-width:56px!important;border-color:rgba(17,162,207,.42)!important;background:linear-gradient(145deg,rgba(17,162,207,.16),rgba(175,207,42,.08) 48%,rgba(5,5,5,.84)),rgba(5,5,5,.88)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.12),0 0 18px rgba(17,162,207,.12),0 14px 34px rgba(0,0,0,.36)!important;transition:transform 170ms ease,border-color 170ms ease,box-shadow 170ms ease,color 170ms ease!important}.header-actions .header-icon-button:before,#finalize-videos.header-render-button:before,#open-settings.header-settings-button.is-openai-ready:before{background:radial-gradient(circle at 45% 22%,rgba(17,162,207,.24),transparent 58%),radial-gradient(circle at 70% 72%,rgba(175,207,42,.18),transparent 62%)!important;opacity:.66!important;transition:opacity 170ms ease,transform 170ms ease!important}.header-actions .header-icon-button:hover,.header-actions .header-icon-button:focus-visible{border-color:rgba(175,207,42,.7)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.16),0 0 24px rgba(17,162,207,.24),0 0 26px rgba(175,207,42,.16),0 18px 40px rgba(0,0,0,.42)!important;transform:translateY(-2px) scale(1.035)}.header-actions .header-icon-button:hover:before,.header-actions .header-icon-button:focus-visible:before{opacity:1!important;transform:scale(1.12) rotate(2deg)!important}.header-actions .header-render-button,#finalize-videos.header-render-button{width:56px!important;height:56px!important;min-width:56px!important;animation:none!important}.header-actions .header-render-button svg,#finalize-videos.header-render-button svg{width:30px;height:30px;stroke-width:1.85;animation:none!important;filter:none!important}#open-settings.header-settings-button.is-openai-ready{border-color:rgba(17,162,207,.42)!important;background:linear-gradient(145deg,rgba(17,162,207,.16),rgba(175,207,42,.08) 48%,rgba(5,5,5,.84)),rgba(5,5,5,.88)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.12),0 0 18px rgba(17,162,207,.12),0 14px 34px rgba(0,0,0,.36)!important}#open-settings.header-settings-button.is-openai-ready svg{animation:cuted-openai-gear-spin 5.8s linear infinite;filter:drop-shadow(0 0 8px rgba(175,207,42,.24))}.header-actions .header-render-button.is-rendering,#finalize-videos.header-render-button.is-rendering{border-color:rgba(175,207,42,.78)!important;background:linear-gradient(180deg,rgba(175,207,42,.2),rgba(17,162,207,.065)),rgba(12,14,9,.72)!important;color:var(--color-brand-green)!important;box-shadow:inset 0 1px rgba(255,255,255,.24),0 0 28px rgba(175,207,42,.34),0 0 42px rgba(17,162,207,.14),0 16px 38px rgba(0,0,0,.36)!important;animation:cuted-render-button-pulse 1.65s ease-in-out infinite!important}.header-actions .header-render-button.is-rendering:before,#finalize-videos.header-render-button.is-rendering:before{background:radial-gradient(circle at 58% 25%,rgba(175,207,42,.28),transparent 60%),radial-gradient(circle at 32% 70%,rgba(17,162,207,.12),transparent 56%)!important;opacity:1!important;transform:scale(1.12);animation:cuted-render-button-scan 1.4s ease-in-out infinite}.header-actions .header-render-button.is-rendering svg,#finalize-videos.header-render-button.is-rendering svg{animation:cuted-render-icon-drift 1.9s ease-in-out infinite!important;filter:drop-shadow(0 0 9px rgba(175,207,42,.42))!important}@media(max-width:1080px){.header-actions{position:static;justify-content:center;width:100%;margin:0;transform:none}.brand-logo{width:min(520px,88vw)}header{grid-template-columns:1fr!important;gap:8px;padding:12px!important}}@media(max-width:860px){.header-actions{justify-content:center;width:100%;margin:0;transform:none}header{grid-template-columns:1fr!important;padding:12px!important}}
 .clip-control-surface .cuted-render-zone.is-ready .cuted-ready-region{flex:0 0 46px;width:46px;min-width:46px}.clip-control-surface .cuted-render-zone.is-ready .cuted-ready-pill{width:46px}
@@ -15879,9 +16256,11 @@ function normalizePublishHashtags(value){
 }
 function publishCoverFromEdit(edit, generated, moment){
   const cover = generated?.cover && typeof generated.cover === "object" ? generated.cover : {};
-  const candidates = publishCoverCandidates(moment, cover);
-  const fallback = cover.selected_frame || candidates[0] || moment.frame_file || "";
-  const selected = candidates.includes(edit.coverFrame) ? edit.coverFrame : fallback;
+  const editedFrame = cleanPublishField(edit.coverFrame, 260);
+  const baseCandidates = publishCoverCandidates(moment, cover);
+  const fallback = cover.selected_frame || baseCandidates[0] || moment.frame_file || "";
+  const selected = editedFrame || fallback;
+  const candidates = uniqueCoverFrames([selected, ...baseCandidates]);
   const zoom = normalizePublishCoverZoom(edit.coverZoom, normalizePublishCoverZoom(cover.zoom, 1));
   return {
     selected_frame: selected,
@@ -17023,11 +17402,23 @@ function previewAnimatedCaptionProperNouns(text){
   return result;
 }
 function previewAnimatedCaptionDisplayWord(word, properNouns){
-  const clean = String(word || "").replace(/[^\\p{L}\\p{N}_]+/gu, "");
+  const clean = previewAnimatedCaptionCleanWord(word);
   if (!clean) return "";
   const key = previewAnimatedCaptionWordKey(clean);
   if (previewAnimatedCaptionIsAcronym(clean) || properNouns.has(key)) return clean;
   return clean.toLocaleLowerCase("pt-BR");
+}
+function previewAnimatedCaptionCleanWord(word){
+  const raw = String(word || "").replace(/[^\\p{L}\\p{N}_.,:%]+/gu, "");
+  return Array.from(raw).filter((char, index, chars) => {
+    if (".,:".includes(char)) {
+      return index > 0 && index + 1 < chars.length && /\\p{N}/u.test(chars[index - 1]) && /\\p{N}/u.test(chars[index + 1]);
+    }
+    if (char === "%") {
+      return index > 0 && /\\p{N}/u.test(chars[index - 1]);
+    }
+    return true;
+  }).join("");
 }
 function previewAnimatedCaptionWordKey(word){
   return String(word || "").replace(/[^\\p{L}\\p{N}_]+/gu, "").toLocaleLowerCase("pt-BR");
@@ -17136,11 +17527,19 @@ function cleanPreviewCaptionText(text){
     .replace(/(^|\\s)(>{1,3}|-{1,2})\\s*/g, " ")
     .replace(/\\s+/g, " ")
     .replace(/\\s+([,.;:!?])/g, "$1")
-    .replace(/([,.;:!?])([^\\s,.;:!?])/g, "$1 $2")
+    .replace(/(\\d)([.,:])\\s+(?=\\d)/g, "$1$2")
+    .replace(/([,.;:!?])([^\\s,.;:!?])/g, spaceAfterPreviewCaptionPunctuation)
     .replace(/^(ne\\??|aham|uhum|hum|entao|mas)\\s+/i, "")
     .trim()
     .replace(/^-+|-+$/g, "")
     .trim();
+}
+function spaceAfterPreviewCaptionPunctuation(match, punctuation, nextChar, offset, value){
+  const previousChar = offset > 0 ? String(value || "")[offset - 1] : "";
+  if (".,:".includes(punctuation) && /\\d/.test(previousChar) && /\\d/.test(nextChar)) {
+    return `${punctuation}${nextChar}`;
+  }
+  return `${punctuation} ${nextChar}`;
 }
 function previewCaptionChunks(text, charsPerLine, maxLines, duration){
   const lineWidth = Math.max(12, Number(charsPerLine) || 28);
@@ -17196,7 +17595,11 @@ function captionCommand(){
   const chars = captionWidth();
   const lines = captionLines();
   const script = window.CUTTED_SCRIPT || "cutted.py";
-  return `python "${script}" caption-selected "caption-queue.json" --out "captioned-clips" --base-dir "." --chars-per-line ${chars} --max-lines ${lines}`;
+  const coverFrame = renderCoverFrameEnabled() ? " --cover-frame" : "";
+  return `python "${script}" caption-selected "caption-queue.json" --out "captioned-clips" --base-dir "." --chars-per-line ${chars} --max-lines ${lines}${coverFrame}`;
+}
+function renderCoverFrameEnabled(){
+  return Boolean(renderQueueState.coverFrame);
 }
 async function finalizeVideos(){
   const button = document.getElementById("finalize-videos");
@@ -17220,6 +17623,7 @@ async function finalizeVideos(){
         chars_per_line: captionWidth(),
         max_lines: captionLines(),
         captions_enabled: queue.some(item => item.captions_enabled !== false),
+        cover_frame_enabled: renderCoverFrameEnabled(),
         gallery_path: currentGalleryPath()
       })
     });
@@ -17308,6 +17712,9 @@ function renderFinalizeResults(files, options = {}){
     const downloadName = file.download_name || file.url?.split("/").pop() || "cuted-video.mp4";
     const finalFile = file.final_file || file.local_file || "";
     const coverFile = file.final_cover_file || file.local_cover_file || file.cover_file || "";
+    const coverFrameUrl = file.cover_frame_url || "";
+    const coverFrameFile = file.final_cover_frame_file || file.local_cover_frame_file || file.cover_frame_file || "";
+    const coverFrameDownloadName = file.download_cover_frame_name || coverFrameUrl.split("/").pop() || "cuted-tiktok-cover-frame.mp4";
     const finalDir = file.final_dir || "";
     const fileStatus = finalFile ? "Arquivo final exportado" : "Preview temporario";
     return `<details class="result-item"${open}>
@@ -17325,26 +17732,41 @@ function renderFinalizeResults(files, options = {}){
             <dt>Vinhetas</dt><dd>${escapeHtml(bumperText)}</dd>
             ${finalFile ? `<dt>Arquivo final</dt><dd><span class="result-path">${escapeHtml(finalFile)}</span></dd>` : ""}
             ${coverFile ? `<dt>Capa final</dt><dd><span class="result-path">${escapeHtml(coverFile)}</span></dd>` : ""}
+            ${coverFrameFile ? `<dt>Versao TikTok</dt><dd><span class="result-path">${escapeHtml(coverFrameFile)}</span></dd>` : ""}
             ${finalDir ? `<dt>Pasta final</dt><dd><span class="result-path">${escapeHtml(finalDir)}</span></dd>` : ""}
           </dl>
           <div class="result-actions">
             <a href="${escapeAttr(file.url)}" target="_blank" rel="noopener">Abrir preview</a>
             <a class="secondary" href="${escapeAttr(file.url)}" download="${escapeAttr(downloadName)}">Baixar preview</a>
+            ${coverFrameUrl ? `<a class="secondary" href="${escapeAttr(coverFrameUrl)}" target="_blank" rel="noopener">Abrir TikTok</a>` : ""}
+            ${coverFrameUrl ? `<a class="secondary" href="${escapeAttr(coverFrameUrl)}" download="${escapeAttr(coverFrameDownloadName)}">Baixar TikTok</a>` : ""}
             ${finalDir ? `<button class="secondary" type="button" data-open-folder="${escapeAttr(finalDir)}">Abrir pasta</button>` : ""}
             ${finalFile ? `<button class="secondary" type="button" data-copy-path="${escapeAttr(finalFile)}">Copiar caminho</button>` : ""}
+            ${coverFrameFile ? `<button class="secondary" type="button" data-copy-path="${escapeAttr(coverFrameFile)}">Copiar TikTok</button>` : ""}
           </div>
         </div>
       </div>
     </details>`;
   }).join("");
 }
-const renderQueueState = { profile: localStorage.getItem("cuted-render-profile") || "medium", pollId: null, activityPollId: null, lastFocus: null, lastJobs: [] };
+const renderQueueState = {
+  profile: localStorage.getItem("cuted-render-profile") || "medium",
+  coverFrame: localStorage.getItem("cuted-render-cover-frame") === "1",
+  pollId: null,
+  activityPollId: null,
+  lastFocus: null,
+  lastJobs: []
+};
 function setupRenderQueuePanel(){
   const modal = document.querySelector("[data-render-queue-modal]");
   if (!modal) return;
   document.querySelectorAll("[data-render-profile]").forEach(button => {
     button.classList.toggle("active", button.dataset.renderProfile === renderQueueState.profile);
     button.addEventListener("click", () => setRenderQueueProfile(button.dataset.renderProfile || "medium"));
+  });
+  document.querySelectorAll("[data-render-cover-frame]").forEach(input => {
+    input.checked = renderQueueState.coverFrame;
+    input.addEventListener("change", () => setRenderCoverFrameEnabled(input.checked));
   });
   document.querySelector("[data-render-queue-close]")?.addEventListener("click", () => closeRenderQueuePanel());
   modal.addEventListener("click", event => { if (event.target === modal) closeRenderQueuePanel(); });
@@ -17446,6 +17868,7 @@ function renderQueueJobHtml(job){
   const meta = [
     summary.platform || "",
     summary.duration ? fixed(summary.duration) : "",
+    summary.cover_frame_enabled ? "Capa TikTok" : "",
     renderProfileLabel(job.resource_profile),
     job.speed || "",
     eta > 0 && job.status === "rendering" ? `${formatRenderEta(eta)} restantes` : ""
@@ -17511,6 +17934,19 @@ async function setRenderQueueProfile(profile){
     if (status) status.textContent = error.message || "Nao consegui atualizar o perfil da fila.";
   }
 }
+function setRenderCoverFrameEnabled(enabled){
+  renderQueueState.coverFrame = Boolean(enabled);
+  localStorage.setItem("cuted-render-cover-frame", renderQueueState.coverFrame ? "1" : "0");
+  document.querySelectorAll("[data-render-cover-frame]").forEach(input => {
+    input.checked = renderQueueState.coverFrame;
+  });
+  const status = document.querySelector("[data-render-queue-status]");
+  if (status) {
+    status.textContent = renderQueueState.coverFrame
+      ? "Capa TikTok ligada para os proximos renders."
+      : "Capa TikTok desligada para os proximos renders.";
+  }
+}
 async function updateRenderQueueProfileJob(jobId, profile){
   if (!jobId) return { changed: false };
   const response = await fetch(`/api/render-jobs/${encodeURIComponent(jobId)}/profile`, {
@@ -17562,6 +17998,7 @@ async function sendCardToRenderQueue(card){
         max_lines: captionLines(),
         captions_enabled: queue.caption_queue.some(item => item.captions_enabled !== false),
         gallery_path: currentGalleryPath(),
+        cover_frame_enabled: renderCoverFrameEnabled(),
         resource_profile: renderQueueState.profile
       })
     });

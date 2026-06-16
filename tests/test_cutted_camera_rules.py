@@ -501,6 +501,47 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIn("-filter_complex", command)
         self.assertIn("coverimg0", " ".join(command))
 
+    def test_publish_cover_pillow_renderer_matches_static_speech_layers(self) -> None:
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not available.")
+        preset = CUTTED.PLATFORM_PRESETS["tiktok"]
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            source = tmp_path / "source.jpg"
+            logo = tmp_path / "logo.png"
+            output = tmp_path / "cover.jpg"
+            Image.new("RGB", (1080, 1920), (32, 32, 32)).save(source)
+            Image.new("RGBA", (120, 40), (255, 0, 0, 255)).save(logo)
+            cover = {
+                "zoom": 1.0,
+                "x": 50,
+                "y": 50,
+                "layers": [
+                    {
+                        "kind": "speech",
+                        "text": "Meu deus !!",
+                        "x": 0.2,
+                        "y": 0.5,
+                        "width": 0.4,
+                        "background_color": "#ffffff",
+                        "background_opacity": 100,
+                        "opacity": 100,
+                    },
+                    {"kind": "image", "image_file": str(logo), "x": 0.3, "y": 0.72, "width": 0.2, "opacity": 100},
+                ],
+            }
+
+            rendered = CUTTED.render_publish_cover_image_with_pillow(source, output, cover, preset)
+            self.assertTrue(rendered)
+            self.assertTrue(output.exists())
+            image = Image.open(output).convert("RGB")
+
+        self.assertGreater(image.getpixel((245, 410))[0], 210)
+        self.assertGreater(image.getpixel((302, 452))[0], 210)
+        self.assertGreater(image.getpixel((330, 810))[0], 180)
+
     def test_page_mounts_live_timeline_with_legacy_fallback(self) -> None:
         html = CUTTED.page_html(
             "Teste",
