@@ -107,12 +107,23 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn('data-render-profile="eco"', html)
         self.assertIn('data-render-profile="medium"', html)
         self.assertIn('data-render-profile="high"', html)
+        self.assertIn("data-render-cover-frame", html)
+        self.assertIn("cuted-render-cover-frame", html)
+        self.assertIn("renderCoverFrameEnabled", html)
+        self.assertIn("cover_frame_enabled: renderCoverFrameEnabled()", html)
+        self.assertIn(" --cover-frame", html)
+        self.assertIn("Capa TikTok", html)
         self.assertIn("/api/render-jobs", html)
         self.assertIn("openRenderQueuePanel", html)
         self.assertIn("sendCardToRenderQueue", html)
         self.assertIn("data-render-cancel", html)
         self.assertIn("data-render-remove", html)
         self.assertIn("/api/render-jobs/${encodeURIComponent(jobId)}/remove", html)
+        self.assertIn("Abrir TikTok", html)
+        self.assertIn("Baixar TikTok", html)
+        self.assertIn("final_cover_frame_file", html)
+        self.assertIn("const editedFrame = cleanPublishField(edit.coverFrame, 260);", html)
+        self.assertIn("const candidates = uniqueCoverFrames([selected, ...baseCandidates]);", html)
         self.assertIn("SEND TO RENDER", script)
         self.assertIn("SENT TO RENDER", script)
         self.assertIn("Ja esta renderizando", html)
@@ -132,6 +143,41 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertNotIn('data-cuted-control="send-render"', script)
         self.assertNotIn("openRenderQueuePanel();\n    await loadRenderQueue();", html)
         self.assertNotIn("showAppNotice(label);\n    await loadRenderQueue();", html)
+
+    def test_render_server_runtime_guard_detects_stale_source(self) -> None:
+        class FakeScriptPath:
+            def __init__(self, mtime_ns: int) -> None:
+                self.mtime_ns = mtime_ns
+
+            def stat(self) -> object:
+                return type("StatResult", (), {"st_mtime_ns": self.mtime_ns})()
+
+        original_path = CUTTED.CUTTED_SERVER_SCRIPT_PATH
+        original_mtime_ns = CUTTED.CUTTED_SERVER_SCRIPT_MTIME_NS
+        try:
+            CUTTED.CUTTED_SERVER_SCRIPT_PATH = FakeScriptPath(22)
+            CUTTED.CUTTED_SERVER_SCRIPT_MTIME_NS = 22
+            self.assertFalse(CUTTED.server_code_changed_since_start())
+
+            CUTTED.CUTTED_SERVER_SCRIPT_PATH = FakeScriptPath(23)
+            self.assertTrue(CUTTED.server_code_changed_since_start())
+
+            payload = CUTTED.stale_server_payload()
+            self.assertEqual(payload["code"], "stale_render_server")
+            self.assertIn("Reinicie", payload["error"])
+        finally:
+            CUTTED.CUTTED_SERVER_SCRIPT_PATH = original_path
+            CUTTED.CUTTED_SERVER_SCRIPT_MTIME_NS = original_mtime_ns
+
+    def test_render_job_fingerprint_tracks_render_contract_version(self) -> None:
+        payload = {"queue": {"caption_queue": [{"rank": 1, "title": "Teste"}]}, "cover_frame_enabled": True}
+        original_version = CUTTED.RENDER_JOB_FINGERPRINT_VERSION
+        original_fingerprint = CUTTED.render_job_fingerprint(payload, "medium")
+        try:
+            CUTTED.RENDER_JOB_FINGERPRINT_VERSION = f"{original_version}-next"
+            self.assertNotEqual(original_fingerprint, CUTTED.render_job_fingerprint(payload, "medium"))
+        finally:
+            CUTTED.RENDER_JOB_FINGERPRINT_VERSION = original_version
 
     def test_closed_captions_can_render_in_preview(self) -> None:
         html = gallery_html()
@@ -181,6 +227,8 @@ class CuttedImportUiTests(unittest.TestCase):
 
     def test_animated_caption_text_uses_social_display_style(self) -> None:
         raw = ">> Mas, Tati Cariani falou com IA; Porque isso."
+        numeric = "Eu ganhei 10.000 e paguei 4.299,00 em 3.2 segundos com 80% pronto."
+        source = MODULE_PATH.read_text(encoding="utf-8")
 
         self.assertEqual(CUTTED.clean_caption_text(raw), "Mas, Tati Cariani falou com IA; Porque isso.")
         self.assertEqual(CUTTED.clean_animated_caption_text(raw), "mas Tati Cariani falou com IA porque isso")
@@ -188,6 +236,12 @@ class CuttedImportUiTests(unittest.TestCase):
             CUTTED.split_animated_caption_words(raw, 18),
             ["mas", "Tati", "Cariani", "falou", "com", "IA", "porque", "isso"],
         )
+        self.assertEqual(
+            CUTTED.split_animated_caption_words(numeric, 18),
+            ["eu", "ganhei", "10.000", "e", "paguei", "4.299,00", "em", "3.2", "segundos", "com", "80%", "pronto"],
+        )
+        self.assertIn("previewAnimatedCaptionCleanWord", source)
+        self.assertIn("spaceAfterPreviewCaptionPunctuation", source)
 
     def test_closed_caption_control_bar_menu_is_available(self) -> None:
         asset_dir = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar"
@@ -226,7 +280,8 @@ class CuttedImportUiTests(unittest.TestCase):
 
         self.assertIn("Arial,88,", line)
         self.assertIn("&H00CFA211", line)
-        self.assertIn("&H66000000", line)
+        self.assertIn("&H33000000", line)
+        self.assertIn("&H33000000,&H33000000", line)
         self.assertIn(",3,7,0,2,80,80,313,1", line)
         self.assertEqual(style["width"], 34)
         self.assertEqual(style["highlight_background_color"], "#000000")
@@ -245,10 +300,14 @@ class CuttedImportUiTests(unittest.TestCase):
 
         self.assertIn("Arial,59,", ass)
         self.assertIn("Arial,47,", ass)
-        self.assertIn("&H6600CCFF", ass)
-        self.assertIn("&H66181311", ass)
+        self.assertIn("&H3300CCFF", ass)
+        self.assertIn("&H33181311", ass)
+        self.assertIn("&H3300CCFF,&H3300CCFF", ass)
+        self.assertIn("&H33181311,&H33181311", ass)
+        self.assertIn("Style: CaptionActive", ass)
         self.assertIn("Style: CaptionSide", ass)
         self.assertIn(",3,6,0,5,80,80,346,1", ass)
+        self.assertIn(",3,7,0,5,80,80,346,1", ass)
         self.assertIn(",3,7,0,2,80,80,346,1", ass)
         self.assertIn("fala", ass)
         self.assertNotIn("Fala", ass)
@@ -262,6 +321,7 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertEqual(windows[1].next, "agora")
         self.assertIn("\\fscx112", ass)
         self.assertIn("\\pos(540,", ass)
+        self.assertIn("CaptionActive", ass)
 
     def test_animated_caption_timing_weights_words_and_punctuation(self) -> None:
         timings = CUTTED.animated_caption_word_timings(["e", "sincronizacao", "fim."], 0.0, 3.0)
@@ -376,6 +436,8 @@ class CuttedImportUiTests(unittest.TestCase):
             out_dir = gallery_dir / "captioned-clips"
             out_dir.mkdir()
             (out_dir / "clip-002-tiktok-captioned.mp4").write_bytes(b"video")
+            (out_dir / "clip-002-tiktok-cover.jpg").write_bytes(b"cover")
+            (out_dir / "clip-002-tiktok-cover-frame.mp4").write_bytes(b"cover-frame")
             (out_dir / "clip-003-tiktok-captioned.mp4").write_bytes(b"")
             (gallery_dir / "caption-queue.json").write_text(
                 json.dumps({
@@ -395,6 +457,8 @@ class CuttedImportUiTests(unittest.TestCase):
             self.assertTrue(result["partial"])
             self.assertEqual(result["count"], 1)
             self.assertEqual(result["files"][0]["url"], "captioned-clips/clip-002-tiktok-captioned.mp4")
+            self.assertEqual(result["files"][0]["cover_url"], "captioned-clips/clip-002-tiktok-cover.jpg")
+            self.assertEqual(result["files"][0]["cover_frame_url"], "captioned-clips/clip-002-tiktok-cover-frame.mp4")
             self.assertEqual(result["files"][0]["adjusted_duration"], 91.2)
 
     def test_finalized_file_urls_normalizes_base_dir(self) -> None:
@@ -403,12 +467,87 @@ class CuttedImportUiTests(unittest.TestCase):
             out_dir = gallery_dir / "captioned-clips"
             out_dir.mkdir(parents=True)
             file_path = out_dir / "clip-002-tiktok-captioned.mp4"
+            cover_frame_path = out_dir / "clip-002-tiktok-cover-frame.mp4"
             file_path.write_bytes(b"video")
+            cover_frame_path.write_bytes(b"video-cover-frame")
             aliased_base_dir = gallery_dir / "nested" / ".."
 
-            files = CUTTED.finalized_file_urls([{"file": str(file_path)}], aliased_base_dir)
+            files = CUTTED.finalized_file_urls([{"file": str(file_path), "cover_frame_file": str(cover_frame_path)}], aliased_base_dir)
 
             self.assertEqual(files[0]["url"], "captioned-clips/clip-002-tiktok-captioned.mp4")
+            self.assertEqual(files[0]["cover_frame_url"], "captioned-clips/clip-002-tiktok-cover-frame.mp4")
+            self.assertEqual(files[0]["final_cover_frame_file"], str(cover_frame_path))
+
+    def test_finalized_file_urls_falls_back_from_missing_export_copies(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery_dir = Path(tmp)
+            job_dir = gallery_dir / "renders" / "jobs" / "render-test"
+            job_dir.mkdir(parents=True)
+            file_path = job_dir / "clip-001-tiktok-captioned.mp4"
+            cover_path = job_dir / "clip-001-tiktok-cover.jpg"
+            cover_frame_path = job_dir / "clip-001-tiktok-cover-frame.mp4"
+            file_path.write_bytes(b"video")
+            cover_path.write_bytes(b"cover")
+            cover_frame_path.write_bytes(b"cover-frame")
+
+            files = CUTTED.finalized_file_urls([{
+                "file": str(file_path),
+                "local_file": str(gallery_dir / "renders" / "missing.mp4"),
+                "cover_file": str(cover_path),
+                "local_cover_file": str(gallery_dir / "renders" / "missing.jpg"),
+                "cover_frame_file": str(cover_frame_path),
+                "local_cover_frame_file": str(gallery_dir / "renders" / "missing-frame.mp4"),
+            }], gallery_dir)
+
+            self.assertEqual(files[0]["final_file"], str(file_path))
+            self.assertEqual(files[0]["final_cover_file"], str(cover_path))
+            self.assertEqual(files[0]["final_cover_frame_file"], str(cover_frame_path))
+            self.assertFalse(files[0]["is_exported"])
+
+    def test_cover_frame_tail_video_reuses_rendered_clip_with_concat(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp)
+            video = out_dir / "clip-002-tiktok-captioned.mp4"
+            cover = out_dir / "clip-002-tiktok-cover.jpg"
+            video.write_bytes(b"video")
+            cover.write_bytes(b"cover")
+            commands: list[list[str]] = []
+            original_run = CUTTED.run_ffmpeg_command
+            original_has_audio = CUTTED.media_has_audio
+
+            def fake_run(command: list[str], row: dict[str, object], cwd: str | None = None) -> None:
+                commands.append(command)
+                Path(command[-1]).write_bytes(b"rendered")
+
+            try:
+                CUTTED.run_ffmpeg_command = fake_run
+                CUTTED.media_has_audio = lambda path, ffmpeg: True
+                result = CUTTED.render_cover_frame_tail_video(
+                    video,
+                    cover,
+                    {"rank": 2},
+                    CUTTED.PLATFORM_PRESETS["tiktok"],
+                    out_dir,
+                    "ffmpeg",
+                )
+            finally:
+                CUTTED.run_ffmpeg_command = original_run
+                CUTTED.media_has_audio = original_has_audio
+
+            assert result is not None
+            self.assertEqual(result.name, "clip-002-tiktok-cover-frame.mp4")
+            self.assertTrue(result.exists())
+            self.assertTrue(any("anullsrc=channel_layout=stereo:sample_rate=44100" in command for command in commands))
+            concat_command = commands[-1]
+            self.assertIn("-f", concat_command)
+            self.assertIn("concat", concat_command)
+            self.assertIn("-c", concat_command)
+            self.assertIn("copy", concat_command)
+
+    def test_caption_cover_frame_enabled_accepts_api_and_cli_flags(self) -> None:
+        self.assertTrue(CUTTED.caption_cover_frame_enabled(type("Args", (), {"cover_frame_enabled": True})()))
+        self.assertTrue(CUTTED.caption_cover_frame_enabled(type("Args", (), {"cover_frame": True})()))
+        self.assertFalse(CUTTED.caption_cover_frame_enabled(type("Args", (), {})()))
 
     def test_camera_analysis_fetch_has_timeout(self) -> None:
         html = gallery_html()
