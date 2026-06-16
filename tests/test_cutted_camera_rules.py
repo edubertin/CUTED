@@ -291,8 +291,10 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertNotIn("data-card-camera", html)
         self.assertIn("data-overlay-place-camera", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("data-overlay-place-speech", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function overlayTimingForCard", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("function speechOverlayTimingForCard", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("syncTimedOverlayVisibility(card, current)", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("data-overlay-timeline", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertNotIn("data-preview-volume-down", html)
         self.assertNotIn("data-preview-volume-up", html)
         self.assertNotIn("data-preview-volume-zero", html)
@@ -324,6 +326,33 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIn("drawtext", rendered)
         self.assertIn("O clima esquentou", rendered)
         self.assertIn("between(t,1.250,3.750)", rendered)
+
+    def test_timed_overlay_contract_applies_to_text_and_image(self) -> None:
+        text = CUTTED.overlay_layer_from_raw({
+            "kind": "text",
+            "text": "Texto entra e sai",
+            "start_seconds": 2.0,
+            "duration_seconds": 4.0,
+        })
+        image = CUTTED.overlay_layer_from_raw({
+            "kind": "image",
+            "label": "Logo",
+            "image_file": "overlay-assets/logo.png",
+            "start_seconds": 3.5,
+            "duration_seconds": 1.5,
+        })
+
+        self.assertEqual(text["start_seconds"], 2.0)
+        self.assertEqual(text["duration_seconds"], 4.0)
+        self.assertEqual(image["start_seconds"], 3.5)
+        self.assertEqual(image["duration_seconds"], 1.5)
+
+        preset = CUTTED.PLATFORM_PRESETS["tiktok"]
+        rendered_text = CUTTED.overlay_filter({"overlays": [text]}, preset)
+        rendered_image = CUTTED.image_overlay_compose_filter(image, preset, "base", "img", "out")
+
+        self.assertIn("between(t,2.000,6.000)", rendered_text)
+        self.assertIn("between(t,3.500,5.000)", rendered_image)
 
     def test_page_mounts_live_timeline_with_legacy_fallback(self) -> None:
         html = CUTTED.page_html(

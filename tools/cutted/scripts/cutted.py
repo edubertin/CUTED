@@ -7534,7 +7534,8 @@ def image_overlay_compose_filter(
     width = int(round(preset.width * float(overlay["width"])))
     x = min(int(round(preset.width * float(overlay["x"]))), max(preset.width - width, 0))
     y = min(int(round(preset.height * float(overlay["y"]))), preset.height)
-    return f"[{input_label}][{image_label}]overlay={x}:{y}:format=auto:eof_action=repeat[{output_label}]"
+    enable = timed_overlay_enable(overlay)
+    return f"[{input_label}][{image_label}]overlay={x}:{y}:format=auto:eof_action=repeat{enable}[{output_label}]"
 
 
 def camera_filter(preset: PlatformPreset, row: dict[str, object]) -> str:
@@ -7996,21 +7997,22 @@ def text_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> s
     font = ffmpeg_filter_path(find_overlay_font())
     color = ffmpeg_color(str(overlay.get("color") or "#ffffff"))
     escaped_text = ffmpeg_text_value(text)
+    enable = timed_overlay_enable(overlay)
     filters = []
     if bool(overlay.get("background_enabled")):
         background = ffmpeg_color(str(overlay.get("background_color") or "#000000"))
         background_opacity = clamp(float(overlay.get("background_opacity") or 70.0) / 100.0, 0.0, 1.0)
-        filters.append(f"drawbox=x={x}:y={y}:w={box_w}:h={box_h}:color={background}@{background_opacity:.2f}:t=fill")
+        filters.append(f"drawbox=x={x}:y={y}:w={box_w}:h={box_h}:color={background}@{background_opacity:.2f}:t=fill{enable}")
     filters.append(
         f"drawtext=fontfile='{font}':text='{escaped_text}':x={x + pad}:y={text_y}:"
-        f"fontsize={font_size}:fontcolor={color}@{opacity:.2f}"
+        f"fontsize={font_size}:fontcolor={color}@{opacity:.2f}{enable}"
     )
     return ",".join(filters)
 
 
 def timed_overlay_enable(overlay: dict[str, object]) -> str:
-    start = max(float(overlay.get("start_seconds") or 0.0), 0.0)
-    duration = max(float(overlay.get("duration_seconds") or 0.0), 0.0)
+    start = max(float(overlay.get("start_seconds") if overlay.get("start_seconds") is not None else 0.0), 0.0)
+    duration = max(float(overlay.get("duration_seconds") if overlay.get("duration_seconds") is not None else 3.0), 0.0)
     if duration <= 0.0:
         return ""
     return f":enable='between(t,{start:.3f},{start + duration:.3f})'"
@@ -8054,7 +8056,8 @@ def image_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> 
     y = min(int(round(preset.height * float(overlay["y"]))), preset.height)
     opacity = clamp(float(overlay["opacity"]) / 100.0, 0.1, 1.0)
     path = ffmpeg_filter_path(Path(image_file))
-    return f"movie='{path}',scale={width}:-1,colorchannelmixer=aa={opacity:.2f}[img];[in][img]overlay={x}:{y}:format=auto[out]"
+    enable = timed_overlay_enable(overlay)
+    return f"movie='{path}',scale={width}:-1,colorchannelmixer=aa={opacity:.2f}[img];[in][img]overlay={x}:{y}:format=auto{enable}[out]"
 
 
 def overlay_from_row(row: dict[str, object]) -> dict[str, object]:
@@ -8120,6 +8123,16 @@ def image_overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
         "opacity": clamp(float(raw.get("opacity") if raw.get("opacity") is not None else 100.0), 10.0, 100.0),
         "image_file": image_file,
         "image_data_url": image_data_url,
+        "start_seconds": clamp(
+            float(raw.get("start_seconds") if raw.get("start_seconds") is not None else 0.0),
+            0.0,
+            9999.0,
+        ),
+        "duration_seconds": clamp(
+            float(raw.get("duration_seconds") if raw.get("duration_seconds") is not None else 3.0),
+            0.3,
+            60.0,
+        ),
     }
 
 
@@ -8146,6 +8159,16 @@ def text_overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
             float(raw.get("background_opacity") if raw.get("background_opacity") is not None else 70.0),
             0.0,
             100.0,
+        ),
+        "start_seconds": clamp(
+            float(raw.get("start_seconds") if raw.get("start_seconds") is not None else 0.0),
+            0.0,
+            9999.0,
+        ),
+        "duration_seconds": clamp(
+            float(raw.get("duration_seconds") if raw.get("duration_seconds") is not None else 3.0),
+            0.3,
+            60.0,
         ),
     }
 
@@ -11299,7 +11322,7 @@ main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px
 .layer-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:100%;min-height:0}.layer-strip:empty{display:none}.bumper-sequence{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;min-height:24px;color:var(--color-text-muted);font-size:12px}.bumper-sequence:empty{display:none}.bumper-sequence span{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bumper-sequence b{color:var(--color-brand-green);font-weight:800}.layer-chip{display:inline-flex;gap:6px;align-items:center;max-width:100%;min-height:30px;padding:4px 5px 4px 9px;border:1px solid #303030;border-radius:999px;background:var(--color-surface-muted);color:var(--color-text-soft);font-size:12px}.layer-chip.is-selected{border-color:var(--color-focus);background:#182011;color:var(--color-text)}.layer-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.layer-chip button{display:inline-grid;place-items:center;width:22px;height:22px;min-width:22px;padding:0;border:1px solid #3a3a3a;border-radius:999px;background:#242424;color:var(--color-text-soft);font-size:14px;line-height:1}
 .cuted-control-surface-slot{display:none;position:relative;z-index:90;margin:-34px 14px 8px;justify-content:center}.cuted-control-surface-slot:empty{display:none}.card[open]>.cuted-control-surface-slot:not(:empty){display:flex}.cuted-control-surface-slot .cuted-control-bar{width:min(66%,930px);min-width:min(100%,820px);min-height:98px;padding:9px 16px;border-radius:18px}.cuted-control-surface-slot .cuted-render-zone{justify-content:flex-end;overflow:visible;min-height:74px}.cuted-control-surface-slot .cuted-tool-group{flex:0 0 408px;min-height:74px}.cuted-control-surface-slot .cuted-tile-button{flex:0 0 68px;width:68px;height:62px;font-size:30px}.cuted-control-surface-slot .cuted-insert-button span{font-size:20px}.cuted-control-surface-slot .cuted-format-trigger{flex:0 0 118px;width:118px;height:62px;grid-template-columns:auto 1fr auto;gap:8px;padding:7px 9px}.cuted-control-surface-slot .cuted-format-copy small{display:none}.cuted-control-surface-slot .cuted-format-copy strong{font-size:20px}.cuted-control-surface-slot .cuted-ratio-icon{border-width:2px;border-radius:3px}.cuted-control-surface-slot .cuted-ratio-vertical{width:16px;height:34px}.cuted-control-surface-slot .cuted-ratio-feed{width:22px;height:28px}.cuted-control-surface-slot .cuted-ratio-wide{width:32px;height:17px}.cuted-control-surface-slot .cuted-divider{flex:0 0 1px;height:48px;margin:0 8px}.cuted-control-surface-slot .cuted-audio-group{flex:0 0 58px;min-width:58px}.cuted-control-surface-slot .cuted-ready-region{flex:0 0 132px;width:132px;min-height:62px;margin-left:auto}.cuted-control-surface-slot .cuted-approve-button{width:60px;height:60px}.cuted-control-surface-slot .cuted-approve-button svg{width:36px;height:36px}.cuted-control-surface-slot .cuted-discard-button{width:46px;height:46px}.cuted-control-surface-slot .cuted-discard-button svg{width:25px;height:25px}
 .editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;justify-items:center;gap:10px}.preview-frame{display:grid;gap:10px;width:100%;max-width:520px}.media{position:relative;container-type:inline-size;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000;pointer-events:none}.placeholder{display:grid;place-items:center;height:100%;color:#777}.preview-bar{display:grid;grid-template-columns:1fr;gap:8px;justify-items:center;width:100%;padding:8px;border:1px solid #252525;border-radius:8px;background:#0a0a0a}.preview-controls,.preview-volume-group{display:flex;gap:6px;align-items:center}.preview-controls{justify-content:center;padding:4px;border:1px solid #202020;border-radius:999px;background:var(--color-surface-raised)}.preview-volume-group{padding-left:4px;border-left:1px solid #2d2d2d}.preview-icon,.preview-step{display:inline-grid;place-items:center;width:32px;height:32px;min-width:32px;padding:0;border:1px solid var(--color-border-strong);border-radius:999px;background:var(--color-surface-control);color:var(--color-text-soft)}.preview-play{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}.preview-icon svg{width:16px;height:16px;display:block;stroke:currentColor}.preview-step{width:26px;height:26px;min-width:26px;font-weight:700}.preview-volume-group output{min-width:32px;color:#d8d8d8;font-size:12px;text-align:center}.card[data-preview-format=tiktok] .preview-frame,.card[data-preview-format=shorts] .preview-frame,.card[data-preview-format=instagram] .preview-frame{max-width:min(100%,calc(72vh * 9 / 16))}.card[data-preview-format=facebook] .preview-frame{max-width:min(100%,calc(72vh * 4 / 5))}.card[data-preview-format=youtube] .preview-frame{max-width:min(100%,520px)}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;overflow:visible;padding-bottom:1px}.preview-strip button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 10px;min-height:34px;border-radius:999px;white-space:nowrap}.preview-strip button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
-.preview-camera-timeline--live{display:block!important;width:100%;min-height:152px;padding:0!important;border-color:rgba(17,162,207,.34)!important;overflow:hidden}.preview-camera-timeline--live .timeline-shell{min-height:150px;border:0;border-radius:4px;background:linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px) 0 0/28px 100%,linear-gradient(180deg,rgba(17,162,207,.08),transparent 34%),#070707}.preview-camera-timeline--live .volume-popover[data-disabled=true]{display:none!important}.preview-live-timeline-loading{display:grid;place-items:center;min-height:86px;color:var(--color-text-muted);font-size:12px}
+.preview-camera-timeline--live{display:block!important;width:100%;min-height:152px;padding:0!important;border-color:rgba(17,162,207,.34)!important;overflow:hidden}.preview-camera-timeline--live .timeline-shell{min-height:150px;border:0;border-radius:4px;background:linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px) 0 0/28px 100%,linear-gradient(180deg,rgba(17,162,207,.08),transparent 34%),#070707}.preview-camera-timeline--live .volume-popover[data-disabled=true]{display:none!important}.preview-live-timeline-loading{display:grid;place-items:center;min-height:86px;color:var(--color-text-muted);font-size:12px}.overlay-timeline{position:absolute;left:76px;right:76px;bottom:12px;z-index:18;height:54px;pointer-events:none}.overlay-timeline[hidden]{display:none}.overlay-timeline-item{position:absolute;left:var(--overlay-time-left);top:calc(var(--overlay-time-row) * 17px);display:flex;align-items:center;justify-content:space-between;gap:5px;width:max(var(--overlay-time-width),28px);height:14px;min-width:28px;padding:0 0 0 6px;border:1px solid rgba(17,162,207,.5);border-radius:999px;background:linear-gradient(90deg,rgba(17,162,207,.26),rgba(231,231,232,.08));color:var(--color-text);box-shadow:0 0 16px rgba(17,162,207,.16);font-size:9px;font-weight:900;line-height:1;cursor:grab;overflow:hidden;pointer-events:auto;transform:translateY(0);transition:border-color .14s ease,box-shadow .14s ease,background .14s ease}.overlay-timeline-item span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-timeline-item i{display:block;width:10px;align-self:stretch;border-left:1px solid rgba(231,231,232,.26);background:rgba(231,231,232,.12);cursor:ew-resize}.overlay-timeline-item[data-overlay-kind=speech]{border-color:rgba(175,207,42,.58);background:linear-gradient(90deg,rgba(175,207,42,.28),rgba(231,231,232,.08));box-shadow:0 0 16px rgba(175,207,42,.14)}.overlay-timeline-item[data-overlay-kind=image]{border-style:dashed}.overlay-timeline-item.is-active,.overlay-timeline-item.is-selected{border-color:rgba(231,231,232,.9);box-shadow:0 0 0 2px rgba(231,231,232,.1),0 0 22px rgba(175,207,42,.22)}
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-stack{display:grid;gap:10px}.tool-section{border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:0;overflow:hidden}.tool-section>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:10px 12px;cursor:pointer;list-style:none;color:var(--color-text);font-weight:800}.tool-section>summary::-webkit-details-marker{display:none}.tool-section>summary:after{content:"";width:8px;height:8px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg);opacity:.62;transition:transform .16s ease}.tool-section[open]>summary:after{transform:rotate(225deg)}.tool-section>summary small{color:var(--color-text-muted);font-size:12px;font-weight:600;text-align:right}.tool-section[open]>summary{border-bottom:1px solid rgba(231,231,232,.08)}.tool-section>*:not(summary){margin:12px}.timeline-editor{padding:0}.timeline-head,.timeline-timebar,.timeline-values{display:flex;justify-content:space-between;gap:12px;color:var(--color-text-muted);font-size:12px}.timeline-head output,.timeline-timebar output{color:var(--color-text);text-align:right}.timeline-timebar{margin-top:10px}.timeline-timebar span:last-child{color:#777;text-align:right}.timeline-scrub{position:relative;height:42px;margin-top:8px}.timeline-scrub-track{position:absolute;left:0;right:0;top:17px;height:8px;border:1px solid #343434;border-radius:999px;background:linear-gradient(90deg,var(--color-surface-muted),#252525);overflow:hidden}.timeline-selected{position:absolute;top:0;bottom:0;background:rgba(175,207,42,.22);border-left:1px solid var(--color-brand-green);border-right:1px solid var(--color-brand-green)}.timeline-playhead{position:absolute;top:-8px;bottom:-8px;width:2px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7)}.timeline-playhead:before{content:"";position:absolute;left:50%;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--color-brand-white);transform:translateX(-50%)}.timeline-scrub input{position:absolute;inset:0;width:100%;height:42px;margin:0;background:transparent;opacity:0;cursor:pointer}.timeline{position:relative;height:38px;margin-top:6px}.timeline-track{position:absolute;left:0;right:0;top:16px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:var(--color-brand-white);border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:38px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{margin-top:6px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .export-dock{display:grid;gap:8px;margin-top:2px;padding:12px;border:1px solid #303030;border-radius:8px;background:#111}.export-dock strong{display:block;font-size:13px}.export-dock span{color:#a8a8a8;font-size:12px}
 .platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:var(--color-text);border-color:var(--color-brand-green)}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.effect-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.75fr);gap:10px}.effect-subpanel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.effect-subpanel strong{font-size:12px}.bumper-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.bumper-upload{display:grid;gap:6px;align-content:start;min-height:64px;padding:9px;border:1px dashed var(--color-border-strong);border-radius:8px;background:var(--color-surface-control);cursor:pointer}.bumper-upload input{font-size:11px}.bumper-strip{display:flex;gap:6px;flex-wrap:wrap;min-height:28px}.bumper-empty{color:var(--color-text-muted);font-size:12px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:var(--color-brand-blue)}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.camera-path-editor,.camera-manual-panel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-path-head,.camera-panel-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.camera-path-head strong,.camera-panel-title strong{font-size:12px}.camera-path-head span,.camera-panel-title span{color:var(--color-text-muted);font-size:12px}.camera-smart-panel{display:grid;gap:9px;padding:10px;border:1px solid rgba(17,162,207,.28);border-radius:8px;background:linear-gradient(135deg,rgba(17,162,207,.12),rgba(175,207,42,.06))}.camera-smart-row,.camera-smart-ai{display:grid;gap:8px}.camera-smart-row{grid-template-columns:repeat(3,minmax(0,1fr))}.camera-smart-ai{grid-template-columns:repeat(5,minmax(0,1fr))}.camera-smart-panel button{display:grid;gap:3px;justify-items:center;background:rgba(17,162,207,.1);color:var(--color-text);border:1px solid rgba(17,162,207,.34);text-align:center}.camera-smart-panel button:hover{border-color:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.14)}.camera-path-track{position:relative;height:34px}.camera-path-rail{position:absolute;left:0;right:0;top:15px;height:5px;border-radius:999px;background:#292929}.camera-path-marker{position:absolute;top:7px;width:20px;height:20px;min-width:20px;padding:0;border-radius:999px;transform:translateX(-50%);background:var(--color-surface-control);border:1px solid var(--color-border-strong)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:var(--color-brand-blue);box-shadow:0 0 0 4px rgba(17,162,207,.18)}.camera-path-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-keyframe-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}.camera-auto-status{min-height:18px;color:var(--color-text-muted);font-size:12px}.camera-path-delete{color:var(--color-danger)!important}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:minmax(160px,1fr) 120px 150px;gap:12px;max-width:none}.caption-toggle{align-content:center}.caption-toggle input{justify-self:start;width:auto;min-height:20px;accent-color:var(--color-brand-blue)}
@@ -12544,7 +12567,9 @@ function defaultTextOverlay(text = "Digite seu texto"){
     color: "#ffffff",
     background_enabled: true,
     background_color: "#000000",
-    background_opacity: 70
+    background_opacity: 70,
+    start_seconds: 0,
+    duration_seconds: 3
   };
 }
 function defaultSpeechOverlay(text = "Fala rapida"){
@@ -12592,7 +12617,9 @@ function normalizeTextOverlay(layer){
     color: normalizeHexColor(layer?.color, "#ffffff"),
     background_enabled: layer?.background_enabled !== false,
     background_color: normalizeHexColor(layer?.background_color, "#000000"),
-    background_opacity: clampNumber(layer?.background_opacity ?? 70, 0, 100)
+    background_opacity: clampNumber(layer?.background_opacity ?? 70, 0, 100),
+    start_seconds: clampNumber(layer?.start_seconds ?? 0, 0, 9999),
+    duration_seconds: clampNumber(layer?.duration_seconds ?? 3, .3, 60)
   };
 }
 function normalizeSpeechOverlay(layer){
@@ -12623,7 +12650,9 @@ function normalizeImageOverlay(layer){
     width: clampNumber(layer?.width ?? .28, .08, .9),
     opacity: clampNumber(layer?.opacity ?? 100, 10, 100),
     image_data_url: String(layer?.image_data_url || ""),
-    image_file: String(layer?.image_file || "")
+    image_file: String(layer?.image_file || ""),
+    start_seconds: clampNumber(layer?.start_seconds ?? 0, 0, 9999),
+    duration_seconds: clampNumber(layer?.duration_seconds ?? 3, .3, 60)
   };
 }
 function normalizeOverlayLayer(layer){
@@ -12694,14 +12723,19 @@ function overlayTimingForLayer(layer){
     duration: clampNumber(layer?.duration_seconds ?? 3, .3, 60)
   };
 }
-function speechOverlayTimingForCard(card){
+function overlayTimingAttrs(layer){
+  const timing = overlayTimingForLayer(layer);
+  return `data-overlay-start="${timing.start.toFixed(3)}" data-overlay-duration="${timing.duration.toFixed(3)}"`;
+}
+function overlayTimingForCard(card){
   const context = cameraContextForCard(card);
   const start = clampNumber(context.position, 0, Math.max(context.duration - .3, 0));
   const duration = clampNumber(Math.min(3, Math.max(context.duration - start, .3)), .3, 60);
   return { start_seconds: Number(start.toFixed(3)), duration_seconds: Number(duration.toFixed(3)) };
 }
+function speechOverlayTimingForCard(card){ return overlayTimingForCard(card); }
 function overlayBoxVisibleAtPosition(box, position){
-  if (box.dataset.overlayKey !== "speech") return true;
+  if (box.dataset.overlayStart === undefined) return true;
   const start = clampNumber(box.dataset.overlayStart ?? 0, 0, 9999);
   const duration = clampNumber(box.dataset.overlayDuration ?? 3, .3, 60);
   return position >= start && position <= start + duration;
@@ -12713,6 +12747,14 @@ function syncTimedOverlayVisibility(item, time = null){
   const raw = time ?? (video && Number.isFinite(video.currentTime) ? video.currentTime : 0);
   const position = item.classList.contains("card") ? cameraContextForCard(item, raw).position : Number(raw || 0);
   boxes.forEach(box => { box.hidden = !overlayBoxVisibleAtPosition(box, position); });
+  syncOverlayTimelineActive(item, position);
+}
+function syncOverlayTimelineActive(item, position){
+  item?.querySelectorAll?.("[data-overlay-timeline-layer]").forEach(node => {
+    const start = clampNumber(node.dataset.overlayStart ?? 0, 0, 9999);
+    const duration = clampNumber(node.dataset.overlayDuration ?? 3, .3, 60);
+    node.classList.toggle("is-active", position >= start && position <= start + duration);
+  });
 }
 function normalizeHexColor(value, fallback){
   const raw = String(value || "").trim();
@@ -13212,6 +13254,7 @@ function updateOverlayUi(card){
   const summary = card.querySelector("[data-overlay-current]");
   if (summary) summary.textContent = layers.length ? `${layers.length} camada(s)` : "Sem chamada";
   renderOverlayLayerBoxes(card, layers);
+  renderOverlayTimeline(card);
   bindCardOverlayControls(card);
 }
 function renderOverlayLayerBoxes(card, layers){
@@ -13265,20 +13308,19 @@ function overlayLayerBoxHtml(layer){
   const selectedClass = selected ? " is-selected" : "";
   if (layer.kind === "image") {
     const src = layer.image_data_url || layer.image_file || "";
-    return `<div class="overlay-box overlay-image-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="image" style="${escapeAttr(overlayStyle(layer))}">
+    return `<div class="overlay-box overlay-image-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="image" ${overlayTimingAttrs(layer)} style="${escapeAttr(overlayStyle(layer))}">
       <img src="${escapeAttr(src)}" alt="${escapeAttr(layer.label)}">
       <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
     </div>`;
   }
   if (layer.kind === "text") {
-    return `<div class="overlay-box overlay-text-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="text" data-overlay-bg="${layer.background_enabled ? "on" : "off"}" style="${escapeAttr(overlayStyle(layer))}">
+    return `<div class="overlay-box overlay-text-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="text" data-overlay-bg="${layer.background_enabled ? "on" : "off"}" ${overlayTimingAttrs(layer)} style="${escapeAttr(overlayStyle(layer))}">
       <span>${escapeHtml(layer.text)}</span>
       <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
     </div>`;
   }
   if (layer.kind === "speech") {
-    const timing = overlayTimingForLayer(layer);
-    return `<div class="overlay-box overlay-speech-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="speech" data-overlay-start="${timing.start.toFixed(3)}" data-overlay-duration="${timing.duration.toFixed(3)}" style="${escapeAttr(overlayStyle(layer))}">
+    return `<div class="overlay-box overlay-speech-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="speech" ${overlayTimingAttrs(layer)} style="${escapeAttr(overlayStyle(layer))}">
       <span>${escapeHtml(layer.text)}</span>
       <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
     </div>`;
@@ -13308,6 +13350,7 @@ function overlayInspectorHtml(layer){
   if (layer.kind === "image") {
     return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>Imagem</strong><button data-overlay-close>Fechar</button></div>
       <div class="overlay-inspector">
+        ${overlayTimingInspectorHtml(layer)}
         <label>Opacidade
           <input data-layer-opacity type="range" min="10" max="100" step="5" value="${layer.opacity}">
         </label>
@@ -13320,6 +13363,7 @@ function overlayInspectorHtml(layer){
   if (layer.kind === "speech") {
     return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>Fala</strong><button data-overlay-close>Fechar</button></div>
       <div class="overlay-inspector">
+        ${overlayTimingInspectorHtml(layer)}
         <label>Conteudo
           <input data-layer-text type="text" value="${escapeAttr(layer.text || layer.label || "")}">
         </label>
@@ -13336,6 +13380,7 @@ function overlayInspectorHtml(layer){
   }
   return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>Texto</strong><button data-overlay-close>Fechar</button></div>
     <div class="overlay-inspector">
+      ${overlayTimingInspectorHtml(layer)}
       <label>Conteudo
         <input data-layer-text type="text" value="${escapeAttr(layer.text || layer.label || "")}">
       </label>
@@ -13365,6 +13410,17 @@ function overlayInspectorHtml(layer){
       <button class="overlay-danger" data-layer-remove>Remover camada</button>
     </div>`;
 }
+function overlayTimingInspectorHtml(layer){
+  const timing = overlayTimingForLayer(layer);
+  return `<div class="overlay-inspector-row overlay-time-row">
+    <label>Inicio
+      <input data-layer-start type="number" min="0" max="9999" step="0.1" value="${timing.start.toFixed(1)}">
+    </label>
+    <label>Duracao
+      <input data-layer-duration type="number" min="0.3" max="60" step="0.1" value="${timing.duration.toFixed(1)}">
+    </label>
+  </div>`;
+}
 function bindCardOverlayControls(card){
   const imageInput = card.querySelector("[data-overlay-image]");
   if (imageInput && !imageInput.dataset.overlayImageBound) {
@@ -13379,6 +13435,10 @@ function addImageOverlayFromInput(card, input){
   if (!file) return;
   const x = Number(input.dataset.overlayX || .36);
   const y = Number(input.dataset.overlayY || .34);
+  const timing = {
+    start_seconds: Number(input.dataset.overlayStart || 0),
+    duration_seconds: Number(input.dataset.overlayDuration || 3)
+  };
   overlayImageDataUrl(file).then(dataUrl => {
     const layer = normalizeImageOverlay({
       id: overlayId(),
@@ -13389,7 +13449,8 @@ function addImageOverlayFromInput(card, input){
       x,
       y,
       width: .28,
-      opacity: 100
+      opacity: 100,
+      ...timing
     });
     card.dataset.selectedOverlayLayer = layer.id;
     addOverlayLayerForRank(card.dataset.rank, layer, overlayPlatformForItem(card));
@@ -13507,6 +13568,7 @@ function showOverlayAddMenu(card, left, top){
     event.preventDefault();
     event.stopPropagation();
     const layer = defaultTextOverlay();
+    Object.assign(layer, overlayTimingForCard(card));
     layer.x = Number(card.dataset.overlayMenuX || .36);
     layer.y = Number(card.dataset.overlayMenuY || .34);
     card.dataset.selectedOverlayLayer = layer.id;
@@ -13517,7 +13579,7 @@ function showOverlayAddMenu(card, left, top){
     event.preventDefault();
     event.stopPropagation();
     const layer = defaultSpeechOverlay();
-    Object.assign(layer, speechOverlayTimingForCard(card));
+    Object.assign(layer, overlayTimingForCard(card));
     layer.x = Number(card.dataset.overlayMenuX || .32);
     layer.y = Number(card.dataset.overlayMenuY || .24);
     card.dataset.selectedOverlayLayer = layer.id;
@@ -13529,8 +13591,11 @@ function showOverlayAddMenu(card, left, top){
     event.stopPropagation();
     const input = card.querySelector("[data-overlay-image]");
     if (!input) return;
+    const timing = overlayTimingForCard(card);
     input.dataset.overlayX = String(card.dataset.overlayMenuX || .36);
     input.dataset.overlayY = String(card.dataset.overlayMenuY || .34);
+    input.dataset.overlayStart = String(timing.start_seconds);
+    input.dataset.overlayDuration = String(timing.duration_seconds);
     closeOverlayMenu(card);
     input.click();
   });
@@ -13604,6 +13669,10 @@ function bindOverlayMenuBasics(card){
 function bindOverlayInspectorControls(card, layer, platform = overlayPlatformForItem(card)){
   const rank = card.dataset.rank;
   const patch = (value, rerender = true) => patchOverlayLayerForRank(rank, layer.id, value, rerender, platform);
+  const start = card.querySelector("[data-layer-start]");
+  if (start) start.addEventListener("input", () => patch({ start_seconds: Number(start.value) }));
+  const duration = card.querySelector("[data-layer-duration]");
+  if (duration) duration.addEventListener("input", () => patch({ duration_seconds: Number(duration.value) }));
   const text = card.querySelector("[data-layer-text]");
   if (text) text.addEventListener("input", () => patch({ text: text.value, label: text.value }));
   const fontSize = card.querySelector("[data-layer-font-size]");
@@ -13963,6 +14032,115 @@ function renderPreviewCameraTimeline(card){
   destroyLivePreviewCameraTimeline(card);
   renderCardRowTimeline(card);
 }
+function overlayTimelineLayersForCard(card){
+  return overlayLayersForRank(card.dataset.rank)
+    .filter(layer => ["image", "speech", "text"].includes(layer.kind));
+}
+function overlayTimelineLabel(layer){
+  if (layer.kind === "image") return "Img";
+  if (layer.kind === "speech") return "Fala";
+  return "Texto";
+}
+function overlayTimelineItemHtml(layer, duration, index){
+  const timing = overlayTimingForLayer(layer);
+  const start = clampNumber(timing.start, 0, Math.max(duration - .3, 0));
+  const itemDuration = clampNumber(timing.duration, .3, Math.max(duration - start, .3));
+  const left = clampNumber((start / Math.max(duration, .3)) * 100, 0, 100);
+  const width = clampNumber((itemDuration / Math.max(duration, .3)) * 100, 1, 100 - left);
+  const row = index % 3;
+  const selected = document.querySelector(`.card[data-rank="${CSS.escape(String(activeRankForLayer(layer)))}"]`)?.dataset.selectedOverlayLayer === layer.id;
+  return `<button class="overlay-timeline-item${selected ? " is-selected" : ""}" data-overlay-timeline-layer="${escapeAttr(layer.id)}" data-overlay-kind="${escapeAttr(layer.kind)}" data-overlay-start="${start.toFixed(3)}" data-overlay-duration="${itemDuration.toFixed(3)}" style="--overlay-time-left:${left.toFixed(3)}%;--overlay-time-width:${width.toFixed(3)}%;--overlay-time-row:${row}" type="button" title="${escapeAttr(`${overlayTimelineLabel(layer)} ${fixed(start)} por ${fixed(itemDuration)}`)}"><span>${escapeHtml(overlayTimelineLabel(layer))}</span><i data-overlay-timeline-resize></i></button>`;
+}
+function renderOverlayTimeline(card){
+  const container = card.querySelector("[data-preview-camera-timeline]");
+  if (!container) return;
+  let track = container.querySelector("[data-overlay-timeline]");
+  const layers = overlayTimelineLayersForCard(card);
+  if (!track) {
+    track = document.createElement("div");
+    track.className = "overlay-timeline";
+    track.setAttribute("data-overlay-timeline", "");
+    container.appendChild(track);
+  }
+  const duration = cameraTimelineDurationForCard(card);
+  track.innerHTML = layers.map((layer, index) => overlayTimelineItemHtml(layer, duration, index)).join("");
+  track.hidden = !layers.length;
+  bindOverlayTimelineControls(card, track);
+  syncTimedOverlayVisibility(card);
+}
+function bindOverlayTimelineControls(card, track){
+  if (track.dataset.overlayTimelineBound) return;
+  track.dataset.overlayTimelineBound = "1";
+  track.addEventListener("pointerdown", event => startOverlayTimelineDrag(card, track, event));
+}
+function startOverlayTimelineDrag(card, track, event){
+  const item = event.target.closest("[data-overlay-timeline-layer]");
+  if (!item) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const platform = overlayPlatformForItem(card);
+  const layer = overlayLayersForRank(card.dataset.rank, platform).find(row => row.id === item.dataset.overlayTimelineLayer);
+  if (!layer) return;
+  const timing = overlayTimingForLayer(layer);
+  const state = {
+    duration: cameraTimelineDurationForCard(card),
+    id: layer.id,
+    moved: false,
+    resizing: Boolean(event.target.closest("[data-overlay-timeline-resize]")),
+    startDuration: timing.duration,
+    startSeconds: timing.start,
+    startX: event.clientX
+  };
+  if (item.setPointerCapture && event.pointerId !== undefined) item.setPointerCapture(event.pointerId);
+  const move = moveEvent => moveOverlayTimelineDrag(card, track, item, state, moveEvent, platform);
+  const end = endEvent => endOverlayTimelineDrag(card, item, state, endEvent, move, platform);
+  document.addEventListener("pointermove", move);
+  document.addEventListener("pointerup", end, { once: true });
+  document.addEventListener("pointercancel", end, { once: true });
+}
+function overlayTimelinePatchFromDrag(track, state, event){
+  const rect = track.getBoundingClientRect();
+  const delta = rect.width ? ((event.clientX - state.startX) / rect.width) * state.duration : 0;
+  if (state.resizing) {
+    const maxDuration = Math.max(state.duration - state.startSeconds, .3);
+    return { duration_seconds: Number(clampNumber(state.startDuration + delta, .3, maxDuration).toFixed(3)) };
+  }
+  const start = clampNumber(state.startSeconds + delta, 0, Math.max(state.duration - state.startDuration, 0));
+  return { start_seconds: Number(start.toFixed(3)) };
+}
+function moveOverlayTimelineDrag(card, track, item, state, event, platform){
+  event.preventDefault();
+  event.stopPropagation();
+  state.moved = state.moved || Math.abs(event.clientX - state.startX) > 2;
+  const patch = overlayTimelinePatchFromDrag(track, state, event);
+  patchOverlayLayerForRank(card.dataset.rank, state.id, patch, false, platform);
+  updateOverlayTimingDom(card, state.id, patch);
+  updateOverlayTimelineItem(item, patch, state.duration);
+  syncTimedOverlayVisibility(card);
+}
+function endOverlayTimelineDrag(card, item, state, event, move, platform){
+  document.removeEventListener("pointermove", move);
+  event.preventDefault();
+  event.stopPropagation();
+  if (!state.moved) {
+    card.dataset.selectedOverlayLayer = state.id;
+    showOverlayInspectorForLayer(card, state.id);
+  }
+  renderOverlayTimeline(card);
+}
+function updateOverlayTimingDom(card, layerId, patch){
+  const box = card.querySelector(`[data-overlay-layer="${CSS.escape(layerId)}"]`);
+  if (box && patch.start_seconds !== undefined) box.dataset.overlayStart = Number(patch.start_seconds).toFixed(3);
+  if (box && patch.duration_seconds !== undefined) box.dataset.overlayDuration = Number(patch.duration_seconds).toFixed(3);
+}
+function updateOverlayTimelineItem(item, patch, totalDuration){
+  const start = clampNumber(patch.start_seconds ?? item.dataset.overlayStart ?? 0, 0, Math.max(totalDuration - .3, 0));
+  const duration = clampNumber(patch.duration_seconds ?? item.dataset.overlayDuration ?? 3, .3, Math.max(totalDuration - start, .3));
+  item.dataset.overlayStart = start.toFixed(3);
+  item.dataset.overlayDuration = duration.toFixed(3);
+  item.style.setProperty("--overlay-time-left", `${((start / Math.max(totalDuration, .3)) * 100).toFixed(3)}%`);
+  item.style.setProperty("--overlay-time-width", `${((duration / Math.max(totalDuration, .3)) * 100).toFixed(3)}%`);
+}
 function renderLivePreviewCameraTimeline(card){
   const container = card.querySelector("[data-preview-camera-timeline]");
   if (!container || container.dataset.liveTimelineFailed === "1") return false;
@@ -13974,6 +14152,7 @@ function renderLivePreviewCameraTimeline(card){
     ensureLivePreviewCameraPopover(card);
     card.__liveTimelineController.update(options);
     loadLiveTimelineWaveform(card);
+    renderOverlayTimeline(card);
     return true;
   }
   if (card.__liveTimelineLoading) return true;
@@ -13985,6 +14164,7 @@ function renderLivePreviewCameraTimeline(card){
     controller.update(liveTimelineOptionsForCard(card));
     ensureLivePreviewCameraPopover(card);
     loadLiveTimelineWaveform(card);
+    renderOverlayTimeline(card);
   }).catch(error => {
     console.warn("Timeline viva indisponivel; usando timeline compacta.", error);
     delete card.__liveTimelineLoading;
@@ -14160,6 +14340,7 @@ function renderLegacyPreviewCameraTimeline(card){
   bindPreviewCameraTimeline(card);
   renderPreviewAudioWaveform(card);
   updatePreviewCameraTimelinePlayhead(card);
+  renderOverlayTimeline(card);
 }
 function renderPreviewAudioWaveform(card){
   const layer = card.querySelector("[data-preview-audio-waveform]");
