@@ -310,6 +310,10 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIn("width:clamp(16px,var(--overlay-time-width),24px)", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("height:26px;min-width:16px;min-height:26px", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn(".overlay-timeline-item:before", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("data-publish-cover-use-overlays", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("data-publish-cover-layer-list", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function normalizeCoverOverlayLayers", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function publishCoverLayerHtml", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertNotIn("overlay-timeline:before", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertNotIn("data-preview-volume-down", html)
         self.assertNotIn("data-preview-volume-up", html)
@@ -404,6 +408,61 @@ class CuttedCameraRuleTests(unittest.TestCase):
             )
 
         self.assertIn("between(t,4.000,6.000)", rendered)
+
+    def test_cover_layers_are_static_and_renderable(self) -> None:
+        cover = {
+            "selected_frame": "frames/clip-cover.jpg",
+            "zoom": 1.25,
+            "x": 64,
+            "y": 38,
+            "layers": [{
+                "kind": "speech",
+                "text": "Capa forte",
+                "x": 0.18,
+                "y": 0.12,
+                "width": 0.58,
+                "start_seconds": 8.0,
+                "duration_seconds": 1.0,
+            }],
+        }
+        preset = CUTTED.PLATFORM_PRESETS["tiktok"]
+
+        layers = CUTTED.cover_overlay_layers(cover)
+        rendered = CUTTED.publish_cover_simple_filter(cover, layers, preset)
+
+        self.assertEqual(layers[0]["start_seconds"], 0.0)
+        self.assertEqual(layers[0]["duration_seconds"], 9999.0)
+        self.assertIn("scale=1350:2400:force_original_aspect_ratio=increase", rendered)
+        self.assertIn("crop=1080:1920", rendered)
+        self.assertIn("Capa forte", rendered)
+        self.assertIn("between(t,0.000,60.000)", rendered)
+
+    def test_materialized_cover_image_overlay_is_available_for_render(self) -> None:
+        image_bytes = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lzLqWQAAAABJRU5ErkJggg=="
+        )
+        layer = {
+            "kind": "image",
+            "label": "Logo capa",
+            "image_data_url": f"data:image/png;base64,{base64.b64encode(image_bytes).decode('ascii')}",
+        }
+        data = {"caption_queue": [{"publish_metadata": {"cover": {"layers": [layer]}}}]}
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            CUTTED.materialize_queue_image_assets(data, Path(tmp_dir))
+
+            self.assertTrue(Path(layer["image_file"]).exists())
+            self.assertEqual(layer["image_data_url"], "")
+            command = CUTTED.publish_cover_ffmpeg_command(
+                Path("cover.jpg"),
+                Path("out.jpg"),
+                {"layers": [layer]},
+                CUTTED.PLATFORM_PRESETS["tiktok"],
+                "ffmpeg",
+            )
+
+        self.assertIn("-filter_complex", command)
+        self.assertIn("coverimg0", " ".join(command))
 
     def test_page_mounts_live_timeline_with_legacy_fallback(self) -> None:
         html = CUTTED.page_html(
