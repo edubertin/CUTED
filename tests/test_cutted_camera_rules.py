@@ -291,6 +291,8 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertNotIn("data-card-camera", html)
         self.assertIn("data-overlay-place-camera", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertIn("data-overlay-place-speech", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function speechOverlayTimingForCard", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("syncTimedOverlayVisibility(card, current)", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertNotIn("data-preview-volume-down", html)
         self.assertNotIn("data-preview-volume-up", html)
         self.assertNotIn("data-preview-volume-zero", html)
@@ -304,12 +306,16 @@ class CuttedCameraRuleTests(unittest.TestCase):
             "y": 0.18,
             "width": 0.44,
             "opacity": 92,
+            "start_seconds": 1.25,
+            "duration_seconds": 2.5,
         })
 
         self.assertEqual(layer["kind"], "speech")
         self.assertEqual(layer["key"], "speech")
         self.assertEqual(layer["color"], "#050505")
         self.assertEqual(layer["background_color"], "#ffffff")
+        self.assertEqual(layer["start_seconds"], 1.25)
+        self.assertEqual(layer["duration_seconds"], 2.5)
 
         preset = CUTTED.PLATFORM_PRESETS["tiktok"]
         rendered = CUTTED.overlay_filter({"overlays": [layer]}, preset)
@@ -317,6 +323,7 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertIn("drawbox", rendered)
         self.assertIn("drawtext", rendered)
         self.assertIn("O clima esquentou", rendered)
+        self.assertIn("between(t,1.250,3.750)", rendered)
 
     def test_page_mounts_live_timeline_with_legacy_fallback(self) -> None:
         html = CUTTED.page_html(

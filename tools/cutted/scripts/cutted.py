@@ -8008,6 +8008,14 @@ def text_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> s
     return ",".join(filters)
 
 
+def timed_overlay_enable(overlay: dict[str, object]) -> str:
+    start = max(float(overlay.get("start_seconds") or 0.0), 0.0)
+    duration = max(float(overlay.get("duration_seconds") or 0.0), 0.0)
+    if duration <= 0.0:
+        return ""
+    return f":enable='between(t,{start:.3f},{start + duration:.3f})'"
+
+
 def speech_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> str:
     text = str(overlay.get("text") or overlay.get("label") or "").strip()
     if not text:
@@ -8028,11 +8036,12 @@ def speech_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) ->
     color = ffmpeg_color(str(overlay.get("color") or "#050505"))
     background = ffmpeg_color(str(overlay.get("background_color") or "#ffffff"))
     escaped_text = ffmpeg_text_value(text)
+    enable = timed_overlay_enable(overlay)
     return ",".join([
-        f"drawbox=x={tail_x}:y={tail_y}:w={tail_w}:h={tail_h}:color={background}@{opacity:.2f}:t=fill",
-        f"drawbox=x={x}:y={y}:w={box_w}:h={box_h}:color={background}@{opacity:.2f}:t=fill",
+        f"drawbox=x={tail_x}:y={tail_y}:w={tail_w}:h={tail_h}:color={background}@{opacity:.2f}:t=fill{enable}",
+        f"drawbox=x={x}:y={y}:w={box_w}:h={box_h}:color={background}@{opacity:.2f}:t=fill{enable}",
         f"drawtext=fontfile='{font}':text='{escaped_text}':x={x + pad}:y={text_y}:"
-        f"fontsize={font_size}:fontcolor={color}@1.0",
+        f"fontsize={font_size}:fontcolor={color}@1.0{enable}",
     ])
 
 
@@ -8158,6 +8167,16 @@ def speech_overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
     layer["key"] = "speech"
     layer["label"] = str(layer["text"])
     layer["tail"] = str(raw.get("tail") or "bottom-left")
+    layer["start_seconds"] = clamp(
+        float(raw.get("start_seconds") if raw.get("start_seconds") is not None else 0.0),
+        0.0,
+        9999.0,
+    )
+    layer["duration_seconds"] = clamp(
+        float(raw.get("duration_seconds") if raw.get("duration_seconds") is not None else 3.0),
+        0.3,
+        60.0,
+    )
     return layer
 
 
@@ -12545,7 +12564,9 @@ function defaultSpeechOverlay(text = "Fala rapida"){
     background_enabled: true,
     background_color: "#ffffff",
     background_opacity: 94,
-    tail: "bottom-left"
+    tail: "bottom-left",
+    start_seconds: 0,
+    duration_seconds: 3
   };
 }
 function normalizeOverlay(overlay){
@@ -12586,7 +12607,9 @@ function normalizeSpeechOverlay(layer){
     kind: "speech",
     key: "speech",
     label: base.text,
-    tail: String(layer?.tail || "bottom-left")
+    tail: String(layer?.tail || "bottom-left"),
+    start_seconds: clampNumber(layer?.start_seconds ?? 0, 0, 9999),
+    duration_seconds: clampNumber(layer?.duration_seconds ?? 3, .3, 60)
   });
 }
 function normalizeImageOverlay(layer){
@@ -12664,6 +12687,32 @@ function overlayStyle(overlay){
   const fontSize = textLike ? `${current.font_size}px` : "20px";
   const backgroundOpacity = textLike ? current.background_opacity / 100 : .7;
   return `--overlay-x:${current.x};--overlay-y:${current.y};--overlay-width:${current.width};--overlay-opacity:${current.opacity / 100};--overlay-accent:${meta.accent};--overlay-color:${color};--overlay-font-size:${fontSize};--overlay-bg-rgb:${backgroundRgb};--overlay-bg-opacity:${backgroundOpacity}`;
+}
+function overlayTimingForLayer(layer){
+  return {
+    start: clampNumber(layer?.start_seconds ?? 0, 0, 9999),
+    duration: clampNumber(layer?.duration_seconds ?? 3, .3, 60)
+  };
+}
+function speechOverlayTimingForCard(card){
+  const context = cameraContextForCard(card);
+  const start = clampNumber(context.position, 0, Math.max(context.duration - .3, 0));
+  const duration = clampNumber(Math.min(3, Math.max(context.duration - start, .3)), .3, 60);
+  return { start_seconds: Number(start.toFixed(3)), duration_seconds: Number(duration.toFixed(3)) };
+}
+function overlayBoxVisibleAtPosition(box, position){
+  if (box.dataset.overlayKey !== "speech") return true;
+  const start = clampNumber(box.dataset.overlayStart ?? 0, 0, 9999);
+  const duration = clampNumber(box.dataset.overlayDuration ?? 3, .3, 60);
+  return position >= start && position <= start + duration;
+}
+function syncTimedOverlayVisibility(item, time = null){
+  const boxes = item?.querySelectorAll?.("[data-overlay-drag]");
+  if (!boxes?.length) return;
+  const video = item.querySelector("video");
+  const raw = time ?? (video && Number.isFinite(video.currentTime) ? video.currentTime : 0);
+  const position = item.classList.contains("card") ? cameraContextForCard(item, raw).position : Number(raw || 0);
+  boxes.forEach(box => { box.hidden = !overlayBoxVisibleAtPosition(box, position); });
 }
 function normalizeHexColor(value, fallback){
   const raw = String(value || "").trim();
@@ -13170,6 +13219,7 @@ function renderOverlayLayerBoxes(card, layers){
   if (list) {
     list.innerHTML = layers.map(overlayLayerBoxHtml).join("");
   }
+  syncTimedOverlayVisibility(card);
   renderLayerStrip(card, layers);
 }
 function renderLayerStrip(card, layers){
@@ -13227,7 +13277,8 @@ function overlayLayerBoxHtml(layer){
     </div>`;
   }
   if (layer.kind === "speech") {
-    return `<div class="overlay-box overlay-speech-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="speech" style="${escapeAttr(overlayStyle(layer))}">
+    const timing = overlayTimingForLayer(layer);
+    return `<div class="overlay-box overlay-speech-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="speech" data-overlay-start="${timing.start.toFixed(3)}" data-overlay-duration="${timing.duration.toFixed(3)}" style="${escapeAttr(overlayStyle(layer))}">
       <span>${escapeHtml(layer.text)}</span>
       <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
     </div>`;
@@ -13466,6 +13517,7 @@ function showOverlayAddMenu(card, left, top){
     event.preventDefault();
     event.stopPropagation();
     const layer = defaultSpeechOverlay();
+    Object.assign(layer, speechOverlayTimingForCard(card));
     layer.x = Number(card.dataset.overlayMenuX || .32);
     layer.y = Number(card.dataset.overlayMenuY || .24);
     card.dataset.selectedOverlayLayer = layer.id;
@@ -13891,6 +13943,7 @@ function updateTimelinePlayhead(card, time = null){
   updateCameraSurfaceForCard(card, current);
   updatePreviewCameraTimelinePlayhead(card, current);
   syncPreviewCaptions(card, current);
+  syncTimedOverlayVisibility(card, current);
 }
 function previewCameraTimelineContext(card){
   const values = trimValues(card);
@@ -15170,8 +15223,14 @@ function overlayPreviewItemHtml(item){
 function bindOverlayPreviewControls(){
   document.querySelectorAll("[data-overlay-preview] .caption-item video").forEach(video => {
     video.volume = defaultPreviewVolume;
+    ["loadedmetadata", "durationchange", "seeked", "timeupdate"].forEach(eventName => {
+      video.addEventListener(eventName, () => syncTimedOverlayVisibility(video.closest(".caption-item")));
+    });
   });
-  document.querySelectorAll("[data-overlay-preview] .caption-item").forEach(item => bindOverlayDrag(item));
+  document.querySelectorAll("[data-overlay-preview] .caption-item").forEach(item => {
+    bindOverlayDrag(item);
+    syncTimedOverlayVisibility(item);
+  });
 }
 function bindOverlayDrag(item){
   const surface = item.querySelector("[data-overlay-surface]");
