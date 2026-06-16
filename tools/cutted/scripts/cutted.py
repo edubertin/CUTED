@@ -10528,9 +10528,13 @@ def publish_panels_html(moment: Moment) -> tuple[str, str]:
             <button type="button" data-publish-cover-zoom-reset title="Restaurar zoom">Reset</button>
           </div>
           <div class="publish-cover-tools">
-            <button type="button" data-publish-cover-use-overlays>Usar camadas do video</button>
+            <button type="button" data-publish-cover-add="text">Texto</button>
+            <button type="button" data-publish-cover-add="speech">Fala</button>
+            <button type="button" data-publish-cover-add="image">Imagem</button>
             <small data-publish-cover-layer-count>0 camadas</small>
           </div>
+          <div class="publish-cover-inspector" data-publish-cover-inspector hidden></div>
+          <input data-publish-cover-image type="file" accept="image/png,image/webp,image/jpeg" hidden>
           {cover_options}
           <p>{reason}</p>
         </aside>""",
@@ -11544,7 +11548,7 @@ body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,
 .clip-control-surface .cuted-render-zone.is-ready .cuted-ready-region{flex:0 0 46px;width:46px;min-width:46px}.clip-control-surface .cuted-render-zone.is-ready .cuted-ready-pill{width:46px}
 .card[open] .editor-shell{grid-template-columns:minmax(210px,260px) minmax(340px,1fr) minmax(260px,330px);gap:14px;align-items:start;padding:0 18px 18px;margin-top:-10px}.card[open] .editor-preview{grid-column:2}.publish-panel{display:grid;gap:10px;align-content:start;min-width:0;max-height:72vh;overflow:auto;padding:12px;border:1px solid rgba(231,231,232,.12);border-radius:12px;background:linear-gradient(180deg,rgba(231,231,232,.075),rgba(231,231,232,.025)),rgba(5,5,5,.52);box-shadow:inset 0 1px rgba(255,255,255,.08),0 12px 34px rgba(0,0,0,.24);backdrop-filter:blur(16px) saturate(1.1)}.publish-panel strong{color:rgba(231,231,232,.72);font-size:11px;letter-spacing:.08em;text-transform:uppercase}.publish-panel h2{margin:0;color:var(--color-text);font-size:17px;line-height:1.18;letter-spacing:0}.publish-panel p{margin:0;color:rgba(231,231,232,.72);font-size:12px;line-height:1.38}.publish-panel small{color:rgba(231,231,232,.5);font-size:11px;line-height:1.34}.publish-cover-frame{position:relative;overflow:hidden;aspect-ratio:9/16;border:1px solid rgba(231,231,232,.1);border-radius:8px;background:#050505}.publish-cover-frame img{display:block;width:100%;height:100%;object-fit:cover}.publish-cover-frame span{display:block;width:100%;height:100%;background:linear-gradient(135deg,rgba(17,162,207,.18),rgba(175,207,42,.08))}.publish-cover-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.publish-cover-options button{min-height:58px;padding:2px;border:1px solid rgba(231,231,232,.14);border-radius:8px;background:rgba(0,0,0,.38);overflow:hidden}.publish-cover-options button.active{border-color:rgba(175,207,42,.82);box-shadow:0 0 0 2px rgba(175,207,42,.16)}.publish-cover-options img{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:5px}.publish-hook{padding:9px 10px;border-left:3px solid rgba(175,207,42,.78);border-radius:8px;background:rgba(175,207,42,.075);color:var(--color-text)!important;font-weight:800}.publish-tags{display:flex;gap:6px;flex-wrap:wrap}.publish-tags span{display:inline-flex;align-items:center;min-height:24px;max-width:100%;padding:4px 7px;border:1px solid rgba(17,162,207,.24);border-radius:999px;background:rgba(17,162,207,.09);color:rgba(231,231,232,.84);font-size:11px;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr);margin-top:0}.card[open] .editor-preview{grid-column:1}.publish-panel{max-height:none}.publish-cover-panel{grid-row:2}.publish-copy-panel{grid-row:3}.publish-cover-frame{max-width:180px}}@media(max-width:860px){.card[open] .editor-shell{padding:0 12px 16px}.publish-panel{border-radius:10px}.publish-cover-frame{max-width:150px}}
 .card[open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(340px,calc(72vh * 9 / 16)) minmax(260px,330px);gap:8px;align-items:center;justify-content:center}.card[data-preview-format=facebook][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(390px,calc(72vh * 4 / 5)) minmax(260px,330px)}.card[data-preview-format=youtube][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(520px,720px) minmax(260px,330px)}.publish-panel{gap:9px;align-content:center;align-self:center;padding:11px}.publish-cover-panel{justify-self:end}.publish-copy-panel{justify-self:start}.publish-panel-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.publish-panel-head button{min-height:26px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-field{display:grid;gap:5px;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-field input,.publish-field textarea{width:100%;min-height:34px;padding:7px 9px;border:1px solid rgba(231,231,232,.14);border-radius:8px;background:rgba(0,0,0,.42);color:var(--color-text);font:inherit;font-size:12px;line-height:1.28;letter-spacing:0}.publish-field textarea{resize:vertical;min-height:72px}.publish-field input:focus,.publish-field textarea:focus{border-color:rgba(17,162,207,.58);outline:0;box-shadow:0 0 0 2px rgba(17,162,207,.16)}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr)}.publish-panel{align-content:start}.publish-cover-panel{justify-self:center}.publish-copy-panel{justify-self:stretch}}
-.publish-cover-frame{touch-action:none}.publish-cover-frame[data-publish-cover-can-drag="1"]{cursor:grab}.publish-cover-frame[data-publish-cover-dragging="1"]{cursor:grabbing}.publish-cover-frame img{user-select:none;-webkit-user-drag:none;transform:scale(var(--publish-cover-zoom,1));transform-origin:var(--publish-cover-x,50%) var(--publish-cover-y,50%);transition:transform 120ms ease;will-change:transform}.publish-cover-frame[data-publish-cover-dragging="1"] img{transition:none}.publish-cover-layer-list{position:absolute;inset:0;z-index:2;pointer-events:none}.publish-cover-layer{position:absolute;display:grid;align-items:center;min-height:24px;padding:5px 7px;border-radius:6px;color:var(--cover-layer-color,#fff);font-weight:800;line-height:1.05;overflow:hidden;text-overflow:ellipsis}.publish-cover-layer span{overflow:hidden;text-overflow:ellipsis}.publish-cover-layer[data-cover-layer-kind=text]{background:rgba(var(--cover-layer-bg,0,0,0),var(--cover-layer-bg-opacity,.7))}.publish-cover-layer[data-cover-layer-kind=speech]{border-radius:11px;background:rgba(var(--cover-layer-bg,255,255,255),var(--cover-layer-bg-opacity,.94));box-shadow:0 8px 18px rgba(0,0,0,.22);color:var(--cover-layer-color,#050505);font-weight:900;overflow:visible}.publish-cover-layer[data-cover-layer-kind=speech]:after{position:absolute;left:18%;bottom:-8px;width:15px;height:12px;border-radius:0 0 14px 0;background:inherit;content:"";transform:skewX(-18deg)}.publish-cover-layer[data-cover-layer-kind=image]{padding:0;background:transparent}.publish-cover-layer[data-cover-layer-kind=image] img{width:100%;height:auto;object-fit:contain;transform:none;transform-origin:center;opacity:var(--cover-layer-opacity,1)}.publish-cover-adjust{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.publish-cover-adjust label{display:grid;grid-template-columns:auto 1fr auto;gap:7px;align-items:center;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-cover-adjust output{min-width:38px;color:rgba(231,231,232,.84);font-size:11px;text-align:right}.publish-cover-adjust input{width:100%;accent-color:var(--color-brand-green)}.publish-cover-adjust button{min-height:28px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-cover-tools{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.publish-cover-tools button{min-height:30px;padding:5px 9px;border-radius:999px;font-size:11px}.publish-cover-tools small{color:rgba(231,231,232,.54);font-size:11px;white-space:nowrap}
+.publish-cover-frame{touch-action:none}.publish-cover-frame[data-publish-cover-can-drag="1"]{cursor:grab}.publish-cover-frame[data-publish-cover-dragging="1"]{cursor:grabbing}.publish-cover-frame>img{user-select:none;-webkit-user-drag:none;transform:scale(var(--publish-cover-zoom,1));transform-origin:var(--publish-cover-x,50%) var(--publish-cover-y,50%);transition:transform 120ms ease;will-change:transform}.publish-cover-frame[data-publish-cover-dragging="1"]>img{transition:none}.publish-cover-layer-list{position:absolute;inset:0;z-index:2;pointer-events:none}.publish-cover-layer{position:absolute;display:grid;align-items:center;min-height:24px;padding:5px 7px;border-radius:6px;color:var(--cover-layer-color,#fff);font-weight:800;line-height:1.05;overflow:hidden;text-overflow:ellipsis;cursor:move;pointer-events:auto;touch-action:none}.publish-cover-layer.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.publish-cover-layer span{overflow:hidden;text-overflow:ellipsis}.publish-cover-layer[data-cover-layer-kind=text]{background:rgba(var(--cover-layer-bg,0,0,0),var(--cover-layer-bg-opacity,.7))}.publish-cover-layer[data-cover-layer-kind=speech]{border-radius:11px;background:rgba(var(--cover-layer-bg,255,255,255),var(--cover-layer-bg-opacity,.94));box-shadow:0 8px 18px rgba(0,0,0,.22);color:var(--cover-layer-color,#050505);font-weight:900;overflow:visible}.publish-cover-layer[data-cover-layer-kind=speech]:after{position:absolute;left:18%;bottom:-8px;width:15px;height:12px;border-radius:0 0 14px 0;background:inherit;content:"";transform:skewX(-18deg)}.publish-cover-layer[data-cover-layer-kind=image]{padding:0;background:transparent}.publish-cover-layer[data-cover-layer-kind=image] img{display:block;width:100%;height:auto;object-fit:contain;transform:none;transform-origin:center;opacity:var(--cover-layer-opacity,1);pointer-events:none}.publish-cover-resize{position:absolute;right:2px;bottom:2px;width:18px;height:18px;padding:0;border:1px solid rgba(255,255,255,.56);border-radius:5px;background:rgba(0,0,0,.34);cursor:nwse-resize}.publish-cover-adjust{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.publish-cover-adjust label{display:grid;grid-template-columns:auto 1fr auto;gap:7px;align-items:center;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-cover-adjust output{min-width:38px;color:rgba(231,231,232,.84);font-size:11px;text-align:right}.publish-cover-adjust input{width:100%;accent-color:var(--color-brand-green)}.publish-cover-adjust button{min-height:28px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-cover-tools{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;align-items:center}.publish-cover-tools button{min-height:30px;padding:5px 8px;border-radius:999px;font-size:11px}.publish-cover-tools small{grid-column:1/-1;color:rgba(231,231,232,.54);font-size:11px;white-space:nowrap}.publish-cover-inspector{display:grid;gap:8px;padding:8px;border:1px solid rgba(231,231,232,.1);border-radius:8px;background:rgba(0,0,0,.28)}.publish-cover-inspector[hidden]{display:none}
 """
 
 
@@ -13498,6 +13502,16 @@ function overlayInspectorHtml(layer){
   }
   return overlayInspectorShell("Texto", `${overlayTextFieldHtml(layer)}${overlayTimingInspectorHtml(layer)}${overlayTextSizeControlsHtml(layer)}${overlayTextStyleHtml(layer)}${overlayRemoveButtonHtml()}`);
 }
+function coverInspectorHtml(layer){
+  if (!layer) return "";
+  if (layer.kind === "image") {
+    return overlayInspectorShell("Imagem da capa", `${overlayImageSourceHtml(layer)}${overlaySizeControlsHtml(layer, "Largura")}${overlayImageInspectorActionsHtml()}`);
+  }
+  if (layer.kind === "speech") {
+    return overlayInspectorShell("Fala da capa", `${overlayTextFieldHtml(layer)}${overlayTextSizeControlsHtml(layer)}${overlaySpeechStyleHtml(layer)}${overlayRemoveButtonHtml()}`);
+  }
+  return overlayInspectorShell("Texto da capa", `${overlayTextFieldHtml(layer)}${overlayTextSizeControlsHtml(layer)}${overlayTextStyleHtml(layer)}${overlayRemoveButtonHtml()}`);
+}
 function overlayInspectorShell(title, body){
   return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>${escapeHtml(title)}</strong><button data-overlay-close>Fechar</button></div>
     <div class="overlay-inspector">
@@ -14014,11 +14028,18 @@ function syncPublishCoverPanel(card, moment, cover){
   card.querySelectorAll("[data-publish-cover-option]").forEach(button => {
     button.classList.toggle("active", button.dataset.publishCoverOption === selected);
   });
-  const layers = normalizeCoverOverlayLayers(cover.layers);
+  syncPublishCoverLayerPreview(card, cover);
+  syncPublishCoverInspector(card);
+}
+function syncPublishCoverLayerPreview(card, cover = null){
+  const moment = (window.CUTTED_DATA.moments || []).find(item => String(item.rank) === String(card.dataset.rank));
+  const currentCover = cover || (moment ? publishMetadata(activePlatformForRank(card.dataset.rank), moment).cover || {} : {});
+  const layers = normalizeCoverOverlayLayers(currentCover.layers);
   const layerList = card.querySelector("[data-publish-cover-layer-list]");
   if (layerList) layerList.innerHTML = layers.map(publishCoverLayerHtml).join("");
   const layerCount = card.querySelector("[data-publish-cover-layer-count]");
   if (layerCount) layerCount.textContent = layers.length === 1 ? "1 camada" : `${layers.length} camadas`;
+  bindPublishCoverLayerControls(card);
 }
 function setPublishFieldValue(card, field, value){
   const input = card.querySelector(`[data-publish-field="${field}"]`);
@@ -14038,6 +14059,7 @@ function publishCoverForCard(card){
 }
 function beginPublishCoverDrag(card, event){
   if (event.button !== undefined && event.button !== 0) return;
+  if (event.target.closest("[data-publish-cover-layer]")) return;
   const frame = event.currentTarget;
   const cover = publishCoverForCard(card);
   if (!cover) return;
@@ -14084,11 +14106,242 @@ function publishCoverDragDelta(start, current, size, zoom){
   const zoomGap = Math.max(normalizePublishCoverZoom(zoom, 1) - 1, 0.08);
   return ((start - current) / Math.max(size, 1)) * 100 / zoomGap;
 }
+function bindPublishCoverImageInput(card){
+  const input = card.querySelector("[data-publish-cover-image]");
+  if (!input || input.dataset.publishCoverImageBound === "1") return;
+  input.dataset.publishCoverImageBound = "1";
+  input.addEventListener("change", () => addPublishCoverImageFromInput(card, input));
+}
+function addPublishCoverLayer(card, kind){
+  if (kind === "image") {
+    const input = card.querySelector("[data-publish-cover-image]");
+    if (input) {
+      delete input.dataset.coverReplaceLayer;
+      input.click();
+    }
+    return;
+  }
+  const layer = kind === "speech" ? defaultSpeechOverlay() : defaultTextOverlay();
+  layer.x = kind === "speech" ? .18 : .16;
+  layer.y = kind === "speech" ? .18 : .12;
+  layer.width = kind === "speech" ? .64 : .68;
+  layer.start_seconds = 0;
+  layer.duration_seconds = 3;
+  card.dataset.selectedCoverLayer = layer.id;
+  addCoverLayerForRank(card.dataset.rank, layer);
+  showPublishCoverInspector(card, layer.id);
+}
+function addPublishCoverImageFromInput(card, input){
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const replaceLayerId = String(input.dataset.coverReplaceLayer || "");
+  overlayImageDataUrl(file).then(dataUrl => {
+    if (replaceLayerId) {
+      patchCoverLayerForRank(card.dataset.rank, replaceLayerId, {
+        image_data_url: dataUrl,
+        image_file: "",
+        label: file.name
+      });
+      card.dataset.selectedCoverLayer = replaceLayerId;
+      showPublishCoverInspector(card, replaceLayerId);
+    } else {
+      const layer = normalizeImageOverlay({
+        id: overlayId(),
+        kind: "image",
+        key: "image",
+        label: file.name,
+        image_data_url: dataUrl,
+        x: .28,
+        y: .28,
+        width: .42,
+        opacity: 100,
+        start_seconds: 0,
+        duration_seconds: 3
+      });
+      card.dataset.selectedCoverLayer = layer.id;
+      addCoverLayerForRank(card.dataset.rank, layer);
+      showPublishCoverInspector(card, layer.id);
+    }
+    clearAppNotice();
+  }).catch(error => {
+    showAppNotice(error.message || "Nao foi possivel usar esta imagem na capa.");
+    console.warn("CUTED cover image overlay was rejected", error);
+  }).finally(() => {
+    input.value = "";
+    delete input.dataset.coverReplaceLayer;
+  });
+}
+function coverLayersForRank(rank){
+  return normalizePublishEdit(cardState(String(rank)).publish).coverLayers;
+}
+function setCoverLayersForRank(rank, layers, rerender = true){
+  const current = cardState(String(rank));
+  const publish = normalizePublishEdit(current.publish);
+  publish.coverLayers = normalizeCoverOverlayLayers(layers);
+  setCardState(String(rank), { publish });
+  const card = cardForRank(rank);
+  if (rerender && card) syncPublishPanel(card);
+  if (rerender) renderCaptionQueue();
+}
+function addCoverLayerForRank(rank, layer){
+  setCoverLayersForRank(rank, [...coverLayersForRank(rank), normalizeOverlayLayer(layer)]);
+}
+function patchCoverLayerForRank(rank, id, patch, rerender = true){
+  const layers = coverLayersForRank(rank).map(layer => {
+    if (layer.id !== id) return layer;
+    return normalizeOverlayLayer(Object.assign({}, layer, patch));
+  });
+  setCoverLayersForRank(rank, layers, rerender);
+}
+function removeCoverLayerForRank(rank, id){
+  setCoverLayersForRank(rank, coverLayersForRank(rank).filter(layer => layer.id !== id));
+}
+function selectedCoverLayerForCard(card){
+  const selected = String(card.dataset.selectedCoverLayer || "");
+  return coverLayersForRank(card.dataset.rank).find(layer => layer.id === selected) || null;
+}
+function syncPublishCoverInspector(card){
+  const inspector = card.querySelector("[data-publish-cover-inspector]");
+  if (!inspector) return;
+  const layer = selectedCoverLayerForCard(card);
+  if (!layer) {
+    inspector.hidden = true;
+    inspector.innerHTML = "";
+    return;
+  }
+  inspector.hidden = false;
+  inspector.innerHTML = coverInspectorHtml(layer);
+  bindPublishCoverInspectorControls(card, layer);
+}
+function showPublishCoverInspector(card, layerId){
+  card.dataset.selectedCoverLayer = layerId;
+  syncPublishPanel(card);
+}
+function bindPublishCoverInspectorControls(card, layer){
+  const rank = card.dataset.rank;
+  const patch = value => {
+    patchCoverLayerForRank(rank, layer.id, value, false);
+    syncPublishCoverLayerPreview(card);
+    renderCaptionQueue();
+  };
+  card.querySelector("[data-publish-cover-inspector] [data-overlay-close]")?.addEventListener("click", () => {
+    delete card.dataset.selectedCoverLayer;
+    syncPublishPanel(card);
+  });
+  const text = card.querySelector("[data-publish-cover-inspector] [data-layer-text]");
+  if (text) text.addEventListener("input", () => patch({ text: text.value, label: text.value }));
+  const fontSize = card.querySelector("[data-publish-cover-inspector] [data-layer-font-size]");
+  if (fontSize) fontSize.addEventListener("input", () => patch({ font_size: Number(fontSize.value) }));
+  const color = card.querySelector("[data-publish-cover-inspector] [data-layer-color]");
+  if (color) color.addEventListener("input", () => patch({ color: color.value }));
+  const opacity = card.querySelector("[data-publish-cover-inspector] [data-layer-opacity]");
+  if (opacity) opacity.addEventListener("input", () => patch({ opacity: Number(opacity.value) }));
+  const width = card.querySelector("[data-publish-cover-inspector] [data-layer-width]");
+  if (width) width.addEventListener("input", () => patch({ width: Number(width.value) / 100 }));
+  const backgroundEnabled = card.querySelector("[data-publish-cover-inspector] [data-layer-background-enabled]");
+  if (backgroundEnabled) backgroundEnabled.addEventListener("change", () => patch({ background_enabled: backgroundEnabled.checked }));
+  const backgroundColor = card.querySelector("[data-publish-cover-inspector] [data-layer-background-color]");
+  if (backgroundColor) backgroundColor.addEventListener("input", () => patch({ background_color: backgroundColor.value }));
+  const backgroundOpacity = card.querySelector("[data-publish-cover-inspector] [data-layer-background-opacity]");
+  if (backgroundOpacity) backgroundOpacity.addEventListener("input", () => patch({ background_opacity: Number(backgroundOpacity.value) }));
+  card.querySelector("[data-publish-cover-inspector] [data-layer-replace-image]")?.addEventListener("click", () => {
+    const input = card.querySelector("[data-publish-cover-image]");
+    if (!input) return;
+    input.dataset.coverReplaceLayer = layer.id;
+    input.click();
+  });
+  card.querySelector("[data-publish-cover-inspector] [data-layer-remove]")?.addEventListener("click", () => {
+    removeCoverLayerForRank(rank, layer.id);
+    delete card.dataset.selectedCoverLayer;
+    syncPublishPanel(card);
+  });
+}
+function bindPublishCoverLayerControls(card){
+  const frame = card.querySelector("[data-publish-cover-preview]");
+  if (!frame) return;
+  frame.querySelectorAll("[data-publish-cover-layer]").forEach(layerNode => bindPublishCoverLayerDrag(card, frame, layerNode));
+}
+function bindPublishCoverLayerDrag(card, frame, layerNode){
+  let drag = null;
+  const start = event => {
+    if (event.type === "mousedown" && drag) return;
+    const resizing = !!event.target?.closest?.("[data-publish-cover-resize]");
+    const frameRect = frame.getBoundingClientRect();
+    const layerRect = layerNode.getBoundingClientRect();
+    drag = {
+      pointerId: event.pointerId,
+      type: resizing ? "resize" : "move",
+      startX: event.clientX,
+      startY: event.clientY,
+      startLeft: layerRect.left - frameRect.left,
+      startTop: layerRect.top - frameRect.top,
+      startWidth: layerRect.width,
+      frameWidth: Math.max(frameRect.width, 1),
+      frameHeight: Math.max(frameRect.height, 1),
+      moved: false
+    };
+    card.dataset.selectedCoverLayer = layerNode.dataset.publishCoverLayer;
+    layerNode.classList.add("is-selected");
+    if (event.pointerId !== undefined && layerNode.setPointerCapture) layerNode.setPointerCapture(event.pointerId);
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", end, { once: true });
+    document.addEventListener("pointercancel", end, { once: true });
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", end, { once: true });
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const move = event => {
+    if (!drag || (event.pointerId !== undefined && event.pointerId !== drag.pointerId)) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) drag.moved = true;
+    const patch = {};
+    if (drag.type === "resize") {
+      const minWidth = layerNode.dataset.coverLayerKind === "image" ? .08 : .16;
+      patch.width = clampNumber((drag.startWidth + dx) / drag.frameWidth, minWidth, .9);
+      layerNode.style.width = `${patch.width * 100}%`;
+    } else {
+      const layerRect = layerNode.getBoundingClientRect();
+      const left = clampNumber(drag.startLeft + dx, 0, Math.max(drag.frameWidth - layerRect.width, 0));
+      const top = clampNumber(drag.startTop + dy, 0, Math.max(drag.frameHeight - layerRect.height, 0));
+      patch.x = left / drag.frameWidth;
+      patch.y = top / drag.frameHeight;
+      layerNode.style.left = `${patch.x * 100}%`;
+      layerNode.style.top = `${patch.y * 100}%`;
+    }
+    patchCoverLayerForRank(card.dataset.rank, layerNode.dataset.publishCoverLayer, patch, false);
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const end = event => {
+    if (!drag || (event.pointerId !== undefined && event.pointerId !== drag.pointerId)) return;
+    const shouldInspect = !drag.moved;
+    drag = null;
+    document.removeEventListener("pointermove", move);
+    document.removeEventListener("mousemove", move);
+    document.removeEventListener("pointerup", end);
+    document.removeEventListener("pointercancel", end);
+    document.removeEventListener("mouseup", end);
+    syncPublishPanel(card);
+    renderCaptionQueue();
+    if (shouldInspect) showPublishCoverInspector(card, layerNode.dataset.publishCoverLayer);
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  layerNode.onpointerdown = start;
+  layerNode.onmousedown = start;
+  layerNode.querySelectorAll("[data-publish-cover-resize]").forEach(handle => {
+    handle.onpointerdown = start;
+    handle.onmousedown = start;
+  });
+}
 function bindPublishPanel(card){
   if (card.dataset.publishBound === "1") return;
   card.dataset.publishBound = "1";
   syncPublishPanel(card);
   bindPublishCoverDrag(card);
+  bindPublishCoverImageInput(card);
   card.querySelectorAll("[data-publish-field]").forEach(input => {
     input.addEventListener("input", () => {
       const current = cardState(card.dataset.rank);
@@ -14131,18 +14384,10 @@ function bindPublishPanel(card){
     syncPublishPanel(card);
     renderCaptionQueue();
   });
-  card.querySelector("[data-publish-cover-use-overlays]")?.addEventListener("click", () => {
-    const layers = normalizeCoverOverlayLayers(overlayLayersForRank(card.dataset.rank, activePlatformForRank(card.dataset.rank)));
-    if (!layers.length) {
-      showAppNotice("Adicione texto, fala ou imagem no video antes de copiar para a capa.");
-      return;
-    }
-    const publish = normalizePublishEdit(cardState(card.dataset.rank).publish);
-    publish.coverLayers = layers.map(copyOverlayLayerForCover);
-    setCardState(card.dataset.rank, { publish });
-    syncPublishPanel(card);
-    renderCaptionQueue();
-    showAppNotice("Camadas do video aplicadas na Capa IA.");
+  card.querySelectorAll("[data-publish-cover-add]").forEach(button => {
+    button.addEventListener("click", () => {
+      addPublishCoverLayer(card, button.dataset.publishCoverAdd);
+    });
   });
   card.querySelector("[data-publish-reset]")?.addEventListener("click", () => {
     setCardState(card.dataset.rank, { publish: {} });
@@ -15280,14 +15525,6 @@ function normalizeCoverOverlayLayers(layers){
   const source = Array.isArray(layers) ? layers : [];
   return source.map(normalizeOverlayLayer).filter(layer => layer.key !== "none");
 }
-function copyOverlayLayerForCover(layer){
-  const normalized = normalizeOverlayLayer(layer);
-  return Object.assign({}, normalized, {
-    id: overlayId(),
-    start_seconds: 0,
-    duration_seconds: 3
-  });
-}
 function publishCoverLayerHtml(layer){
   const current = normalizeOverlayLayer(layer);
   const left = clampNumber(current.x * 100, 0, 100);
@@ -15295,16 +15532,23 @@ function publishCoverLayerHtml(layer){
   const width = clampNumber(current.width * 100, 8, 90);
   const opacity = clampNumber(current.opacity / 100, .1, 1);
   const fontSize = clampNumber((current.font_size || 34) * .42, 10, 24);
+  const selected = document.querySelector(`.card[data-rank="${CSS.escape(String(activeRankForCoverLayer(current)))}"]`)?.dataset.selectedCoverLayer === current.id;
+  const selectedClass = selected ? " is-selected" : "";
+  const resize = '<button class="publish-cover-resize" data-publish-cover-resize type="button" title="Redimensionar"></button>';
   if (current.kind === "image") {
     const src = current.image_data_url || current.image_file || "";
     if (!src) return "";
-    return `<div class="publish-cover-layer" data-cover-layer-kind="image" style="left:${left}%;top:${top}%;width:${width}%;--cover-layer-opacity:${opacity}"><img src="${escapeAttr(src)}" alt=""></div>`;
+    return `<div class="publish-cover-layer${selectedClass}" data-publish-cover-layer="${escapeAttr(current.id)}" data-cover-layer-kind="image" style="left:${left}%;top:${top}%;width:${width}%;--cover-layer-opacity:${opacity}"><img src="${escapeAttr(src)}" alt="">${resize}</div>`;
   }
   const bg = hexToRgb(current.background_color || "#000000").join(",");
   const bgOpacity = clampNumber((current.background_opacity ?? 70) / 100, 0, 1);
   const color = normalizeHexColor(current.color, current.kind === "speech" ? "#050505" : "#ffffff");
   const text = escapeHtml(current.text || current.label || "");
-  return `<div class="publish-cover-layer" data-cover-layer-kind="${escapeAttr(current.kind)}" style="left:${left}%;top:${top}%;width:${width}%;font-size:${fontSize}px;opacity:${opacity};--cover-layer-color:${color};--cover-layer-bg:${bg};--cover-layer-bg-opacity:${bgOpacity}"><span>${text}</span></div>`;
+  return `<div class="publish-cover-layer${selectedClass}" data-publish-cover-layer="${escapeAttr(current.id)}" data-cover-layer-kind="${escapeAttr(current.kind)}" style="left:${left}%;top:${top}%;width:${width}%;font-size:${fontSize}px;opacity:${opacity};--cover-layer-color:${color};--cover-layer-bg:${bg};--cover-layer-bg-opacity:${bgOpacity}"><span>${text}</span>${resize}</div>`;
+}
+function activeRankForCoverLayer(layer){
+  const card = Array.from(document.querySelectorAll(".card")).find(item => coverLayersForRank(item.dataset.rank).some(current => current.id === layer.id));
+  return card?.dataset.rank || "";
 }
 function normalizePublishCoverZoom(value, fallback = 1){
   if (value === null || value === undefined || value === "") return fallback;
