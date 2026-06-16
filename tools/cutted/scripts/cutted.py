@@ -7953,6 +7953,8 @@ def overlay_layer_filter(overlay: dict[str, object], preset: PlatformPreset) -> 
         return ""
     if overlay.get("kind") == "image":
         return image_overlay_filter(overlay, preset)
+    if overlay.get("kind") == "speech":
+        return speech_overlay_filter(overlay, preset)
     if overlay.get("kind") == "text":
         return text_overlay_filter(overlay, preset)
     card = OVERLAY_PRESETS[str(overlay["key"])]
@@ -8006,6 +8008,34 @@ def text_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> s
     return ",".join(filters)
 
 
+def speech_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> str:
+    text = str(overlay.get("text") or overlay.get("label") or "").strip()
+    if not text:
+        return ""
+    box_w = int(round(preset.width * float(overlay["width"])))
+    font_size = max(18, int(round(float(overlay["font_size"]) * preset.width / 1080.0)))
+    box_h = max(int(round(font_size * 1.95)), int(round(preset.height * 0.054)))
+    x = min(int(round(preset.width * float(overlay["x"]))), max(preset.width - box_w, 0))
+    y = min(int(round(preset.height * float(overlay["y"]))), max(preset.height - box_h, 0))
+    pad = max(12, int(round(font_size * 0.44)))
+    tail_w = max(18, int(round(font_size * 0.5)))
+    tail_h = max(16, int(round(font_size * 0.44)))
+    tail_x = min(x + max(pad, int(round(box_w * 0.2))), max(preset.width - tail_w, 0))
+    tail_y = min(y + box_h - max(2, int(round(tail_h * 0.2))), preset.height)
+    text_y = y + max(8, int(round((box_h - font_size) / 2)))
+    opacity = clamp(float(overlay["opacity"]) / 100.0, 0.1, 1.0)
+    font = ffmpeg_filter_path(find_overlay_font())
+    color = ffmpeg_color(str(overlay.get("color") or "#050505"))
+    background = ffmpeg_color(str(overlay.get("background_color") or "#ffffff"))
+    escaped_text = ffmpeg_text_value(text)
+    return ",".join([
+        f"drawbox=x={tail_x}:y={tail_y}:w={tail_w}:h={tail_h}:color={background}@{opacity:.2f}:t=fill",
+        f"drawbox=x={x}:y={y}:w={box_w}:h={box_h}:color={background}@{opacity:.2f}:t=fill",
+        f"drawtext=fontfile='{font}':text='{escaped_text}':x={x + pad}:y={text_y}:"
+        f"fontsize={font_size}:fontcolor={color}@1.0",
+    ])
+
+
 def image_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> str:
     image_file = str(overlay.get("image_file") or "")
     if not image_file:
@@ -8041,6 +8071,8 @@ def overlay_layers_from_row(row: dict[str, object]) -> list[dict[str, object]]:
 def overlay_layer_from_raw(raw: dict[str, object]) -> dict[str, object]:
     if str(raw.get("kind") or raw.get("key") or "") == "image":
         return image_overlay_from_raw(raw)
+    if str(raw.get("kind") or raw.get("key") or "") == "speech":
+        return speech_overlay_from_raw(raw)
     if str(raw.get("kind") or raw.get("key") or "") == "text":
         return text_overlay_from_raw(raw)
     return overlay_from_raw(raw)
@@ -8107,6 +8139,26 @@ def text_overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
             100.0,
         ),
     }
+
+
+def speech_overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
+    layer = text_overlay_from_raw({
+        **raw,
+        "text": raw.get("text") or raw.get("label") or "Fala rapida",
+        "background_enabled": True,
+        "background_color": raw.get("background_color") or "#ffffff",
+        "background_opacity": raw.get("background_opacity") if raw.get("background_opacity") is not None else 94,
+        "color": raw.get("color") or "#050505",
+        "font_size": raw.get("font_size") if raw.get("font_size") is not None else 34,
+        "width": raw.get("width") if raw.get("width") is not None else 0.56,
+    })
+    if layer["key"] == "none":
+        return layer
+    layer["kind"] = "speech"
+    layer["key"] = "speech"
+    layer["label"] = str(layer["text"])
+    layer["tail"] = str(raw.get("tail") or "bottom-left")
+    return layer
 
 
 def default_overlay() -> dict[str, object]:
@@ -11236,7 +11288,7 @@ main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px
 .card[data-effect=light-grain] .media video,.card[data-effect=light-grain] .media img{filter:contrast(1.08) brightness(1.02)}.card[data-effect=old-film] .media video,.card[data-effect=old-film] .media img{filter:sepia(.48) contrast(1.2) saturate(.62) brightness(.92)}.card[data-effect=vhs] .media video,.card[data-effect=vhs] .media img{filter:saturate(.62) contrast(1.22) brightness(.9) hue-rotate(-7deg)}.card[data-effect=bw-old] .media video,.card[data-effect=bw-old] .media img{filter:grayscale(1) contrast(1.22) brightness(.9)}.card[data-effect=light-grain] .media:after,.card[data-effect=old-film] .media:after,.card[data-effect=vhs] .media:after,.card[data-effect=bw-old] .media:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--effect-opacity,.24);background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 70% 65%,rgba(0,0,0,.95) 0 1px,transparent 1.8px);background-size:4px 4px,6px 6px;mix-blend-mode:overlay}.card[data-effect=old-film] .media:before,.card[data-effect=bw-old] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at center,transparent 44%,rgba(0,0,0,.46) 100%)}.card[data-effect=vhs] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 4px);mix-blend-mode:overlay}
 .camera-surface[data-camera-fit=contain] video:not(.camera-fit-bg){object-position:center}
 .preview-caption-layer span{padding:var(--preview-caption-padding,0);border-radius:.16em;background:var(--preview-caption-bg,transparent);color:var(--preview-caption-color,#fff);font-size:var(--preview-caption-size,clamp(18px,6.67cqw,36px));box-decoration-break:clone;-webkit-box-decoration-break:clone}
-.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,var(--color-brand-green));border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none;pointer-events:auto}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-text-box{display:grid;align-items:center;min-width:96px;min-height:34px;padding:8px 12px;border-left:0;background:rgba(var(--overlay-bg-rgb,0,0,0),var(--overlay-bg-opacity,.7));box-shadow:none;color:var(--overlay-color,#fff);font-weight:700;font-size:clamp(13px,var(--overlay-font-size,20px),36px);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.overlay-text-box[data-overlay-bg=off]{background:transparent;box-shadow:none}.overlay-text-box span{opacity:var(--overlay-opacity,1);overflow:hidden;text-overflow:ellipsis}.overlay-box.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.overlay-image-box{display:grid;place-items:center;min-width:72px;min-height:72px;padding:6px;border:1px dashed rgba(255,255,255,.42);background:rgba(0,0,0,.12);box-shadow:0 8px 24px rgba(0,0,0,.22)}.overlay-image-box img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none;background:transparent}.overlay-resize{position:absolute;right:3px;bottom:3px;z-index:4;width:22px;height:22px;padding:0;border:1px solid rgba(255,255,255,.52);border-radius:5px;background:rgba(255,255,255,.2);cursor:nwse-resize;touch-action:none;pointer-events:auto}.overlay-menu{position:absolute;z-index:6;display:grid;gap:8px;width:min(360px,94%);padding:8px;border:1px solid var(--color-border-strong);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel);touch-action:none}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px;cursor:move}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-inspector{display:grid;gap:8px}.overlay-inspector label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.overlay-inspector input[type=text],.overlay-inspector input[type=number]{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.overlay-inspector input[type=color]{width:42px;height:32px;padding:2px;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black)}.overlay-inspector-row{display:flex;gap:8px;align-items:center}.overlay-inspector-row>*{flex:1}.overlay-inspector-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.overlay-inspector-check input{width:auto}.overlay-danger{color:var(--color-danger)!important;border-color:#5b2626!important;background:#251111!important}.image-upload{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-empty{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;color:var(--color-text-muted)}
+.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,var(--color-brand-green));border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none;pointer-events:auto}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-text-box{display:grid;align-items:center;min-width:96px;min-height:34px;padding:8px 12px;border-left:0;background:rgba(var(--overlay-bg-rgb,0,0,0),var(--overlay-bg-opacity,.7));box-shadow:none;color:var(--overlay-color,#fff);font-weight:700;font-size:clamp(13px,var(--overlay-font-size,20px),36px);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.overlay-text-box[data-overlay-bg=off]{background:transparent;box-shadow:none}.overlay-text-box span{opacity:var(--overlay-opacity,1);overflow:hidden;text-overflow:ellipsis}.overlay-speech-box{display:grid;align-items:center;min-width:112px;min-height:42px;padding:10px 15px;border:0;border-radius:18px;background:rgba(var(--overlay-bg-rgb,255,255,255),var(--overlay-bg-opacity,.94));box-shadow:0 10px 24px rgba(0,0,0,.22);color:var(--overlay-color,#050505);font-weight:900;font-size:clamp(14px,var(--overlay-font-size,22px),30px);line-height:1.08;white-space:normal;overflow:visible}.overlay-speech-box:after{position:absolute;left:18%;bottom:-12px;width:24px;height:20px;border-radius:0 0 22px 0;background:inherit;content:"";transform:skewX(-18deg);box-shadow:8px 9px 16px rgba(0,0,0,.12)}.overlay-speech-box span{position:relative;z-index:1;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;opacity:var(--overlay-opacity,1);overflow:hidden;text-overflow:ellipsis;overflow-wrap:anywhere}.overlay-box.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.overlay-image-box{display:grid;place-items:center;min-width:72px;min-height:72px;padding:6px;border:1px dashed rgba(255,255,255,.42);background:rgba(0,0,0,.12);box-shadow:0 8px 24px rgba(0,0,0,.22)}.overlay-image-box img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none;background:transparent}.overlay-resize{position:absolute;right:3px;bottom:3px;z-index:4;width:22px;height:22px;padding:0;border:1px solid rgba(255,255,255,.52);border-radius:5px;background:rgba(255,255,255,.2);cursor:nwse-resize;touch-action:none;pointer-events:auto}.overlay-menu{position:absolute;z-index:6;display:grid;gap:8px;width:min(360px,94%);padding:8px;border:1px solid var(--color-border-strong);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel);touch-action:none}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px;cursor:move}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-inspector{display:grid;gap:8px}.overlay-inspector label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.overlay-inspector input[type=text],.overlay-inspector input[type=number]{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.overlay-inspector input[type=color]{width:42px;height:32px;padding:2px;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black)}.overlay-inspector-row{display:flex;gap:8px;align-items:center}.overlay-inspector-row>*{flex:1}.overlay-inspector-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.overlay-inspector-check input{width:auto}.overlay-danger{color:var(--color-danger)!important;border-color:#5b2626!important;background:#251111!important}.image-upload{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-empty{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;color:var(--color-text-muted)}
 p{color:#bebebe}.peak{color:#fff;font-size:16px;line-height:1.35}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}.transcript-copy{max-height:220px;overflow:auto;margin-top:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(0,0,0,.18)}.transcript-copy p{margin:0;line-height:1.45}
 body[data-tab=import] main,body[data-tab=import] .final-stage{display:none}body[data-tab=import] .import-stage{display:block}body[data-tab=final] main,body[data-tab=final] .import-stage{display:none}body[data-tab=final] .final-stage{display:block}.final-stage{display:none;margin:18px auto;max-width:1240px;padding:18px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised)}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.render-status{margin-top:12px;color:var(--color-text-muted)}.render-results{display:grid;gap:12px;margin-top:14px}.result-item{border:1px solid #303030;border-radius:8px;background:#090909;overflow:hidden}.result-item[open]{border-color:var(--color-metal-gray)}.result-item summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;border:0;color:var(--color-text)}.result-item summary strong{font-size:14px}.result-item summary span{color:var(--color-text-muted);font-size:12px}.result-body{display:grid;grid-template-columns:minmax(260px,420px) minmax(240px,1fr);gap:14px;padding:0 14px 14px}.result-body video{width:100%;max-height:70vh;background:#000;border-radius:6px;object-fit:contain}.result-meta{display:grid;align-content:start;gap:10px}.result-meta dl{margin:0}.result-path{display:block;max-width:100%;padding:8px 10px;border:1px solid rgba(17,162,207,.28);border-radius:6px;background:rgba(17,162,207,.08);color:var(--color-text);font-size:12px;line-height:1.35;overflow-wrap:anywhere}.result-actions{display:flex;gap:8px;flex-wrap:wrap}.result-actions a,.result-actions button{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.result-actions a.secondary,.result-actions button.secondary{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}
 .empty-project-stage{display:none;max-width:720px;margin:18px auto;padding:0 18px}.empty-project-panel{display:grid;gap:10px;padding:18px;border:1px solid var(--glass-border);border-radius:var(--radius-panel);background:var(--glass-bg-strong);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(24px) saturate(1.45);text-align:center}.empty-project-panel p{margin:0;color:var(--color-text-muted)}.empty-project-panel button{justify-self:center}body[data-project-empty=true][data-tab=edit] main{display:none}body[data-project-empty=true][data-tab=edit] .empty-project-stage{display:block}
@@ -12476,6 +12528,26 @@ function defaultTextOverlay(text = "Digite seu texto"){
     background_opacity: 70
   };
 }
+function defaultSpeechOverlay(text = "Fala rapida"){
+  return {
+    id: overlayId(),
+    kind: "speech",
+    key: "speech",
+    label: text,
+    text,
+    x: .32,
+    y: .24,
+    width: .56,
+    opacity: 96,
+    font_size: 34,
+    font_weight: "800",
+    color: "#050505",
+    background_enabled: true,
+    background_color: "#ffffff",
+    background_opacity: 94,
+    tail: "bottom-left"
+  };
+}
 function normalizeOverlay(overlay){
   const key = overlayMeta[overlay?.key] ? overlay.key : "none";
   if (key === "none") return defaultOverlay();
@@ -12502,6 +12574,21 @@ function normalizeTextOverlay(layer){
     background_opacity: clampNumber(layer?.background_opacity ?? 70, 0, 100)
   };
 }
+function normalizeSpeechOverlay(layer){
+  const base = normalizeTextOverlay(Object.assign({}, defaultSpeechOverlay(), layer, {
+    background_enabled: true,
+    background_color: layer?.background_color || "#ffffff",
+    background_opacity: layer?.background_opacity ?? 94,
+    color: layer?.color || "#050505",
+    font_weight: layer?.font_weight || "800"
+  }));
+  return Object.assign(base, {
+    kind: "speech",
+    key: "speech",
+    label: base.text,
+    tail: String(layer?.tail || "bottom-left")
+  });
+}
 function normalizeImageOverlay(layer){
   return {
     id: String(layer?.id || overlayId()),
@@ -12518,6 +12605,7 @@ function normalizeImageOverlay(layer){
 }
 function normalizeOverlayLayer(layer){
   if (layer?.kind === "image" || layer?.key === "image") return normalizeImageOverlay(layer);
+  if (layer?.kind === "speech" || layer?.key === "speech") return normalizeSpeechOverlay(layer);
   if (layer?.kind === "text" || layer?.key === "text") return normalizeTextOverlay(layer);
   return normalizeOverlay(layer);
 }
@@ -12570,10 +12658,11 @@ function overlayLabel(overlay){
 function overlayStyle(overlay){
   const current = normalizeOverlayLayer(overlay);
   const meta = overlayMeta[current.key] || overlayMeta.none;
-  const backgroundRgb = current.kind === "text" ? hexToRgb(current.background_color).join(",") : "0,0,0";
-  const color = current.kind === "text" ? current.color : "#ffffff";
-  const fontSize = current.kind === "text" ? `${current.font_size}px` : "20px";
-  const backgroundOpacity = current.kind === "text" ? current.background_opacity / 100 : .7;
+  const textLike = current.kind === "text" || current.kind === "speech";
+  const backgroundRgb = textLike ? hexToRgb(current.background_color).join(",") : "0,0,0";
+  const color = textLike ? current.color : "#ffffff";
+  const fontSize = textLike ? `${current.font_size}px` : "20px";
+  const backgroundOpacity = textLike ? current.background_opacity / 100 : .7;
   return `--overlay-x:${current.x};--overlay-y:${current.y};--overlay-width:${current.width};--overlay-opacity:${current.opacity / 100};--overlay-accent:${meta.accent};--overlay-color:${color};--overlay-font-size:${fontSize};--overlay-bg-rgb:${backgroundRgb};--overlay-bg-opacity:${backgroundOpacity}`;
 }
 function normalizeHexColor(value, fallback){
@@ -13098,6 +13187,7 @@ function renderLayerStrip(card, layers){
 }
 function layerStripLabel(layer){
   if (layer.kind === "image") return layer.label || "Imagem";
+  if (layer.kind === "speech") return `Fala: ${layer.text || layer.label || ""}`.trim();
   if (layer.kind === "text") return layer.text || layer.label || "Texto";
   return overlayMeta[layer.key]?.label || layer.label || "Camada";
 }
@@ -13136,6 +13226,12 @@ function overlayLayerBoxHtml(layer){
       <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
     </div>`;
   }
+  if (layer.kind === "speech") {
+    return `<div class="overlay-box overlay-speech-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="speech" style="${escapeAttr(overlayStyle(layer))}">
+      <span>${escapeHtml(layer.text)}</span>
+      <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
+    </div>`;
+  }
   const meta = overlayMeta[layer.key] || overlayMeta.none;
   return `<div class="overlay-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="${escapeAttr(layer.key)}" style="${escapeAttr(overlayStyle(layer))}">
     <strong>${escapeHtml(meta.title)}</strong>
@@ -13151,6 +13247,7 @@ function overlayPlaceButtonsHtml(){
   return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>Adicionar camada</strong><button data-overlay-close>Fechar</button></div>
     <div class="overlay-menu-actions">
       <button data-overlay-place-text>Texto</button>
+      <button data-overlay-place-speech>Fala</button>
       <button data-overlay-place-image>Imagem transparente</button>
       <button data-overlay-place-camera>Camera</button>
     </div>`;
@@ -13166,6 +13263,23 @@ function overlayInspectorHtml(layer){
         <label>Largura
           <input data-layer-width type="range" min="8" max="90" step="1" value="${Math.round(layer.width * 100)}">
         </label>
+        <button class="overlay-danger" data-layer-remove>Remover camada</button>
+      </div>`;
+  }
+  if (layer.kind === "speech") {
+    return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>Fala</strong><button data-overlay-close>Fechar</button></div>
+      <div class="overlay-inspector">
+        <label>Conteudo
+          <input data-layer-text type="text" value="${escapeAttr(layer.text || layer.label || "")}">
+        </label>
+        <div class="overlay-inspector-row">
+          <label>Tamanho
+            <input data-layer-font-size type="number" min="14" max="96" step="1" value="${Math.round(layer.font_size || 34)}">
+          </label>
+          <label>Opacidade
+            <input data-layer-opacity type="range" min="10" max="100" step="5" value="${layer.opacity}">
+          </label>
+        </div>
         <button class="overlay-danger" data-layer-remove>Remover camada</button>
       </div>`;
   }
@@ -13344,6 +13458,16 @@ function showOverlayAddMenu(card, left, top){
     const layer = defaultTextOverlay();
     layer.x = Number(card.dataset.overlayMenuX || .36);
     layer.y = Number(card.dataset.overlayMenuY || .34);
+    card.dataset.selectedOverlayLayer = layer.id;
+    addOverlayLayerForRank(card.dataset.rank, layer, overlayPlatformForItem(card));
+    showOverlayInspectorForLayer(card, layer.id, left, top);
+  });
+  menu.querySelector("[data-overlay-place-speech]")?.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    const layer = defaultSpeechOverlay();
+    layer.x = Number(card.dataset.overlayMenuX || .32);
+    layer.y = Number(card.dataset.overlayMenuY || .24);
     card.dataset.selectedOverlayLayer = layer.id;
     addOverlayLayerForRank(card.dataset.rank, layer, overlayPlatformForItem(card));
     showOverlayInspectorForLayer(card, layer.id, left, top);
