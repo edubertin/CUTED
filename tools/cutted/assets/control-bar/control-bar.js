@@ -1,10 +1,11 @@
 (function registerCutedControlBar(global) {
   const DEFAULT_STATE = {
     aiStatus: "idle",
+    captionMode: "off",
     captionsEnabled: false,
     captionMenuOpen: false,
     captionPaletteOpen: null,
-    captionStyle: { size: 72, width: 28, textColor: "#ffffff", backgroundColor: "transparent" },
+    captionStyle: { size: 72, width: 28, bottom: 16, mode: "off", textColor: "#ffffff", backgroundColor: "transparent", highlightBackgroundColor: "#000000" },
     effectMenuOpen: false,
     effectStyle: "clean",
     formatMenuOpen: false,
@@ -170,14 +171,16 @@
   function normalizeState(state) {
     const effectStyle = ["clean", "vhs", "film", "grain"].includes(state.effectStyle) ? state.effectStyle : "clean";
     const aiStatus = ["idle", "loading", "active"].includes(state.aiStatus) ? state.aiStatus : "idle";
+    const captionMode = normalizeCaptionMode(state.captionMode || state.captionStyle?.mode || (state.captionsEnabled ? "on" : "off"));
 
     return {
       aiStatus,
       busy: Boolean(state.busy),
-      captionsEnabled: Boolean(state.captionsEnabled),
+      captionMode,
+      captionsEnabled: captionMode !== "off",
       captionMenuOpen: Boolean(state.captionMenuOpen),
-      captionPaletteOpen: ["text", "background"].includes(state.captionPaletteOpen) ? state.captionPaletteOpen : null,
-      captionStyle: normalizeCaptionStyle(state.captionStyle),
+      captionPaletteOpen: captionPickerKind(state.captionPaletteOpen),
+      captionStyle: normalizeCaptionStyle({ ...state.captionStyle, mode: captionMode }),
       effectMenuOpen: Boolean(state.effectMenuOpen),
       effectStyle,
       formatMenuOpen: Boolean(state.formatMenuOpen),
@@ -221,18 +224,51 @@
 
   function normalizeCaptionStyle(value) {
     const input = value && typeof value === "object" ? value : {};
+    const mode = normalizeCaptionMode(input.mode || input.captionMode);
     return {
       size: clamp(Number(input.size || 72), 24, 140),
       width: clamp(Number(input.width || 28), 12, 56),
+      bottom: clamp(Number(input.bottom || input.height || 16), 6, 32),
+      mode,
       textColor: normalizeHexColor(input.textColor, "#ffffff"),
-      backgroundColor: normalizeCaptionBackground(input.backgroundColor)
+      backgroundColor: normalizeCaptionBackground(input.backgroundColor),
+      highlightBackgroundColor: normalizeCaptionHighlightBackground(
+        input.highlightBackgroundColor || input.highlight_background_color || input.activeBackgroundColor || input.active_background_color || input.backgroundColor
+      )
     };
+  }
+
+  function normalizeCaptionMode(value) {
+    const mode = String(value || "").trim().toLowerCase();
+    if (mode === "animated" || mode === "animada") return "animated";
+    if (mode === "on" || mode === "static") return "on";
+    return "off";
   }
 
   function normalizeCaptionBackground(value) {
     const raw = String(value || "").trim().toLowerCase();
     if (!raw || raw === "transparent" || raw === "none") return "transparent";
     return normalizeHexColor(raw, "#000000");
+  }
+
+  function normalizeCaptionHighlightBackground(value) {
+    return normalizeHexColor(value, "#000000");
+  }
+
+  function captionPickerKind(value) {
+    return ["text", "background", "highlight"].includes(value) ? value : null;
+  }
+
+  function captionPickerStyleKey(kind) {
+    if (kind === "background") return "backgroundColor";
+    if (kind === "highlight") return "highlightBackgroundColor";
+    return "textColor";
+  }
+
+  function captionPickerStatus(kind) {
+    if (kind === "background") return "Background palette";
+    if (kind === "highlight") return "Middle background";
+    return "Text palette";
   }
 
   function normalizeHexColor(value, fallback) {
@@ -247,7 +283,9 @@
       captionButton: container.querySelector("[data-cuted-control='caption']"),
       captionMenu: container.querySelector("[data-cuted-caption-menu]"),
       captionToggle: container.querySelector("[data-cuted-caption-toggle]"),
+      captionModeButtons: Array.from(container.querySelectorAll("[data-cuted-caption-mode]")),
       captionOkButton: container.querySelector("[data-cuted-caption-ok]"),
+      captionBottomInput: container.querySelector("[data-cuted-caption-bottom]"),
       captionSizeInput: container.querySelector("[data-cuted-caption-size]"),
       captionWidthInput: container.querySelector("[data-cuted-caption-width]"),
       captionSteps: Array.from(container.querySelectorAll("[data-cuted-caption-step]")),
@@ -310,7 +348,7 @@
       emitStateChange(container, callbacks, subscribers, state);
     };
     const emitCaptionChange = () => {
-      const payload = { captionsEnabled: state.captionsEnabled, captionStyle: { ...state.captionStyle } };
+      const payload = { captionMode: state.captionMode, captionsEnabled: state.captionsEnabled, captionStyle: { ...state.captionStyle, mode: state.captionMode } };
       callbacks.onCaptionToggle?.(payload);
       callbacks.onCaptionStyleChange?.(payload);
     };
@@ -502,10 +540,15 @@
       setCaptionStatus("Closed caption");
       sync();
     });
-    elements.captionToggle.addEventListener("click", () => {
+    elements.captionToggle.addEventListener("click", (event) => {
       if (isLocked()) return;
-      state.captionsEnabled = !state.captionsEnabled;
-      setCaptionStatus(state.captionsEnabled ? "Caption ON" : "Caption OFF", state.captionsEnabled ? "blue" : "neutral");
+      const modeButton = event.target instanceof Element ? event.target.closest("[data-cuted-caption-mode]") : null;
+      const fallbackMode = state.captionMode === "off" ? "on" : state.captionMode === "on" ? "animated" : "off";
+      const mode = normalizeCaptionMode(modeButton?.dataset.cutedCaptionMode || fallbackMode);
+      state.captionMode = mode;
+      state.captionsEnabled = mode !== "off";
+      state.captionStyle = normalizeCaptionStyle({ ...state.captionStyle, mode });
+      setCaptionStatus(captionModeLabel(mode), mode === "off" ? "neutral" : "blue");
       sync();
       emitCaptionChange();
     });
@@ -519,35 +562,36 @@
     elements.captionSteps.forEach((button) => {
       button.addEventListener("click", () => {
         if (isLocked()) return;
-        const key = button.dataset.cutedCaptionStep === "width" ? "width" : "size";
+        const key = ["bottom", "width"].includes(button.dataset.cutedCaptionStep) ? button.dataset.cutedCaptionStep : "size";
         const direction = Number(button.dataset.cutedCaptionDirection || 0);
-        const current = key === "width" ? state.captionStyle.width : state.captionStyle.size;
-        const step = key === "width" ? 1 : 2;
+        const current = key === "bottom" ? state.captionStyle.bottom : key === "width" ? state.captionStyle.width : state.captionStyle.size;
+        const step = key === "size" ? 2 : 1;
         const next = current + (direction * step);
-        updateCaptionStyle({ [key]: next }, key === "width" ? `Width ${Math.round(next)}` : `Size ${Math.round(next)}`);
+        updateCaptionStyle({ [key]: next }, captionStepLabel(key, next));
       });
     });
-    [["size", elements.captionSizeInput], ["width", elements.captionWidthInput]].forEach(([key, input]) => {
+    [["size", elements.captionSizeInput], ["width", elements.captionWidthInput], ["bottom", elements.captionBottomInput]].forEach(([key, input]) => {
       input.addEventListener("change", () => {
         if (isLocked()) return;
-        updateCaptionStyle({ [key]: Number(input.value) }, key === "width" ? `Width ${input.value}` : `Size ${input.value}`);
+        updateCaptionStyle({ [key]: Number(input.value) }, captionStepLabel(key, input.value));
       });
     });
     elements.captionPickers.forEach((picker) => {
       picker.addEventListener("click", () => {
         if (isLocked()) return;
-        const target = picker.dataset.cutedCaptionPicker === "background" ? "background" : "text";
+        const target = captionPickerKind(picker.dataset.cutedCaptionPicker) || "text";
         state.captionPaletteOpen = state.captionPaletteOpen === target ? null : target;
-        setCaptionStatus(target === "background" ? "Background palette" : "Text palette");
+        setCaptionStatus(captionPickerStatus(target));
         sync();
       });
     });
     elements.captionSwatches.forEach((button) => {
       button.addEventListener("click", () => {
         if (isLocked()) return;
-        const key = state.captionPaletteOpen === "background" ? "backgroundColor" : "textColor";
+        const key = captionPickerStyleKey(state.captionPaletteOpen);
         const value = button.dataset.cutedCaptionValue || "transparent";
-        updateCaptionStyle({ [key]: value }, key === "backgroundColor" ? "Background color" : "Text color");
+        const label = key === "backgroundColor" ? "Background color" : key === "highlightBackgroundColor" ? "Middle background" : "Text color";
+        updateCaptionStyle({ [key]: value }, label);
       });
     });
     elements.approveButton.addEventListener("click", () => {
@@ -764,12 +808,18 @@
 
   function syncCaptionMenu(elements, state) {
     elements.captionMenu.dataset.open = String(state.captionMenuOpen);
+    elements.captionToggle.dataset.mode = state.captionMode;
     elements.captionToggle.classList.toggle("is-on", state.captionsEnabled);
     elements.captionToggle.setAttribute("aria-pressed", String(state.captionsEnabled));
+    elements.captionModeButtons.forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.cutedCaptionMode === state.captionMode);
+      button.setAttribute("aria-pressed", String(button.dataset.cutedCaptionMode === state.captionMode));
+    });
     elements.captionSizeInput.value = String(Math.round(state.captionStyle.size));
     elements.captionWidthInput.value = String(Math.round(state.captionStyle.width));
+    elements.captionBottomInput.value = String(Math.round(state.captionStyle.bottom));
     elements.captionPickers.forEach((picker) => {
-      const key = picker.dataset.cutedCaptionPicker === "background" ? "backgroundColor" : "textColor";
+      const key = captionPickerStyleKey(picker.dataset.cutedCaptionPicker);
       const value = state.captionStyle[key];
       picker.style.setProperty("--caption-picker-color", value === "transparent" ? "transparent" : value);
       picker.dataset.transparent = String(value === "transparent");
@@ -779,8 +829,8 @@
     elements.captionPalette.dataset.kind = state.captionPaletteOpen || "text";
     elements.captionSwatches.forEach((button) => {
       const isTransparent = button.dataset.cutedCaptionValue === "transparent";
-      const key = state.captionPaletteOpen === "background" ? "backgroundColor" : "textColor";
-      button.hidden = !state.captionPaletteOpen || (state.captionPaletteOpen === "text" && isTransparent);
+      const key = captionPickerStyleKey(state.captionPaletteOpen);
+      button.hidden = !state.captionPaletteOpen || (state.captionPaletteOpen !== "background" && isTransparent);
       button.classList.toggle("is-active", button.dataset.cutedCaptionValue === state.captionStyle[key]);
     });
   }
@@ -791,6 +841,17 @@
     elements.clipRank.textContent = state.clipInfo.rank;
     elements.clipTitle.textContent = state.clipInfo.title;
     elements.clipSummary.textContent = state.clipInfo.summary;
+  }
+
+  function captionModeLabel(mode) {
+    if (mode === "animated") return "Caption animated";
+    if (mode === "on") return "Caption ON";
+    return "Caption OFF";
+  }
+
+  function captionStepLabel(key, value) {
+    if (key === "bottom") return `Height ${Math.round(Number(value) || 0)}%`;
+    return key === "width" ? `Width ${Math.round(Number(value) || 0)}` : `Size ${Math.round(Number(value) || 0)}`;
   }
 
   function syncStatus(elements, state) {
@@ -1019,20 +1080,22 @@
     return `
       <div class="cuted-caption-menu" data-open="false" data-cuted-caption-menu>
         <div class="cuted-caption-menu-head">
-          <button class="cuted-caption-switch" type="button" aria-label="Closed captions on or off" aria-pressed="false" data-cuted-caption-toggle>
-            <span>ON</span>
-            <i aria-hidden="true"></i>
-            <span>OFF</span>
-          </button>
+          <div class="cuted-caption-switch" role="group" aria-label="Modo da legenda" data-mode="off" data-cuted-caption-toggle>
+            <button type="button" aria-pressed="true" data-cuted-caption-mode="off">OFF</button>
+            <button type="button" aria-pressed="false" data-cuted-caption-mode="on">ON</button>
+            <button type="button" aria-pressed="false" data-cuted-caption-mode="animated">ANI</button>
+          </div>
           <button class="cuted-caption-ok" type="button" data-cuted-caption-ok>OK</button>
         </div>
         <div class="cuted-caption-number-grid">
           ${renderCaptionStepper("size", "FONT", 72)}
           ${renderCaptionStepper("width", "WIDTH", 28)}
+          ${renderCaptionStepper("bottom", "ALTURA", 16)}
         </div>
         <div class="cuted-caption-color-grid">
           ${renderCaptionColorPicker("text", "A", "#ffffff")}
           ${renderCaptionColorPicker("background", "BG", "#000000")}
+          ${renderCaptionColorPicker("highlight", "MID", "#000000")}
         </div>
         ${renderCaptionPalette()}
       </div>
@@ -1040,12 +1103,14 @@
   }
 
   function renderCaptionStepper(key, label, value) {
+    const min = key === "bottom" ? "6" : key === "width" ? "12" : "24";
+    const max = key === "bottom" ? "32" : key === "width" ? "56" : "140";
     return `
       <label class="cuted-caption-stepper">
         <span>${label}</span>
         <span class="cuted-caption-stepper-row">
           <button type="button" aria-label="${label} menor" data-cuted-caption-step="${key}" data-cuted-caption-direction="-1">-</button>
-          <input type="number" min="${key === "width" ? "12" : "24"}" max="${key === "width" ? "56" : "140"}" value="${value}" data-cuted-caption-${key} />
+          <input type="number" min="${min}" max="${max}" value="${value}" data-cuted-caption-${key} />
           <button type="button" aria-label="${label} maior" data-cuted-caption-step="${key}" data-cuted-caption-direction="1">+</button>
         </span>
       </label>
