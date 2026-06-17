@@ -7899,7 +7899,7 @@ def captioned_ffmpeg_command(
     ffmpeg: str, filters: list[str]
 ) -> list[str]:
     base = [
-        ffmpeg, "-y", "-i", str(input_path), "-ss", fmt_time(caption_trim_start(row)),
+        ffmpeg, "-y", "-ss", fmt_time(caption_trim_start(row)), "-i", str(input_path),
         "-t", fmt_time(caption_duration(row)),
     ]
     return render_command(base, output_path, row, preset, filters, caption_duration(row))
