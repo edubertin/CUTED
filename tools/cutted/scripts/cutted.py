@@ -196,9 +196,9 @@ PUBLISH_MAX_HASHTAGS = 6
 PUBLISH_DEFAULT_HASHTAGS = ["#Podcast", "#Cortes"]
 CUTTED_CAPTION_BOTTOM_OFFSET_MULTIPLIER = 1.25
 ANIMATED_CAPTION_LEAD_SECONDS = 0.14
-ANIMATED_CAPTION_MIN_RENDER_SECONDS = 0.14
-ANIMATED_CAPTION_TARGET_MIN_WORD_SECONDS = 0.18
-ANIMATED_CAPTION_FAST_WORD_SECONDS = 0.16
+ANIMATED_CAPTION_MIN_RENDER_SECONDS = 0.22
+ANIMATED_CAPTION_TARGET_MIN_WORD_SECONDS = 0.24
+ANIMATED_CAPTION_FAST_WORD_SECONDS = 0.20
 ANIMATED_CAPTION_MAX_GROUP_WORDS = 3
 ANIMATED_CAPTION_BOX_OPACITY = 0.80
 ANIMATED_CAPTION_BOX_SHADOW_OPACITY = 0.28
@@ -210,7 +210,7 @@ COVER_SPEECH_TAIL_WIDTH_PREVIEW_PX = 15.0
 COVER_SPEECH_TAIL_HEIGHT_PREVIEW_PX = 12.0
 COVER_SPEECH_TAIL_BOTTOM_PREVIEW_PX = -8.0
 COVER_FRAME_TAIL_SECONDS = 0.5
-RENDER_JOB_FINGERPRINT_VERSION = "cuted-render-queue-v9-caption-timing-cover-parity"
+RENDER_JOB_FINGERPRINT_VERSION = "cuted-render-queue-v10-canonical-animated-captions"
 RENDER_QUEUE_WRITE_ATTEMPTS = 6
 RENDER_QUEUE_WRITE_RETRY_SECONDS = 0.08
 STALE_RENDER_SERVER_ERROR = (
@@ -7422,7 +7422,7 @@ def ass_document_with_style(
     style = caption_style_from_row(row, preset)
     animated = style.get("mode") == "animated"
     dialogue = (
-        ass_animated_dialogue_lines(events, duration, chars_per_line, preset, style)
+        ass_animated_dialogue_lines(events, duration, chars_per_line, preset, style, row)
         if animated
         else ass_dialogue_lines(events, duration, chars_per_line, max_lines)
     )
@@ -7609,7 +7609,8 @@ def ass_dialogue_lines(events: list[CaptionEvent], duration: float, chars_per_li
 
 
 def ass_animated_dialogue_lines(
-    events: list[CaptionEvent], duration: float, chars_per_line: int, preset: PlatformPreset, style: dict[str, object]
+    events: list[CaptionEvent], duration: float, chars_per_line: int, preset: PlatformPreset, style: dict[str, object],
+    row: dict[str, object] | None = None,
 ) -> list[str]:
     lines: list[str] = []
     active_size = max(24, int(int(style.get("size") or (72 if preset.height >= 1600 else 54)) * 0.82))
@@ -7618,8 +7619,14 @@ def ass_animated_dialogue_lines(
     center_y = ass_animated_caption_center_y(preset, style, active_size)
     side_y = center_y + max(3, int(active_size * 0.08))
     previous_end = 0.0
-    for window in animated_caption_window_events(events, duration, chars_per_line):
-        start, end = animated_caption_render_window_times(window, duration, previous_end)
+    canonical_windows = animated_caption_windows_from_row(row or {}, duration)
+    windows = canonical_windows or animated_caption_window_events(events, duration, chars_per_line)
+    for window in windows:
+        start, end = (
+            animated_caption_canonical_window_times(window, duration, previous_end)
+            if canonical_windows
+            else animated_caption_render_window_times(window, duration, previous_end)
+        )
         if end <= start:
             continue
         previous_end = end
@@ -7633,6 +7640,35 @@ def ass_animated_dialogue_lines(
         lines.extend(ass_animated_caption_box_lines(start, end, window.active, center_x, center_y, active_size, style))
         lines.append(ass_animated_dialogue_line(3, start, end, "CaptionActive", window.active, center_x, center_y, pop))
     return lines
+
+
+def animated_caption_windows_from_row(row: dict[str, object], duration: float) -> list[AnimatedCaptionWindow]:
+    raw = row.get("animated_caption_windows")
+    if not isinstance(raw, list):
+        return []
+    windows: list[AnimatedCaptionWindow] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        active = clean_animated_caption_text(str(item.get("active") or ""))
+        if not active:
+            continue
+        start = clamp_float(item.get("start"), 0.0, duration, 0.0)
+        end = clamp_float(item.get("end"), 0.0, duration, start)
+        if end <= start:
+            continue
+        previous = clean_animated_caption_text(str(item.get("previous") or ""))
+        next_text = clean_animated_caption_text(str(item.get("next") or ""))
+        windows.append(AnimatedCaptionWindow(round(start, 3), round(end, 3), previous, active, next_text))
+    return sorted(windows, key=lambda window: (window.start, window.end))
+
+
+def animated_caption_canonical_window_times(
+    window: AnimatedCaptionWindow, duration: float, previous_end: float = 0.0
+) -> tuple[float, float]:
+    start = min(max(window.start, previous_end, 0.0), duration)
+    end = min(max(window.end, start + 0.08), duration)
+    return round(start, 3), round(end, 3)
 
 
 def animated_caption_render_window_times(
@@ -7756,7 +7792,38 @@ def animated_caption_word_timings(words: list[str], start: float, end: float) ->
         word_end = end if index == len(words) - 1 else min(end, cursor + (duration * weights[index] / total))
         timings.append((index, word, cursor, word_end))
         cursor = word_end
-    return timings
+    return merge_fast_animated_caption_timings(timings)
+
+
+def merge_fast_animated_caption_timings(
+    timings: list[tuple[int, str, float, float]]
+) -> list[tuple[int, str, float, float]]:
+    groups = [{"word": word, "start": start, "end": end} for _, word, start, end in timings]
+    while len(groups) > 1:
+        index = next(
+            (
+                current
+                for current, group in enumerate(groups)
+                if float(group["end"]) - float(group["start"]) < ANIMATED_CAPTION_MIN_RENDER_SECONDS
+            ),
+            -1,
+        )
+        if index < 0:
+            break
+        target = index + 1 if index + 1 < len(groups) else index - 1
+        first_index, second_index = sorted((index, target))
+        first = groups[first_index]
+        second = groups[second_index]
+        merged = {
+            "word": f'{first["word"]} {second["word"]}',
+            "start": first["start"],
+            "end": second["end"],
+        }
+        groups[first_index:second_index + 1] = [merged]
+    return [
+        (index, str(group["word"]), float(group["start"]), float(group["end"]))
+        for index, group in enumerate(groups)
+    ]
 
 
 def animated_caption_word_weight(word: str) -> float:
@@ -7773,15 +7840,16 @@ def animated_caption_window_events(events: list[CaptionEvent], duration: float, 
         words = smart_animated_caption_words(event.text, max_word_length, end - start)
         if not words:
             continue
-        for index, word, word_start, word_end in animated_caption_word_timings(words, start, end):
+        timings = animated_caption_word_timings(words, start, end)
+        for index, word, word_start, word_end in timings:
             if word_end - word_start < 0.08:
                 continue
             result.append(AnimatedCaptionWindow(
                 round(word_start, 3),
                 round(word_end, 3),
-                words[index - 1] if index > 0 else "",
+                timings[index - 1][1] if index > 0 else "",
                 word,
-                words[index + 1] if index + 1 < len(words) else "",
+                timings[index + 1][1] if index + 1 < len(timings) else "",
             ))
     return result
 
@@ -16419,6 +16487,7 @@ function buildExportData(){
       bumpers: edit.bumpers,
       captions_enabled: captions.enabled,
       caption_style: captions.style,
+      animated_caption_windows: captions.style.mode === "animated" ? previewAnimatedCaptionTimeline(moment) : [],
       clip_file: moment.clip_file,
       title: moment.title,
       peak_text: moment.peak_text,
@@ -17531,16 +17600,19 @@ function previewCaptionContextForCard(card, time = null){
   const moment = previewMomentForCard(card);
   if (!moment) return null;
   const row = adjustedMoment(moment);
-  const events = previewCaptionEvents(row);
-  if (!events.length) return null;
   const values = trimValues(card);
   const video = primaryCameraVideo(card);
   const raw = time === null && video && Number.isFinite(video.currentTime) ? video.currentTime : time;
   const current = clampPreviewTime(values, Number(raw ?? values.trimStart));
   const position = Math.max(0, current - values.trimStart);
-  const lookupPosition = captionSettingsForCard(card).style.mode === "animated" ? position + animatedCaptionLeadSeconds() : position;
-  const event = events.find(item => lookupPosition >= item.start && lookupPosition < item.end) || null;
-  return event ? { event, position: lookupPosition } : null;
+  if (captionSettingsForCard(card).style.mode === "animated") {
+    const window = previewAnimatedCaptionTimeline(row).find(item => position >= item.start && position < item.end) || null;
+    return window ? { event: window, position } : null;
+  }
+  const events = previewCaptionEvents(row);
+  if (!events.length) return null;
+  const event = events.find(item => position >= item.start && position < item.end) || null;
+  return event ? { event, position } : null;
 }
 function animatedCaptionLeadSeconds(){
   return .14;
@@ -17593,9 +17665,9 @@ function previewAnimatedCaptionHtml(event, position){
   return previewAnimatedCaptionRender(event, position).html;
 }
 function previewAnimatedCaptionRender(event, position){
-  const wordWindow = previewAnimatedCaptionWindow(event, position);
+  const wordWindow = event?.active ? event : previewAnimatedCaptionWindow(event, position);
   if (!wordWindow) return { key: "", html: "" };
-  const key = `${event.start.toFixed(2)}-${wordWindow.index}`;
+  const key = wordWindow.key || `${Number(event.start || 0).toFixed(2)}-${wordWindow.index || 0}`;
   const html = `<span class="preview-caption-window" data-caption-pop-key="${key}">
     <span class="preview-caption-word preview-caption-side preview-caption-prev">${escapeHtml(wordWindow.previous)}</span>
     <span class="preview-caption-word preview-caption-active">${escapeHtml(wordWindow.active)}</span>
@@ -17616,12 +17688,61 @@ function previewAnimatedCaptionWindow(event, position){
     next: index + 1 < words.length ? words[index + 1] : ""
   };
 }
+function previewAnimatedCaptionTimeline(row){
+  const duration = Math.max(Number(row.adjusted_duration || 0), .1);
+  const raw = [];
+  previewCaptionEvents(row).forEach(event => {
+    const words = previewSmartAnimatedCaptionWords(event);
+    if (!words.length) return;
+    const timings = previewAnimatedCaptionWordTimings(event, words);
+    timings.forEach((slot, index) => {
+      raw.push({
+        start: slot.start,
+        end: slot.end,
+        previous: index > 0 ? timings[index - 1].word : "",
+        active: slot.word,
+        next: index + 1 < timings.length ? timings[index + 1].word : "",
+        sourceStart: event.start
+      });
+    });
+  });
+  return previewAnimatedCaptionDisplayWindows(raw, duration);
+}
+function previewAnimatedCaptionDisplayWindows(windows, duration){
+  let previousEnd = 0;
+  return windows.map((window, index) => {
+    const rawStart = clampNumber(Number(window.start || 0), 0, duration);
+    const rawEnd = clampNumber(Number(window.end || rawStart), rawStart, duration);
+    const rawDuration = Math.max(rawEnd - rawStart, .08);
+    let start = clampNumber(rawStart - animatedCaptionLeadSeconds(), 0, duration);
+    let end = clampNumber(rawEnd - animatedCaptionLeadSeconds(), start, duration);
+    if (rawStart <= animatedCaptionLeadSeconds()) {
+      end = clampNumber(Math.max(end, start + rawDuration), start, duration);
+    }
+    if (start < previousEnd) {
+      start = previousEnd;
+      end = clampNumber(Math.max(end, start + .08), start, duration);
+    }
+    previousEnd = end;
+    if (end <= start) return null;
+    return {
+      key: `${start.toFixed(3)}-${index}`,
+      index,
+      start: Number(start.toFixed(3)),
+      end: Number(end.toFixed(3)),
+      previous: window.previous || "",
+      active: window.active || "",
+      next: window.next || ""
+    };
+  }).filter(Boolean);
+}
 function previewAnimatedCaptionWord(word){
   const text = String(word || "");
   return text.length <= 18 ? text : `${text.slice(0, 17)}...`;
 }
-const PREVIEW_ANIMATED_CAPTION_TARGET_MIN_WORD_SECONDS = .18;
-const PREVIEW_ANIMATED_CAPTION_FAST_WORD_SECONDS = .16;
+const PREVIEW_ANIMATED_CAPTION_MIN_DISPLAY_SECONDS = .22;
+const PREVIEW_ANIMATED_CAPTION_TARGET_MIN_WORD_SECONDS = .24;
+const PREVIEW_ANIMATED_CAPTION_FAST_WORD_SECONDS = .20;
 const PREVIEW_ANIMATED_CAPTION_MAX_GROUP_WORDS = 3;
 const PREVIEW_ANIMATED_CAPTION_PROPER_NOUN_STOPWORDS = new Set([
   "a", "as", "o", "os", "um", "uma", "uns", "umas", "de", "da", "das", "do", "dos",
@@ -17758,12 +17879,31 @@ function previewAnimatedCaptionWordTimings(event, words){
   const weights = words.map(previewAnimatedCaptionWordWeight);
   const total = weights.reduce((sum, value) => sum + value, 0) || Math.max(words.length, 1);
   let cursor = start;
-  return words.map((word, index) => {
+  const timings = words.map((word, index) => {
     const wordEnd = index === words.length - 1 ? end : Math.min(end, cursor + (duration * weights[index] / total));
     const timing = { index, word, start: cursor, end: wordEnd };
     cursor = wordEnd;
     return timing;
   });
+  return previewMergeFastAnimatedCaptionTimings(timings);
+}
+function previewMergeFastAnimatedCaptionTimings(timings){
+  const groups = timings.map(item => ({ word: item.word, start: item.start, end: item.end }));
+  while (groups.length > 1) {
+    const index = groups.findIndex(item => item.end - item.start < PREVIEW_ANIMATED_CAPTION_MIN_DISPLAY_SECONDS);
+    if (index < 0) break;
+    const target = index + 1 < groups.length ? index + 1 : index - 1;
+    const firstIndex = Math.min(index, target);
+    const secondIndex = Math.max(index, target);
+    const first = groups[firstIndex];
+    const second = groups[secondIndex];
+    groups.splice(firstIndex, secondIndex - firstIndex + 1, {
+      word: `${first.word} ${second.word}`,
+      start: first.start,
+      end: second.end
+    });
+  }
+  return groups.map((item, index) => ({ index, word: item.word, start: item.start, end: item.end }));
 }
 function previewAnimatedCaptionWordWeight(word){
   const core = String(word || "").replace(/[^\\p{L}\\p{N}_]+/gu, "");
