@@ -196,6 +196,7 @@ PUBLISH_MAX_HASHTAGS = 6
 PUBLISH_DEFAULT_HASHTAGS = ["#Podcast", "#Cortes"]
 CUTTED_CAPTION_BOTTOM_OFFSET_MULTIPLIER = 1.25
 ANIMATED_CAPTION_LEAD_SECONDS = 0.14
+ANIMATED_CAPTION_MIN_RENDER_SECONDS = 0.14
 ANIMATED_CAPTION_TARGET_MIN_WORD_SECONDS = 0.18
 ANIMATED_CAPTION_FAST_WORD_SECONDS = 0.16
 ANIMATED_CAPTION_MAX_GROUP_WORDS = 3
@@ -209,7 +210,7 @@ COVER_SPEECH_TAIL_WIDTH_PREVIEW_PX = 15.0
 COVER_SPEECH_TAIL_HEIGHT_PREVIEW_PX = 12.0
 COVER_SPEECH_TAIL_BOTTOM_PREVIEW_PX = -8.0
 COVER_FRAME_TAIL_SECONDS = 0.5
-RENDER_JOB_FINGERPRINT_VERSION = "cuted-render-queue-v8-cover-parity"
+RENDER_JOB_FINGERPRINT_VERSION = "cuted-render-queue-v9-caption-timing-cover-parity"
 RENDER_QUEUE_WRITE_ATTEMPTS = 6
 RENDER_QUEUE_WRITE_RETRY_SECONDS = 0.08
 STALE_RENDER_SERVER_ERROR = (
@@ -7616,11 +7617,12 @@ def ass_animated_dialogue_lines(
     center_x = preset.width // 2
     center_y = ass_animated_caption_center_y(preset, style, active_size)
     side_y = center_y + max(3, int(active_size * 0.08))
+    previous_end = 0.0
     for window in animated_caption_window_events(events, duration, chars_per_line):
-        start = min(max(window.start - ANIMATED_CAPTION_LEAD_SECONDS, 0.0), duration)
-        end = min(max(window.end - ANIMATED_CAPTION_LEAD_SECONDS, start + 0.1), duration)
+        start, end = animated_caption_render_window_times(window, duration, previous_end)
         if end <= start:
             continue
+        previous_end = end
         if window.previous:
             prev_x = int(clamp(center_x - ass_caption_side_offset(window.previous, window.active, active_size, side_size), 70, preset.width - 70))
             lines.append(ass_animated_dialogue_line(0, start, end, "CaptionSide", window.previous, prev_x, side_y, ""))
@@ -7631,6 +7633,22 @@ def ass_animated_dialogue_lines(
         lines.extend(ass_animated_caption_box_lines(start, end, window.active, center_x, center_y, active_size, style))
         lines.append(ass_animated_dialogue_line(3, start, end, "CaptionActive", window.active, center_x, center_y, pop))
     return lines
+
+
+def animated_caption_render_window_times(
+    window: AnimatedCaptionWindow, duration: float, previous_end: float = 0.0
+) -> tuple[float, float]:
+    raw_start = min(max(window.start, 0.0), duration)
+    raw_end = min(max(window.end, raw_start + ANIMATED_CAPTION_MIN_RENDER_SECONDS), duration)
+    raw_duration = max(raw_end - raw_start, ANIMATED_CAPTION_MIN_RENDER_SECONDS)
+    start = min(max(raw_start - ANIMATED_CAPTION_LEAD_SECONDS, 0.0), duration)
+    end = min(max(raw_end - ANIMATED_CAPTION_LEAD_SECONDS, start + ANIMATED_CAPTION_MIN_RENDER_SECONDS), duration)
+    if raw_start <= ANIMATED_CAPTION_LEAD_SECONDS:
+        end = min(max(end, start + raw_duration), duration)
+    if start < previous_end:
+        start = min(previous_end, duration)
+        end = min(max(end, start + ANIMATED_CAPTION_MIN_RENDER_SECONDS), duration)
+    return round(start, 3), round(end, 3)
 
 
 def ass_animated_caption_box_lines(
@@ -7813,7 +7831,7 @@ def captioned_ffmpeg_command(
     ffmpeg: str, filters: list[str]
 ) -> list[str]:
     base = [
-        ffmpeg, "-y", "-ss", fmt_time(caption_trim_start(row)), "-i", str(input_path),
+        ffmpeg, "-y", "-i", str(input_path), "-ss", fmt_time(caption_trim_start(row)),
         "-t", fmt_time(caption_duration(row)),
     ]
     return render_command(base, output_path, row, preset, filters, caption_duration(row))
