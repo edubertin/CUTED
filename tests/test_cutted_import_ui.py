@@ -200,11 +200,12 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("function previewAnimatedCaptionHtml", html)
         self.assertIn("function previewAnimatedCaptionRender", html)
         self.assertIn("function previewAnimatedCaptionWindow", html)
+        self.assertIn("function previewAnimatedCaptionTimeline", html)
         self.assertIn("function cleanPreviewAnimatedCaptionText", html)
         self.assertIn("function animatedCaptionLeadSeconds", html)
         self.assertIn("function previewAnimatedCaptionWordTimings", html)
         self.assertIn("function previewAnimatedCaptionWordWeight", html)
-        self.assertIn('position + animatedCaptionLeadSeconds()', html)
+        self.assertIn("previewAnimatedCaptionTimeline(row).find", html)
         self.assertIn("layer.dataset.captionPopKey !== rendered.key", html)
         self.assertIn('delete layer.dataset.captionPopKey', html)
         self.assertIn('captionBackgroundCss(style.backgroundColor)', html)
@@ -339,8 +340,7 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertNotRegex(ass, r"\\p1[^\\n]+\\fscx112")
 
     def test_render_fingerprint_invalidates_caption_timing_and_cover_parity_jobs(self) -> None:
-        self.assertIn("caption-timing", CUTTED.RENDER_JOB_FINGERPRINT_VERSION)
-        self.assertIn("cover-parity", CUTTED.RENDER_JOB_FINGERPRINT_VERSION)
+        self.assertIn("canonical-animated-captions", CUTTED.RENDER_JOB_FINGERPRINT_VERSION)
 
     def test_animated_caption_render_timing_preserves_first_word_duration(self) -> None:
         first = CUTTED.AnimatedCaptionWindow(0.0, 0.327, "", "cade", "a")
@@ -353,6 +353,34 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertGreaterEqual(first_end - first_start, 0.32)
         self.assertGreaterEqual(second_start, first_end)
         self.assertGreaterEqual(second_end - second_start, CUTTED.ANIMATED_CAPTION_MIN_RENDER_SECONDS)
+
+    def test_animated_caption_render_uses_exported_canonical_windows(self) -> None:
+        preset = CUTTED.PLATFORM_PRESETS["tiktok"]
+        row = {
+            "adjusted_duration": 1.2,
+            "caption_style": {"mode": "animated", "size": 72, "bottom": 18, "highlightBackgroundColor": "#38bdf8"},
+            "animated_caption_windows": [
+                {"start": 0.0, "end": 0.31, "previous": "", "active": "cadê", "next": "a roupa"},
+                {"start": 0.31, "end": 0.72, "previous": "cadê", "active": "a roupa", "next": ""},
+            ],
+            "caption_segments": [{"start": 0.0, "end": 1.2, "text": "Cadê a roupa"}],
+        }
+        events = CUTTED.caption_events(row, 28, 2, 1.2)
+        ass = CUTTED.ass_document_with_style(events, 1.2, preset, 28, 2, row)
+
+        self.assertIn("0:00:00.00,0:00:00.31,CaptionActive", ass)
+        self.assertIn("0:00:00.31,0:00:00.72,CaptionActive", ass)
+        self.assertIn("a roupa", ass)
+
+    def test_fast_animated_caption_words_are_merged_for_readability(self) -> None:
+        timings = CUTTED.animated_caption_word_timings(["cadê", "a", "roupa"], 0.0, 0.715)
+        windows = CUTTED.animated_caption_window_events([CUTTED.CaptionEvent(0.0, 0.715, "Cadê a roupa")], 1.2, 28)
+
+        self.assertEqual([item[1] for item in timings], ["cadê", "a roupa"])
+        self.assertEqual(windows[0].next, "a roupa")
+        self.assertEqual(windows[1].previous, "cadê")
+        self.assertEqual(windows[1].next, "")
+        self.assertTrue(all(item[3] - item[2] >= CUTTED.ANIMATED_CAPTION_MIN_RENDER_SECONDS for item in timings))
 
     def test_captioned_ffmpeg_command_uses_precise_seek_after_input(self) -> None:
         command = CUTTED.captioned_ffmpeg_command(
@@ -777,6 +805,7 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("const captions = normalizeCaptionSettings(edit.captions)", html)
         self.assertIn("captions_enabled: captions.enabled", html)
         self.assertIn("caption_style: captions.style", html)
+        self.assertIn('animated_caption_windows: captions.style.mode === "animated" ? previewAnimatedCaptionTimeline(moment) : []', html)
         self.assertIn("captions_enabled: queue.some(item => item.captions_enabled !== false)", html)
         self.assertIn("captions_enabled: queue.caption_queue.some(item => item.captions_enabled !== false)", html)
 
