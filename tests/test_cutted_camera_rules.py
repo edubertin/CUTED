@@ -290,10 +290,293 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertNotIn("Smart Camera", html)
         self.assertNotIn("data-card-camera", html)
         self.assertIn("data-overlay-place-camera", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("data-overlay-place-speech", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("overlay-icon-actions", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("overlay-icon-close", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn('aria-label="Fechar menu de camadas"', CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn(".overlay-menu[hidden],.publish-cover-menu[hidden]{display:none!important}", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn('if (menu.dataset.overlayMenuMode === "add") menu.innerHTML = "";', CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("event.stopPropagation();\n    closeOverlayMenu(card);", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn('menu.dataset.overlayMenuMode = "add";', CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function overlayTimingForCard", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function speechOverlayTimingForCard", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("syncTimedOverlayVisibility(card, current)", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("data-overlay-timeline", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("container.appendChild(track)", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("data-overlay-visible=false", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("setOverlayBoxVisibility", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("data-layer-replace-image", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("overlay-inspector-section", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("overlay-image-source", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("max-height:min(420px,calc(100vh - 24px))", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function overlayTextSizeControlsHtml", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function overlaySpeechStyleHtml", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("overlayReplaceLayer", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("patchOverlayLayerForRank(card.dataset.rank, replaceLayerId", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("position:absolute;left:76px;right:76px;bottom:44px", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("width:clamp(16px,var(--overlay-time-width),24px)", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("height:26px;min-width:16px;min-height:26px", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn(".overlay-timeline-item:before", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("data-publish-cover-stage", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("data-publish-cover-menu", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn('data-publish-cover-add="text"', CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn('data-publish-cover-add="speech"', CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn('data-publish-cover-add="image"', CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn('aria-label="Fechar menu da capa"', CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("event.stopPropagation();\n    closePublishCoverMenu(card);", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function coverPlaceButtonsHtml", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function showPublishCoverAddMenu", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function closePublishCoverMenu", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("const coverLayerVerticalLift = .30", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function liftedCoverLayerY", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("bottom:16.25%", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("bottom:8.8%", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("bottom:11%", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertNotIn("publish-cover-tools", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertNotIn("data-publish-cover-inspector", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("data-publish-cover-image", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("data-publish-cover-layer-list", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function addPublishCoverLayer", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function patchCoverLayerForRank", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function normalizeCoverOverlayLayers", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertIn("function publishCoverLayerHtml", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertNotIn("data-publish-cover-use-overlays", CUTTED.page_html("Teste", html, "{}", ""))
+        self.assertNotIn("overlay-timeline:before", CUTTED.page_html("Teste", html, "{}", ""))
         self.assertNotIn("data-preview-volume-down", html)
         self.assertNotIn("data-preview-volume-up", html)
         self.assertNotIn("data-preview-volume-zero", html)
         self.assertNotIn("data-preview-volume-value", html)
+
+        live_timeline_js = (
+            MODULE_PATH.parent.parent / "assets" / "live-timeline" / "live-timeline.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("d=a?t-o-8:t+8", live_timeline_js)
+        self.assertIn("S=a?t-3:t+3", live_timeline_js)
+        self.assertIn("E=a?d+o:d", live_timeline_js)
+        self.assertIn("s.circle(e,t,n.selected?4.1:3)", live_timeline_js)
+        self.assertNotIn("t-o*.5-9", live_timeline_js)
+
+    def test_speech_overlay_is_available_and_renders_as_bubble(self) -> None:
+        layer = CUTTED.overlay_layer_from_raw({
+            "kind": "speech",
+            "text": "O clima esquentou",
+            "x": 0.2,
+            "y": 0.18,
+            "width": 0.44,
+            "opacity": 92,
+            "start_seconds": 1.25,
+            "duration_seconds": 2.5,
+        })
+
+        self.assertEqual(layer["kind"], "speech")
+        self.assertEqual(layer["key"], "speech")
+        self.assertEqual(layer["color"], "#050505")
+        self.assertEqual(layer["background_color"], "#ffffff")
+        self.assertEqual(layer["start_seconds"], 1.25)
+        self.assertEqual(layer["duration_seconds"], 2.5)
+
+        preset = CUTTED.PLATFORM_PRESETS["tiktok"]
+        rendered = CUTTED.overlay_filter({"overlays": [layer]}, preset)
+
+        self.assertIn("drawbox", rendered)
+        self.assertIn("drawtext", rendered)
+        self.assertIn("O clima esquentou", rendered)
+        self.assertIn("between(t,1.250,3.750)", rendered)
+
+    def test_caption_render_margin_is_lifted(self) -> None:
+        tiktok = CUTTED.PLATFORM_PRESETS["tiktok"]
+        youtube = CUTTED.PLATFORM_PRESETS["youtube"]
+
+        self.assertEqual(CUTTED.caption_margin_v(tiktok), 313)
+        self.assertEqual(CUTTED.caption_margin_v(youtube), 119)
+        self.assertIn(",2,80,80,313,1", CUTTED.ass_style_line(tiktok))
+        self.assertIn(",2,80,80,119,1", CUTTED.ass_style_line(youtube))
+
+    def test_timed_overlay_contract_applies_to_text_and_image(self) -> None:
+        text = CUTTED.overlay_layer_from_raw({
+            "kind": "text",
+            "text": "Texto entra e sai",
+            "start_seconds": 2.0,
+            "duration_seconds": 4.0,
+        })
+        image = CUTTED.overlay_layer_from_raw({
+            "kind": "image",
+            "label": "Logo",
+            "image_file": "overlay-assets/logo.png",
+            "start_seconds": 3.5,
+            "duration_seconds": 1.5,
+        })
+
+        self.assertEqual(text["start_seconds"], 2.0)
+        self.assertEqual(text["duration_seconds"], 4.0)
+        self.assertEqual(image["start_seconds"], 3.5)
+        self.assertEqual(image["duration_seconds"], 1.5)
+
+        preset = CUTTED.PLATFORM_PRESETS["tiktok"]
+        rendered_text = CUTTED.overlay_filter({"overlays": [text]}, preset)
+        rendered_image = CUTTED.image_overlay_compose_filter(image, preset, "base", "img", "out")
+
+        self.assertIn("between(t,2.000,6.000)", rendered_text)
+        self.assertIn("between(t,3.500,5.000)", rendered_image)
+
+    def test_materialized_image_overlay_keeps_timing_for_render(self) -> None:
+        image_bytes = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lzLqWQAAAABJRU5ErkJggg=="
+        )
+        layer = {
+            "kind": "image",
+            "label": "Logo",
+            "image_data_url": f"data:image/png;base64,{base64.b64encode(image_bytes).decode('ascii')}",
+            "start_seconds": 4.0,
+            "duration_seconds": 2.0,
+        }
+        data = {"caption_queue": [{"overlays": [layer]}]}
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            CUTTED.materialize_queue_image_assets(data, Path(tmp_dir))
+
+            self.assertTrue(Path(layer["image_file"]).exists())
+            self.assertEqual(layer["image_data_url"], "")
+            self.assertEqual(layer["start_seconds"], 4.0)
+            self.assertEqual(layer["duration_seconds"], 2.0)
+            rendered = CUTTED.image_overlay_compose_filter(
+                CUTTED.image_overlay_from_raw(layer), CUTTED.PLATFORM_PRESETS["tiktok"], "base", "img", "out"
+            )
+
+        self.assertIn("between(t,4.000,6.000)", rendered)
+
+    def test_cover_layers_are_static_and_renderable(self) -> None:
+        cover = {
+            "selected_frame": "frames/clip-cover.jpg",
+            "zoom": 1.25,
+            "x": 64,
+            "y": 38,
+            "layers": [{
+                "kind": "speech",
+                "text": "Capa forte",
+                "x": 0.18,
+                "y": 0.12,
+                "width": 0.58,
+                "start_seconds": 8.0,
+                "duration_seconds": 1.0,
+            }],
+        }
+        preset = CUTTED.PLATFORM_PRESETS["tiktok"]
+
+        layers = CUTTED.cover_overlay_layers(cover)
+        rendered = CUTTED.publish_cover_simple_filter(cover, layers, preset)
+
+        self.assertEqual(layers[0]["start_seconds"], 0.0)
+        self.assertEqual(layers[0]["duration_seconds"], 9999.0)
+        self.assertEqual(layers[0]["y"], 0.0)
+        self.assertIn("scale=1350:2400:force_original_aspect_ratio=increase", rendered)
+        self.assertIn("crop=1080:1920", rendered)
+        self.assertIn("Capa forte", rendered)
+        self.assertIn("between(t,0.000,60.000)", rendered)
+
+    def test_materialized_cover_image_overlay_is_available_for_render(self) -> None:
+        image_bytes = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lzLqWQAAAABJRU5ErkJggg=="
+        )
+        layer = {
+            "kind": "image",
+            "label": "Logo capa",
+            "image_data_url": f"data:image/png;base64,{base64.b64encode(image_bytes).decode('ascii')}",
+        }
+        data = {"caption_queue": [{"publish_metadata": {"cover": {"layers": [layer]}}}]}
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            CUTTED.materialize_queue_image_assets(data, Path(tmp_dir))
+
+            self.assertTrue(Path(layer["image_file"]).exists())
+            self.assertEqual(layer["image_data_url"], "")
+            command = CUTTED.publish_cover_ffmpeg_command(
+                Path("cover.jpg"),
+                Path("out.jpg"),
+                {"layers": [layer]},
+                CUTTED.PLATFORM_PRESETS["tiktok"],
+                "ffmpeg",
+            )
+
+        self.assertIn("-filter_complex", command)
+        self.assertIn("coverimg0", " ".join(command))
+
+    def test_publish_cover_pillow_renderer_matches_static_speech_layers(self) -> None:
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not available.")
+        preset = CUTTED.PLATFORM_PRESETS["tiktok"]
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            source = tmp_path / "source.jpg"
+            logo = tmp_path / "logo.png"
+            output = tmp_path / "cover.jpg"
+            Image.new("RGB", (1080, 1920), (32, 32, 32)).save(source)
+            Image.new("RGBA", (120, 40), (255, 0, 0, 255)).save(logo)
+            cover = {
+                "zoom": 1.0,
+                "x": 50,
+                "y": 50,
+                "layers": [
+                    {
+                        "kind": "speech",
+                        "text": "Meu deus !!",
+                        "x": 0.2,
+                        "y": 0.5,
+                        "width": 0.4,
+                        "background_color": "#ffffff",
+                        "background_opacity": 100,
+                        "opacity": 100,
+                    },
+                    {"kind": "image", "image_file": str(logo), "x": 0.3, "y": 0.72, "width": 0.2, "opacity": 100},
+                ],
+            }
+
+            rendered = CUTTED.render_publish_cover_image_with_pillow(source, output, cover, preset)
+            self.assertTrue(rendered)
+            self.assertTrue(output.exists())
+            image = Image.open(output).convert("RGB")
+
+        self.assertGreater(image.getpixel((245, 410))[0], 210)
+        self.assertLess(image.getpixel((302, 452))[0], 40)
+        self.assertGreater(image.getpixel((330, 810))[0], 180)
+
+    def test_publish_cover_pillow_uses_preview_scaled_font(self) -> None:
+        preset = CUTTED.PLATFORM_PRESETS["tiktok"]
+
+        self.assertEqual(CUTTED.pillow_cover_font_size({"font_size": 34}, preset), 61)
+        self.assertEqual(CUTTED.pillow_cover_preview_px(11, preset), 47)
+        self.assertEqual(CUTTED.pillow_cover_preview_px(-8, preset), -34)
+
+    def test_publish_cover_pillow_crop_matches_preview_object_fit_order(self) -> None:
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not available.")
+        preset = CUTTED.PLATFORM_PRESETS["tiktok"]
+        source = Image.new("RGB", (1920, 1080))
+        pixels = [
+            (int(round(x / 1919 * 255)), 64, 255 - int(round(x / 1919 * 255)))
+            for _y in range(1080)
+            for x in range(1920)
+        ]
+        source.putdata(pixels)
+
+        rendered = CUTTED.pillow_cover_base_image(
+            source.convert("RGBA"),
+            {"zoom": 1.4, "x": 100, "y": 42.6},
+            preset,
+            Image,
+        ).convert("RGB")
+
+        center_red = rendered.getpixel((preset.width // 2, preset.height // 2))[0]
+        left_red = rendered.getpixel((32, preset.height // 2))[0]
+        right_red = rendered.getpixel((preset.width - 33, preset.height // 2))[0]
+        self.assertGreater(center_red, 125)
+        self.assertLess(center_red, 155)
+        self.assertLess(left_red, center_red)
+        self.assertGreater(right_red, center_red)
 
     def test_page_mounts_live_timeline_with_legacy_fallback(self) -> None:
         html = CUTTED.page_html(

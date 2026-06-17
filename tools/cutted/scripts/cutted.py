@@ -36,6 +36,11 @@ PROJECT_CATALOG_LIMIT = 12
 PROJECT_CATALOG_SIZE_FILE_LIMIT = 3000
 PROJECTS_DIR_NAME = "projects"
 PROJECT_RENDERS_DIR_NAME = "renders"
+CUTTED_SERVER_SCRIPT_PATH = Path(__file__).resolve()
+try:
+    CUTTED_SERVER_SCRIPT_MTIME_NS = CUTTED_SERVER_SCRIPT_PATH.stat().st_mtime_ns
+except OSError:
+    CUTTED_SERVER_SCRIPT_MTIME_NS = 0
 GROUP_FIT_LOGO_TOP_RATIO = 0.11
 GROUP_FIT_LOGO_WIDTH_RATIO = 0.38
 GROUP_FIT_LOGO_OPACITY = 0.9
@@ -189,6 +194,28 @@ PUBLISH_CLIP_TEXT_LIMIT = 900
 PUBLISH_SOURCE_TEXT_LIMIT = 1800
 PUBLISH_MAX_HASHTAGS = 6
 PUBLISH_DEFAULT_HASHTAGS = ["#Podcast", "#Cortes"]
+CUTTED_CAPTION_BOTTOM_OFFSET_MULTIPLIER = 1.25
+ANIMATED_CAPTION_LEAD_SECONDS = 0.14
+ANIMATED_CAPTION_MIN_RENDER_SECONDS = 0.22
+ANIMATED_CAPTION_TARGET_MIN_WORD_SECONDS = 0.24
+ANIMATED_CAPTION_FAST_WORD_SECONDS = 0.20
+ANIMATED_CAPTION_MAX_GROUP_WORDS = 3
+ANIMATED_CAPTION_BOX_OPACITY = 0.80
+ANIMATED_CAPTION_BOX_SHADOW_OPACITY = 0.28
+COVER_LAYER_VERTICAL_LIFT = 0.30
+COVER_PREVIEW_CANONICAL_WIDTH = 252.0
+COVER_LAYER_PREVIEW_FONT_SCALE = 0.42
+COVER_SPEECH_RADIUS_PREVIEW_PX = 11.0
+COVER_SPEECH_TAIL_WIDTH_PREVIEW_PX = 15.0
+COVER_SPEECH_TAIL_HEIGHT_PREVIEW_PX = 12.0
+COVER_SPEECH_TAIL_BOTTOM_PREVIEW_PX = -8.0
+COVER_FRAME_TAIL_SECONDS = 0.5
+RENDER_JOB_FINGERPRINT_VERSION = "cuted-render-queue-v10-canonical-animated-captions"
+RENDER_QUEUE_WRITE_ATTEMPTS = 6
+RENDER_QUEUE_WRITE_RETRY_SECONDS = 0.08
+STALE_RENDER_SERVER_ERROR = (
+    "Servidor CUTED antigo. Reinicie o app antes de renderizar para usar as ultimas mudancas."
+)
 MAX_SELECTION_OVERLAP = 0.35
 MAX_SELECTION_TEXT_SIMILARITY = 0.72
 SELECTION_CLUSTER_SECONDS = 120.0
@@ -315,6 +342,15 @@ class CaptionEvent:
     start: float
     end: float
     text: str
+
+
+@dataclass(frozen=True)
+class AnimatedCaptionWindow:
+    start: float
+    end: float
+    previous: str
+    active: str
+    next: str
 
 
 @dataclass
@@ -469,6 +505,7 @@ def parse_args() -> argparse.Namespace:
     caption.add_argument("--base-dir", type=Path, default=None)
     caption.add_argument("--chars-per-line", type=int, default=28)
     caption.add_argument("--max-lines", type=int, default=2)
+    caption.add_argument("--cover-frame", action=argparse.BooleanOptionalAction, default=False)
     serve = subparsers.add_parser("serve", help="Serve a generated gallery with local finalize API.")
     serve.add_argument("--dir", type=Path, required=True)
     serve.add_argument("--host", default="127.0.0.1")
@@ -1098,7 +1135,15 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
                 self.wfile.write(chunk)
                 remaining -= len(chunk)
 
+        def reject_stale_render_server(self) -> bool:
+            if not server_code_changed_since_start():
+                return False
+            send_json_response(self, 409, stale_server_payload())
+            return True
+
         def handle_finalize(self, request_base_dir: Path) -> None:
+            if self.reject_stale_render_server():
+                return
             try:
                 result = finalize_from_request(self, request_base_dir)
                 send_json_response(self, 200, result)
@@ -1133,6 +1178,8 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             send_json_response(self, 200 if result.get("ok") else 404, result)
 
         def handle_render_job(self, request_base_dir: Path) -> None:
+            if self.reject_stale_render_server():
+                return
             try:
                 result = start_render_job(self, request_base_dir)
                 send_json_response(self, 200, result)
@@ -1311,6 +1358,7 @@ def finalize_payload(
         chars_per_line=int(payload.get("chars_per_line") or 28),
         max_lines=int(payload.get("max_lines") or 2),
         captions_enabled=bool(payload.get("captions_enabled", True)),
+        cover_frame_enabled=bool(payload.get("cover_frame_enabled", False)),
     )
     captioned = caption_selected_rows(rows, gallery_dir, target_dir, find_ffmpeg(), options)
     captioned, export_dir = export_captioned_rows(captioned, gallery_dir)
@@ -1592,8 +1640,9 @@ def render_job_fingerprint(payload: dict[str, object], profile: str) -> str:
         "chars_per_line": payload.get("chars_per_line"),
         "max_lines": payload.get("max_lines"),
         "captions_enabled": payload.get("captions_enabled"),
+        "cover_frame_enabled": bool(payload.get("cover_frame_enabled", False)),
         "resource_profile": profile,
-        "renderer": "cuted-render-queue-v1",
+        "renderer": RENDER_JOB_FINGERPRINT_VERSION,
     }
     raw = json.dumps(relevant, ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
@@ -1609,6 +1658,7 @@ def render_job_summary(payload: dict[str, object]) -> dict[str, object]:
         "title": first.get("title") or first.get("peak_text") or "Render CUTED",
         "platform": first.get("platform_label") or first.get("platform") or "",
         "duration": first.get("adjusted_duration") or "",
+        "cover_frame_enabled": bool(payload.get("cover_frame_enabled", False)),
     }
 
 
@@ -1639,9 +1689,34 @@ def persist_render_queue(gallery_dir: Path) -> None:
 def write_render_queue_manifest(gallery_dir: Path, jobs: list[dict[str, object]]) -> None:
     path = render_queue_manifest_path(gallery_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = path.with_suffix(".tmp")
-    temp_path.write_text(json.dumps({"version": 1, "jobs": jobs}, ensure_ascii=False, indent=2), encoding="utf-8")
-    temp_path.replace(path)
+    payload = json.dumps({"version": 1, "jobs": jobs}, ensure_ascii=False, indent=2)
+    for attempt in range(RENDER_QUEUE_WRITE_ATTEMPTS):
+        temp_path = render_queue_temp_manifest_path(path)
+        try:
+            temp_path.write_text(payload, encoding="utf-8")
+            temp_path.replace(path)
+            return
+        except OSError as error:
+            if not render_queue_write_error_is_retryable(error) or attempt + 1 >= RENDER_QUEUE_WRITE_ATTEMPTS:
+                raise
+            render_queue_cleanup_temp_manifest(temp_path)
+            time.sleep(RENDER_QUEUE_WRITE_RETRY_SECONDS * (attempt + 1))
+
+
+def render_queue_temp_manifest_path(path: Path) -> Path:
+    suffix = f"{os.getpid()}-{threading.get_ident()}-{uuid.uuid4().hex[:8]}"
+    return path.with_name(f"{path.stem}.{suffix}.tmp")
+
+
+def render_queue_write_error_is_retryable(error: OSError) -> bool:
+    return isinstance(error, PermissionError) or getattr(error, "winerror", None) == 5
+
+
+def render_queue_cleanup_temp_manifest(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError as error:
+        print(f"[cutted] render queue temp cleanup failed: {error}", file=sys.stderr)
 
 
 def render_queue_snapshot_without_lock(gallery_dir: Path) -> list[dict[str, object]]:
@@ -1719,6 +1794,15 @@ def recovered_captioned_files(gallery_dir: Path) -> list[dict[str, object]]:
             "height": row.get("height") or preset.height,
             "file": str(file_path),
         })
+        cover_path = out_dir / f"clip-{rank:03d}-{platform}-cover.jpg"
+        if cover_path.exists() and cover_path.is_file():
+            row["cover_file"] = str(cover_path)
+        cover_frame_path = out_dir / f"clip-{rank:03d}-{platform}-cover-frame.mp4"
+        legacy_cover_frame_path = out_dir / f"clip-{rank:03d}-{platform}-captioned-cover-frame.mp4"
+        if cover_frame_path.exists() and cover_frame_path.is_file():
+            row["cover_frame_file"] = str(cover_frame_path)
+        elif legacy_cover_frame_path.exists() and legacy_cover_frame_path.is_file():
+            row["cover_frame_file"] = str(legacy_cover_frame_path)
         recovered.append(row)
     return recovered
 
@@ -5739,7 +5823,20 @@ def export_captioned_rows(rows: list[dict[str, object]], gallery_dir: Path) -> t
             continue
         destination = unique_export_path(export_dir / source.name)
         shutil.copy2(source, destination)
-        exported.append({**row, "local_file": str(destination)})
+        exported_row = {**row, "local_file": str(destination)}
+        cover_source_value = str(row.get("cover_file") or "")
+        cover_source = Path(cover_source_value)
+        if cover_source_value and cover_source.exists():
+            cover_destination = unique_export_path(export_dir / cover_source.name)
+            shutil.copy2(cover_source, cover_destination)
+            exported_row["local_cover_file"] = str(cover_destination)
+        cover_frame_source_value = str(row.get("cover_frame_file") or "")
+        cover_frame_source = Path(cover_frame_source_value)
+        if cover_frame_source_value and cover_frame_source.exists():
+            cover_frame_destination = unique_export_path(export_dir / cover_frame_source.name)
+            shutil.copy2(cover_frame_source, cover_frame_destination)
+            exported_row["local_cover_frame_file"] = str(cover_frame_destination)
+        exported.append(exported_row)
     return exported, export_dir
 
 
@@ -6450,13 +6547,30 @@ def finalized_file_urls(rows: list[dict[str, object]], base_dir: Path) -> list[d
         file_path = Path(str(row.get("file") or ""))
         rel = file_path.resolve().relative_to(resolved_base_dir)
         final_path = exported_file_path(row, file_path)
+        cover_path = exported_cover_file_path(row)
+        cover_frame_path = exported_cover_frame_file_path(row)
+        cover_url = ""
+        raw_cover_value = str(row.get("cover_file") or "")
+        raw_cover = Path(raw_cover_value)
+        if raw_cover_value and raw_cover.exists():
+            cover_url = raw_cover.resolve().relative_to(resolved_base_dir).as_posix()
+        cover_frame_url = ""
+        raw_cover_frame_value = str(row.get("cover_frame_file") or "")
+        raw_cover_frame = Path(raw_cover_frame_value)
+        if raw_cover_frame_value and raw_cover_frame.exists():
+            cover_frame_url = raw_cover_frame.resolve().relative_to(resolved_base_dir).as_posix()
         files.append({
             **row,
             "url": rel.as_posix(),
             "preview_url": rel.as_posix(),
+            "cover_url": cover_url,
+            "cover_frame_url": cover_frame_url,
             "download_name": final_path.name,
+            "download_cover_frame_name": cover_frame_path.name if cover_frame_path else "",
             "final_file": str(final_path),
             "final_dir": str(final_path.parent),
+            "final_cover_file": str(cover_path) if cover_path else "",
+            "final_cover_frame_file": str(cover_frame_path) if cover_frame_path else "",
             "is_exported": final_path != file_path,
         })
     return files
@@ -6465,8 +6579,36 @@ def finalized_file_urls(rows: list[dict[str, object]], base_dir: Path) -> list[d
 def exported_file_path(row: dict[str, object], fallback: Path) -> Path:
     local_file = row.get("local_file")
     if isinstance(local_file, str) and local_file.strip():
-        return Path(local_file)
+        path = Path(local_file)
+        if path.exists():
+            return path
     return fallback
+
+
+def exported_cover_file_path(row: dict[str, object]) -> Path | None:
+    local_cover = row.get("local_cover_file")
+    if isinstance(local_cover, str) and local_cover.strip():
+        path = Path(local_cover)
+        if path.exists():
+            return path
+    cover_file = row.get("cover_file")
+    if isinstance(cover_file, str) and cover_file.strip():
+        path = Path(cover_file)
+        return path if path.exists() else None
+    return None
+
+
+def exported_cover_frame_file_path(row: dict[str, object]) -> Path | None:
+    local_cover_frame = row.get("local_cover_frame_file")
+    if isinstance(local_cover_frame, str) and local_cover_frame.strip():
+        path = Path(local_cover_frame)
+        if path.exists():
+            return path
+    cover_frame_file = row.get("cover_frame_file")
+    if isinstance(cover_frame_file, str) and cover_frame_file.strip():
+        path = Path(cover_frame_file)
+        return path if path.exists() else None
+    return None
 
 
 def send_json_response(handler: http.server.BaseHTTPRequestHandler, status: int, data: dict[str, object]) -> None:
@@ -6476,6 +6618,28 @@ def send_json_response(handler: http.server.BaseHTTPRequestHandler, status: int,
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
+
+
+def current_server_script_mtime_ns() -> int:
+    try:
+        return CUTTED_SERVER_SCRIPT_PATH.stat().st_mtime_ns
+    except OSError:
+        return CUTTED_SERVER_SCRIPT_MTIME_NS
+
+
+def server_code_changed_since_start() -> bool:
+    current_mtime_ns = current_server_script_mtime_ns()
+    return bool(CUTTED_SERVER_SCRIPT_MTIME_NS and current_mtime_ns and current_mtime_ns != CUTTED_SERVER_SCRIPT_MTIME_NS)
+
+
+def stale_server_payload() -> dict[str, object]:
+    return {
+        "ok": False,
+        "code": "stale_render_server",
+        "error": STALE_RENDER_SERVER_ERROR,
+        "started_mtime_ns": CUTTED_SERVER_SCRIPT_MTIME_NS,
+        "current_mtime_ns": current_server_script_mtime_ns(),
+    }
 
 
 def caption_rows_from_data(data: object) -> list[dict[str, object]]:
@@ -6492,13 +6656,22 @@ def caption_rows_from_data(data: object) -> list[dict[str, object]]:
 def materialize_queue_image_assets(data: object, asset_dir: Path) -> None:
     rows = queue_rows_for_assets(data)
     for row in rows:
-        overlays = row.get("overlays")
-        if not isinstance(overlays, list):
-            continue
-        for layer in overlays:
+        for layer in image_layers_to_materialize(row):
             if not isinstance(layer, dict) or str(layer.get("kind") or layer.get("key") or "") != "image":
                 continue
             materialize_image_layer(layer, asset_dir)
+
+
+def image_layers_to_materialize(row: dict[str, object]) -> list[dict[str, object]]:
+    layers: list[dict[str, object]] = []
+    overlays = row.get("overlays")
+    if isinstance(overlays, list):
+        layers.extend(layer for layer in overlays if isinstance(layer, dict))
+    cover = publish_cover_from_row(row)
+    cover_layers = cover.get("layers")
+    if isinstance(cover_layers, list):
+        layers.extend(layer for layer in cover_layers if isinstance(layer, dict))
+    return layers
 
 
 def materialize_queue_bumper_assets(data: object, asset_dir: Path) -> None:
@@ -6631,7 +6804,8 @@ def render_selected_rows(rows: list[dict[str, object]], base_dir: Path, out_dir:
             if adjusted_duration <= 0:
                 adjusted_duration = max(float(row.get("end", 0.0)) - float(row.get("start", 0.0)), 0.1)
             render_platform_clip(input_path, output_path, trim_start, adjusted_duration, preset, row, ffmpeg)
-            rendered.append(rendered_row(row, preset, output_path))
+            cover_path = render_publish_cover_image(row, preset, base_dir, out_dir, ffmpeg)
+            rendered.append(rendered_row(row, preset, output_path, cover_path))
     return rendered
 
 
@@ -6657,10 +6831,18 @@ def caption_selected_rows(
         if subtitle_path:
             write_ass_subtitles(subtitle_path, row, preset, args.chars_per_line, args.max_lines)
         bumper_info = render_captioned_clip(input_path, output_path, subtitle_path, row, preset, base_dir, out_dir, ffmpeg)
-        result = captioned_row(row, preset, output_path, subtitle_path)
+        cover_path = render_publish_cover_image(row, preset, base_dir, out_dir, ffmpeg)
+        cover_frame_path = render_cover_frame_tail_video(output_path, cover_path, row, preset, out_dir, ffmpeg) if caption_cover_frame_enabled(args) else None
+        result = captioned_row(row, preset, output_path, subtitle_path, cover_path, cover_frame_path)
         result.update(bumper_info)
+        if cover_frame_path:
+            result["cover_frame_duration"] = round(float(result.get("final_duration") or caption_duration(row)) + COVER_FRAME_TAIL_SECONDS, 3)
         captioned.append(result)
     return captioned
+
+
+def caption_cover_frame_enabled(args: argparse.Namespace) -> bool:
+    return bool(getattr(args, "cover_frame_enabled", False) or getattr(args, "cover_frame", False))
 
 
 def apply_render_resource_to_rows(rows: list[dict[str, object]], profile: str) -> None:
@@ -6895,7 +7077,8 @@ def caption_events_from_segments(row: dict[str, object], chars_per_line: int, ma
     if not isinstance(segments, list):
         return []
     start = float(row.get("adjusted_start") or row.get("start") or 0.0)
-    end = float(row.get("adjusted_end") or row.get("end") or 0.0)
+    fallback_end = start + float(row.get("adjusted_duration") or 0.0)
+    end = float(row.get("adjusted_end") or row.get("end") or fallback_end)
     events = [event_from_segment(item, start, end, chars_per_line, max_lines) for item in segments]
     return [event for event in events if event is not None]
 
@@ -6942,10 +7125,189 @@ def clean_caption_text(text: str) -> str:
     clean = re.sub(r"(^|\s)(>{1,3}|-{1,2})\s*", " ", clean)
     clean = re.sub(r"\s+", " ", clean)
     clean = re.sub(r"\s+([,.;:!?])", r"\1", clean)
-    clean = re.sub(r"([,.;:!?])([^\s,.;:!?])", r"\1 \2", clean)
+    clean = re.sub(r"(\d)([.,:])\s+(?=\d)", r"\1\2", clean)
+    clean = re.sub(r"([,.;:!?])([^\s,.;:!?])", space_after_caption_punctuation, clean)
     clean = re.sub(r"^(né\??|aham|uhum|hum|então|mas)\s+", "", clean, flags=re.IGNORECASE)
     clean = re.sub(r"\b(\w+)(\s+\1\b){2,}", r"\1", clean, flags=re.IGNORECASE)
     return clean.strip(" -")
+
+
+def space_after_caption_punctuation(match: re.Match[str]) -> str:
+    punctuation, next_char = match.group(1), match.group(2)
+    previous_index = match.start(1) - 1
+    previous_char = match.string[previous_index] if previous_index >= 0 else ""
+    if punctuation in ".,:" and previous_char.isdigit() and next_char.isdigit():
+        return f"{punctuation}{next_char}"
+    return f"{punctuation} {next_char}"
+
+
+ANIMATED_CAPTION_PROPER_NOUN_STOPWORDS = {
+    "a", "as", "o", "os", "um", "uma", "uns", "umas", "de", "da", "das", "do", "dos",
+    "e", "ou", "mas", "porque", "por", "para", "pra", "com", "sem", "em", "no", "na",
+    "nos", "nas", "ao", "aos", "aí", "ai", "então", "entao", "só", "so", "que", "quem",
+    "qual", "quando", "onde", "como", "isso", "essa", "esse", "isto", "esta", "este",
+    "eu", "tu", "ele", "ela", "nós", "nos", "vocês", "voces", "você", "voce", "meu",
+    "minha", "seu", "sua", "me", "te", "se", "lhe", "não", "nao", "sim", "é", "eh",
+    "foi", "era", "ser", "ter", "tem", "tá", "ta", "tava", "vai", "vou", "vão", "vao",
+    "fui", "faz", "fazer", "dá", "da", "dar", "precisa", "preciso", "precisava", "acho",
+    "tipo", "cara", "né", "ne", "olha", "bom", "certo", "agora",
+}
+
+
+ANIMATED_CAPTION_FILLER_WORDS = {
+    "ah", "aham", "uhum", "hum", "eh", "Ã©", "e", "aÃ­", "ai", "entÃ£o", "entao",
+    "tipo", "assim", "nÃ©", "ne", "cara", "mano", "bom", "olha", "certo",
+}
+
+
+ANIMATED_CAPTION_ATTACH_PREVIOUS: set[str] = set()
+
+
+ANIMATED_CAPTION_ATTACH_NEXT = {
+    "a", "as", "o", "os", "um", "uma", "uns", "umas", "me", "te", "se", "meu", "minha", "seu", "sua",
+    "de", "da", "das", "do", "dos", "com", "sem", "pra", "para", "por", "em", "no", "na", "nos", "nas", "ao", "aos",
+}
+
+
+def clean_animated_caption_text(text: str) -> str:
+    clean = clean_caption_text(text)
+    proper_nouns = animated_caption_proper_nouns(clean)
+    words = [animated_caption_display_word(word, proper_nouns) for word in clean.split()]
+    return " ".join(word for word in words if word)
+
+
+def animated_caption_proper_nouns(text: str) -> set[str]:
+    matches = list(re.finditer(r"[\wÀ-ÖØ-öø-ÿ]+", text, flags=re.UNICODE))
+    result: set[str] = set()
+    for index, match in enumerate(matches):
+        word = match.group(0)
+        if not animated_caption_is_capitalized_word(word):
+            continue
+        key = animated_caption_word_key(word)
+        if key in ANIMATED_CAPTION_PROPER_NOUN_STOPWORDS:
+            continue
+        sentence_start = match.start() == 0 or bool(re.search(r"[.!?…]\s*$", text[:match.start()]))
+        previous_capitalized = index > 0 and animated_caption_is_capitalized_word(matches[index - 1].group(0))
+        next_capitalized = index + 1 < len(matches) and animated_caption_is_capitalized_word(matches[index + 1].group(0))
+        if not sentence_start or previous_capitalized or next_capitalized:
+            result.add(key)
+    return result
+
+
+def animated_caption_display_word(word: str, proper_nouns: set[str]) -> str:
+    clean = animated_caption_clean_word(word)
+    if not clean:
+        return ""
+    key = animated_caption_word_key(clean)
+    if animated_caption_is_acronym(clean) or key in proper_nouns:
+        return clean
+    return clean.lower()
+
+
+def animated_caption_clean_word(word: str) -> str:
+    clean = re.sub(r"[^\wÀ-ÖØ-öø-ÿ.,:%]+", "", word, flags=re.UNICODE)
+    result: list[str] = []
+    for index, char in enumerate(clean):
+        if char in ".,:":
+            previous_digit = index > 0 and clean[index - 1].isdigit()
+            next_digit = index + 1 < len(clean) and clean[index + 1].isdigit()
+            if previous_digit and next_digit:
+                result.append(char)
+            continue
+        if char == "%":
+            if index > 0 and clean[index - 1].isdigit():
+                result.append(char)
+            continue
+        result.append(char)
+    return "".join(result)
+
+
+def animated_caption_word_key(word: str) -> str:
+    return re.sub(r"[^\wÀ-ÖØ-öø-ÿ]+", "", word, flags=re.UNICODE).casefold()
+
+
+def animated_caption_is_capitalized_word(word: str) -> bool:
+    letters = [char for char in word if char.isalpha()]
+    return bool(letters) and letters[0].isupper() and not animated_caption_is_acronym(word)
+
+
+def animated_caption_is_acronym(word: str) -> bool:
+    letters = [char for char in word if char.isalpha()]
+    return 1 < len(letters) <= 6 and "".join(letters).isupper()
+
+
+def animated_caption_is_numeric_token(word: str) -> bool:
+    return bool(re.search(r"\d", word))
+
+
+def animated_caption_is_low_value_word(word: str) -> bool:
+    return animated_caption_word_key(word) in ANIMATED_CAPTION_FILLER_WORDS
+
+
+def smart_animated_caption_words(text: str, max_word_length: int, duration: float) -> list[str]:
+    words = split_animated_caption_words(text, max_word_length)
+    if not words:
+        return []
+    words = smart_animated_caption_drop_fillers(words, duration)
+    return smart_animated_caption_group_words(words, duration)
+
+
+def smart_animated_caption_drop_fillers(words: list[str], duration: float) -> list[str]:
+    word_seconds = duration / max(len(words), 1)
+    if word_seconds >= ANIMATED_CAPTION_FAST_WORD_SECONDS:
+        return words
+    filtered = [word for word in words if animated_caption_is_numeric_token(word) or not animated_caption_is_low_value_word(word)]
+    return filtered or words
+
+
+def smart_animated_caption_group_words(words: list[str], duration: float) -> list[str]:
+    word_seconds = duration / max(len(words), 1)
+    if word_seconds >= ANIMATED_CAPTION_TARGET_MIN_WORD_SECONDS:
+        return words
+    groups: list[str] = []
+    for word in words:
+        if smart_animated_caption_should_attach_to_previous(groups, word):
+            groups[-1] = f"{groups[-1]} {word}"
+            continue
+        if smart_animated_caption_should_attach_next(groups, words):
+            groups.append(word)
+            continue
+        groups.append(word)
+    return smart_animated_caption_balance_groups(groups)
+
+
+def smart_animated_caption_should_attach_to_previous(groups: list[str], word: str) -> bool:
+    if not groups:
+        return False
+    key = animated_caption_word_key(word)
+    if key in ANIMATED_CAPTION_ATTACH_PREVIOUS:
+        return smart_animated_caption_group_size(groups[-1]) < ANIMATED_CAPTION_MAX_GROUP_WORDS
+    previous = groups[-1].split()[-1]
+    if animated_caption_word_key(previous) in ANIMATED_CAPTION_ATTACH_NEXT:
+        return smart_animated_caption_group_size(groups[-1]) < ANIMATED_CAPTION_MAX_GROUP_WORDS
+    return key == animated_caption_word_key(previous) and smart_animated_caption_group_size(groups[-1]) < ANIMATED_CAPTION_MAX_GROUP_WORDS
+
+
+def smart_animated_caption_should_attach_next(groups: list[str], words: list[str]) -> bool:
+    index = sum(smart_animated_caption_group_size(group) for group in groups)
+    if index >= len(words):
+        return False
+    return animated_caption_word_key(words[index]) in ANIMATED_CAPTION_ATTACH_NEXT and index + 1 < len(words)
+
+
+def smart_animated_caption_balance_groups(groups: list[str]) -> list[str]:
+    result: list[str] = []
+    for group in groups:
+        key = animated_caption_word_key(group)
+        if result and key in ANIMATED_CAPTION_ATTACH_PREVIOUS and smart_animated_caption_group_size(result[-1]) < ANIMATED_CAPTION_MAX_GROUP_WORDS:
+            result[-1] = f"{result[-1]} {group}"
+            continue
+        result.append(group)
+    return result
+
+
+def smart_animated_caption_group_size(group: str) -> int:
+    return len([word for word in group.split() if word])
 
 
 CAPTION_MOJIBAKE_REPLACEMENTS = {
@@ -7057,6 +7419,18 @@ def ass_document_with_style(
     events: list[CaptionEvent], duration: float, preset: PlatformPreset, chars_per_line: int, max_lines: int,
     row: dict[str, object]
 ) -> str:
+    style = caption_style_from_row(row, preset)
+    animated = style.get("mode") == "animated"
+    dialogue = (
+        ass_animated_dialogue_lines(events, duration, chars_per_line, preset, style, row)
+        if animated
+        else ass_dialogue_lines(events, duration, chars_per_line, max_lines)
+    )
+    style_lines = [ass_style_line(preset, style)]
+    if animated:
+        style_lines.append(ass_caption_active_style_line(preset, style))
+        style_lines.append(ass_caption_side_style_line(preset, style))
+        style_lines.append(ass_caption_box_style_line(preset))
     return "\n".join([
         "[Script Info]",
         "ScriptType: v4.00+",
@@ -7068,41 +7442,123 @@ def ass_document_with_style(
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
         "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, "
         "MarginR, MarginV, Encoding",
-        ass_style_line(preset, caption_style_from_row(row, preset)),
+        *style_lines,
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
-        *ass_dialogue_lines(events, duration, chars_per_line, max_lines),
+        *dialogue,
         "",
     ])
 
 
 def ass_style_line(preset: PlatformPreset, style: dict[str, object] | None = None) -> str:
     style = style or {}
+    mode = str(style.get("mode") or "on")
     font_size = int(style.get("size") or (72 if preset.height >= 1600 else 54))
-    margin_v = 250 if preset.height >= 1600 else 95
+    if mode == "animated":
+        font_size = max(24, int(font_size * 0.82))
+    margin_v = caption_margin_v(preset, style)
     outline = 7 if preset.height >= 1600 else 5
     primary = ass_color(str(style.get("text_color") or "#ffffff"), "00")
-    background = str(style.get("background_color") or "transparent")
+    background_key = "highlight_background_color" if mode == "animated" else "background_color"
+    background = str(style.get(background_key) or style.get("background_color") or "transparent")
+    if mode == "animated" and background == "transparent":
+        background = "#000000"
     border_style = 3 if background != "transparent" else 1
-    back_color = ass_color(background if background != "transparent" else "#000000", "66" if border_style == 3 else "99")
+    back_color = ass_color(background if background != "transparent" else "#000000", "33" if border_style == 3 else "99")
+    outline_color = back_color if border_style == 3 else "&H00000000"
     return (
         "Style: Default,Arial,"
-        f"{font_size},{primary},&H0000FFFF,&H00000000,{back_color},-1,0,0,0,100,100,0,0,{border_style},"
+        f"{font_size},{primary},&H0000FFFF,{outline_color},{back_color},-1,0,0,0,100,100,0,0,{border_style},"
         f"{outline},0,2,80,80,{margin_v},1"
     )
+
+
+def ass_caption_active_style_line(preset: PlatformPreset, style: dict[str, object]) -> str:
+    base_size = int(style.get("size") or (72 if preset.height >= 1600 else 54))
+    font_size = max(24, int(base_size * 0.82))
+    outline = 7 if preset.height >= 1600 else 5
+    primary = ass_color(str(style.get("text_color") or "#ffffff"), "00")
+    return (
+        "Style: CaptionActive,Arial,"
+        f"{font_size},{primary},&H0000FFFF,&H66000000,&H99000000,-1,0,0,0,100,100,0,0,1,"
+        f"{outline},0,5,80,80,{caption_margin_v(preset, style)},1"
+    )
+
+
+def ass_caption_side_style_line(preset: PlatformPreset, style: dict[str, object]) -> str:
+    base_size = int(style.get("size") or (72 if preset.height >= 1600 else 54))
+    font_size = max(22, int(base_size * 0.66))
+    outline = 6 if preset.height >= 1600 else 4
+    primary = ass_color(str(style.get("text_color") or "#ffffff"), "18")
+    background = str(style.get("background_color") or "transparent")
+    border_style = 3 if background != "transparent" else 1
+    back_color = ass_color(background if background != "transparent" else "#000000", "33" if border_style == 3 else "99")
+    outline_color = back_color if border_style == 3 else "&H00000000"
+    return (
+        "Style: CaptionSide,Arial,"
+        f"{font_size},{primary},&H0000FFFF,{outline_color},{back_color},-1,0,0,0,100,100,0,0,{border_style},"
+        f"{outline},0,5,80,80,{caption_margin_v(preset, style)},1"
+    )
+
+
+def ass_caption_box_style_line(preset: PlatformPreset) -> str:
+    return (
+        "Style: CaptionBox,Arial,"
+        "1,&H00FFFFFF,&H0000FFFF,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1"
+    )
+
+
+def caption_margin_v(preset: PlatformPreset, style: dict[str, object] | None = None) -> int:
+    if style and style.get("bottom") is not None:
+        return int(preset.height * clamp_float(style.get("bottom"), 6.0, 32.0, 16.0) / 100.0 + 0.5)
+    base_margin = 250 if preset.height >= 1600 else 95
+    return int(base_margin * CUTTED_CAPTION_BOTTOM_OFFSET_MULTIPLIER + 0.5)
 
 
 def caption_style_from_row(row: dict[str, object], preset: PlatformPreset) -> dict[str, object]:
     raw = row.get("caption_style")
     if not isinstance(raw, dict):
         return {}
+    mode = normalize_caption_mode(raw.get("mode") or raw.get("captionMode") or raw.get("caption_mode"))
+    background = normalize_caption_background_color(raw.get("backgroundColor") or raw.get("background_color"))
+    highlight = normalize_caption_background_color(
+        raw.get("highlightBackgroundColor")
+        or raw.get("highlight_background_color")
+        or raw.get("activeBackgroundColor")
+        or raw.get("active_background_color")
+        or background
+    )
     return {
         "size": clamp_int(raw.get("size"), 24, 140, 72 if preset.height >= 1600 else 54),
         "width": clamp_int(raw.get("width"), 12, 56, 28),
+        "bottom": clamp_float(raw.get("bottom") or raw.get("height"), 6.0, 32.0, default_caption_bottom_percent(preset)),
+        "mode": mode,
         "text_color": normalize_hex_color(raw.get("textColor") or raw.get("text_color"), "#ffffff"),
-        "background_color": normalize_caption_background_color(raw.get("backgroundColor") or raw.get("background_color")),
+        "background_color": background,
+        "highlight_background_color": highlight,
     }
+
+
+def default_caption_bottom_percent(preset: PlatformPreset) -> float:
+    return round(caption_margin_v(preset) / max(preset.height, 1) * 100.0, 2)
+
+
+def normalize_caption_mode(value: object) -> str:
+    text = str(value or "").strip().lower()
+    if text in {"animated", "animada"}:
+        return "animated"
+    if text in {"off", "false", "0"}:
+        return "off"
+    return "on"
+
+
+def clamp_float(value: object, minimum: float, maximum: float, fallback: float) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return fallback
+    return max(minimum, min(maximum, number))
 
 
 def clamp_int(value: object, minimum: int, maximum: int, fallback: int) -> int:
@@ -7131,6 +7587,17 @@ def ass_color(value: str, alpha: str) -> str:
     return f"&H{alpha}{blue}{green}{red}".upper()
 
 
+def ass_alpha_from_opacity(opacity: float) -> str:
+    alpha = int(round((1.0 - clamp(opacity, 0.0, 1.0)) * 255))
+    return f"{alpha:02X}"
+
+
+def ass_rgb_color(value: str) -> str:
+    color = normalize_hex_color(value, "#000000").lstrip("#")
+    red, green, blue = color[0:2], color[2:4], color[4:6]
+    return f"&H{blue}{green}{red}&".upper()
+
+
 def ass_dialogue_lines(events: list[CaptionEvent], duration: float, chars_per_line: int, max_lines: int) -> list[str]:
     lines: list[str] = []
     for event in events:
@@ -7139,6 +7606,257 @@ def ass_dialogue_lines(events: list[CaptionEvent], duration: float, chars_per_li
         text = ass_escape_text(wrap_caption_text(event.text, chars_per_line, max_lines))
         lines.append(f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Default,,0,0,0,,{text}")
     return lines
+
+
+def ass_animated_dialogue_lines(
+    events: list[CaptionEvent], duration: float, chars_per_line: int, preset: PlatformPreset, style: dict[str, object],
+    row: dict[str, object] | None = None,
+) -> list[str]:
+    lines: list[str] = []
+    active_size = max(24, int(int(style.get("size") or (72 if preset.height >= 1600 else 54)) * 0.82))
+    side_size = max(22, int(int(style.get("size") or active_size) * 0.66))
+    center_x = preset.width // 2
+    center_y = ass_animated_caption_center_y(preset, style, active_size)
+    side_y = center_y + max(3, int(active_size * 0.08))
+    previous_end = 0.0
+    canonical_windows = animated_caption_windows_from_row(row or {}, duration)
+    windows = canonical_windows or animated_caption_window_events(events, duration, chars_per_line)
+    for window in windows:
+        start, end = (
+            animated_caption_canonical_window_times(window, duration, previous_end)
+            if canonical_windows
+            else animated_caption_render_window_times(window, duration, previous_end)
+        )
+        if end <= start:
+            continue
+        previous_end = end
+        if window.previous:
+            prev_x = int(clamp(center_x - ass_caption_side_offset(window.previous, window.active, active_size, side_size), 70, preset.width - 70))
+            lines.append(ass_animated_dialogue_line(0, start, end, "CaptionSide", window.previous, prev_x, side_y, ""))
+        if window.next:
+            next_x = int(clamp(center_x + ass_caption_side_offset(window.next, window.active, active_size, side_size), 70, preset.width - 70))
+            lines.append(ass_animated_dialogue_line(0, start, end, "CaptionSide", window.next, next_x, side_y, ""))
+        pop = r"\fad(25,70)\t(0,90,\fscx112\fscy112)\t(90,190,\fscx100\fscy100)"
+        lines.extend(ass_animated_caption_box_lines(start, end, window.active, center_x, center_y, active_size, style))
+        lines.append(ass_animated_dialogue_line(3, start, end, "CaptionActive", window.active, center_x, center_y, pop))
+    return lines
+
+
+def animated_caption_windows_from_row(row: dict[str, object], duration: float) -> list[AnimatedCaptionWindow]:
+    raw = row.get("animated_caption_windows")
+    if not isinstance(raw, list):
+        return []
+    windows: list[AnimatedCaptionWindow] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        active = clean_animated_caption_text(str(item.get("active") or ""))
+        if not active:
+            continue
+        start = clamp_float(item.get("start"), 0.0, duration, 0.0)
+        end = clamp_float(item.get("end"), 0.0, duration, start)
+        if end <= start:
+            continue
+        previous = clean_animated_caption_text(str(item.get("previous") or ""))
+        next_text = clean_animated_caption_text(str(item.get("next") or ""))
+        windows.append(AnimatedCaptionWindow(round(start, 3), round(end, 3), previous, active, next_text))
+    return sorted(windows, key=lambda window: (window.start, window.end))
+
+
+def animated_caption_canonical_window_times(
+    window: AnimatedCaptionWindow, duration: float, previous_end: float = 0.0
+) -> tuple[float, float]:
+    start = min(max(window.start, previous_end, 0.0), duration)
+    end = min(max(window.end, start + 0.08), duration)
+    return round(start, 3), round(end, 3)
+
+
+def animated_caption_render_window_times(
+    window: AnimatedCaptionWindow, duration: float, previous_end: float = 0.0
+) -> tuple[float, float]:
+    raw_start = min(max(window.start, 0.0), duration)
+    raw_end = min(max(window.end, raw_start + ANIMATED_CAPTION_MIN_RENDER_SECONDS), duration)
+    raw_duration = max(raw_end - raw_start, ANIMATED_CAPTION_MIN_RENDER_SECONDS)
+    start = min(max(raw_start - ANIMATED_CAPTION_LEAD_SECONDS, 0.0), duration)
+    end = min(max(raw_end - ANIMATED_CAPTION_LEAD_SECONDS, start + ANIMATED_CAPTION_MIN_RENDER_SECONDS), duration)
+    if raw_start <= ANIMATED_CAPTION_LEAD_SECONDS:
+        end = min(max(end, start + raw_duration), duration)
+    if start < previous_end:
+        start = min(previous_end, duration)
+        end = min(max(end, start + ANIMATED_CAPTION_MIN_RENDER_SECONDS), duration)
+    return round(start, 3), round(end, 3)
+
+
+def ass_animated_caption_box_lines(
+    start: float, end: float, text: str, center_x: int, center_y: int, font_size: int,
+    style: dict[str, object],
+) -> list[str]:
+    width = int(ass_caption_word_width(text, font_size) + font_size * 0.88 + 0.5)
+    height = int(font_size * 1.28 + 0.5)
+    radius = max(6, int(font_size * 0.25 + 0.5))
+    shape = ass_rounded_rect_path(width, height, radius)
+    color = ass_rgb_color(str(style.get("highlight_background_color") or "#000000"))
+    top_left_x = center_x - (width // 2)
+    top_left_y = center_y - (height // 2) + max(5, int(font_size * 0.16 + 0.5))
+    shadow_y = top_left_y + max(5, font_size // 9)
+    shadow_alpha = ass_alpha_from_opacity(ANIMATED_CAPTION_BOX_SHADOW_OPACITY)
+    fill_alpha = ass_alpha_from_opacity(ANIMATED_CAPTION_BOX_OPACITY)
+    border_alpha = ass_alpha_from_opacity(0.12)
+    shadow = ass_vector_dialogue_line(1, start, end, top_left_x, shadow_y, shape, "&H000000&", shadow_alpha, "", "")
+    fill = ass_vector_dialogue_line(
+        2, start, end, top_left_x, top_left_y, shape, color, fill_alpha, r"\fad(25,70)", rf"\bord2\3c&HFFFFFF&\3a&H{border_alpha}"
+    )
+    return [shadow, fill]
+
+
+def ass_vector_dialogue_line(
+    layer: int, start: float, end: float, x: int, y: int, shape: str, color: str, alpha: str, tags: str, border: str
+) -> str:
+    vector_tags = rf"{{\an7\pos({x},{y})\p1\1c{color}\1a&H{alpha}&\bord0\shad0{border}{tags}}}"
+    return f"Dialogue: {layer},{ass_time(start)},{ass_time(end)},CaptionBox,,0,0,0,,{vector_tags}{shape}"
+
+
+def ass_rounded_rect_path(width: int, height: int, radius: int) -> str:
+    width = max(2, width)
+    height = max(2, height)
+    radius = max(1, min(radius, width // 2, height // 2))
+    points = ass_rounded_rect_points(width, height, radius)
+    first, *rest = points
+    return " ".join([f"m {first[0]} {first[1]}", *(f"l {x} {y}" for x, y in rest)])
+
+
+def ass_rounded_rect_points(width: int, height: int, radius: int) -> list[tuple[int, int]]:
+    points: list[tuple[int, int]] = []
+    corners = (
+        (width - radius, radius, -90, 0),
+        (width - radius, height - radius, 0, 90),
+        (radius, height - radius, 90, 180),
+        (radius, radius, 180, 270),
+    )
+    for cx, cy, start_angle, end_angle in corners:
+        for step in range(5):
+            angle = math.radians(start_angle + (end_angle - start_angle) * step / 4)
+            points.append((int(round(cx + math.cos(angle) * radius)), int(round(cy + math.sin(angle) * radius))))
+    return points
+
+
+def ass_animated_dialogue_line(
+    layer: int, start: float, end: float, style_name: str, text: str, x: int, y: int, tags: str
+) -> str:
+    text_value = ass_escape_text(text)
+    position = rf"{{\an5\pos({x},{y}){tags}}}"
+    return f"Dialogue: {layer},{ass_time(start)},{ass_time(end)},{style_name},,0,0,0,,{position}{text_value}"
+
+
+def ass_animated_caption_center_y(preset: PlatformPreset, style: dict[str, object], font_size: int) -> int:
+    margin = caption_margin_v(preset, style)
+    return int(max(font_size, preset.height - margin - (font_size * 0.55)) + 0.5)
+
+
+def ass_caption_side_offset(side: str, active: str, active_size: int, side_size: int) -> int:
+    active_width = ass_caption_word_width(active, active_size)
+    side_width = ass_caption_word_width(side, side_size)
+    gap = max(22, int(active_size * 0.62))
+    return int((active_width / 2) + (side_width / 2) + gap + 0.5)
+
+
+def ass_caption_word_width(text: str, font_size: int) -> float:
+    wide = sum(1 for char in text if char in "mwMW@#%&")
+    narrow = sum(1 for char in text if char in "ilI.,'!|")
+    normal = max(len(text) - wide - narrow, 0)
+    return (normal * 0.56 + wide * 0.78 + narrow * 0.28) * font_size
+
+
+def animated_caption_word_events(events: list[CaptionEvent], duration: float, chars_per_line: int) -> list[CaptionEvent]:
+    result: list[CaptionEvent] = []
+    max_word_length = max(8, min(chars_per_line, 18))
+    for event in events:
+        start = clamp(event.start, 0.0, duration)
+        end = clamp(event.end, start + 0.12, duration)
+        words = smart_animated_caption_words(event.text, max_word_length, end - start)
+        if not words:
+            continue
+        for index, word, word_start, word_end in animated_caption_word_timings(words, start, end):
+            if word_end - word_start >= 0.08:
+                result.append(CaptionEvent(round(word_start, 3), round(word_end, 3), word))
+    return result
+
+
+def animated_caption_word_timings(words: list[str], start: float, end: float) -> list[tuple[int, str, float, float]]:
+    duration = max(end - start, 0.12)
+    weights = [animated_caption_word_weight(word) for word in words]
+    total = sum(weights) or float(len(words) or 1)
+    cursor = start
+    timings: list[tuple[int, str, float, float]] = []
+    for index, word in enumerate(words):
+        word_end = end if index == len(words) - 1 else min(end, cursor + (duration * weights[index] / total))
+        timings.append((index, word, cursor, word_end))
+        cursor = word_end
+    return merge_fast_animated_caption_timings(timings)
+
+
+def merge_fast_animated_caption_timings(
+    timings: list[tuple[int, str, float, float]]
+) -> list[tuple[int, str, float, float]]:
+    groups = [{"word": word, "start": start, "end": end} for _, word, start, end in timings]
+    while len(groups) > 1:
+        index = next(
+            (
+                current
+                for current, group in enumerate(groups)
+                if float(group["end"]) - float(group["start"]) < ANIMATED_CAPTION_MIN_RENDER_SECONDS
+            ),
+            -1,
+        )
+        if index < 0:
+            break
+        target = index + 1 if index + 1 < len(groups) else index - 1
+        first_index, second_index = sorted((index, target))
+        first = groups[first_index]
+        second = groups[second_index]
+        merged = {
+            "word": f'{first["word"]} {second["word"]}',
+            "start": first["start"],
+            "end": second["end"],
+        }
+        groups[first_index:second_index + 1] = [merged]
+    return [
+        (index, str(group["word"]), float(group["start"]), float(group["end"]))
+        for index, group in enumerate(groups)
+    ]
+
+
+def animated_caption_word_weight(word: str) -> float:
+    core = re.sub(r"\W+", "", word, flags=re.UNICODE)
+    return max(0.7, min(math.sqrt(max(len(core), 1)), 3.0))
+
+
+def animated_caption_window_events(events: list[CaptionEvent], duration: float, chars_per_line: int) -> list[AnimatedCaptionWindow]:
+    result: list[AnimatedCaptionWindow] = []
+    max_word_length = max(8, min(chars_per_line, 18))
+    for event in events:
+        start = clamp(event.start, 0.0, duration)
+        end = clamp(event.end, start + 0.12, duration)
+        words = smart_animated_caption_words(event.text, max_word_length, end - start)
+        if not words:
+            continue
+        timings = animated_caption_word_timings(words, start, end)
+        for index, word, word_start, word_end in timings:
+            if word_end - word_start < 0.08:
+                continue
+            result.append(AnimatedCaptionWindow(
+                round(word_start, 3),
+                round(word_end, 3),
+                timings[index - 1][1] if index > 0 else "",
+                word,
+                timings[index + 1][1] if index + 1 < len(timings) else "",
+            ))
+    return result
+
+
+def split_animated_caption_words(text: str, max_word_length: int) -> list[str]:
+    words = [word.strip() for word in re.split(r"\s+", clean_animated_caption_text(text)) if word.strip()]
+    return [word if len(word) <= max_word_length else f"{word[:max_word_length - 1]}..." for word in words]
 
 
 def wrap_caption_text(text: str, chars_per_line: int, max_lines: int) -> str:
@@ -7198,7 +7916,8 @@ def subtitle_filter_path(subtitle_path: Path, out_dir: Path) -> str:
 
 
 def captioned_row(
-    row: dict[str, object], preset: PlatformPreset, output_path: Path, subtitle_path: Path | None
+    row: dict[str, object], preset: PlatformPreset, output_path: Path, subtitle_path: Path | None,
+    cover_path: Path | None = None, cover_frame_path: Path | None = None,
 ) -> dict[str, object]:
     base_duration = caption_duration(row)
     return {
@@ -7216,6 +7935,9 @@ def captioned_row(
         "adjusted_duration": base_duration,
         "base_duration": base_duration,
         "final_duration": base_duration,
+        "cover_file": str(cover_path) if cover_path else "",
+        "cover_frame_file": str(cover_frame_path) if cover_frame_path else "",
+        "cover_frame_duration": round(base_duration + COVER_FRAME_TAIL_SECONDS, 3) if cover_frame_path else 0.0,
         "publish_metadata": row.get("publish_metadata") if isinstance(row.get("publish_metadata"), dict) else {},
         "camera": camera_from_row(row),
         "camera_path": camera_path_from_row(row, base_duration),
@@ -7407,6 +8129,367 @@ def resolve_media_path(base_dir: Path, clip_file: str) -> Path:
     return path if path.is_absolute() else base_dir / path
 
 
+def render_cover_frame_tail_video(
+    video_path: Path,
+    cover_path: Path | None,
+    row: dict[str, object],
+    preset: PlatformPreset,
+    out_dir: Path,
+    ffmpeg: str,
+) -> Path | None:
+    if cover_path is None or not cover_path.exists() or not video_path.exists():
+        return None
+    output = out_dir / f"clip-{int(row.get('rank', 0)):03d}-{preset.key}-cover-frame.mp4"
+    work_dir = out_dir / "cover-frame-work" / f"{output.stem}-{uuid.uuid4().hex[:8]}"
+    work_dir.mkdir(parents=True, exist_ok=False)
+    try:
+        cover_segment = work_dir / "cover-frame.mp4"
+        render_cover_frame_segment(cover_path, cover_segment, media_has_audio(video_path, ffmpeg), preset, row, ffmpeg)
+        concat_path = work_dir / "concat.txt"
+        concat_path.write_text(concat_file_entry(video_path) + concat_file_entry(cover_segment), encoding="utf-8")
+        temp_output = work_dir / "cover-frame-final.mp4"
+        command = [
+            ffmpeg,
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_path),
+            "-c",
+            "copy",
+            "-movflags",
+            "+faststart",
+            str(temp_output),
+        ]
+        try:
+            run_ffmpeg_command(command, row, cwd=str(out_dir))
+        except subprocess.CalledProcessError:
+            temp_output = work_dir / "cover-frame-final-reencoded.mp4"
+            fallback = [
+                ffmpeg,
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(concat_path),
+                *mp4_output_args(row),
+                str(temp_output),
+            ]
+            run_ffmpeg_command(fallback, row, cwd=str(out_dir))
+        shutil.copy2(temp_output, output)
+        return output if output.exists() and output.stat().st_size > 0 else None
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
+
+
+def render_cover_frame_segment(
+    cover_path: Path,
+    output: Path,
+    include_audio: bool,
+    preset: PlatformPreset,
+    row: dict[str, object],
+    ffmpeg: str,
+) -> None:
+    duration = fmt_time(COVER_FRAME_TAIL_SECONDS)
+    video_filter_arg = ",".join([
+        f"scale={preset.width}:{preset.height}:force_original_aspect_ratio=increase",
+        f"crop={preset.width}:{preset.height}",
+        "setsar=1",
+        "fps=30",
+        "format=yuv420p",
+    ])
+    command = [ffmpeg, "-y", "-loop", "1", "-t", duration, "-i", str(cover_path)]
+    if include_audio:
+        command.extend(["-f", "lavfi", "-t", duration, "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"])
+        command.extend(["-t", duration, "-vf", video_filter_arg, "-map", "0:v:0", "-map", "1:a:0", "-shortest"])
+    else:
+        command.extend(["-t", duration, "-vf", video_filter_arg, "-map", "0:v:0"])
+    command.extend(mp4_output_args(row))
+    command.append(str(output))
+    run_ffmpeg_command(command, row)
+
+
+def render_publish_cover_image(
+    row: dict[str, object], preset: PlatformPreset, base_dir: Path, out_dir: Path, ffmpeg: str
+) -> Path | None:
+    cover = publish_cover_from_row(row)
+    frame = str(cover.get("selected_frame") or "").strip()
+    if not frame:
+        return None
+    source = resolve_media_path(base_dir, frame)
+    if not source.exists() or not source.is_file():
+        return None
+    output = out_dir / f"clip-{int(row.get('rank', 0)):03d}-{preset.key}-cover.jpg"
+    if render_publish_cover_image_with_pillow(source, output, cover, preset):
+        return output
+    command = publish_cover_ffmpeg_command(source, output, cover, preset, ffmpeg)
+    run_ffmpeg_command(command, row, cwd=str(out_dir))
+    return output
+
+
+def render_publish_cover_image_with_pillow(source: Path, output: Path, cover: dict[str, object], preset: PlatformPreset) -> bool:
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        return False
+    with Image.open(source) as loaded:
+        canvas = pillow_cover_base_image(loaded.convert("RGBA"), cover, preset, Image)
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    for layer in cover_overlay_layers(cover):
+        if layer.get("kind") == "image":
+            pillow_draw_cover_image_layer(canvas, layer, preset, Image)
+        elif layer.get("kind") == "speech":
+            pillow_draw_cover_text_layer(draw, layer, preset, ImageFont, True)
+        elif layer.get("kind") == "text":
+            pillow_draw_cover_text_layer(draw, layer, preset, ImageFont, False)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    canvas.convert("RGB").save(output, "JPEG", quality=94, optimize=True)
+    return output.exists() and output.stat().st_size > 0
+
+
+def pillow_cover_base_image(image: object, cover: dict[str, object], preset: PlatformPreset, image_module: object) -> object:
+    zoom = clamp(float(cover.get("zoom") if cover.get("zoom") is not None else 1.0), 1.0, 1.8)
+    base = pillow_cover_object_fit_image(image, preset, image_module)
+    if zoom <= 1.001:
+        return base
+    resized = base.resize((int(round(preset.width * zoom)), int(round(preset.height * zoom))), pillow_resampling_filter(image_module))
+    crop_x = clamp(float(cover.get("x") if cover.get("x") is not None else 50.0), 0.0, 100.0) / 100.0
+    crop_y = clamp(float(cover.get("y") if cover.get("y") is not None else 50.0), 0.0, 100.0) / 100.0
+    left = int(round(preset.width * (zoom - 1.0) * crop_x))
+    top = int(round(preset.height * (zoom - 1.0) * crop_y))
+    return resized.crop((left, top, left + preset.width, top + preset.height))
+
+
+def pillow_cover_object_fit_image(image: object, preset: PlatformPreset, image_module: object) -> object:
+    scale = max(preset.width / max(image.width, 1), preset.height / max(image.height, 1))
+    resized_w = max(preset.width, int(math.ceil(image.width * scale)))
+    resized_h = max(preset.height, int(math.ceil(image.height * scale)))
+    resized = image.resize((resized_w, resized_h), pillow_resampling_filter(image_module))
+    left = int(round(max(resized_w - preset.width, 0) * 0.5))
+    top = int(round(max(resized_h - preset.height, 0) * 0.5))
+    return resized.crop((left, top, left + preset.width, top + preset.height))
+
+
+def pillow_resampling_filter(image_module: object) -> object:
+    resampling = getattr(image_module, "Resampling", None)
+    return getattr(resampling, "LANCZOS", getattr(image_module, "LANCZOS", 1))
+
+
+def pillow_draw_cover_image_layer(canvas: object, layer: dict[str, object], preset: PlatformPreset, image_module: object) -> None:
+    image_file = str(layer.get("image_file") or "")
+    if not image_file:
+        return
+    with image_module.open(image_file) as loaded:
+        image = loaded.convert("RGBA")
+    width = max(1, int(round(preset.width * float(layer.get("width") or 0.28))))
+    height = max(1, int(round(image.height * (width / max(image.width, 1)))))
+    image = image.resize((width, height), pillow_resampling_filter(image_module))
+    opacity = clamp(float(layer.get("opacity") or 100.0) / 100.0, 0.1, 1.0)
+    if opacity < 0.999:
+        alpha = image.getchannel("A").point(lambda value: int(value * opacity))
+        image.putalpha(alpha)
+    x = min(int(round(preset.width * float(layer.get("x") or 0.0))), max(preset.width - width, 0))
+    y = min(int(round(preset.height * float(layer.get("y") or 0.0))), max(preset.height - height, 0))
+    canvas.alpha_composite(image, (x, y))
+
+
+def pillow_cover_preview_px(value: float, preset: PlatformPreset) -> int:
+    return int(round(value * preset.width / COVER_PREVIEW_CANONICAL_WIDTH))
+
+
+def pillow_cover_font_size(layer: dict[str, object], preset: PlatformPreset) -> int:
+    preview_size = float(layer.get("font_size") or 34.0) * COVER_LAYER_PREVIEW_FONT_SCALE
+    return max(18, pillow_cover_preview_px(preview_size, preset))
+
+
+def pillow_draw_cover_text_layer(
+    draw: object, layer: dict[str, object], preset: PlatformPreset, image_font: object, speech: bool
+) -> None:
+    text = str(layer.get("text") or layer.get("label") or "").strip()
+    if not text:
+        return
+    font_size = pillow_cover_font_size(layer, preset)
+    font = image_font.truetype(str(find_overlay_font()), font_size)
+    box = pillow_cover_text_box(draw, layer, preset, font, font_size, speech)
+    x, y, box_w, box_h, pad_x, pad_y, line_height, lines = box
+    opacity = clamp(float(layer.get("opacity") or 100.0) / 100.0, 0.1, 1.0)
+    if speech or bool(layer.get("background_enabled")):
+        pillow_draw_cover_text_background(draw, layer, (x, y, box_w, box_h), font_size, opacity, speech, preset)
+    text_color = pillow_rgba(layer.get("color"), "#050505" if speech else "#ffffff", opacity)
+    for index, line in enumerate(lines):
+        draw.text((x + pad_x, y + pad_y + index * line_height), line, fill=text_color, font=font)
+
+
+def pillow_cover_text_box(
+    draw: object, layer: dict[str, object], preset: PlatformPreset, font: object, font_size: int, speech: bool
+) -> tuple[int, int, int, int, int, int, int, list[str]]:
+    box_w = max(1, int(round(preset.width * float(layer.get("width") or 0.42))))
+    x = min(int(round(preset.width * float(layer.get("x") or 0.0))), max(preset.width - box_w, 0))
+    pad_x = max(10, int(round(font_size * (0.44 if speech else 0.35))))
+    pad_y = max(8, int(round(font_size * (0.32 if speech else 0.26))))
+    lines = pillow_wrap_text(draw, str(layer.get("text") or layer.get("label") or ""), font, max(box_w - pad_x * 2, 1))
+    line_height = max(font_size, pillow_text_size(draw, "Ag", font)[1]) + max(2, int(round(font_size * 0.12)))
+    min_height = int(round(font_size * (1.95 if speech else 1.65)))
+    box_h = max(min_height, len(lines) * line_height + pad_y * 2)
+    y = min(int(round(preset.height * float(layer.get("y") or 0.0))), max(preset.height - box_h, 0))
+    return x, y, box_w, box_h, pad_x, pad_y, line_height, lines
+
+
+def pillow_wrap_text(draw: object, text: str, font: object, max_width: int) -> list[str]:
+    words = text.split()
+    if not words:
+        return [text]
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if not current or pillow_text_size(draw, candidate, font)[0] <= max_width:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines[:2] or [text]
+
+
+def pillow_text_size(draw: object, text: str, font: object) -> tuple[int, int]:
+    left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
+    return max(1, right - left), max(1, bottom - top)
+
+
+def pillow_draw_cover_text_background(
+    draw: object,
+    layer: dict[str, object],
+    rect: tuple[int, int, int, int],
+    font_size: int,
+    opacity: float,
+    speech: bool,
+    preset: PlatformPreset,
+) -> None:
+    x, y, box_w, box_h = rect
+    bg_opacity = clamp(float(layer.get("background_opacity") if layer.get("background_opacity") is not None else 94.0) / 100.0, 0.0, 1.0)
+    background = pillow_rgba(layer.get("background_color"), "#ffffff" if speech else "#000000", opacity * bg_opacity)
+    radius = pillow_cover_preview_px(COVER_SPEECH_RADIUS_PREVIEW_PX, preset) if speech else max(6, int(round(font_size * 0.18)))
+    if speech:
+        pillow_draw_cover_speech_tail(draw, (x, y, box_w, box_h), background, preset)
+        draw.rounded_rectangle((x, y, x + box_w, y + box_h), radius=radius, fill=background)
+    else:
+        draw.rounded_rectangle((x, y, x + box_w, y + box_h), radius=radius, fill=background)
+
+
+def pillow_draw_cover_speech_tail(
+    draw: object, rect: tuple[int, int, int, int], color: tuple[int, int, int, int], preset: PlatformPreset
+) -> None:
+    x, y, box_w, box_h = rect
+    tail_w = pillow_cover_preview_px(COVER_SPEECH_TAIL_WIDTH_PREVIEW_PX, preset)
+    tail_h = pillow_cover_preview_px(COVER_SPEECH_TAIL_HEIGHT_PREVIEW_PX, preset)
+    tail_x = x + int(round(box_w * 0.18))
+    tail_y = y + box_h + pillow_cover_preview_px(COVER_SPEECH_TAIL_BOTTOM_PREVIEW_PX, preset)
+    skew = max(2, int(round(math.tan(math.radians(18.0)) * tail_h)))
+    points = [
+        (tail_x + skew, tail_y),
+        (tail_x + tail_w + skew, tail_y),
+        (tail_x + tail_w, tail_y + tail_h),
+        (tail_x, tail_y + tail_h),
+    ]
+    draw.polygon(points, fill=color)
+
+
+def pillow_rgba(value: object, fallback: str, opacity: float) -> tuple[int, int, int, int]:
+    color = normalize_hex_color(value, fallback).lstrip("#")
+    alpha = int(round(255 * clamp(opacity, 0.0, 1.0)))
+    return int(color[0:2], 16), int(color[2:4], 16), int(color[4:6], 16), alpha
+
+
+def publish_cover_from_row(row: dict[str, object]) -> dict[str, object]:
+    metadata = row.get("publish_metadata")
+    if not isinstance(metadata, dict):
+        return {}
+    cover = metadata.get("cover")
+    return cover if isinstance(cover, dict) else {}
+
+
+def publish_cover_ffmpeg_command(
+    source: Path, output: Path, cover: dict[str, object], preset: PlatformPreset, ffmpeg: str
+) -> list[str]:
+    layers = cover_overlay_layers(cover)
+    image_layers = [layer for layer in layers if layer.get("kind") == "image" and str(layer.get("image_file") or "")]
+    base = [ffmpeg, "-y", "-i", str(source)]
+    if image_layers:
+        return [
+            *base, "-filter_complex", publish_cover_complex_filter(cover, layers, preset),
+            "-map", "[vout]", "-frames:v", "1", "-q:v", "2", str(output),
+        ]
+    return [
+        *base, "-vf", publish_cover_simple_filter(cover, layers, preset),
+        "-frames:v", "1", "-q:v", "2", str(output),
+    ]
+
+
+def publish_cover_simple_filter(cover: dict[str, object], layers: list[dict[str, object]], preset: PlatformPreset) -> str:
+    filters = [publish_cover_base_filter(cover, preset)]
+    overlay = overlay_filter({"overlays": layers}, preset)
+    if overlay:
+        filters.append(overlay)
+    filters.append("format=yuv420p")
+    return ",".join(filters)
+
+
+def publish_cover_complex_filter(cover: dict[str, object], layers: list[dict[str, object]], preset: PlatformPreset) -> str:
+    non_image_layers = [layer for layer in layers if layer.get("kind") != "image"]
+    base_filters = [publish_cover_base_filter(cover, preset)]
+    overlay = overlay_filter({"overlays": non_image_layers}, preset)
+    if overlay:
+        base_filters.append(overlay)
+    parts = [f"[0:v]{','.join(base_filters)}[vbase]"]
+    previous = "vbase"
+    image_layers = [layer for layer in layers if layer.get("kind") == "image" and str(layer.get("image_file") or "")]
+    for index, layer in enumerate(image_layers):
+        image_label = f"coverimg{index}"
+        output_label = f"vcover{index}"
+        parts.append(image_overlay_source_filter(layer, preset, image_label))
+        parts.append(image_overlay_compose_filter(layer, preset, previous, image_label, output_label))
+        previous = output_label
+    parts.append(f"[{previous}]format=yuv420p[vout]")
+    return ";".join(parts)
+
+
+def publish_cover_base_filter(cover: dict[str, object], preset: PlatformPreset) -> str:
+    zoom = clamp(float(cover.get("zoom") if cover.get("zoom") is not None else 1.0), 1.0, 1.8)
+    crop_x = clamp(float(cover.get("x") if cover.get("x") is not None else 50.0), 0.0, 100.0) / 100.0
+    crop_y = clamp(float(cover.get("y") if cover.get("y") is not None else 50.0), 0.0, 100.0) / 100.0
+    return ",".join([
+        f"scale={int(round(preset.width * zoom))}:{int(round(preset.height * zoom))}:force_original_aspect_ratio=increase",
+        f"crop={preset.width}:{preset.height}:x='(iw-ow)*{crop_x:.4f}':y='(ih-oh)*{crop_y:.4f}'",
+        "setsar=1",
+    ])
+
+
+def cover_overlay_layers(cover: dict[str, object]) -> list[dict[str, object]]:
+    layers = cover.get("layers")
+    if not isinstance(layers, list):
+        return []
+    result = [static_cover_overlay_layer(layer) for layer in layers if isinstance(layer, dict)]
+    return [layer for layer in result if layer.get("key") != "none"]
+
+
+def static_cover_overlay_layer(layer: dict[str, object]) -> dict[str, object]:
+    normalized = overlay_layer_from_raw(layer)
+    normalized["y"] = lifted_cover_layer_y(float(normalized.get("y") or 0.0))
+    normalized["start_seconds"] = 0.0
+    normalized["duration_seconds"] = 9999.0
+    return normalized
+
+
+def lifted_cover_layer_y(y: float) -> float:
+    return clamp(y - COVER_LAYER_VERTICAL_LIFT, 0.0, 1.0)
+
+
 def render_platform_clip(
     input_path: Path, output_path: Path, start: float, duration: float,
     preset: PlatformPreset, row: dict[str, object], ffmpeg: str
@@ -7534,7 +8617,8 @@ def image_overlay_compose_filter(
     width = int(round(preset.width * float(overlay["width"])))
     x = min(int(round(preset.width * float(overlay["x"]))), max(preset.width - width, 0))
     y = min(int(round(preset.height * float(overlay["y"]))), preset.height)
-    return f"[{input_label}][{image_label}]overlay={x}:{y}:format=auto:eof_action=repeat[{output_label}]"
+    enable = timed_overlay_enable(overlay)
+    return f"[{input_label}][{image_label}]overlay={x}:{y}:format=auto:eof_action=repeat{enable}[{output_label}]"
 
 
 def camera_filter(preset: PlatformPreset, row: dict[str, object]) -> str:
@@ -7953,6 +9037,8 @@ def overlay_layer_filter(overlay: dict[str, object], preset: PlatformPreset) -> 
         return ""
     if overlay.get("kind") == "image":
         return image_overlay_filter(overlay, preset)
+    if overlay.get("kind") == "speech":
+        return speech_overlay_filter(overlay, preset)
     if overlay.get("kind") == "text":
         return text_overlay_filter(overlay, preset)
     card = OVERLAY_PRESETS[str(overlay["key"])]
@@ -7994,16 +9080,54 @@ def text_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> s
     font = ffmpeg_filter_path(find_overlay_font())
     color = ffmpeg_color(str(overlay.get("color") or "#ffffff"))
     escaped_text = ffmpeg_text_value(text)
+    enable = timed_overlay_enable(overlay)
     filters = []
     if bool(overlay.get("background_enabled")):
         background = ffmpeg_color(str(overlay.get("background_color") or "#000000"))
         background_opacity = clamp(float(overlay.get("background_opacity") or 70.0) / 100.0, 0.0, 1.0)
-        filters.append(f"drawbox=x={x}:y={y}:w={box_w}:h={box_h}:color={background}@{background_opacity:.2f}:t=fill")
+        filters.append(f"drawbox=x={x}:y={y}:w={box_w}:h={box_h}:color={background}@{background_opacity:.2f}:t=fill{enable}")
     filters.append(
         f"drawtext=fontfile='{font}':text='{escaped_text}':x={x + pad}:y={text_y}:"
-        f"fontsize={font_size}:fontcolor={color}@{opacity:.2f}"
+        f"fontsize={font_size}:fontcolor={color}@{opacity:.2f}{enable}"
     )
     return ",".join(filters)
+
+
+def timed_overlay_enable(overlay: dict[str, object]) -> str:
+    start = max(float(overlay.get("start_seconds") if overlay.get("start_seconds") is not None else 0.0), 0.0)
+    duration = max(float(overlay.get("duration_seconds") if overlay.get("duration_seconds") is not None else 3.0), 0.0)
+    if duration <= 0.0:
+        return ""
+    return f":enable='between(t,{start:.3f},{start + duration:.3f})'"
+
+
+def speech_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> str:
+    text = str(overlay.get("text") or overlay.get("label") or "").strip()
+    if not text:
+        return ""
+    box_w = int(round(preset.width * float(overlay["width"])))
+    font_size = max(18, int(round(float(overlay["font_size"]) * preset.width / 1080.0)))
+    box_h = max(int(round(font_size * 1.95)), int(round(preset.height * 0.054)))
+    x = min(int(round(preset.width * float(overlay["x"]))), max(preset.width - box_w, 0))
+    y = min(int(round(preset.height * float(overlay["y"]))), max(preset.height - box_h, 0))
+    pad = max(12, int(round(font_size * 0.44)))
+    tail_w = max(18, int(round(font_size * 0.5)))
+    tail_h = max(16, int(round(font_size * 0.44)))
+    tail_x = min(x + max(pad, int(round(box_w * 0.2))), max(preset.width - tail_w, 0))
+    tail_y = min(y + box_h - max(2, int(round(tail_h * 0.2))), preset.height)
+    text_y = y + max(8, int(round((box_h - font_size) / 2)))
+    opacity = clamp(float(overlay["opacity"]) / 100.0, 0.1, 1.0)
+    font = ffmpeg_filter_path(find_overlay_font())
+    color = ffmpeg_color(str(overlay.get("color") or "#050505"))
+    background = ffmpeg_color(str(overlay.get("background_color") or "#ffffff"))
+    escaped_text = ffmpeg_text_value(text)
+    enable = timed_overlay_enable(overlay)
+    return ",".join([
+        f"drawbox=x={tail_x}:y={tail_y}:w={tail_w}:h={tail_h}:color={background}@{opacity:.2f}:t=fill{enable}",
+        f"drawbox=x={x}:y={y}:w={box_w}:h={box_h}:color={background}@{opacity:.2f}:t=fill{enable}",
+        f"drawtext=fontfile='{font}':text='{escaped_text}':x={x + pad}:y={text_y}:"
+        f"fontsize={font_size}:fontcolor={color}@1.0{enable}",
+    ])
 
 
 def image_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> str:
@@ -8015,7 +9139,8 @@ def image_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> 
     y = min(int(round(preset.height * float(overlay["y"]))), preset.height)
     opacity = clamp(float(overlay["opacity"]) / 100.0, 0.1, 1.0)
     path = ffmpeg_filter_path(Path(image_file))
-    return f"movie='{path}',scale={width}:-1,colorchannelmixer=aa={opacity:.2f}[img];[in][img]overlay={x}:{y}:format=auto[out]"
+    enable = timed_overlay_enable(overlay)
+    return f"movie='{path}',scale={width}:-1,colorchannelmixer=aa={opacity:.2f}[img];[in][img]overlay={x}:{y}:format=auto{enable}[out]"
 
 
 def overlay_from_row(row: dict[str, object]) -> dict[str, object]:
@@ -8041,6 +9166,8 @@ def overlay_layers_from_row(row: dict[str, object]) -> list[dict[str, object]]:
 def overlay_layer_from_raw(raw: dict[str, object]) -> dict[str, object]:
     if str(raw.get("kind") or raw.get("key") or "") == "image":
         return image_overlay_from_raw(raw)
+    if str(raw.get("kind") or raw.get("key") or "") == "speech":
+        return speech_overlay_from_raw(raw)
     if str(raw.get("kind") or raw.get("key") or "") == "text":
         return text_overlay_from_raw(raw)
     return overlay_from_raw(raw)
@@ -8079,6 +9206,16 @@ def image_overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
         "opacity": clamp(float(raw.get("opacity") if raw.get("opacity") is not None else 100.0), 10.0, 100.0),
         "image_file": image_file,
         "image_data_url": image_data_url,
+        "start_seconds": clamp(
+            float(raw.get("start_seconds") if raw.get("start_seconds") is not None else 0.0),
+            0.0,
+            9999.0,
+        ),
+        "duration_seconds": clamp(
+            float(raw.get("duration_seconds") if raw.get("duration_seconds") is not None else 3.0),
+            0.3,
+            60.0,
+        ),
     }
 
 
@@ -8106,7 +9243,47 @@ def text_overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
             0.0,
             100.0,
         ),
+        "start_seconds": clamp(
+            float(raw.get("start_seconds") if raw.get("start_seconds") is not None else 0.0),
+            0.0,
+            9999.0,
+        ),
+        "duration_seconds": clamp(
+            float(raw.get("duration_seconds") if raw.get("duration_seconds") is not None else 3.0),
+            0.3,
+            60.0,
+        ),
     }
+
+
+def speech_overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
+    layer = text_overlay_from_raw({
+        **raw,
+        "text": raw.get("text") or raw.get("label") or "Fala rapida",
+        "background_enabled": True,
+        "background_color": raw.get("background_color") or "#ffffff",
+        "background_opacity": raw.get("background_opacity") if raw.get("background_opacity") is not None else 94,
+        "color": raw.get("color") or "#050505",
+        "font_size": raw.get("font_size") if raw.get("font_size") is not None else 34,
+        "width": raw.get("width") if raw.get("width") is not None else 0.56,
+    })
+    if layer["key"] == "none":
+        return layer
+    layer["kind"] = "speech"
+    layer["key"] = "speech"
+    layer["label"] = str(layer["text"])
+    layer["tail"] = str(raw.get("tail") or "bottom-left")
+    layer["start_seconds"] = clamp(
+        float(raw.get("start_seconds") if raw.get("start_seconds") is not None else 0.0),
+        0.0,
+        9999.0,
+    )
+    layer["duration_seconds"] = clamp(
+        float(raw.get("duration_seconds") if raw.get("duration_seconds") is not None else 3.0),
+        0.3,
+        60.0,
+    )
+    return layer
 
 
 def default_overlay() -> dict[str, object]:
@@ -8155,7 +9332,7 @@ def clamp(value: float, minimum: float, maximum: float) -> float:
     return min(max(value, minimum), maximum)
 
 
-def rendered_row(row: dict[str, object], preset: PlatformPreset, output_path: Path) -> dict[str, object]:
+def rendered_row(row: dict[str, object], preset: PlatformPreset, output_path: Path, cover_path: Path | None = None) -> dict[str, object]:
     return {
         "rank": row.get("rank"),
         "platform": preset.key,
@@ -8163,6 +9340,7 @@ def rendered_row(row: dict[str, object], preset: PlatformPreset, output_path: Pa
         "width": preset.width,
         "height": preset.height,
         "file": str(output_path),
+        "cover_file": str(cover_path) if cover_path else "",
         "adjusted_start": row.get("adjusted_start"),
         "adjusted_end": row.get("adjusted_end"),
         "adjusted_duration": row.get("adjusted_duration"),
@@ -10292,13 +11470,17 @@ def publish_panels_html(moment: Moment) -> tuple[str, str]:
     return (
         f"""<aside class="publish-panel publish-cover-panel" data-publish-panel="cover">
           <strong>Capa IA</strong>
-          <div class="publish-cover-frame" data-publish-cover-preview>{cover_img}</div>
+          <div class="publish-cover-stage" data-publish-cover-stage>
+            <div class="publish-cover-frame" data-publish-cover-preview>{cover_img}<div class="publish-cover-layer-list" data-publish-cover-layer-list></div></div>
+            <div class="overlay-menu publish-cover-menu" data-publish-cover-menu hidden></div>
+          </div>
           <div class="publish-cover-adjust">
             <label>Zoom <output data-publish-cover-zoom-value>{cover_zoom}%</output>
               <input data-publish-cover-zoom type="range" min="100" max="180" step="5" value="{cover_zoom}">
             </label>
             <button type="button" data-publish-cover-zoom-reset title="Restaurar zoom">Reset</button>
           </div>
+          <input data-publish-cover-image type="file" accept="image/png,image/webp,image/jpeg" hidden>
           {cover_options}
           <p>{reason}</p>
         </aside>""",
@@ -10561,6 +11743,10 @@ def page_html(
         <button type="button" data-render-profile="medium" class="active">Medio</button>
         <button type="button" data-render-profile="high">Alto</button>
       </div>
+      <label class="render-cover-frame-toggle">
+        <input type="checkbox" data-render-cover-frame>
+        <span><strong>Capa TikTok</strong><small>Cria uma copia com a capa no ultimo frame.</small></span>
+      </label>
       <div class="render-queue-status" data-render-queue-status>Nenhum render em andamento.</div>
       <div class="render-queue-list" data-render-queue-list></div>
     </section>
@@ -11228,15 +12414,15 @@ main{display:grid;gap:12px;max-width:1440px;margin:0 auto;padding:16px 18px 28px
 .layer-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:100%;min-height:0}.layer-strip:empty{display:none}.bumper-sequence{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;min-height:24px;color:var(--color-text-muted);font-size:12px}.bumper-sequence:empty{display:none}.bumper-sequence span{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bumper-sequence b{color:var(--color-brand-green);font-weight:800}.layer-chip{display:inline-flex;gap:6px;align-items:center;max-width:100%;min-height:30px;padding:4px 5px 4px 9px;border:1px solid #303030;border-radius:999px;background:var(--color-surface-muted);color:var(--color-text-soft);font-size:12px}.layer-chip.is-selected{border-color:var(--color-focus);background:#182011;color:var(--color-text)}.layer-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.layer-chip button{display:inline-grid;place-items:center;width:22px;height:22px;min-width:22px;padding:0;border:1px solid #3a3a3a;border-radius:999px;background:#242424;color:var(--color-text-soft);font-size:14px;line-height:1}
 .cuted-control-surface-slot{display:none;position:relative;z-index:90;margin:-34px 14px 8px;justify-content:center}.cuted-control-surface-slot:empty{display:none}.card[open]>.cuted-control-surface-slot:not(:empty){display:flex}.cuted-control-surface-slot .cuted-control-bar{width:min(66%,930px);min-width:min(100%,820px);min-height:98px;padding:9px 16px;border-radius:18px}.cuted-control-surface-slot .cuted-render-zone{justify-content:flex-end;overflow:visible;min-height:74px}.cuted-control-surface-slot .cuted-tool-group{flex:0 0 408px;min-height:74px}.cuted-control-surface-slot .cuted-tile-button{flex:0 0 68px;width:68px;height:62px;font-size:30px}.cuted-control-surface-slot .cuted-insert-button span{font-size:20px}.cuted-control-surface-slot .cuted-format-trigger{flex:0 0 118px;width:118px;height:62px;grid-template-columns:auto 1fr auto;gap:8px;padding:7px 9px}.cuted-control-surface-slot .cuted-format-copy small{display:none}.cuted-control-surface-slot .cuted-format-copy strong{font-size:20px}.cuted-control-surface-slot .cuted-ratio-icon{border-width:2px;border-radius:3px}.cuted-control-surface-slot .cuted-ratio-vertical{width:16px;height:34px}.cuted-control-surface-slot .cuted-ratio-feed{width:22px;height:28px}.cuted-control-surface-slot .cuted-ratio-wide{width:32px;height:17px}.cuted-control-surface-slot .cuted-divider{flex:0 0 1px;height:48px;margin:0 8px}.cuted-control-surface-slot .cuted-audio-group{flex:0 0 58px;min-width:58px}.cuted-control-surface-slot .cuted-ready-region{flex:0 0 132px;width:132px;min-height:62px;margin-left:auto}.cuted-control-surface-slot .cuted-approve-button{width:60px;height:60px}.cuted-control-surface-slot .cuted-approve-button svg{width:36px;height:36px}.cuted-control-surface-slot .cuted-discard-button{width:46px;height:46px}.cuted-control-surface-slot .cuted-discard-button svg{width:25px;height:25px}
 .editor-shell{display:grid;grid-template-columns:minmax(280px,520px) minmax(360px,1fr);gap:14px;padding:0 14px 14px}.editor-preview{display:grid;align-content:start;justify-items:center;gap:10px}.preview-frame{display:grid;gap:10px;width:100%;max-width:520px}.media{position:relative;container-type:inline-size;aspect-ratio:16/9;background:#000;max-height:72vh;overflow:hidden;border-radius:6px}.media video,.media img{width:100%;height:100%;object-fit:cover;display:block;background:#000;pointer-events:none}.placeholder{display:grid;place-items:center;height:100%;color:#777}.preview-bar{display:grid;grid-template-columns:1fr;gap:8px;justify-items:center;width:100%;padding:8px;border:1px solid #252525;border-radius:8px;background:#0a0a0a}.preview-controls,.preview-volume-group{display:flex;gap:6px;align-items:center}.preview-controls{justify-content:center;padding:4px;border:1px solid #202020;border-radius:999px;background:var(--color-surface-raised)}.preview-volume-group{padding-left:4px;border-left:1px solid #2d2d2d}.preview-icon,.preview-step{display:inline-grid;place-items:center;width:32px;height:32px;min-width:32px;padding:0;border:1px solid var(--color-border-strong);border-radius:999px;background:var(--color-surface-control);color:var(--color-text-soft)}.preview-play{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}.preview-icon svg{width:16px;height:16px;display:block;stroke:currentColor}.preview-step{width:26px;height:26px;min-width:26px;font-weight:700}.preview-volume-group output{min-width:32px;color:#d8d8d8;font-size:12px;text-align:center}.card[data-preview-format=tiktok] .preview-frame,.card[data-preview-format=shorts] .preview-frame,.card[data-preview-format=instagram] .preview-frame{max-width:min(100%,calc(72vh * 9 / 16))}.card[data-preview-format=facebook] .preview-frame{max-width:min(100%,calc(72vh * 4 / 5))}.card[data-preview-format=youtube] .preview-frame{max-width:min(100%,520px)}.card[data-preview-format=tiktok] .media,.card[data-preview-format=shorts] .media,.card[data-preview-format=instagram] .media{aspect-ratio:9/16}.card[data-preview-format=facebook] .media{aspect-ratio:4/5}.card[data-preview-format=youtube] .media{aspect-ratio:16/9}.preview-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;overflow:visible;padding-bottom:1px}.preview-strip button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid #303030;padding:8px 10px;min-height:34px;border-radius:999px;white-space:nowrap}.preview-strip button.active{background:var(--color-brand-white);color:var(--color-brand-black);border-color:var(--color-brand-white)}
-.preview-camera-timeline--live{display:block!important;width:100%;min-height:152px;padding:0!important;border-color:rgba(17,162,207,.34)!important;overflow:hidden}.preview-camera-timeline--live .timeline-shell{min-height:150px;border:0;border-radius:4px;background:linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px) 0 0/28px 100%,linear-gradient(180deg,rgba(17,162,207,.08),transparent 34%),#070707}.preview-camera-timeline--live .volume-popover[data-disabled=true]{display:none!important}.preview-live-timeline-loading{display:grid;place-items:center;min-height:86px;color:var(--color-text-muted);font-size:12px}
+.preview-camera-timeline--live{position:relative;display:block!important;width:100%;min-height:152px;padding:0!important;border-color:rgba(17,162,207,.34)!important;overflow:hidden}.preview-camera-timeline--live .timeline-shell{min-height:150px;border:0;border-radius:4px;background:linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px) 0 0/28px 100%,linear-gradient(180deg,rgba(17,162,207,.08),transparent 34%),#070707}.preview-camera-timeline--live .volume-popover[data-disabled=true]{display:none!important}.preview-live-timeline-loading{display:grid;place-items:center;min-height:86px;color:var(--color-text-muted);font-size:12px}.overlay-timeline{position:absolute;left:76px;right:76px;bottom:44px;z-index:18;height:34px;pointer-events:none}.overlay-timeline[hidden]{display:none}.overlay-timeline-item{position:absolute;left:var(--overlay-time-left);top:0;display:grid;place-items:center;width:clamp(16px,var(--overlay-time-width),24px);height:26px;min-width:16px;min-height:26px;padding:0;border:2px solid rgba(175,207,42,.86);border-radius:7px;background:linear-gradient(180deg,rgba(175,207,42,.16),rgba(5,5,5,.9));color:transparent;box-shadow:0 0 0 2px rgba(175,207,42,.12),0 0 18px rgba(175,207,42,.22);font-size:0;line-height:1;cursor:grab;overflow:visible;pointer-events:auto;transform:translateY(0);transition:border-color .14s ease,box-shadow .14s ease,background .14s ease}.overlay-timeline-item:before{content:"";position:absolute;left:50%;top:-9px;width:5px;height:5px;border-radius:999px;background:var(--color-brand-green);box-shadow:0 0 10px rgba(175,207,42,.7);transform:translateX(-50%)}.overlay-timeline-item:after{content:"";position:absolute;inset:5px 4px;border:1px solid rgba(175,207,42,.38);border-radius:3px;background:rgba(0,0,0,.42)}.overlay-timeline-item span{position:absolute;inset:0;overflow:hidden;opacity:0;pointer-events:none}.overlay-timeline-item i{position:absolute;right:-3px;top:4px;bottom:4px;z-index:2;display:block;width:7px;border:0;border-radius:999px;background:rgba(231,231,232,.2);cursor:ew-resize}.overlay-timeline-item[data-overlay-kind=speech]{border-color:rgba(231,231,232,.88);background:linear-gradient(180deg,rgba(175,207,42,.28),rgba(5,5,5,.9));box-shadow:0 0 0 2px rgba(231,231,232,.08),0 0 20px rgba(175,207,42,.28)}.overlay-timeline-item[data-overlay-kind=image]{border-style:dashed}.overlay-timeline-item.is-active,.overlay-timeline-item.is-selected{border-color:rgba(231,231,232,.98);box-shadow:0 0 0 3px rgba(175,207,42,.18),0 0 24px rgba(175,207,42,.36)}
 .editor-tools{display:grid;align-content:start;gap:12px}.tool-stack{display:grid;gap:10px}.tool-section{border:1px solid #242424;border-radius:8px;background:#0a0a0a;padding:0;overflow:hidden}.tool-section>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:10px 12px;cursor:pointer;list-style:none;color:var(--color-text);font-weight:800}.tool-section>summary::-webkit-details-marker{display:none}.tool-section>summary:after{content:"";width:8px;height:8px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg);opacity:.62;transition:transform .16s ease}.tool-section[open]>summary:after{transform:rotate(225deg)}.tool-section>summary small{color:var(--color-text-muted);font-size:12px;font-weight:600;text-align:right}.tool-section[open]>summary{border-bottom:1px solid rgba(231,231,232,.08)}.tool-section>*:not(summary){margin:12px}.timeline-editor{padding:0}.timeline-head,.timeline-timebar,.timeline-values{display:flex;justify-content:space-between;gap:12px;color:var(--color-text-muted);font-size:12px}.timeline-head output,.timeline-timebar output{color:var(--color-text);text-align:right}.timeline-timebar{margin-top:10px}.timeline-timebar span:last-child{color:#777;text-align:right}.timeline-scrub{position:relative;height:42px;margin-top:8px}.timeline-scrub-track{position:absolute;left:0;right:0;top:17px;height:8px;border:1px solid #343434;border-radius:999px;background:linear-gradient(90deg,var(--color-surface-muted),#252525);overflow:hidden}.timeline-selected{position:absolute;top:0;bottom:0;background:rgba(175,207,42,.22);border-left:1px solid var(--color-brand-green);border-right:1px solid var(--color-brand-green)}.timeline-playhead{position:absolute;top:-8px;bottom:-8px;width:2px;background:var(--color-brand-white);box-shadow:0 0 0 1px rgba(0,0,0,.7)}.timeline-playhead:before{content:"";position:absolute;left:50%;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--color-brand-white);transform:translateX(-50%)}.timeline-scrub input{position:absolute;inset:0;width:100%;height:42px;margin:0;background:transparent;opacity:0;cursor:pointer}.timeline{position:relative;height:38px;margin-top:6px}.timeline-track{position:absolute;left:0;right:0;top:16px;height:6px;background:#292929;border-radius:999px;overflow:hidden}.timeline-fill{position:absolute;top:0;bottom:0;background:var(--color-brand-white);border-radius:999px}.timeline input{position:absolute;inset:0;width:100%;height:38px;margin:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto;-webkit-appearance:none;appearance:none}.timeline input::-webkit-slider-runnable-track{background:transparent}.timeline input::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-brand-white);border:2px solid var(--color-brand-black);pointer-events:auto}.timeline input::-moz-range-track{background:transparent}.timeline-values{margin-top:6px}.actions,.platform-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .export-dock{display:grid;gap:8px;margin-top:2px;padding:12px;border:1px solid #303030;border-radius:8px;background:#111}.export-dock strong{display:block;font-size:13px}.export-dock span{color:#a8a8a8;font-size:12px}
 .platform-tags button,.camera-card-buttons button,.effect-card-buttons button,.overlay-card-buttons button{background:var(--color-surface-control);color:var(--color-text-soft);border:1px solid var(--color-border-strong);text-align:left}.platform-tags button.active,.camera-card-buttons button.active,.effect-card-buttons button.active,.overlay-card-buttons button.active{background:#102018;color:var(--color-text);border-color:var(--color-brand-green)}.camera-card-controls,.effect-card-controls,.overlay-card-controls{display:grid;gap:10px}.effect-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.75fr);gap:10px}.effect-subpanel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.effect-subpanel strong{font-size:12px}.bumper-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.bumper-upload{display:grid;gap:6px;align-content:start;min-height:64px;padding:9px;border:1px dashed var(--color-border-strong);border-radius:8px;background:var(--color-surface-control);cursor:pointer}.bumper-upload input{font-size:11px}.bumper-strip{display:flex;gap:6px;flex-wrap:wrap;min-height:28px}.bumper-empty{color:var(--color-text-muted);font-size:12px}.camera-card-buttons,.effect-card-buttons,.overlay-card-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.camera-card-controls label,.effect-card-controls label,.overlay-card-controls label,.caption-settings label{display:grid;gap:6px;color:var(--color-text-muted);font-size:12px}.camera-card-controls input,.effect-card-controls input,.overlay-card-controls input{width:100%;accent-color:var(--color-brand-blue)}.camera-card-controls select,.caption-settings select,.caption-settings input{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.camera-path-editor,.camera-manual-panel{display:grid;gap:10px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-path-head,.camera-panel-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.camera-path-head strong,.camera-panel-title strong{font-size:12px}.camera-path-head span,.camera-panel-title span{color:var(--color-text-muted);font-size:12px}.camera-smart-panel{display:grid;gap:9px;padding:10px;border:1px solid rgba(17,162,207,.28);border-radius:8px;background:linear-gradient(135deg,rgba(17,162,207,.12),rgba(175,207,42,.06))}.camera-smart-row,.camera-smart-ai{display:grid;gap:8px}.camera-smart-row{grid-template-columns:repeat(3,minmax(0,1fr))}.camera-smart-ai{grid-template-columns:repeat(5,minmax(0,1fr))}.camera-smart-panel button{display:grid;gap:3px;justify-items:center;background:rgba(17,162,207,.1);color:var(--color-text);border:1px solid rgba(17,162,207,.34);text-align:center}.camera-smart-panel button:hover{border-color:var(--color-brand-blue);box-shadow:0 0 0 3px rgba(17,162,207,.14)}.camera-path-track{position:relative;height:34px}.camera-path-rail{position:absolute;left:0;right:0;top:15px;height:5px;border-radius:999px;background:#292929}.camera-path-marker{position:absolute;top:7px;width:20px;height:20px;min-width:20px;padding:0;border-radius:999px;transform:translateX(-50%);background:var(--color-surface-control);border:1px solid var(--color-border-strong)}.camera-path-marker.active{background:var(--color-brand-blue);border-color:var(--color-brand-blue);box-shadow:0 0 0 4px rgba(17,162,207,.18)}.camera-path-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-keyframe-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}.camera-auto-status{min-height:18px;color:var(--color-text-muted);font-size:12px}.camera-path-delete{color:var(--color-danger)!important}.camera-segments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.camera-segment{display:grid;gap:8px;padding:10px;border:1px solid #2a2a2a;border-radius:8px;background:#101010}.camera-segment strong{font-size:12px}.caption-settings{display:grid;grid-template-columns:minmax(160px,1fr) 120px 150px;gap:12px;max-width:none}.caption-toggle{align-content:center}.caption-toggle input{justify-self:start;width:auto;min-height:20px;accent-color:var(--color-brand-blue)}
-.camera-smart-panel p{margin:0;color:var(--color-text-muted);font-size:12px}.camera-smart-panel button span{color:var(--color-text-muted);font-size:11px}.camera-director-action{min-height:72px;background:linear-gradient(135deg,rgba(17,162,207,.32),rgba(231,231,232,.08))!important;border-color:rgba(17,162,207,.72)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 34px rgba(17,162,207,.1)}.camera-director-action strong{font-size:15px}.camera-smart-row button{min-height:54px}.camera-smart-ai button{min-height:50px}.camera-advanced{display:grid;gap:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.025)}.camera-advanced summary{display:flex;justify-content:space-between;gap:10px;align-items:center;cursor:pointer;color:var(--color-text-soft)}.camera-advanced summary small{color:var(--color-text-muted);font-size:12px}.camera-advanced[open] summary{padding-bottom:8px;border-bottom:1px solid rgba(231,231,232,.08)}.camera-advanced .camera-manual-panel{padding:0;border:0;background:transparent}.camera-surface video{position:relative;z-index:1;object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1),transform var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1)}.camera-surface[data-camera-cut=hard] video:not(.camera-fit-bg){transition:none}.camera-surface .camera-fit-bg{position:absolute!important;inset:-7%;z-index:0!important;width:114%!important;height:114%!important;display:none!important;object-fit:cover!important;object-position:center!important;transform:none!important;filter:blur(22px) saturate(.88) brightness(.62)!important;pointer-events:none}.camera-surface .camera-fit-logo{position:absolute;top:11%;left:50%;z-index:1;width:38%!important;max-width:240px;height:auto!important;display:none!important;object-fit:contain!important;object-position:center;background:transparent!important;transform:translateX(-50%);opacity:.9;pointer-events:none}.camera-surface[data-camera-fit=contain]{background:#050505}.camera-surface[data-camera-fit=contain] .camera-fit-bg{display:block!important}.camera-surface[data-camera-fit=contain] .camera-fit-logo{display:block!important}.camera-surface[data-camera-fit=contain] video:not(.camera-fit-bg){z-index:2;object-fit:contain;transform:none;transform-origin:center;background:transparent}.camera-reticle{position:absolute;inset:14% 22%;z-index:3;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}.preview-caption-layer{position:absolute;left:7.4%;right:7.4%;bottom:13%;z-index:4;display:grid;justify-items:center;pointer-events:none;opacity:0;transform:translateY(8px);transition:opacity 120ms ease,transform 120ms ease}.preview-caption-layer[data-visible=true]{opacity:1;transform:translateY(0)}.preview-caption-layer span{display:block;max-width:100%;color:#fff;font-family:Arial,sans-serif;font-size:clamp(18px,6.67cqw,36px);font-weight:900;line-height:1.08;text-align:center;text-shadow:0 2px 0 #000,0 -2px 0 #000,2px 0 0 #000,-2px 0 0 #000,0 0 12px rgba(0,0,0,.9),0 8px 22px rgba(0,0,0,.66);-webkit-text-stroke:clamp(1.2px,.44cqw,2.4px) rgba(0,0,0,.88);paint-order:stroke fill;text-transform:none;white-space:normal}.card[data-preview-format=facebook] .preview-caption-layer{bottom:7.05%}.card[data-preview-format=facebook] .preview-caption-layer span{font-size:clamp(18px,5cqw,34px);-webkit-text-stroke:clamp(1.1px,.38cqw,2px) rgba(0,0,0,.88)}.card[data-preview-format=youtube] .preview-caption-layer{bottom:8.8%}.card[data-preview-format=youtube] .preview-caption-layer span{font-size:clamp(18px,2.82cqw,32px);-webkit-text-stroke:clamp(1px,.26cqw,1.8px) rgba(0,0,0,.88)}
+.camera-smart-panel p{margin:0;color:var(--color-text-muted);font-size:12px}.camera-smart-panel button span{color:var(--color-text-muted);font-size:11px}.camera-director-action{min-height:72px;background:linear-gradient(135deg,rgba(17,162,207,.32),rgba(231,231,232,.08))!important;border-color:rgba(17,162,207,.72)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 34px rgba(17,162,207,.1)}.camera-director-action strong{font-size:15px}.camera-smart-row button{min-height:54px}.camera-smart-ai button{min-height:50px}.camera-advanced{display:grid;gap:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(255,255,255,.025)}.camera-advanced summary{display:flex;justify-content:space-between;gap:10px;align-items:center;cursor:pointer;color:var(--color-text-soft)}.camera-advanced summary small{color:var(--color-text-muted);font-size:12px}.camera-advanced[open] summary{padding-bottom:8px;border-bottom:1px solid rgba(231,231,232,.08)}.camera-advanced .camera-manual-panel{padding:0;border:0;background:transparent}.camera-surface video{position:relative;z-index:1;object-position:var(--camera-x,50%) 50%;transform:scale(var(--camera-scale,1));transform-origin:var(--camera-x,50%) 50%;transition:object-position var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1),transform var(--camera-transition-ms,700ms) cubic-bezier(.22,.61,.36,1)}.camera-surface[data-camera-cut=hard] video:not(.camera-fit-bg){transition:none}.camera-surface .camera-fit-bg{position:absolute!important;inset:-7%;z-index:0!important;width:114%!important;height:114%!important;display:none!important;object-fit:cover!important;object-position:center!important;transform:none!important;filter:blur(22px) saturate(.88) brightness(.62)!important;pointer-events:none}.camera-surface .camera-fit-logo{position:absolute;top:11%;left:50%;z-index:1;width:38%!important;max-width:240px;height:auto!important;display:none!important;object-fit:contain!important;object-position:center;background:transparent!important;transform:translateX(-50%);opacity:.9;pointer-events:none}.camera-surface[data-camera-fit=contain]{background:#050505}.camera-surface[data-camera-fit=contain] .camera-fit-bg{display:block!important}.camera-surface[data-camera-fit=contain] .camera-fit-logo{display:block!important}.camera-surface[data-camera-fit=contain] video:not(.camera-fit-bg){z-index:2;object-fit:contain;transform:none;transform-origin:center;background:transparent}.camera-reticle{position:absolute;inset:14% 22%;z-index:3;border:1px solid rgba(36,209,126,.58);border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.1);pointer-events:none}.preview-caption-layer{position:absolute;left:7.4%;right:7.4%;bottom:16.25%;z-index:4;display:grid;justify-items:center;pointer-events:none;opacity:0;transform:translateY(8px);transition:opacity 120ms ease,transform 120ms ease}.preview-caption-layer[data-visible=true]{opacity:1;transform:translateY(0)}.preview-caption-layer span{display:block;max-width:100%;color:#fff;font-family:Arial,sans-serif;font-size:clamp(18px,6.67cqw,36px);font-weight:900;line-height:1.08;text-align:center;text-shadow:0 2px 0 #000,0 -2px 0 #000,2px 0 0 #000,-2px 0 0 #000,0 0 12px rgba(0,0,0,.9),0 8px 22px rgba(0,0,0,.66);-webkit-text-stroke:clamp(1.2px,.44cqw,2.4px) rgba(0,0,0,.88);paint-order:stroke fill;text-transform:none;white-space:normal}.card[data-preview-format=facebook] .preview-caption-layer{bottom:8.8%}.card[data-preview-format=facebook] .preview-caption-layer span{font-size:clamp(18px,5cqw,34px);-webkit-text-stroke:clamp(1.1px,.38cqw,2px) rgba(0,0,0,.88)}.card[data-preview-format=youtube] .preview-caption-layer{bottom:11%}.card[data-preview-format=youtube] .preview-caption-layer span{font-size:clamp(18px,2.82cqw,32px);-webkit-text-stroke:clamp(1px,.26cqw,1.8px) rgba(0,0,0,.88)}
 .card[data-effect=light-grain] .media video,.card[data-effect=light-grain] .media img{filter:contrast(1.08) brightness(1.02)}.card[data-effect=old-film] .media video,.card[data-effect=old-film] .media img{filter:sepia(.48) contrast(1.2) saturate(.62) brightness(.92)}.card[data-effect=vhs] .media video,.card[data-effect=vhs] .media img{filter:saturate(.62) contrast(1.22) brightness(.9) hue-rotate(-7deg)}.card[data-effect=bw-old] .media video,.card[data-effect=bw-old] .media img{filter:grayscale(1) contrast(1.22) brightness(.9)}.card[data-effect=light-grain] .media:after,.card[data-effect=old-film] .media:after,.card[data-effect=vhs] .media:after,.card[data-effect=bw-old] .media:after{content:"";position:absolute;inset:0;pointer-events:none;opacity:var(--effect-opacity,.24);background-image:radial-gradient(circle at 20% 30%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 70% 65%,rgba(0,0,0,.95) 0 1px,transparent 1.8px);background-size:4px 4px,6px 6px;mix-blend-mode:overlay}.card[data-effect=old-film] .media:before,.card[data-effect=bw-old] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at center,transparent 44%,rgba(0,0,0,.46) 100%)}.card[data-effect=vhs] .media:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 4px);mix-blend-mode:overlay}
 .camera-surface[data-camera-fit=contain] video:not(.camera-fit-bg){object-position:center}
 .preview-caption-layer span{padding:var(--preview-caption-padding,0);border-radius:.16em;background:var(--preview-caption-bg,transparent);color:var(--preview-caption-color,#fff);font-size:var(--preview-caption-size,clamp(18px,6.67cqw,36px));box-decoration-break:clone;-webkit-box-decoration-break:clone}
-.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,var(--color-brand-green));border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none;pointer-events:auto}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-text-box{display:grid;align-items:center;min-width:96px;min-height:34px;padding:8px 12px;border-left:0;background:rgba(var(--overlay-bg-rgb,0,0,0),var(--overlay-bg-opacity,.7));box-shadow:none;color:var(--overlay-color,#fff);font-weight:700;font-size:clamp(13px,var(--overlay-font-size,20px),36px);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.overlay-text-box[data-overlay-bg=off]{background:transparent;box-shadow:none}.overlay-text-box span{opacity:var(--overlay-opacity,1);overflow:hidden;text-overflow:ellipsis}.overlay-box.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.overlay-image-box{display:grid;place-items:center;min-width:72px;min-height:72px;padding:6px;border:1px dashed rgba(255,255,255,.42);background:rgba(0,0,0,.12);box-shadow:0 8px 24px rgba(0,0,0,.22)}.overlay-image-box img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none;background:transparent}.overlay-resize{position:absolute;right:3px;bottom:3px;z-index:4;width:22px;height:22px;padding:0;border:1px solid rgba(255,255,255,.52);border-radius:5px;background:rgba(255,255,255,.2);cursor:nwse-resize;touch-action:none;pointer-events:auto}.overlay-menu{position:absolute;z-index:6;display:grid;gap:8px;width:min(360px,94%);padding:8px;border:1px solid var(--color-border-strong);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel);touch-action:none}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px;cursor:move}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-inspector{display:grid;gap:8px}.overlay-inspector label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.overlay-inspector input[type=text],.overlay-inspector input[type=number]{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.overlay-inspector input[type=color]{width:42px;height:32px;padding:2px;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black)}.overlay-inspector-row{display:flex;gap:8px;align-items:center}.overlay-inspector-row>*{flex:1}.overlay-inspector-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.overlay-inspector-check input{width:auto}.overlay-danger{color:var(--color-danger)!important;border-color:#5b2626!important;background:#251111!important}.image-upload{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-empty{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;color:var(--color-text-muted)}
+.overlay-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.overlay-box{position:absolute;z-index:3;left:calc(var(--overlay-x)*100%);top:calc(var(--overlay-y)*100%);width:calc(var(--overlay-width)*100%);min-width:120px;padding:10px 14px 11px 18px;border-left:6px solid var(--overlay-accent,var(--color-brand-green));border-radius:8px;background:rgba(0,0,0,var(--overlay-opacity,.92));box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:move;touch-action:none;user-select:none;pointer-events:auto;opacity:1;transform:translateY(0);transition:opacity 170ms ease,transform 170ms ease,outline-color .14s ease}.overlay-box[data-overlay-visible=false]{opacity:0;transform:translateY(5px);pointer-events:none}.overlay-box[data-overlay-key=none]{display:none}.overlay-box strong{font-size:clamp(13px,4vw,20px);line-height:1.05}.overlay-box em{display:block;margin-top:3px;color:rgba(255,255,255,.75);font-style:normal;font-size:clamp(10px,2.4vw,13px);line-height:1.2}.overlay-text-box{display:grid;align-items:center;min-width:96px;min-height:34px;padding:8px 12px;border-left:0;background:rgba(var(--overlay-bg-rgb,0,0,0),var(--overlay-bg-opacity,.7));box-shadow:none;color:var(--overlay-color,#fff);font-weight:700;font-size:clamp(13px,var(--overlay-font-size,20px),36px);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.overlay-text-box[data-overlay-bg=off]{background:transparent;box-shadow:none}.overlay-text-box span{opacity:var(--overlay-opacity,1);overflow:hidden;text-overflow:ellipsis}.overlay-speech-box{display:grid;align-items:center;min-width:112px;min-height:42px;padding:10px 15px;border:0;border-radius:18px;background:rgba(var(--overlay-bg-rgb,255,255,255),var(--overlay-bg-opacity,.94));box-shadow:0 10px 24px rgba(0,0,0,.22);color:var(--overlay-color,#050505);font-weight:900;font-size:clamp(14px,var(--overlay-font-size,22px),30px);line-height:1.08;white-space:normal;overflow:visible}.overlay-speech-box:after{position:absolute;left:18%;bottom:-12px;width:24px;height:20px;border-radius:0 0 22px 0;background:inherit;content:"";transform:skewX(-18deg);box-shadow:8px 9px 16px rgba(0,0,0,.12)}.overlay-speech-box span{position:relative;z-index:1;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;opacity:var(--overlay-opacity,1);overflow:hidden;text-overflow:ellipsis;overflow-wrap:anywhere}.overlay-box.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.overlay-image-box{display:grid;place-items:center;min-width:72px;min-height:72px;padding:6px;border:1px dashed rgba(255,255,255,.42);background:rgba(0,0,0,.12);box-shadow:0 8px 24px rgba(0,0,0,.22)}.overlay-image-box img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;opacity:var(--overlay-opacity,1);pointer-events:none;background:transparent}.overlay-resize{position:absolute;right:3px;bottom:3px;z-index:4;width:22px;height:22px;padding:0;border:1px solid rgba(255,255,255,.52);border-radius:5px;background:rgba(255,255,255,.2);cursor:nwse-resize;touch-action:none;pointer-events:auto}.overlay-menu{position:absolute;z-index:6;display:grid;gap:8px;width:min(360px,94%);max-height:min(420px,calc(100vh - 24px));overflow:auto;padding:8px;border:1px solid var(--color-border-strong);border-radius:8px;background:#101010;box-shadow:var(--shadow-panel);touch-action:none;scrollbar-width:thin;scrollbar-color:rgba(175,207,42,.5) rgba(255,255,255,.06)}.overlay-menu[hidden]{display:none}.overlay-menu-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:2px 2px 4px;cursor:move}.overlay-menu-head strong{font-size:13px}.overlay-menu-head button{padding:6px 9px}.overlay-menu-actions{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px}.overlay-menu button{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-inspector{display:grid;gap:8px}.overlay-inspector label{display:grid;gap:5px;color:var(--color-text-muted);font-size:12px}.overlay-inspector input[type=text],.overlay-inspector input[type=number]{width:100%;background:var(--color-brand-black);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:6px;padding:8px}.overlay-inspector input[type=color]{width:42px;height:32px;padding:2px;border:1px solid var(--color-border-strong);border-radius:6px;background:var(--color-brand-black)}.overlay-inspector input[type=range]{width:100%;accent-color:var(--color-brand-green)}.overlay-inspector-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.overlay-inspector-row>*{flex:1 1 96px}.overlay-inspector-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.overlay-inspector-check input{width:auto}.overlay-inspector-section{display:grid;gap:8px;padding:8px;border:1px solid rgba(231,231,232,.1);border-radius:8px;background:rgba(231,231,232,.035)}.overlay-inspector-section summary{cursor:pointer;color:var(--color-text-soft);font-size:12px;font-weight:800;list-style:none}.overlay-inspector-section summary::-webkit-details-marker{display:none}.overlay-inspector-section[open] summary{padding-bottom:6px;border-bottom:1px solid rgba(231,231,232,.08)}.overlay-image-source{display:grid;grid-template-columns:44px 1fr;gap:8px;align-items:center}.overlay-image-source img,.overlay-image-source span{display:block;width:44px;height:44px;border:1px solid rgba(231,231,232,.14);border-radius:6px;background:#050505;object-fit:contain}.overlay-inspector-actions{display:flex;gap:8px;flex-wrap:wrap}.overlay-inspector-actions button{flex:1 1 120px}.overlay-danger{color:var(--color-danger)!important;border-color:#5b2626!important;background:#251111!important}.image-upload{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;background:#0f0f0f}.overlay-layer-list{display:grid;gap:6px}.overlay-layer-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid #242424;border-radius:6px;background:#101010}.overlay-layer-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overlay-layer-row button{padding:6px 9px;background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}.overlay-empty{padding:10px;border:1px dashed var(--color-border-strong);border-radius:8px;color:var(--color-text-muted)}
 p{color:#bebebe}.peak{color:#fff;font-size:16px;line-height:1.35}dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;color:#aaa}dt{color:#707070}dd{margin:0}.transcript-copy{max-height:220px;overflow:auto;margin-top:10px;padding:10px;border:1px solid rgba(231,231,232,.08);border-radius:8px;background:rgba(0,0,0,.18)}.transcript-copy p{margin:0;line-height:1.45}
 body[data-tab=import] main,body[data-tab=import] .final-stage{display:none}body[data-tab=import] .import-stage{display:block}body[data-tab=final] main,body[data-tab=final] .import-stage{display:none}body[data-tab=final] .final-stage{display:block}.final-stage{display:none;margin:18px auto;max-width:1240px;padding:18px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-raised)}.stage-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.render-status{margin-top:12px;color:var(--color-text-muted)}.render-results{display:grid;gap:12px;margin-top:14px}.result-item{border:1px solid #303030;border-radius:8px;background:#090909;overflow:hidden}.result-item[open]{border-color:var(--color-metal-gray)}.result-item summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;border:0;color:var(--color-text)}.result-item summary strong{font-size:14px}.result-item summary span{color:var(--color-text-muted);font-size:12px}.result-body{display:grid;grid-template-columns:minmax(260px,420px) minmax(240px,1fr);gap:14px;padding:0 14px 14px}.result-body video{width:100%;max-height:70vh;background:#000;border-radius:6px;object-fit:contain}.result-meta{display:grid;align-content:start;gap:10px}.result-meta dl{margin:0}.result-path{display:block;max-width:100%;padding:8px 10px;border:1px solid rgba(17,162,207,.28);border-radius:6px;background:rgba(17,162,207,.08);color:var(--color-text);font-size:12px;line-height:1.35;overflow-wrap:anywhere}.result-actions{display:flex;gap:8px;flex-wrap:wrap}.result-actions a,.result-actions button{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 12px;border-radius:6px;background:var(--color-brand-white);color:var(--color-brand-black);text-decoration:none}.result-actions a.secondary,.result-actions button.secondary{background:#242424;color:var(--color-text-soft);border:1px solid var(--color-border-strong)}
 .empty-project-stage{display:none;max-width:720px;margin:18px auto;padding:0 18px}.empty-project-panel{display:grid;gap:10px;padding:18px;border:1px solid var(--glass-border);border-radius:var(--radius-panel);background:var(--glass-bg-strong);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-edge);backdrop-filter:blur(24px) saturate(1.45);text-align:center}.empty-project-panel p{margin:0;color:var(--color-text-muted)}.empty-project-panel button{justify-self:center}body[data-project-empty=true][data-tab=edit] main{display:none}body[data-project-empty=true][data-tab=edit] .empty-project-stage{display:block}
@@ -11307,12 +12493,15 @@ body{position:relative;background:linear-gradient(180deg,#050505 0%,#070907 58%,
 .settings-backdrop{position:fixed!important;inset:0!important;z-index:5000!important;display:grid!important;place-items:center!important;padding:32px;background:radial-gradient(circle at 50% 42%,rgba(17,162,207,.18),transparent 30%),radial-gradient(circle at 64% 58%,rgba(175,207,42,.12),transparent 26%),rgba(0,0,0,.68)!important;backdrop-filter:blur(18px) saturate(1.18)!important;opacity:0;pointer-events:none;transition:opacity 180ms ease}.settings-backdrop[hidden]{display:none!important}.settings-backdrop.is-open{opacity:1;pointer-events:auto}.settings-backdrop.is-closing{opacity:0;pointer-events:none}.settings-panel{position:relative!important;isolation:isolate;width:min(640px,calc(100vw - 48px))!important;max-height:min(760px,calc(100vh - 56px));overflow:hidden auto;padding:20px!important;border:1px solid rgba(17,162,207,.34)!important;border-radius:22px!important;background:linear-gradient(145deg,rgba(231,231,232,.11),rgba(5,5,5,.8) 46%,rgba(11,15,10,.88)),rgba(5,5,5,.92)!important;box-shadow:0 0 0 1px rgba(255,255,255,.055),0 0 42px rgba(17,162,207,.2),0 0 58px rgba(175,207,42,.12),0 32px 86px rgba(0,0,0,.72)!important;transform:translateY(18px) scale(.965);opacity:0;outline:none;transition:transform 210ms cubic-bezier(.2,.9,.2,1),opacity 180ms ease}.settings-backdrop.is-open .settings-panel{transform:translateY(0) scale(1);opacity:1}.settings-backdrop.is-closing .settings-panel{transform:translateY(12px) scale(.975);opacity:0}.settings-aura{position:absolute;inset:-46px;z-index:-1;background:conic-gradient(from 130deg,transparent,rgba(17,162,207,.22),transparent 32%,rgba(175,207,42,.18),transparent 62%);opacity:.54;filter:blur(12px);animation:settings-aura-drift 8s linear infinite}.settings-head{position:relative;display:flex!important;align-items:flex-start!important;justify-content:space-between!important;gap:18px;padding:0 0 16px;border-bottom:1px solid rgba(231,231,232,.1)}.settings-title-row{display:flex;align-items:center;gap:14px;min-width:0}.settings-orb{display:grid;place-items:center;width:52px;height:52px;min-width:52px;border:1px solid rgba(175,207,42,.44);border-radius:16px;background:radial-gradient(circle at 50% 32%,rgba(175,207,42,.22),transparent 62%),rgba(8,11,8,.78);color:var(--color-brand-green);box-shadow:inset 0 1px rgba(255,255,255,.16),0 0 26px rgba(175,207,42,.18)}.settings-orb svg{width:27px;height:27px;fill:none;stroke:currentColor;stroke-width:1.9;animation:cuted-openai-gear-spin 7.2s linear infinite}.settings-head strong{display:block;color:var(--color-text);font-size:22px;line-height:1.05}.settings-head p{margin:5px 0 0!important;color:rgba(231,231,232,.62)!important;font-size:13px;line-height:1.25}.settings-close-button{display:grid!important;place-items:center;width:40px!important;height:40px!important;min-width:40px!important;padding:0!important;border:1px solid rgba(231,231,232,.16)!important;border-radius:14px!important;background:rgba(231,231,232,.06)!important;color:rgba(231,231,232,.75)!important;font-weight:900!important}.settings-close-button:hover,.settings-close-button:focus-visible{border-color:rgba(255,111,111,.42)!important;color:#ff9d9d!important;box-shadow:0 0 22px rgba(255,111,111,.18)}.settings-form{display:grid!important;gap:14px!important;margin-top:16px!important}.settings-status{padding:12px 14px!important;border:1px solid rgba(17,162,207,.26)!important;border-radius:14px!important;background:linear-gradient(90deg,rgba(17,162,207,.12),rgba(175,207,42,.065)),rgba(0,0,0,.3)!important;color:rgba(231,231,232,.82)!important;font-size:13px}.settings-field{display:grid!important;gap:7px!important;color:rgba(231,231,232,.68)!important;font-size:12px!important;font-weight:800;letter-spacing:.01em}.settings-form input,.settings-form select{min-height:44px!important;border:1px solid rgba(231,231,232,.14)!important;border-radius:14px!important;background:rgba(0,0,0,.52)!important;color:var(--color-text)!important;padding:10px 12px!important;box-shadow:inset 0 1px rgba(255,255,255,.05)!important}.settings-form input:focus,.settings-form select:focus{border-color:rgba(17,162,207,.62)!important;outline:none;box-shadow:0 0 0 3px rgba(17,162,207,.16),inset 0 1px rgba(255,255,255,.07)!important}.settings-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important}.settings-usage{display:grid!important;gap:5px!important;padding:12px 14px!important;border:1px solid rgba(231,231,232,.12)!important;border-radius:14px!important;background:rgba(231,231,232,.045)!important;color:rgba(231,231,232,.6)!important;font-size:12px!important}.settings-usage strong{color:rgba(231,231,232,.86)}.settings-actions{display:flex!important;justify-content:flex-end!important;gap:10px!important;flex-wrap:wrap!important;padding-top:2px}.settings-actions button{min-height:42px!important;border-radius:999px!important;padding:0 18px!important}.settings-actions button[type=submit]{border-color:rgba(175,207,42,.56)!important;background:linear-gradient(90deg,rgba(175,207,42,.95),rgba(17,162,207,.88))!important;color:#050505!important;font-weight:900!important}.settings-actions [data-settings-test]{border-color:rgba(17,162,207,.36)!important;background:rgba(17,162,207,.08)!important;color:var(--color-text)!important}.settings-form small{color:rgba(231,231,232,.5)!important;font-size:11px!important}@keyframes settings-aura-drift{to{transform:rotate(360deg)}}@media(max-width:760px){.settings-backdrop{padding:18px}.settings-panel{width:calc(100vw - 28px)!important;padding:16px!important}.settings-grid{grid-template-columns:1fr!important}.settings-head strong{font-size:20px}}
 .settings-panel{scrollbar-width:none}.settings-panel::-webkit-scrollbar{width:0;height:0}
 .render-queue-backdrop{position:fixed!important;inset:0!important;z-index:4900!important;display:grid!important;place-items:center!important;padding:32px;background:radial-gradient(circle at 46% 38%,rgba(17,162,207,.18),transparent 30%),radial-gradient(circle at 63% 62%,rgba(175,207,42,.12),transparent 28%),rgba(0,0,0,.7)!important;backdrop-filter:blur(18px) saturate(1.18)!important;opacity:0;pointer-events:none;transition:opacity 180ms ease}.render-queue-backdrop[hidden]{display:none!important}.render-queue-backdrop.is-open{opacity:1;pointer-events:auto}.render-queue-backdrop.is-closing{opacity:0;pointer-events:none}.render-queue-panel{position:relative;isolation:isolate;width:min(760px,calc(100vw - 56px));max-height:min(780px,calc(100vh - 56px));overflow:hidden;padding:20px;border:1px solid rgba(17,162,207,.34);border-radius:22px;background:linear-gradient(145deg,rgba(231,231,232,.11),rgba(5,5,5,.82) 46%,rgba(11,15,10,.9)),rgba(5,5,5,.94);box-shadow:0 0 0 1px rgba(255,255,255,.055),0 0 42px rgba(17,162,207,.2),0 0 58px rgba(175,207,42,.12),0 32px 86px rgba(0,0,0,.72);transform:translateY(18px) scale(.965);opacity:0;outline:none;transition:transform 210ms cubic-bezier(.2,.9,.2,1),opacity 180ms ease}.render-queue-backdrop.is-open .render-queue-panel{transform:translateY(0) scale(1);opacity:1}.render-queue-aura{position:absolute;inset:-46px;z-index:-1;background:conic-gradient(from 120deg,transparent,rgba(17,162,207,.2),transparent 34%,rgba(175,207,42,.18),transparent 64%);opacity:.48;filter:blur(12px);animation:settings-aura-drift 8.5s linear infinite}.render-queue-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;padding-bottom:16px;border-bottom:1px solid rgba(231,231,232,.1)}.render-queue-head strong{display:block;font-size:22px;line-height:1.05}.render-queue-head p{margin:5px 0 0;color:rgba(231,231,232,.62);font-size:13px}.render-queue-close{display:grid;place-items:center;width:40px;height:40px;min-width:40px;padding:0;border:1px solid rgba(231,231,232,.16);border-radius:14px;background:rgba(231,231,232,.06);color:rgba(231,231,232,.75);font-weight:900}.render-resource-switch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:16px 0}.render-resource-switch button{min-height:42px;border:1px solid rgba(231,231,232,.16);border-radius:14px;background:rgba(231,231,232,.055);color:rgba(231,231,232,.74);font-weight:900}.render-resource-switch button.active{border-color:rgba(175,207,42,.58);background:linear-gradient(90deg,rgba(175,207,42,.2),rgba(17,162,207,.08));color:var(--color-text);box-shadow:0 0 22px rgba(175,207,42,.14)}.render-queue-status{min-height:42px;padding:12px 14px;border:1px solid rgba(17,162,207,.26);border-radius:14px;background:linear-gradient(90deg,rgba(17,162,207,.12),rgba(175,207,42,.065)),rgba(0,0,0,.3);color:rgba(231,231,232,.82);font-size:13px}.render-queue-list{display:grid;gap:10px;max-height:min(486px,calc(100vh - 288px));margin-top:12px;overflow:auto;padding-right:4px;scrollbar-width:thin;scrollbar-color:rgba(175,207,42,.55) rgba(255,255,255,.055)}.render-queue-list::-webkit-scrollbar{width:8px}.render-queue-list::-webkit-scrollbar-thumb{border-radius:999px;background:linear-gradient(180deg,rgba(17,162,207,.72),rgba(175,207,42,.72))}.render-job-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:13px 14px;border:1px solid rgba(231,231,232,.12);border-radius:16px;background:linear-gradient(180deg,rgba(231,231,232,.07),rgba(231,231,232,.025)),rgba(0,0,0,.34)}.render-job-card[data-status=ready]{border-color:rgba(175,207,42,.38)}.render-job-card[data-status=failed],.render-job-card[data-status=cancelled]{border-color:rgba(255,111,111,.36)}.render-job-main{display:grid;gap:7px;min-width:0}.render-job-title{display:flex;gap:8px;align-items:center;min-width:0}.render-job-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.render-job-pill{display:inline-flex;align-items:center;min-height:22px;padding:3px 8px;border-radius:999px;background:rgba(17,162,207,.12);color:rgba(36,220,255,.9);font-size:11px;font-weight:900;text-transform:uppercase}.render-job-card[data-status=cancelled] .render-job-pill,.render-job-card[data-status=failed] .render-job-pill{background:rgba(255,111,111,.12);color:#ff9d9d}.render-job-meta{color:rgba(231,231,232,.58);font-size:12px}.render-job-progress{position:relative;height:5px;overflow:hidden;border-radius:999px;background:rgba(231,231,232,.1)}.render-job-progress span{position:absolute;inset:0 auto 0 0;width:var(--progress);border-radius:inherit;background:linear-gradient(90deg,var(--color-brand-blue),var(--color-brand-green));box-shadow:0 0 14px rgba(17,162,207,.34)}.render-job-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.render-job-actions button{min-height:34px;padding:7px 11px;border:1px solid rgba(231,231,232,.16);border-radius:999px;background:rgba(231,231,232,.07);color:rgba(231,231,232,.82);font-weight:800}.render-job-actions button.primary{border-color:rgba(175,207,42,.52);background:rgba(175,207,42,.14);color:var(--color-brand-green)}.render-job-actions [data-render-cancel],.render-job-actions [data-render-remove]{border-color:rgba(255,111,111,.34);background:rgba(255,111,111,.08);color:#ffb3b3}.render-empty{padding:18px;border:1px dashed rgba(231,231,232,.16);border-radius:16px;color:rgba(231,231,232,.58);text-align:center}
+.render-cover-frame-toggle{display:flex;gap:10px;align-items:center;margin:-4px 0 14px;padding:10px 12px;border:1px solid rgba(231,231,232,.13);border-radius:14px;background:rgba(231,231,232,.045);color:rgba(231,231,232,.82);cursor:pointer}.render-cover-frame-toggle input{width:18px;height:18px;accent-color:var(--color-brand-green)}.render-cover-frame-toggle span{display:grid;gap:2px}.render-cover-frame-toggle strong{font-size:13px}.render-cover-frame-toggle small{color:rgba(231,231,232,.54);font-size:11px;line-height:1.25}
 .workspace-exit-backdrop{position:fixed!important;inset:0!important;z-index:4950!important;display:grid!important;place-items:center!important;padding:32px;background:radial-gradient(circle at 45% 38%,rgba(17,162,207,.18),transparent 30%),radial-gradient(circle at 62% 62%,rgba(175,207,42,.12),transparent 28%),rgba(0,0,0,.72)!important;backdrop-filter:blur(18px) saturate(1.18)!important;opacity:0;pointer-events:none;transition:opacity 180ms ease}.workspace-exit-backdrop[hidden]{display:none!important}.workspace-exit-backdrop.is-open{opacity:1;pointer-events:auto}.workspace-exit-backdrop.is-closing{opacity:0;pointer-events:none}.workspace-exit-panel{position:relative;isolation:isolate;width:min(620px,calc(100vw - 48px));overflow:hidden;padding:20px;border:1px solid rgba(17,162,207,.34);border-radius:22px;background:linear-gradient(145deg,rgba(231,231,232,.11),rgba(5,5,5,.83) 46%,rgba(11,15,10,.9)),rgba(5,5,5,.94);box-shadow:0 0 0 1px rgba(255,255,255,.055),0 0 42px rgba(17,162,207,.2),0 0 58px rgba(175,207,42,.12),0 32px 86px rgba(0,0,0,.72);transform:translateY(18px) scale(.965);opacity:0;outline:none;transition:transform 210ms cubic-bezier(.2,.9,.2,1),opacity 180ms ease}.workspace-exit-backdrop.is-open .workspace-exit-panel{transform:translateY(0) scale(1);opacity:1}.workspace-exit-aura{position:absolute;inset:-46px;z-index:-1;background:conic-gradient(from 120deg,transparent,rgba(17,162,207,.2),transparent 34%,rgba(175,207,42,.18),transparent 64%);opacity:.48;filter:blur(12px);animation:settings-aura-drift 8.5s linear infinite}.workspace-exit-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;padding-bottom:16px;border-bottom:1px solid rgba(231,231,232,.1)}.workspace-exit-head strong{display:block;font-size:22px;line-height:1.05}.workspace-exit-head p,.workspace-exit-body p{margin:5px 0 0;color:rgba(231,231,232,.62);font-size:13px;line-height:1.35}.workspace-exit-body{display:grid;gap:8px;padding:16px 0}.workspace-exit-close{display:grid;place-items:center;width:40px;height:40px;min-width:40px;padding:0;border:1px solid rgba(231,231,232,.16);border-radius:14px;background:rgba(231,231,232,.06);color:rgba(231,231,232,.75);font-weight:900}.workspace-exit-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}.workspace-exit-actions button{min-height:42px;border-radius:999px;padding:0 18px;border:1px solid rgba(231,231,232,.16);background:rgba(231,231,232,.07);color:rgba(231,231,232,.82);font-weight:900}.workspace-exit-actions button.primary{border-color:rgba(175,207,42,.56);background:var(--color-brand-white);color:var(--color-brand-black)}
 .header-actions{position:absolute;right:26px;top:50%;display:flex;justify-content:flex-end;align-items:center;gap:10px;width:auto;margin:0;transform:translateY(-50%)}header{grid-template-columns:1fr!important;justify-items:center;padding:18px 26px 2px!important}.header-actions .header-icon-button,#reset-ui.header-icon-button,#finalize-videos.header-icon-button,#open-settings.header-icon-button{width:56px!important;height:56px!important;min-width:56px!important;border-color:rgba(17,162,207,.42)!important;background:linear-gradient(145deg,rgba(17,162,207,.16),rgba(175,207,42,.08) 48%,rgba(5,5,5,.84)),rgba(5,5,5,.88)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.12),0 0 18px rgba(17,162,207,.12),0 14px 34px rgba(0,0,0,.36)!important;transition:transform 170ms ease,border-color 170ms ease,box-shadow 170ms ease,color 170ms ease!important}.header-actions .header-icon-button:before,#finalize-videos.header-render-button:before,#open-settings.header-settings-button.is-openai-ready:before{background:radial-gradient(circle at 45% 22%,rgba(17,162,207,.24),transparent 58%),radial-gradient(circle at 70% 72%,rgba(175,207,42,.18),transparent 62%)!important;opacity:.66!important;transition:opacity 170ms ease,transform 170ms ease!important}.header-actions .header-icon-button:hover,.header-actions .header-icon-button:focus-visible{border-color:rgba(175,207,42,.7)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.16),0 0 24px rgba(17,162,207,.24),0 0 26px rgba(175,207,42,.16),0 18px 40px rgba(0,0,0,.42)!important;transform:translateY(-2px) scale(1.035)}.header-actions .header-icon-button:hover:before,.header-actions .header-icon-button:focus-visible:before{opacity:1!important;transform:scale(1.12) rotate(2deg)!important}.header-actions .header-render-button,#finalize-videos.header-render-button{width:56px!important;height:56px!important;min-width:56px!important;animation:none!important}.header-actions .header-render-button svg,#finalize-videos.header-render-button svg{width:30px;height:30px;stroke-width:1.85;animation:none!important;filter:none!important}#open-settings.header-settings-button.is-openai-ready{border-color:rgba(17,162,207,.42)!important;background:linear-gradient(145deg,rgba(17,162,207,.16),rgba(175,207,42,.08) 48%,rgba(5,5,5,.84)),rgba(5,5,5,.88)!important;color:var(--color-text)!important;box-shadow:inset 0 1px rgba(255,255,255,.12),0 0 18px rgba(17,162,207,.12),0 14px 34px rgba(0,0,0,.36)!important}#open-settings.header-settings-button.is-openai-ready svg{animation:cuted-openai-gear-spin 5.8s linear infinite;filter:drop-shadow(0 0 8px rgba(175,207,42,.24))}.header-actions .header-render-button.is-rendering,#finalize-videos.header-render-button.is-rendering{border-color:rgba(175,207,42,.78)!important;background:linear-gradient(180deg,rgba(175,207,42,.2),rgba(17,162,207,.065)),rgba(12,14,9,.72)!important;color:var(--color-brand-green)!important;box-shadow:inset 0 1px rgba(255,255,255,.24),0 0 28px rgba(175,207,42,.34),0 0 42px rgba(17,162,207,.14),0 16px 38px rgba(0,0,0,.36)!important;animation:cuted-render-button-pulse 1.65s ease-in-out infinite!important}.header-actions .header-render-button.is-rendering:before,#finalize-videos.header-render-button.is-rendering:before{background:radial-gradient(circle at 58% 25%,rgba(175,207,42,.28),transparent 60%),radial-gradient(circle at 32% 70%,rgba(17,162,207,.12),transparent 56%)!important;opacity:1!important;transform:scale(1.12);animation:cuted-render-button-scan 1.4s ease-in-out infinite}.header-actions .header-render-button.is-rendering svg,#finalize-videos.header-render-button.is-rendering svg{animation:cuted-render-icon-drift 1.9s ease-in-out infinite!important;filter:drop-shadow(0 0 9px rgba(175,207,42,.42))!important}@media(max-width:1080px){.header-actions{position:static;justify-content:center;width:100%;margin:0;transform:none}.brand-logo{width:min(520px,88vw)}header{grid-template-columns:1fr!important;gap:8px;padding:12px!important}}@media(max-width:860px){.header-actions{justify-content:center;width:100%;margin:0;transform:none}header{grid-template-columns:1fr!important;padding:12px!important}}
 .clip-control-surface .cuted-render-zone.is-ready .cuted-ready-region{flex:0 0 46px;width:46px;min-width:46px}.clip-control-surface .cuted-render-zone.is-ready .cuted-ready-pill{width:46px}
 .card[open] .editor-shell{grid-template-columns:minmax(210px,260px) minmax(340px,1fr) minmax(260px,330px);gap:14px;align-items:start;padding:0 18px 18px;margin-top:-10px}.card[open] .editor-preview{grid-column:2}.publish-panel{display:grid;gap:10px;align-content:start;min-width:0;max-height:72vh;overflow:auto;padding:12px;border:1px solid rgba(231,231,232,.12);border-radius:12px;background:linear-gradient(180deg,rgba(231,231,232,.075),rgba(231,231,232,.025)),rgba(5,5,5,.52);box-shadow:inset 0 1px rgba(255,255,255,.08),0 12px 34px rgba(0,0,0,.24);backdrop-filter:blur(16px) saturate(1.1)}.publish-panel strong{color:rgba(231,231,232,.72);font-size:11px;letter-spacing:.08em;text-transform:uppercase}.publish-panel h2{margin:0;color:var(--color-text);font-size:17px;line-height:1.18;letter-spacing:0}.publish-panel p{margin:0;color:rgba(231,231,232,.72);font-size:12px;line-height:1.38}.publish-panel small{color:rgba(231,231,232,.5);font-size:11px;line-height:1.34}.publish-cover-frame{position:relative;overflow:hidden;aspect-ratio:9/16;border:1px solid rgba(231,231,232,.1);border-radius:8px;background:#050505}.publish-cover-frame img{display:block;width:100%;height:100%;object-fit:cover}.publish-cover-frame span{display:block;width:100%;height:100%;background:linear-gradient(135deg,rgba(17,162,207,.18),rgba(175,207,42,.08))}.publish-cover-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.publish-cover-options button{min-height:58px;padding:2px;border:1px solid rgba(231,231,232,.14);border-radius:8px;background:rgba(0,0,0,.38);overflow:hidden}.publish-cover-options button.active{border-color:rgba(175,207,42,.82);box-shadow:0 0 0 2px rgba(175,207,42,.16)}.publish-cover-options img{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:5px}.publish-hook{padding:9px 10px;border-left:3px solid rgba(175,207,42,.78);border-radius:8px;background:rgba(175,207,42,.075);color:var(--color-text)!important;font-weight:800}.publish-tags{display:flex;gap:6px;flex-wrap:wrap}.publish-tags span{display:inline-flex;align-items:center;min-height:24px;max-width:100%;padding:4px 7px;border:1px solid rgba(17,162,207,.24);border-radius:999px;background:rgba(17,162,207,.09);color:rgba(231,231,232,.84);font-size:11px;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr);margin-top:0}.card[open] .editor-preview{grid-column:1}.publish-panel{max-height:none}.publish-cover-panel{grid-row:2}.publish-copy-panel{grid-row:3}.publish-cover-frame{max-width:180px}}@media(max-width:860px){.card[open] .editor-shell{padding:0 12px 16px}.publish-panel{border-radius:10px}.publish-cover-frame{max-width:150px}}
 .card[open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(340px,calc(72vh * 9 / 16)) minmax(260px,330px);gap:8px;align-items:center;justify-content:center}.card[data-preview-format=facebook][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(390px,calc(72vh * 4 / 5)) minmax(260px,330px)}.card[data-preview-format=youtube][open] .editor-shell{grid-template-columns:minmax(205px,252px) minmax(520px,720px) minmax(260px,330px)}.publish-panel{gap:9px;align-content:center;align-self:center;padding:11px}.publish-cover-panel{justify-self:end}.publish-copy-panel{justify-self:start}.publish-panel-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.publish-panel-head button{min-height:26px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-field{display:grid;gap:5px;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-field input,.publish-field textarea{width:100%;min-height:34px;padding:7px 9px;border:1px solid rgba(231,231,232,.14);border-radius:8px;background:rgba(0,0,0,.42);color:var(--color-text);font:inherit;font-size:12px;line-height:1.28;letter-spacing:0}.publish-field textarea{resize:vertical;min-height:72px}.publish-field input:focus,.publish-field textarea:focus{border-color:rgba(17,162,207,.58);outline:0;box-shadow:0 0 0 2px rgba(17,162,207,.16)}@media(max-width:1180px){.card[open] .editor-shell{grid-template-columns:minmax(0,1fr)}.publish-panel{align-content:start}.publish-cover-panel{justify-self:center}.publish-copy-panel{justify-self:stretch}}
-.publish-cover-frame{touch-action:none}.publish-cover-frame[data-publish-cover-can-drag="1"]{cursor:grab}.publish-cover-frame[data-publish-cover-dragging="1"]{cursor:grabbing}.publish-cover-frame img{user-select:none;-webkit-user-drag:none;transform:scale(var(--publish-cover-zoom,1));transform-origin:var(--publish-cover-x,50%) var(--publish-cover-y,50%);transition:transform 120ms ease;will-change:transform}.publish-cover-frame[data-publish-cover-dragging="1"] img{transition:none}.publish-cover-adjust{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.publish-cover-adjust label{display:grid;grid-template-columns:auto 1fr auto;gap:7px;align-items:center;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-cover-adjust output{min-width:38px;color:rgba(231,231,232,.84);font-size:11px;text-align:right}.publish-cover-adjust input{width:100%;accent-color:var(--color-brand-green)}.publish-cover-adjust button{min-height:28px;padding:4px 8px;border-radius:999px;font-size:11px}
+.publish-cover-stage{position:relative}.publish-cover-frame{touch-action:none}.publish-cover-frame[data-publish-cover-can-drag="1"]{cursor:grab}.publish-cover-frame[data-publish-cover-dragging="1"]{cursor:grabbing}.publish-cover-frame>img{user-select:none;-webkit-user-drag:none;transform:scale(var(--publish-cover-zoom,1));transform-origin:var(--publish-cover-x,50%) var(--publish-cover-y,50%);transition:transform 120ms ease;will-change:transform}.publish-cover-frame[data-publish-cover-dragging="1"]>img{transition:none}.publish-cover-layer-list{position:absolute;inset:0;z-index:2;pointer-events:none}.publish-cover-layer{position:absolute;display:grid;align-items:center;min-height:24px;padding:5px 7px;border-radius:6px;color:var(--cover-layer-color,#fff);font-weight:800;line-height:1.05;overflow:hidden;text-overflow:ellipsis;cursor:move;pointer-events:auto;touch-action:none}.publish-cover-layer.is-selected{outline:2px solid var(--color-focus);outline-offset:2px}.publish-cover-layer span{overflow:hidden;text-overflow:ellipsis}.publish-cover-layer[data-cover-layer-kind=text]{background:rgba(var(--cover-layer-bg,0,0,0),var(--cover-layer-bg-opacity,.7))}.publish-cover-layer[data-cover-layer-kind=speech]{border-radius:11px;background:rgba(var(--cover-layer-bg,255,255,255),var(--cover-layer-bg-opacity,.94));box-shadow:0 8px 18px rgba(0,0,0,.22);color:var(--cover-layer-color,#050505);font-weight:900;overflow:visible}.publish-cover-layer[data-cover-layer-kind=speech]:after{position:absolute;left:18%;bottom:-8px;width:15px;height:12px;border-radius:0 0 14px 0;background:inherit;content:"";transform:skewX(-18deg)}.publish-cover-layer[data-cover-layer-kind=image]{padding:0;background:transparent}.publish-cover-layer[data-cover-layer-kind=image] img{display:block;width:100%;height:auto;object-fit:contain;transform:none;transform-origin:center;opacity:var(--cover-layer-opacity,1);pointer-events:none}.publish-cover-resize{position:absolute;right:2px;bottom:2px;width:18px;height:18px;padding:0;border:1px solid rgba(255,255,255,.56);border-radius:5px;background:rgba(0,0,0,.34);cursor:nwse-resize}.publish-cover-adjust{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.publish-cover-adjust label{display:grid;grid-template-columns:auto 1fr auto;gap:7px;align-items:center;color:rgba(231,231,232,.62);font-size:11px;font-weight:800;letter-spacing:0}.publish-cover-adjust output{min-width:38px;color:rgba(231,231,232,.84);font-size:11px;text-align:right}.publish-cover-adjust input{width:100%;accent-color:var(--color-brand-green)}.publish-cover-adjust button{min-height:28px;padding:4px 8px;border-radius:999px;font-size:11px}.publish-cover-menu{z-index:7;width:min(320px,96%);max-height:min(380px,calc(100vh - 24px))}
+.preview-caption-layer{bottom:var(--preview-caption-bottom,16.25%)}.card[data-preview-format=facebook] .preview-caption-layer{bottom:var(--preview-caption-bottom,8.8%)}.card[data-preview-format=youtube] .preview-caption-layer{bottom:var(--preview-caption-bottom,11%)}.preview-caption-layer[data-mode=animated] .preview-caption-window{display:inline-grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:.54em;width:min(94%,18em);padding:0;border-radius:0;background:transparent;color:var(--preview-caption-color,#fff);font-size:calc(var(--preview-caption-size,28px) * .76);line-height:1;text-shadow:0 2px 8px rgba(0,0,0,.75);-webkit-text-stroke:0;white-space:nowrap;box-decoration-break:slice;-webkit-box-decoration-break:slice;animation:cuted-caption-window-step 190ms cubic-bezier(.2,.9,.2,1)}.preview-caption-layer[data-mode=animated] .preview-caption-word{display:inline-grid;place-items:center;min-width:.56em;max-width:100%;padding:.1em .32em;border-radius:.22em;background:var(--preview-caption-bg,transparent);color:var(--preview-caption-color,#fff);font-size:1em;overflow:hidden;text-overflow:ellipsis;box-decoration-break:slice;-webkit-box-decoration-break:slice}.preview-caption-layer[data-mode=animated] .preview-caption-side{opacity:.72;font-size:.76em;transform:translateY(.1em)}.preview-caption-layer[data-mode=animated] .preview-caption-side:empty{min-width:0;padding:0;background:transparent}.preview-caption-layer[data-mode=animated] .preview-caption-prev{justify-self:end}.preview-caption-layer[data-mode=animated] .preview-caption-next{justify-self:start}.preview-caption-layer[data-mode=animated] .preview-caption-active{justify-self:center;max-width:7.4em;padding:.15em .44em;border-radius:.25em;background:var(--preview-caption-highlight-bg,var(--preview-caption-bg,rgba(0,0,0,.82)));color:var(--preview-caption-color,#fff);font-size:1em;box-shadow:0 8px 22px rgba(0,0,0,.34),0 0 0 1px rgba(255,255,255,.12);animation:cuted-caption-pop 220ms cubic-bezier(.2,.9,.2,1)}@keyframes cuted-caption-pop{0%{opacity:.72;transform:translateY(7px) scale(.88)}64%{opacity:1;transform:translateY(-5px) scale(1.12)}100%{opacity:1;transform:translateY(0) scale(1)}}@keyframes cuted-caption-window-step{0%{transform:translateX(.18em);filter:blur(.8px)}100%{transform:translateX(0);filter:blur(0)}}
+.overlay-menu[data-overlay-menu-mode=add]{display:block;width:max-content;min-width:0;max-width:calc(100vw - 28px);max-height:none;overflow:visible;padding:6px;border-radius:999px;background:linear-gradient(135deg,rgba(17,162,207,.16),rgba(175,207,42,.08)),rgba(5,5,5,.9);box-shadow:0 12px 30px rgba(0,0,0,.42),0 0 18px rgba(17,162,207,.18);backdrop-filter:blur(18px) saturate(1.16)}.overlay-menu[data-overlay-menu-mode=add] .overlay-icon-actions{display:flex;gap:6px;align-items:center}.overlay-icon-action{display:grid!important;place-items:center;width:38px;height:38px;min-width:38px;min-height:38px;padding:0!important;border-radius:12px!important;background:rgba(231,231,232,.075)!important;color:rgba(231,231,232,.9)!important;font-size:11px!important;font-weight:950!important;letter-spacing:0!important;line-height:1!important}.overlay-icon-action:hover,.overlay-icon-action:focus-visible{border-color:rgba(175,207,42,.68)!important;color:var(--color-brand-green)!important;box-shadow:0 0 16px rgba(175,207,42,.2)}.overlay-icon-close{width:30px!important;height:30px!important;min-width:30px!important;min-height:30px!important;border-radius:999px!important;color:rgba(231,231,232,.68)!important;font-size:14px!important}.overlay-icon-close:hover,.overlay-icon-close:focus-visible{border-color:rgba(255,111,111,.5)!important;color:#ffb2b2!important;box-shadow:0 0 16px rgba(255,111,111,.16)!important}.overlay-menu[hidden],.publish-cover-menu[hidden]{display:none!important}.publish-cover-menu[data-overlay-menu-mode=add]{width:max-content;max-height:none}.clip-control-surface .cuted-control-bar{min-height:82px}.clip-control-surface .cuted-render-zone{min-height:58px}.clip-control-surface .cuted-tool-group{flex-basis:330px;min-height:58px}.clip-control-surface .cuted-tile-button{flex-basis:54px;width:54px;height:50px;font-size:24px}.card[open] .clip-row-timeline.preview-camera-timeline--live .timeline-shell{min-height:214px}.card[open] .clip-row-timeline.preview-camera-timeline--live{min-height:216px;margin:-10px 0 0}
 """
 
 
@@ -11336,6 +12525,7 @@ const emptyGalleryStorageKey = "cutted-empty-gallery";
 const maxOverlayImageBytes = 1800000;
 const maxOverlayImageSourceBytes = 6000000;
 const maxOverlayImagePixels = 1600;
+const coverLayerVerticalLift = .30;
 const maxBumperVideoBytes = 48000000;
 const cameraAnalysisFetchTimeoutMs = 180000;
 const cameraReadinessPollMs = 3500;
@@ -11525,24 +12715,38 @@ function defaultCaptionSettings(){
 function normalizeCaptionSettings(value, fallback = null){
   const source = value && typeof value === "object" ? value : {};
   const base = fallback && typeof fallback === "object" ? fallback : defaultCaptionSettings();
+  const style = normalizeCaptionStyleObject(Object.assign({}, base.style || {}, source.style || {}));
   const enabled = Object.prototype.hasOwnProperty.call(source, "enabled")
     ? Boolean(source.enabled)
     : Object.prototype.hasOwnProperty.call(base, "enabled")
       ? Boolean(base.enabled)
       : captionEnabled();
   return {
-    enabled,
-    style: normalizeCaptionStyleObject(Object.assign({}, base.style || {}, source.style || {}))
+    enabled: style.mode === "off" ? false : enabled,
+    style: Object.assign(style, { mode: enabled ? style.mode === "off" ? "on" : style.mode : "off" })
   };
 }
 function normalizeCaptionStyleObject(value){
   const source = value && typeof value === "object" ? value : {};
+  const backgroundColor = normalizeCaptionBackground(source.backgroundColor || source.background_color);
   return {
     size: clampNumber(Number(source.size || defaultCaptionSize()), 24, 140),
     width: clampNumber(Number(source.width || 28), 12, 56),
+    bottom: clampNumber(Number(source.bottom || source.height || defaultCaptionBottom()), 6, 32),
+    mode: normalizeCaptionMode(source.mode || source.captionMode),
     textColor: normalizeCaptionColor(source.textColor || source.text_color, "#ffffff"),
-    backgroundColor: normalizeCaptionBackground(source.backgroundColor || source.background_color)
+    backgroundColor,
+    highlightBackgroundColor: normalizeCaptionHighlightBackground(
+      source.highlightBackgroundColor || source.highlight_background_color || source.activeBackgroundColor || source.active_background_color || backgroundColor
+    )
   };
+}
+function normalizeCaptionMode(value){
+  const mode = String(value || "").trim().toLowerCase();
+  if (mode === "animated" || mode === "animada") return "animated";
+  if (mode === "on" || mode === "static") return "on";
+  if (mode === "off" || mode === "false" || mode === "0") return "off";
+  return "on";
 }
 function defaultCamera(){ return cameraSequence(cameraParts.map(part => defaultCameraSegment(part.key))); }
 function defaultCameraSegment(part){ return { part, part_label: cameraPartLabel(part), key: "center", label: cameraMeta.center.label, strength: 60 }; }
@@ -12473,7 +13677,31 @@ function defaultTextOverlay(text = "Digite seu texto"){
     color: "#ffffff",
     background_enabled: true,
     background_color: "#000000",
-    background_opacity: 70
+    background_opacity: 70,
+    start_seconds: 0,
+    duration_seconds: 3
+  };
+}
+function defaultSpeechOverlay(text = "Fala rapida"){
+  return {
+    id: overlayId(),
+    kind: "speech",
+    key: "speech",
+    label: text,
+    text,
+    x: .32,
+    y: .24,
+    width: .56,
+    opacity: 96,
+    font_size: 34,
+    font_weight: "800",
+    color: "#050505",
+    background_enabled: true,
+    background_color: "#ffffff",
+    background_opacity: 94,
+    tail: "bottom-left",
+    start_seconds: 0,
+    duration_seconds: 3
   };
 }
 function normalizeOverlay(overlay){
@@ -12499,8 +13727,27 @@ function normalizeTextOverlay(layer){
     color: normalizeHexColor(layer?.color, "#ffffff"),
     background_enabled: layer?.background_enabled !== false,
     background_color: normalizeHexColor(layer?.background_color, "#000000"),
-    background_opacity: clampNumber(layer?.background_opacity ?? 70, 0, 100)
+    background_opacity: clampNumber(layer?.background_opacity ?? 70, 0, 100),
+    start_seconds: clampNumber(layer?.start_seconds ?? 0, 0, 9999),
+    duration_seconds: clampNumber(layer?.duration_seconds ?? 3, .3, 60)
   };
+}
+function normalizeSpeechOverlay(layer){
+  const base = normalizeTextOverlay(Object.assign({}, defaultSpeechOverlay(), layer, {
+    background_enabled: true,
+    background_color: layer?.background_color || "#ffffff",
+    background_opacity: layer?.background_opacity ?? 94,
+    color: layer?.color || "#050505",
+    font_weight: layer?.font_weight || "800"
+  }));
+  return Object.assign(base, {
+    kind: "speech",
+    key: "speech",
+    label: base.text,
+    tail: String(layer?.tail || "bottom-left"),
+    start_seconds: clampNumber(layer?.start_seconds ?? 0, 0, 9999),
+    duration_seconds: clampNumber(layer?.duration_seconds ?? 3, .3, 60)
+  });
 }
 function normalizeImageOverlay(layer){
   return {
@@ -12513,11 +13760,14 @@ function normalizeImageOverlay(layer){
     width: clampNumber(layer?.width ?? .28, .08, .9),
     opacity: clampNumber(layer?.opacity ?? 100, 10, 100),
     image_data_url: String(layer?.image_data_url || ""),
-    image_file: String(layer?.image_file || "")
+    image_file: String(layer?.image_file || ""),
+    start_seconds: clampNumber(layer?.start_seconds ?? 0, 0, 9999),
+    duration_seconds: clampNumber(layer?.duration_seconds ?? 3, .3, 60)
   };
 }
 function normalizeOverlayLayer(layer){
   if (layer?.kind === "image" || layer?.key === "image") return normalizeImageOverlay(layer);
+  if (layer?.kind === "speech" || layer?.key === "speech") return normalizeSpeechOverlay(layer);
   if (layer?.kind === "text" || layer?.key === "text") return normalizeTextOverlay(layer);
   return normalizeOverlay(layer);
 }
@@ -12570,11 +13820,56 @@ function overlayLabel(overlay){
 function overlayStyle(overlay){
   const current = normalizeOverlayLayer(overlay);
   const meta = overlayMeta[current.key] || overlayMeta.none;
-  const backgroundRgb = current.kind === "text" ? hexToRgb(current.background_color).join(",") : "0,0,0";
-  const color = current.kind === "text" ? current.color : "#ffffff";
-  const fontSize = current.kind === "text" ? `${current.font_size}px` : "20px";
-  const backgroundOpacity = current.kind === "text" ? current.background_opacity / 100 : .7;
+  const textLike = current.kind === "text" || current.kind === "speech";
+  const backgroundRgb = textLike ? hexToRgb(current.background_color).join(",") : "0,0,0";
+  const color = textLike ? current.color : "#ffffff";
+  const fontSize = textLike ? `${current.font_size}px` : "20px";
+  const backgroundOpacity = textLike ? current.background_opacity / 100 : .7;
   return `--overlay-x:${current.x};--overlay-y:${current.y};--overlay-width:${current.width};--overlay-opacity:${current.opacity / 100};--overlay-accent:${meta.accent};--overlay-color:${color};--overlay-font-size:${fontSize};--overlay-bg-rgb:${backgroundRgb};--overlay-bg-opacity:${backgroundOpacity}`;
+}
+function overlayTimingForLayer(layer){
+  return {
+    start: clampNumber(layer?.start_seconds ?? 0, 0, 9999),
+    duration: clampNumber(layer?.duration_seconds ?? 3, .3, 60)
+  };
+}
+function overlayTimingAttrs(layer){
+  const timing = overlayTimingForLayer(layer);
+  return `data-overlay-start="${timing.start.toFixed(3)}" data-overlay-duration="${timing.duration.toFixed(3)}"`;
+}
+function overlayTimingForCard(card){
+  const context = cameraContextForCard(card);
+  const start = clampNumber(context.position, 0, Math.max(context.duration - .3, 0));
+  const duration = clampNumber(Math.min(3, Math.max(context.duration - start, .3)), .3, 60);
+  return { start_seconds: Number(start.toFixed(3)), duration_seconds: Number(duration.toFixed(3)) };
+}
+function speechOverlayTimingForCard(card){ return overlayTimingForCard(card); }
+function overlayBoxVisibleAtPosition(box, position){
+  if (box.dataset.overlayStart === undefined) return true;
+  const start = clampNumber(box.dataset.overlayStart ?? 0, 0, 9999);
+  const duration = clampNumber(box.dataset.overlayDuration ?? 3, .3, 60);
+  return position >= start && position < start + duration;
+}
+function setOverlayBoxVisibility(box, visible){
+  box.hidden = false;
+  box.dataset.overlayVisible = visible ? "true" : "false";
+  box.setAttribute("aria-hidden", visible ? "false" : "true");
+}
+function syncTimedOverlayVisibility(item, time = null){
+  const boxes = item?.querySelectorAll?.("[data-overlay-drag]");
+  if (!boxes?.length) return;
+  const video = item.querySelector("video");
+  const raw = time ?? (video && Number.isFinite(video.currentTime) ? video.currentTime : 0);
+  const position = item.classList.contains("card") ? cameraContextForCard(item, raw).position : Number(raw || 0);
+  boxes.forEach(box => setOverlayBoxVisibility(box, overlayBoxVisibleAtPosition(box, position)));
+  syncOverlayTimelineActive(item, position);
+}
+function syncOverlayTimelineActive(item, position){
+  item?.querySelectorAll?.("[data-overlay-timeline-layer]").forEach(node => {
+    const start = clampNumber(node.dataset.overlayStart ?? 0, 0, 9999);
+    const duration = clampNumber(node.dataset.overlayDuration ?? 3, .3, 60);
+    node.classList.toggle("is-active", position >= start && position < start + duration);
+  });
 }
 function normalizeHexColor(value, fallback){
   const raw = String(value || "").trim();
@@ -12682,6 +13977,7 @@ function controlSurfaceStateForCard(card){
     aspectRatio: controlSurfaceAspectRatio(platform),
     bumpers: bumpersForRank(rank, platform),
     busy,
+    captionMode: edit.captions.style.mode,
     captionsEnabled: edit.captions.enabled,
     captionStyle: edit.captions.style,
     clipInfo: controlSurfaceClipInfo(card),
@@ -12783,15 +14079,19 @@ function setControlSurfaceCaptions(enabled, style = null){
     const rank = card.dataset.rank;
     const platform = activePlatformForRank(rank);
     const current = platformEditForRank(rank, platform).captions;
+    const nextStyle = normalizeCaptionStyleObject(Object.assign({}, style || current.style));
+    const nextEnabled = nextStyle.mode === "off" ? false : Boolean(enabled);
     setPlatformEditForRank(rank, platform, {
       captions: normalizeCaptionSettings({
-        enabled,
-        style: style || current.style
+        enabled: nextEnabled,
+        style: nextStyle
       }, current)
     });
   });
-  localStorage.setItem("cutted-caption-enabled", enabled ? "1" : "0");
-  storeCaptionStyle(style);
+  const nextMode = normalizeCaptionMode(style?.mode || (enabled ? "on" : "off"));
+  localStorage.setItem("cutted-caption-enabled", nextMode === "off" ? "0" : "1");
+  localStorage.setItem("cutted-caption-mode", nextMode);
+  storeCaptionStyle(Object.assign({}, style || {}, { mode: nextMode }));
   syncCaptionInputs();
   syncPreviewCaptionsForOpenCards();
   renderCaptionQueue();
@@ -13074,6 +14374,7 @@ function updateOverlayUi(card){
   const summary = card.querySelector("[data-overlay-current]");
   if (summary) summary.textContent = layers.length ? `${layers.length} camada(s)` : "Sem chamada";
   renderOverlayLayerBoxes(card, layers);
+  renderOverlayTimeline(card);
   bindCardOverlayControls(card);
 }
 function renderOverlayLayerBoxes(card, layers){
@@ -13081,6 +14382,7 @@ function renderOverlayLayerBoxes(card, layers){
   if (list) {
     list.innerHTML = layers.map(overlayLayerBoxHtml).join("");
   }
+  syncTimedOverlayVisibility(card);
   renderLayerStrip(card, layers);
 }
 function renderLayerStrip(card, layers){
@@ -13098,6 +14400,7 @@ function renderLayerStrip(card, layers){
 }
 function layerStripLabel(layer){
   if (layer.kind === "image") return layer.label || "Imagem";
+  if (layer.kind === "speech") return `Fala: ${layer.text || layer.label || ""}`.trim();
   if (layer.kind === "text") return layer.text || layer.label || "Texto";
   return overlayMeta[layer.key]?.label || layer.label || "Camada";
 }
@@ -13125,13 +14428,19 @@ function overlayLayerBoxHtml(layer){
   const selectedClass = selected ? " is-selected" : "";
   if (layer.kind === "image") {
     const src = layer.image_data_url || layer.image_file || "";
-    return `<div class="overlay-box overlay-image-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="image" style="${escapeAttr(overlayStyle(layer))}">
+    return `<div class="overlay-box overlay-image-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="image" ${overlayTimingAttrs(layer)} style="${escapeAttr(overlayStyle(layer))}">
       <img src="${escapeAttr(src)}" alt="${escapeAttr(layer.label)}">
       <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
     </div>`;
   }
   if (layer.kind === "text") {
-    return `<div class="overlay-box overlay-text-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="text" data-overlay-bg="${layer.background_enabled ? "on" : "off"}" style="${escapeAttr(overlayStyle(layer))}">
+    return `<div class="overlay-box overlay-text-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="text" data-overlay-bg="${layer.background_enabled ? "on" : "off"}" ${overlayTimingAttrs(layer)} style="${escapeAttr(overlayStyle(layer))}">
+      <span>${escapeHtml(layer.text)}</span>
+      <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
+    </div>`;
+  }
+  if (layer.kind === "speech") {
+    return `<div class="overlay-box overlay-speech-box${selectedClass}" data-overlay-drag data-overlay-layer="${escapeAttr(layer.id)}" data-overlay-key="speech" ${overlayTimingAttrs(layer)} style="${escapeAttr(overlayStyle(layer))}">
       <span>${escapeHtml(layer.text)}</span>
       <button class="overlay-resize" data-overlay-resize title="Redimensionar"></button>
     </div>`;
@@ -13148,57 +14457,137 @@ function activeRankForLayer(layer){
   return card?.dataset.rank || "";
 }
 function overlayPlaceButtonsHtml(){
-  return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>Adicionar camada</strong><button data-overlay-close>Fechar</button></div>
-    <div class="overlay-menu-actions">
-      <button data-overlay-place-text>Texto</button>
-      <button data-overlay-place-image>Imagem transparente</button>
-      <button data-overlay-place-camera>Camera</button>
+  return `<div class="overlay-icon-actions" aria-label="Adicionar camada">
+      <button class="overlay-icon-action" data-overlay-place-text type="button" aria-label="Texto" title="Texto"><span aria-hidden="true">T</span></button>
+      <button class="overlay-icon-action" data-overlay-place-speech type="button" aria-label="Fala" title="Fala"><span aria-hidden="true">F</span></button>
+      <button class="overlay-icon-action" data-overlay-place-image type="button" aria-label="Imagem transparente" title="Imagem"><span aria-hidden="true">IMG</span></button>
+      <button class="overlay-icon-action" data-overlay-place-camera type="button" aria-label="Camera" title="Camera"><span aria-hidden="true">CAM</span></button>
+      <button class="overlay-icon-action overlay-icon-close" data-overlay-close type="button" aria-label="Fechar menu de camadas" title="Fechar"><span aria-hidden="true">x</span></button>
+    </div>`;
+}
+function coverPlaceButtonsHtml(){
+  return `<div class="overlay-icon-actions overlay-icon-actions-cover" aria-label="Adicionar na capa">
+      <button class="overlay-icon-action" data-publish-cover-add="text" type="button" aria-label="Texto" title="Texto"><span aria-hidden="true">T</span></button>
+      <button class="overlay-icon-action" data-publish-cover-add="speech" type="button" aria-label="Fala" title="Fala"><span aria-hidden="true">F</span></button>
+      <button class="overlay-icon-action" data-publish-cover-add="image" type="button" aria-label="Imagem transparente" title="Imagem"><span aria-hidden="true">IMG</span></button>
+      <button class="overlay-icon-action overlay-icon-close" data-overlay-close type="button" aria-label="Fechar menu da capa" title="Fechar"><span aria-hidden="true">x</span></button>
     </div>`;
 }
 function overlayInspectorHtml(layer){
   if (!layer) return overlayPlaceButtonsHtml();
   if (layer.kind === "image") {
-    return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>Imagem</strong><button data-overlay-close>Fechar</button></div>
-      <div class="overlay-inspector">
-        <label>Opacidade
-          <input data-layer-opacity type="range" min="10" max="100" step="5" value="${layer.opacity}">
-        </label>
-        <label>Largura
-          <input data-layer-width type="range" min="8" max="90" step="1" value="${Math.round(layer.width * 100)}">
-        </label>
-        <button class="overlay-danger" data-layer-remove>Remover camada</button>
-      </div>`;
+    return overlayInspectorShell("Imagem", `${overlayImageSourceHtml(layer)}${overlayTimingInspectorHtml(layer)}${overlaySizeControlsHtml(layer, "Largura")}${overlayImageInspectorActionsHtml()}`);
   }
-  return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>Texto</strong><button data-overlay-close>Fechar</button></div>
+  if (layer.kind === "speech") {
+    return overlayInspectorShell("Fala", `${overlayTextFieldHtml(layer)}${overlayTimingInspectorHtml(layer)}${overlayTextSizeControlsHtml(layer)}${overlaySpeechStyleHtml(layer)}${overlayRemoveButtonHtml()}`);
+  }
+  return overlayInspectorShell("Texto", `${overlayTextFieldHtml(layer)}${overlayTimingInspectorHtml(layer)}${overlayTextSizeControlsHtml(layer)}${overlayTextStyleHtml(layer)}${overlayRemoveButtonHtml()}`);
+}
+function coverInspectorHtml(layer){
+  if (!layer) return "";
+  if (layer.kind === "image") {
+    return overlayInspectorShell("Imagem da capa", `${overlayImageSourceHtml(layer)}${overlaySizeControlsHtml(layer, "Largura")}${overlayImageInspectorActionsHtml()}`);
+  }
+  if (layer.kind === "speech") {
+    return overlayInspectorShell("Fala da capa", `${overlayTextFieldHtml(layer)}${overlayTextSizeControlsHtml(layer)}${overlaySpeechStyleHtml(layer)}${overlayRemoveButtonHtml()}`);
+  }
+  return overlayInspectorShell("Texto da capa", `${overlayTextFieldHtml(layer)}${overlayTextSizeControlsHtml(layer)}${overlayTextStyleHtml(layer)}${overlayRemoveButtonHtml()}`);
+}
+function overlayInspectorShell(title, body){
+  return `<div class="overlay-menu-head" data-overlay-menu-drag><strong>${escapeHtml(title)}</strong><button data-overlay-close>Fechar</button></div>
     <div class="overlay-inspector">
-      <label>Conteudo
-        <input data-layer-text type="text" value="${escapeAttr(layer.text || layer.label || "")}">
-      </label>
-      <div class="overlay-inspector-row">
-        <label>Tamanho
-          <input data-layer-font-size type="number" min="14" max="96" step="1" value="${Math.round(layer.font_size || 44)}">
-        </label>
-        <label>Cor
-          <input data-layer-color type="color" value="${escapeAttr(layer.color || "#ffffff")}">
-        </label>
-      </div>
-      <label>Opacidade
-        <input data-layer-opacity type="range" min="10" max="100" step="5" value="${layer.opacity}">
+      ${body}
+    </div>`;
+}
+function overlayTextFieldHtml(layer){
+  return `<label>Conteudo
+    <input data-layer-text type="text" value="${escapeAttr(layer.text || layer.label || "")}">
+  </label>`;
+}
+function overlayTimingInspectorHtml(layer){
+  const timing = overlayTimingForLayer(layer);
+  return `<div class="overlay-inspector-row overlay-time-row">
+    <label>Inicio
+      <input data-layer-start type="number" min="0" max="9999" step="0.1" value="${timing.start.toFixed(1)}">
+    </label>
+    <label>Duracao
+      <input data-layer-duration type="number" min="0.3" max="60" step="0.1" value="${timing.duration.toFixed(1)}">
+    </label>
+  </div>`;
+}
+function overlayTextSizeControlsHtml(layer){
+  return `<div class="overlay-inspector-row">
+    <label>Tamanho
+      <input data-layer-font-size type="number" min="14" max="96" step="1" value="${Math.round(layer.font_size || 44)}">
+    </label>
+    <label>Largura
+      <input data-layer-width type="range" min="16" max="90" step="1" value="${Math.round(layer.width * 100)}">
+    </label>
+    <label>Opacidade
+      <input data-layer-opacity type="range" min="10" max="100" step="5" value="${layer.opacity}">
+    </label>
+  </div>`;
+}
+function overlaySizeControlsHtml(layer, widthLabel){
+  return `<div class="overlay-inspector-row">
+    <label>${escapeHtml(widthLabel)}
+      <input data-layer-width type="range" min="8" max="90" step="1" value="${Math.round(layer.width * 100)}">
+    </label>
+    <label>Opacidade
+      <input data-layer-opacity type="range" min="10" max="100" step="5" value="${layer.opacity}">
+    </label>
+  </div>`;
+}
+function overlayTextStyleHtml(layer){
+  return `<details class="overlay-inspector-section" open>
+    <summary>Aparencia</summary>
+    <div class="overlay-inspector-row">
+      <label>Cor
+        <input data-layer-color type="color" value="${escapeAttr(layer.color || "#ffffff")}">
       </label>
       <label class="overlay-inspector-check">
         <input data-layer-background-enabled type="checkbox" ${layer.background_enabled ? "checked" : ""}>
         Fundo
       </label>
-      <div class="overlay-inspector-row">
-        <label>Cor do fundo
-          <input data-layer-background-color type="color" value="${escapeAttr(layer.background_color || "#000000")}">
-        </label>
-        <label>Opacidade fundo
-          <input data-layer-background-opacity type="range" min="0" max="100" step="5" value="${layer.background_opacity}">
-        </label>
-      </div>
-      <button class="overlay-danger" data-layer-remove>Remover camada</button>
-    </div>`;
+    </div>
+    <div class="overlay-inspector-row">
+      <label>Cor do fundo
+        <input data-layer-background-color type="color" value="${escapeAttr(layer.background_color || "#000000")}">
+      </label>
+      <label>Opacidade fundo
+        <input data-layer-background-opacity type="range" min="0" max="100" step="5" value="${layer.background_opacity}">
+      </label>
+    </div>
+  </details>`;
+}
+function overlaySpeechStyleHtml(layer){
+  return `<details class="overlay-inspector-section" open>
+    <summary>Aparencia</summary>
+    <div class="overlay-inspector-row">
+      <label>Texto
+        <input data-layer-color type="color" value="${escapeAttr(layer.color || "#050505")}">
+      </label>
+      <label>Balao
+        <input data-layer-background-color type="color" value="${escapeAttr(layer.background_color || "#ffffff")}">
+      </label>
+    </div>
+    <label>Opacidade do balao
+      <input data-layer-background-opacity type="range" min="20" max="100" step="5" value="${layer.background_opacity}">
+    </label>
+  </details>`;
+}
+function overlayImageSourceHtml(layer){
+  const src = layer.image_data_url || layer.image_file || "";
+  return `<div class="overlay-image-source">
+    ${src ? `<img src="${escapeAttr(src)}" alt="">` : "<span></span>"}
+    <button type="button" data-layer-replace-image>Trocar imagem</button>
+  </div>`;
+}
+function overlayImageInspectorActionsHtml(){
+  return `<div class="overlay-inspector-actions">${overlayRemoveButtonHtml()}</div>`;
+}
+function overlayRemoveButtonHtml(){
+  return `<button class="overlay-danger" data-layer-remove>Remover camada</button>`;
 }
 function bindCardOverlayControls(card){
   const imageInput = card.querySelector("[data-overlay-image]");
@@ -13212,8 +14601,15 @@ function bindCardOverlayControls(card){
 function addImageOverlayFromInput(card, input){
   const file = input.files && input.files[0];
   if (!file) return;
+  const replaceLayerId = String(input.dataset.overlayReplaceLayer || "");
+  const platform = overlayPlatformForItem(card);
+  const currentLayer = replaceLayerId ? overlayLayersForRank(card.dataset.rank, platform).find(row => row.id === replaceLayerId) : null;
   const x = Number(input.dataset.overlayX || .36);
   const y = Number(input.dataset.overlayY || .34);
+  const timing = {
+    start_seconds: Number(input.dataset.overlayStart || 0),
+    duration_seconds: Number(input.dataset.overlayDuration || 3)
+  };
   overlayImageDataUrl(file).then(dataUrl => {
     const layer = normalizeImageOverlay({
       id: overlayId(),
@@ -13224,13 +14620,24 @@ function addImageOverlayFromInput(card, input){
       x,
       y,
       width: .28,
-      opacity: 100
+      opacity: 100,
+      ...timing
     });
-    card.dataset.selectedOverlayLayer = layer.id;
-    addOverlayLayerForRank(card.dataset.rank, layer, overlayPlatformForItem(card));
+    if (currentLayer) {
+      card.dataset.selectedOverlayLayer = replaceLayerId;
+      patchOverlayLayerForRank(card.dataset.rank, replaceLayerId, {
+        image_data_url: dataUrl,
+        image_file: "",
+        label: file.name
+      }, true, platform);
+    } else {
+      card.dataset.selectedOverlayLayer = layer.id;
+      addOverlayLayerForRank(card.dataset.rank, layer, platform);
+    }
     const surface = card.querySelector("[data-overlay-surface]");
     if (surface) {
-      showOverlayInspectorForLayer(card, layer.id, layer.x * surface.clientWidth, layer.y * surface.clientHeight);
+      const inspectorLayer = currentLayer || layer;
+      showOverlayInspectorForLayer(card, replaceLayerId || layer.id, inspectorLayer.x * surface.clientWidth, inspectorLayer.y * surface.clientHeight);
     }
     clearAppNotice();
   }).catch(error => {
@@ -13238,6 +14645,7 @@ function addImageOverlayFromInput(card, input){
     console.warn("CUTED image overlay was rejected", error);
   }).finally(() => {
     input.value = "";
+    delete input.dataset.overlayReplaceLayer;
   });
 }
 function overlayImageDataUrl(file){
@@ -13267,18 +14675,34 @@ function readFileAsDataUrl(file){
 }
 function downscaleImageDataUrl(dataUrl, sourceType){
   return loadImageForOverlay(dataUrl).then(image => {
-    const scale = Math.min(1, maxOverlayImagePixels / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height, 1));
-    const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
-    const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("Nao foi possivel otimizar a imagem.");
-    context.clearRect(0, 0, width, height);
-    context.drawImage(image, 0, 0, width, height);
-    const outputType = sourceType === "image/jpeg" ? "image/jpeg" : "image/png";
-    return canvasToDataUrl(canvas, outputType, outputType === "image/jpeg" ? .86 : undefined);
+    const originalWidth = image.naturalWidth || image.width;
+    const originalHeight = image.naturalHeight || image.height;
+    const longSide = Math.max(originalWidth, originalHeight, 1);
+    const outputType = sourceType === "image/jpeg" ? "image/jpeg" : "image/webp";
+    const plans = [
+      { pixels: maxOverlayImagePixels, quality: outputType === "image/jpeg" ? .86 : .84 },
+      { pixels: 1280, quality: outputType === "image/jpeg" ? .8 : .78 },
+      { pixels: 960, quality: outputType === "image/jpeg" ? .74 : .72 },
+      { pixels: 720, quality: outputType === "image/jpeg" ? .7 : .68 }
+    ];
+    let best = "";
+    return plans.reduce((chain, plan) => chain.then(done => {
+      if (done) return done;
+      const scale = Math.min(1, plan.pixels / longSide);
+      const width = Math.max(1, Math.round(originalWidth * scale));
+      const height = Math.max(1, Math.round(originalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Nao foi possivel otimizar a imagem.");
+      context.clearRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+      return canvasToDataUrl(canvas, outputType, plan.quality).catch(() => canvasToDataUrl(canvas, "image/png")).then(candidate => {
+        best = candidate.length < (best.length || Infinity) ? candidate : best;
+        return candidate.length <= maxOverlayImageBytes ? candidate : "";
+      });
+    }), Promise.resolve("")).then(done => done || best);
   });
 }
 function loadImageForOverlay(dataUrl){
@@ -13330,20 +14754,35 @@ function bindOverlayPlacement(card){
 }
 function closeOverlayMenu(card){
   const menu = card.querySelector("[data-overlay-menu]");
-  if (menu) menu.hidden = true;
+  if (!menu) return;
+  menu.hidden = true;
+  if (menu.dataset.overlayMenuMode === "add") menu.innerHTML = "";
 }
 function showOverlayAddMenu(card, left, top){
   const surface = card.querySelector("[data-overlay-surface]");
   const menu = card.querySelector("[data-overlay-menu]");
   if (!surface || !menu) return;
   menu.innerHTML = overlayPlaceButtonsHtml();
+  menu.dataset.overlayMenuMode = "add";
   bindOverlayMenuBasics(card);
   menu.querySelector("[data-overlay-place-text]")?.addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
     const layer = defaultTextOverlay();
+    Object.assign(layer, overlayTimingForCard(card));
     layer.x = Number(card.dataset.overlayMenuX || .36);
     layer.y = Number(card.dataset.overlayMenuY || .34);
+    card.dataset.selectedOverlayLayer = layer.id;
+    addOverlayLayerForRank(card.dataset.rank, layer, overlayPlatformForItem(card));
+    showOverlayInspectorForLayer(card, layer.id, left, top);
+  });
+  menu.querySelector("[data-overlay-place-speech]")?.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    const layer = defaultSpeechOverlay();
+    Object.assign(layer, overlayTimingForCard(card));
+    layer.x = Number(card.dataset.overlayMenuX || .32);
+    layer.y = Number(card.dataset.overlayMenuY || .24);
     card.dataset.selectedOverlayLayer = layer.id;
     addOverlayLayerForRank(card.dataset.rank, layer, overlayPlatformForItem(card));
     showOverlayInspectorForLayer(card, layer.id, left, top);
@@ -13353,8 +14792,11 @@ function showOverlayAddMenu(card, left, top){
     event.stopPropagation();
     const input = card.querySelector("[data-overlay-image]");
     if (!input) return;
+    const timing = overlayTimingForCard(card);
     input.dataset.overlayX = String(card.dataset.overlayMenuX || .36);
     input.dataset.overlayY = String(card.dataset.overlayMenuY || .34);
+    input.dataset.overlayStart = String(timing.start_seconds);
+    input.dataset.overlayDuration = String(timing.duration_seconds);
     closeOverlayMenu(card);
     input.click();
   });
@@ -13377,6 +14819,7 @@ function showOverlayInspectorForLayer(card, layerId, left = null, top = null){
   if (!layer) return;
   card.dataset.selectedOverlayLayer = layer.id;
   menu.innerHTML = overlayInspectorHtml(layer);
+  menu.dataset.overlayMenuMode = "inspect";
   bindOverlayMenuBasics(card);
   bindOverlayInspectorControls(card, layer, platform);
   const box = card.querySelector(`[data-overlay-layer="${CSS.escape(layer.id)}"]`);
@@ -13422,12 +14865,20 @@ function bindOverlayMenuBasics(card){
   const surface = card.querySelector("[data-overlay-surface]");
   const menu = card.querySelector("[data-overlay-menu]");
   if (!surface || !menu) return;
-  menu.querySelector("[data-overlay-close]")?.addEventListener("click", () => closeOverlayMenu(card));
+  menu.querySelector("[data-overlay-close]")?.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    closeOverlayMenu(card);
+  });
   bindOverlayMenuDrag(surface, menu);
 }
 function bindOverlayInspectorControls(card, layer, platform = overlayPlatformForItem(card)){
   const rank = card.dataset.rank;
   const patch = (value, rerender = true) => patchOverlayLayerForRank(rank, layer.id, value, rerender, platform);
+  const start = card.querySelector("[data-layer-start]");
+  if (start) start.addEventListener("input", () => patch({ start_seconds: Number(start.value) }));
+  const duration = card.querySelector("[data-layer-duration]");
+  if (duration) duration.addEventListener("input", () => patch({ duration_seconds: Number(duration.value) }));
   const text = card.querySelector("[data-layer-text]");
   if (text) text.addEventListener("input", () => patch({ text: text.value, label: text.value }));
   const fontSize = card.querySelector("[data-layer-font-size]");
@@ -13438,6 +14889,13 @@ function bindOverlayInspectorControls(card, layer, platform = overlayPlatformFor
   if (opacity) opacity.addEventListener("input", () => patch({ opacity: Number(opacity.value) }));
   const width = card.querySelector("[data-layer-width]");
   if (width) width.addEventListener("input", () => patch({ width: Number(width.value) / 100 }));
+  card.querySelector("[data-layer-replace-image]")?.addEventListener("click", () => {
+    const input = card.querySelector("[data-overlay-image]");
+    if (!input) return;
+    input.dataset.overlayReplaceLayer = layer.id;
+    closeOverlayMenu(card);
+    input.click();
+  });
   const backgroundEnabled = card.querySelector("[data-layer-background-enabled]");
   if (backgroundEnabled) backgroundEnabled.addEventListener("change", () => patch({ background_enabled: backgroundEnabled.checked }));
   const backgroundColor = card.querySelector("[data-layer-background-color]");
@@ -13559,6 +15017,18 @@ function syncPublishCoverPanel(card, moment, cover){
   card.querySelectorAll("[data-publish-cover-option]").forEach(button => {
     button.classList.toggle("active", button.dataset.publishCoverOption === selected);
   });
+  syncPublishCoverLayerPreview(card, cover);
+  refreshPublishCoverFloatingMenu(card);
+}
+function syncPublishCoverLayerPreview(card, cover = null){
+  const moment = (window.CUTTED_DATA.moments || []).find(item => String(item.rank) === String(card.dataset.rank));
+  const currentCover = cover || (moment ? publishMetadata(activePlatformForRank(card.dataset.rank), moment).cover || {} : {});
+  const layers = normalizeCoverOverlayLayers(currentCover.layers);
+  const layerList = card.querySelector("[data-publish-cover-layer-list]");
+  if (layerList) layerList.innerHTML = layers.map(publishCoverLayerHtml).join("");
+  const layerCount = card.querySelector("[data-publish-cover-layer-count]");
+  if (layerCount) layerCount.textContent = layers.length === 1 ? "1 camada" : `${layers.length} camadas`;
+  bindPublishCoverLayerControls(card);
 }
 function setPublishFieldValue(card, field, value){
   const input = card.querySelector(`[data-publish-field="${field}"]`);
@@ -13570,6 +15040,16 @@ function bindPublishCoverDrag(card){
   if (!frame) return;
   frame.addEventListener("pointerdown", event => beginPublishCoverDrag(card, event));
 }
+function bindPublishCoverPlacement(card){
+  const frame = card.querySelector("[data-publish-cover-preview]");
+  if (!frame || frame.dataset.publishCoverPlacementBound === "1") return;
+  frame.dataset.publishCoverPlacementBound = "1";
+  frame.addEventListener("click", event => {
+    if (card.dataset.publishCoverFrameMoved === "1") return;
+    if (event.target.closest("[data-publish-cover-layer]")) return;
+    showPublishCoverAddMenu(card, event.clientX, event.clientY);
+  });
+}
 function publishCoverForCard(card){
   const moment = (window.CUTTED_DATA.moments || []).find(item => String(item.rank) === String(card.dataset.rank));
   if (!moment) return null;
@@ -13578,6 +15058,7 @@ function publishCoverForCard(card){
 }
 function beginPublishCoverDrag(card, event){
   if (event.button !== undefined && event.button !== 0) return;
+  if (event.target.closest("[data-publish-cover-layer]")) return;
   const frame = event.currentTarget;
   const cover = publishCoverForCard(card);
   if (!cover) return;
@@ -13592,7 +15073,8 @@ function beginPublishCoverDrag(card, event){
     startY: normalizePublishCoverPosition(cover.y, zoom),
     width: Math.max(rect.width, 1),
     height: Math.max(rect.height, 1),
-    zoom
+    zoom,
+    moved: false
   };
   event.preventDefault();
   frame.dataset.publishCoverDragging = "1";
@@ -13605,6 +15087,8 @@ function beginPublishCoverDrag(card, event){
 }
 function movePublishCoverDrag(card, drag, event){
   event.preventDefault();
+  if (Math.abs(event.clientX - drag.startClientX) > 2 || Math.abs(event.clientY - drag.startClientY) > 2) drag.moved = true;
+  if (drag.moved) card.querySelector("[data-publish-cover-preview]")?.setAttribute("data-publish-cover-moved", "1");
   const publish = normalizePublishEdit(cardState(drag.rank).publish);
   publish.coverZoom = drag.zoom;
   publish.coverX = normalizePublishCoverPosition(drag.startX + publishCoverDragDelta(drag.startClientX, event.clientX, drag.width, drag.zoom), drag.zoom);
@@ -13613,6 +15097,12 @@ function movePublishCoverDrag(card, drag, event){
   syncPublishPanel(card);
 }
 function endPublishCoverDrag(frame, pointerId, move, end){
+  const card = frame.closest(".card");
+  if (card && frame.dataset.publishCoverMoved === "1") {
+    card.dataset.publishCoverFrameMoved = "1";
+    window.setTimeout(() => { delete card.dataset.publishCoverFrameMoved; }, 120);
+  }
+  delete frame.dataset.publishCoverMoved;
   frame.dataset.publishCoverDragging = "0";
   if (frame.hasPointerCapture?.(pointerId)) frame.releasePointerCapture(pointerId);
   frame.removeEventListener("pointermove", move);
@@ -13624,11 +15114,303 @@ function publishCoverDragDelta(start, current, size, zoom){
   const zoomGap = Math.max(normalizePublishCoverZoom(zoom, 1) - 1, 0.08);
   return ((start - current) / Math.max(size, 1)) * 100 / zoomGap;
 }
+function bindPublishCoverImageInput(card){
+  const input = card.querySelector("[data-publish-cover-image]");
+  if (!input || input.dataset.publishCoverImageBound === "1") return;
+  input.dataset.publishCoverImageBound = "1";
+  input.addEventListener("change", () => addPublishCoverImageFromInput(card, input));
+}
+function addPublishCoverLayer(card, kind){
+  if (kind === "image") {
+    const input = card.querySelector("[data-publish-cover-image]");
+    if (input) {
+      delete input.dataset.coverReplaceLayer;
+      input.dataset.coverX = String(card.dataset.coverMenuX || .28);
+      input.dataset.coverY = String(card.dataset.coverMenuY || .28);
+      closePublishCoverMenu(card);
+      input.click();
+    }
+    return;
+  }
+  const layer = kind === "speech" ? defaultSpeechOverlay() : defaultTextOverlay();
+  layer.x = clampNumber(Number(card.dataset.coverMenuX || (kind === "speech" ? .18 : .16)), 0, .84);
+  layer.y = clampNumber(Number(card.dataset.coverMenuY || (kind === "speech" ? .18 : .12)), 0, .9);
+  layer.width = kind === "speech" ? .64 : .68;
+  layer.start_seconds = 0;
+  layer.duration_seconds = 3;
+  card.dataset.selectedCoverLayer = layer.id;
+  addCoverLayerForRank(card.dataset.rank, layer);
+  showPublishCoverInspector(card, layer.id);
+}
+function addPublishCoverImageFromInput(card, input){
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const replaceLayerId = String(input.dataset.coverReplaceLayer || "");
+  overlayImageDataUrl(file).then(dataUrl => {
+    if (replaceLayerId) {
+      patchCoverLayerForRank(card.dataset.rank, replaceLayerId, {
+        image_data_url: dataUrl,
+        image_file: "",
+        label: file.name
+      });
+      card.dataset.selectedCoverLayer = replaceLayerId;
+      showPublishCoverInspector(card, replaceLayerId);
+    } else {
+      const layer = normalizeImageOverlay({
+        id: overlayId(),
+        kind: "image",
+        key: "image",
+        label: file.name,
+        image_data_url: dataUrl,
+        x: clampNumber(Number(input.dataset.coverX || .28), 0, .92),
+        y: clampNumber(Number(input.dataset.coverY || .28), 0, .92),
+        width: .42,
+        opacity: 100,
+        start_seconds: 0,
+        duration_seconds: 3
+      });
+      card.dataset.selectedCoverLayer = layer.id;
+      addCoverLayerForRank(card.dataset.rank, layer);
+      showPublishCoverInspector(card, layer.id);
+    }
+    clearAppNotice();
+  }).catch(error => {
+    showAppNotice(error.message || "Nao foi possivel usar esta imagem na capa.");
+    console.warn("CUTED cover image overlay was rejected", error);
+  }).finally(() => {
+    input.value = "";
+    delete input.dataset.coverReplaceLayer;
+    delete input.dataset.coverX;
+    delete input.dataset.coverY;
+  });
+}
+function coverLayersForRank(rank){
+  return normalizePublishEdit(cardState(String(rank)).publish).coverLayers;
+}
+function setCoverLayersForRank(rank, layers, rerender = true){
+  const current = cardState(String(rank));
+  const publish = normalizePublishEdit(current.publish);
+  publish.coverLayers = normalizeCoverOverlayLayers(layers);
+  setCardState(String(rank), { publish });
+  const card = cardForRank(rank);
+  if (rerender && card) syncPublishPanel(card);
+  if (rerender) renderCaptionQueue();
+}
+function addCoverLayerForRank(rank, layer){
+  setCoverLayersForRank(rank, [...coverLayersForRank(rank), normalizeOverlayLayer(layer)]);
+}
+function patchCoverLayerForRank(rank, id, patch, rerender = true){
+  const layers = coverLayersForRank(rank).map(layer => {
+    if (layer.id !== id) return layer;
+    return normalizeOverlayLayer(Object.assign({}, layer, patch));
+  });
+  setCoverLayersForRank(rank, layers, rerender);
+}
+function removeCoverLayerForRank(rank, id){
+  setCoverLayersForRank(rank, coverLayersForRank(rank).filter(layer => layer.id !== id));
+}
+function selectedCoverLayerForCard(card){
+  const selected = String(card.dataset.selectedCoverLayer || "");
+  return coverLayersForRank(card.dataset.rank).find(layer => layer.id === selected) || null;
+}
+function publishCoverMenuSurface(card){
+  return card.querySelector("[data-publish-cover-stage]") || card.querySelector("[data-publish-cover-preview]");
+}
+function closePublishCoverMenu(card){
+  const menu = card.querySelector("[data-publish-cover-menu]");
+  if (!menu) return;
+  menu.hidden = true;
+  menu.innerHTML = "";
+  delete card.dataset.selectedCoverLayer;
+}
+function bindPublishCoverMenuBasics(card){
+  const surface = publishCoverMenuSurface(card);
+  const menu = card.querySelector("[data-publish-cover-menu]");
+  if (!surface || !menu) return;
+  menu.querySelector("[data-overlay-close]")?.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    closePublishCoverMenu(card);
+  });
+  bindOverlayMenuDrag(surface, menu);
+}
+function publishCoverMenuPoint(card, clientX, clientY){
+  const frame = card.querySelector("[data-publish-cover-preview]");
+  const surface = publishCoverMenuSurface(card);
+  const frameRect = frame?.getBoundingClientRect();
+  const surfaceRect = surface?.getBoundingClientRect();
+  if (!frameRect || !surfaceRect) return { x: .28, y: .28, left: 8, top: 8 };
+  const x = clampNumber((clientX - frameRect.left) / Math.max(frameRect.width, 1), 0, .92);
+  const y = clampNumber((clientY - frameRect.top) / Math.max(frameRect.height, 1), 0, .92);
+  return { x, y, left: clientX - surfaceRect.left, top: clientY - surfaceRect.top };
+}
+function showPublishCoverAddMenu(card, clientX, clientY){
+  const surface = publishCoverMenuSurface(card);
+  const menu = card.querySelector("[data-publish-cover-menu]");
+  if (!surface || !menu) return;
+  const point = publishCoverMenuPoint(card, clientX, clientY);
+  card.dataset.coverMenuX = String(point.x);
+  card.dataset.coverMenuY = String(point.y);
+  delete card.dataset.selectedCoverLayer;
+  menu.innerHTML = coverPlaceButtonsHtml();
+  menu.dataset.overlayMenuMode = "add";
+  bindPublishCoverMenuBasics(card);
+  bindPublishCoverAddButtons(card);
+  positionOverlayMenu(surface, menu, point.left, point.top);
+  menu.hidden = false;
+}
+function refreshPublishCoverFloatingMenu(card){
+  const layer = selectedCoverLayerForCard(card);
+  const menu = card.querySelector("[data-publish-cover-menu]");
+  if (!menu || menu.hidden || !layer) return;
+  showPublishCoverInspector(card, layer.id);
+}
+function showPublishCoverInspector(card, layerId){
+  const surface = publishCoverMenuSurface(card);
+  const menu = card.querySelector("[data-publish-cover-menu]");
+  if (!surface || !menu) return;
+  card.dataset.selectedCoverLayer = layerId;
+  const layer = selectedCoverLayerForCard(card);
+  if (!layer) return;
+  menu.innerHTML = coverInspectorHtml(layer);
+  menu.dataset.overlayMenuMode = "inspect";
+  bindPublishCoverMenuBasics(card);
+  bindPublishCoverInspectorControls(card, layer);
+  menu.hidden = false;
+  const box = card.querySelector(`[data-publish-cover-layer="${CSS.escape(layer.id)}"]`);
+  if (box) positionOverlayInspectorNearLayer(surface, menu, box);
+  else positionOverlayMenu(surface, menu, 8, 8);
+}
+function bindPublishCoverInspectorControls(card, layer){
+  const rank = card.dataset.rank;
+  const patch = value => {
+    patchCoverLayerForRank(rank, layer.id, value, false);
+    syncPublishCoverLayerPreview(card);
+    renderCaptionQueue();
+  };
+  const menu = card.querySelector("[data-publish-cover-menu]");
+  const text = menu?.querySelector("[data-layer-text]");
+  if (text) text.addEventListener("input", () => patch({ text: text.value, label: text.value }));
+  const fontSize = menu?.querySelector("[data-layer-font-size]");
+  if (fontSize) fontSize.addEventListener("input", () => patch({ font_size: Number(fontSize.value) }));
+  const color = menu?.querySelector("[data-layer-color]");
+  if (color) color.addEventListener("input", () => patch({ color: color.value }));
+  const opacity = menu?.querySelector("[data-layer-opacity]");
+  if (opacity) opacity.addEventListener("input", () => patch({ opacity: Number(opacity.value) }));
+  const width = menu?.querySelector("[data-layer-width]");
+  if (width) width.addEventListener("input", () => patch({ width: Number(width.value) / 100 }));
+  const backgroundEnabled = menu?.querySelector("[data-layer-background-enabled]");
+  if (backgroundEnabled) backgroundEnabled.addEventListener("change", () => patch({ background_enabled: backgroundEnabled.checked }));
+  const backgroundColor = menu?.querySelector("[data-layer-background-color]");
+  if (backgroundColor) backgroundColor.addEventListener("input", () => patch({ background_color: backgroundColor.value }));
+  const backgroundOpacity = menu?.querySelector("[data-layer-background-opacity]");
+  if (backgroundOpacity) backgroundOpacity.addEventListener("input", () => patch({ background_opacity: Number(backgroundOpacity.value) }));
+  menu?.querySelector("[data-layer-replace-image]")?.addEventListener("click", () => {
+    const input = card.querySelector("[data-publish-cover-image]");
+    if (!input) return;
+    input.dataset.coverReplaceLayer = layer.id;
+    closePublishCoverMenu(card);
+    input.click();
+  });
+  menu?.querySelector("[data-layer-remove]")?.addEventListener("click", () => {
+    removeCoverLayerForRank(rank, layer.id);
+    closePublishCoverMenu(card);
+  });
+}
+function bindPublishCoverAddButtons(card){
+  const menu = card.querySelector("[data-publish-cover-menu]");
+  if (!menu) return;
+  menu.querySelectorAll("[data-publish-cover-add]").forEach(button => {
+    button.addEventListener("click", () => addPublishCoverLayer(card, button.dataset.publishCoverAdd));
+  });
+}
+function bindPublishCoverLayerControls(card){
+  const frame = card.querySelector("[data-publish-cover-preview]");
+  if (!frame) return;
+  frame.querySelectorAll("[data-publish-cover-layer]").forEach(layerNode => bindPublishCoverLayerDrag(card, frame, layerNode));
+}
+function bindPublishCoverLayerDrag(card, frame, layerNode){
+  let drag = null;
+  const start = event => {
+    if (event.type === "mousedown" && drag) return;
+    const resizing = !!event.target?.closest?.("[data-publish-cover-resize]");
+    const frameRect = frame.getBoundingClientRect();
+    const layerRect = layerNode.getBoundingClientRect();
+    drag = {
+      pointerId: event.pointerId,
+      type: resizing ? "resize" : "move",
+      startX: event.clientX,
+      startY: event.clientY,
+      startLeft: layerRect.left - frameRect.left,
+      startTop: layerRect.top - frameRect.top,
+      startWidth: layerRect.width,
+      frameWidth: Math.max(frameRect.width, 1),
+      frameHeight: Math.max(frameRect.height, 1),
+      moved: false
+    };
+    card.dataset.selectedCoverLayer = layerNode.dataset.publishCoverLayer;
+    layerNode.classList.add("is-selected");
+    if (event.pointerId !== undefined && layerNode.setPointerCapture) layerNode.setPointerCapture(event.pointerId);
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", end, { once: true });
+    document.addEventListener("pointercancel", end, { once: true });
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", end, { once: true });
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const move = event => {
+    if (!drag || (event.pointerId !== undefined && event.pointerId !== drag.pointerId)) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) drag.moved = true;
+    const patch = {};
+    if (drag.type === "resize") {
+      const minWidth = layerNode.dataset.coverLayerKind === "image" ? .08 : .16;
+      patch.width = clampNumber((drag.startWidth + dx) / drag.frameWidth, minWidth, .9);
+      layerNode.style.width = `${patch.width * 100}%`;
+    } else {
+      const layerRect = layerNode.getBoundingClientRect();
+      const left = clampNumber(drag.startLeft + dx, 0, Math.max(drag.frameWidth - layerRect.width, 0));
+      const top = clampNumber(drag.startTop + dy, 0, Math.max(drag.frameHeight - layerRect.height, 0));
+      patch.x = left / drag.frameWidth;
+      patch.y = clampNumber(top / drag.frameHeight + coverLayerVerticalLift, 0, 1);
+      layerNode.style.left = `${patch.x * 100}%`;
+      layerNode.style.top = `${liftedCoverLayerY(patch.y) * 100}%`;
+    }
+    patchCoverLayerForRank(card.dataset.rank, layerNode.dataset.publishCoverLayer, patch, false);
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const end = event => {
+    if (!drag || (event.pointerId !== undefined && event.pointerId !== drag.pointerId)) return;
+    const shouldInspect = !drag.moved;
+    drag = null;
+    document.removeEventListener("pointermove", move);
+    document.removeEventListener("mousemove", move);
+    document.removeEventListener("pointerup", end);
+    document.removeEventListener("pointercancel", end);
+    document.removeEventListener("mouseup", end);
+    syncPublishPanel(card);
+    renderCaptionQueue();
+    if (shouldInspect) showPublishCoverInspector(card, layerNode.dataset.publishCoverLayer);
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  layerNode.onpointerdown = start;
+  layerNode.onmousedown = start;
+  layerNode.querySelectorAll("[data-publish-cover-resize]").forEach(handle => {
+    handle.onpointerdown = start;
+    handle.onmousedown = start;
+  });
+}
 function bindPublishPanel(card){
   if (card.dataset.publishBound === "1") return;
   card.dataset.publishBound = "1";
   syncPublishPanel(card);
   bindPublishCoverDrag(card);
+  bindPublishCoverPlacement(card);
+  bindPublishCoverImageInput(card);
   card.querySelectorAll("[data-publish-field]").forEach(input => {
     input.addEventListener("input", () => {
       const current = cardState(card.dataset.rank);
@@ -13758,6 +15540,13 @@ function updateTimelinePlayhead(card, time = null){
   if (time === null && video && trimRangeActive(values) && Math.abs(Number(video.currentTime || 0) - current) > .05) {
     video.currentTime = current;
   }
+  syncPreviewPlaybackFrame(card, current);
+}
+function syncPreviewPlaybackFrame(card, time = null){
+  const values = trimValues(card);
+  const video = primaryCameraVideo(card);
+  const raw = time === null && video && Number.isFinite(video.currentTime) ? video.currentTime : time;
+  const current = clampPreviewTime(values, Number(raw ?? values.trimStart));
   const scrubInput = card.querySelector("[data-trim-scrub]");
   if (scrubInput) scrubInput.value = current.toFixed(1);
   const playhead = card.querySelector("[data-timeline-playhead]");
@@ -13767,6 +15556,7 @@ function updateTimelinePlayhead(card, time = null){
   updateCameraSurfaceForCard(card, current);
   updatePreviewCameraTimelinePlayhead(card, current);
   syncPreviewCaptions(card, current);
+  syncTimedOverlayVisibility(card, current);
 }
 function previewCameraTimelineContext(card){
   const values = trimValues(card);
@@ -13786,6 +15576,117 @@ function renderPreviewCameraTimeline(card){
   destroyLivePreviewCameraTimeline(card);
   renderCardRowTimeline(card);
 }
+function overlayTimelineLayersForCard(card){
+  return overlayLayersForRank(card.dataset.rank)
+    .filter(layer => ["image", "speech", "text"].includes(layer.kind));
+}
+function overlayTimelineLabel(layer){
+  if (layer.kind === "image") return "Img";
+  if (layer.kind === "speech") return "Fala";
+  return "Texto";
+}
+function overlayTimelineItemHtml(layer, duration, index){
+  const timing = overlayTimingForLayer(layer);
+  const start = clampNumber(timing.start, 0, Math.max(duration - .3, 0));
+  const itemDuration = clampNumber(timing.duration, .3, Math.max(duration - start, .3));
+  const left = clampNumber((start / Math.max(duration, .3)) * 100, 0, 100);
+  const width = clampNumber((itemDuration / Math.max(duration, .3)) * 100, 1, 100 - left);
+  const row = index % 3;
+  const selected = document.querySelector(`.card[data-rank="${CSS.escape(String(activeRankForLayer(layer)))}"]`)?.dataset.selectedOverlayLayer === layer.id;
+  return `<button class="overlay-timeline-item${selected ? " is-selected" : ""}" data-overlay-timeline-layer="${escapeAttr(layer.id)}" data-overlay-kind="${escapeAttr(layer.kind)}" data-overlay-start="${start.toFixed(3)}" data-overlay-duration="${itemDuration.toFixed(3)}" style="--overlay-time-left:${left.toFixed(3)}%;--overlay-time-width:${width.toFixed(3)}%;--overlay-time-row:${row}" type="button" title="${escapeAttr(`${overlayTimelineLabel(layer)} ${fixed(start)} por ${fixed(itemDuration)}`)}"><span>${escapeHtml(overlayTimelineLabel(layer))}</span><i data-overlay-timeline-resize></i></button>`;
+}
+function renderOverlayTimeline(card){
+  const container = card.querySelector("[data-preview-camera-timeline]");
+  if (!container) return;
+  let track = card.querySelector("[data-overlay-timeline]");
+  const layers = overlayTimelineLayersForCard(card);
+  if (!track) {
+    track = document.createElement("div");
+    track.className = "overlay-timeline";
+    track.setAttribute("data-overlay-timeline", "");
+  }
+  if (track.parentElement !== container) {
+    container.appendChild(track);
+  }
+  const duration = cameraTimelineDurationForCard(card);
+  track.innerHTML = layers.map((layer, index) => overlayTimelineItemHtml(layer, duration, index)).join("");
+  track.hidden = !layers.length;
+  bindOverlayTimelineControls(card, track);
+  syncTimedOverlayVisibility(card);
+}
+function bindOverlayTimelineControls(card, track){
+  if (track.dataset.overlayTimelineBound) return;
+  track.dataset.overlayTimelineBound = "1";
+  track.addEventListener("pointerdown", event => startOverlayTimelineDrag(card, track, event));
+}
+function startOverlayTimelineDrag(card, track, event){
+  const item = event.target.closest("[data-overlay-timeline-layer]");
+  if (!item) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const platform = overlayPlatformForItem(card);
+  const layer = overlayLayersForRank(card.dataset.rank, platform).find(row => row.id === item.dataset.overlayTimelineLayer);
+  if (!layer) return;
+  const timing = overlayTimingForLayer(layer);
+  const state = {
+    duration: cameraTimelineDurationForCard(card),
+    id: layer.id,
+    moved: false,
+    resizing: Boolean(event.target.closest("[data-overlay-timeline-resize]")),
+    startDuration: timing.duration,
+    startSeconds: timing.start,
+    startX: event.clientX
+  };
+  if (item.setPointerCapture && event.pointerId !== undefined) item.setPointerCapture(event.pointerId);
+  const move = moveEvent => moveOverlayTimelineDrag(card, track, item, state, moveEvent, platform);
+  const end = endEvent => endOverlayTimelineDrag(card, item, state, endEvent, move, platform);
+  document.addEventListener("pointermove", move);
+  document.addEventListener("pointerup", end, { once: true });
+  document.addEventListener("pointercancel", end, { once: true });
+}
+function overlayTimelinePatchFromDrag(track, state, event){
+  const rect = track.getBoundingClientRect();
+  const delta = rect.width ? ((event.clientX - state.startX) / rect.width) * state.duration : 0;
+  if (state.resizing) {
+    const maxDuration = Math.max(state.duration - state.startSeconds, .3);
+    return { duration_seconds: Number(clampNumber(state.startDuration + delta, .3, maxDuration).toFixed(3)) };
+  }
+  const start = clampNumber(state.startSeconds + delta, 0, Math.max(state.duration - state.startDuration, 0));
+  return { start_seconds: Number(start.toFixed(3)) };
+}
+function moveOverlayTimelineDrag(card, track, item, state, event, platform){
+  event.preventDefault();
+  event.stopPropagation();
+  state.moved = state.moved || Math.abs(event.clientX - state.startX) > 2;
+  const patch = overlayTimelinePatchFromDrag(track, state, event);
+  patchOverlayLayerForRank(card.dataset.rank, state.id, patch, false, platform);
+  updateOverlayTimingDom(card, state.id, patch);
+  updateOverlayTimelineItem(item, patch, state.duration);
+  syncTimedOverlayVisibility(card);
+}
+function endOverlayTimelineDrag(card, item, state, event, move, platform){
+  document.removeEventListener("pointermove", move);
+  event.preventDefault();
+  event.stopPropagation();
+  if (!state.moved) {
+    card.dataset.selectedOverlayLayer = state.id;
+    showOverlayInspectorForLayer(card, state.id);
+  }
+  renderOverlayTimeline(card);
+}
+function updateOverlayTimingDom(card, layerId, patch){
+  const box = card.querySelector(`[data-overlay-layer="${CSS.escape(layerId)}"]`);
+  if (box && patch.start_seconds !== undefined) box.dataset.overlayStart = Number(patch.start_seconds).toFixed(3);
+  if (box && patch.duration_seconds !== undefined) box.dataset.overlayDuration = Number(patch.duration_seconds).toFixed(3);
+}
+function updateOverlayTimelineItem(item, patch, totalDuration){
+  const start = clampNumber(patch.start_seconds ?? item.dataset.overlayStart ?? 0, 0, Math.max(totalDuration - .3, 0));
+  const duration = clampNumber(patch.duration_seconds ?? item.dataset.overlayDuration ?? 3, .3, Math.max(totalDuration - start, .3));
+  item.dataset.overlayStart = start.toFixed(3);
+  item.dataset.overlayDuration = duration.toFixed(3);
+  item.style.setProperty("--overlay-time-left", `${((start / Math.max(totalDuration, .3)) * 100).toFixed(3)}%`);
+  item.style.setProperty("--overlay-time-width", `${((duration / Math.max(totalDuration, .3)) * 100).toFixed(3)}%`);
+}
 function renderLivePreviewCameraTimeline(card){
   const container = card.querySelector("[data-preview-camera-timeline]");
   if (!container || container.dataset.liveTimelineFailed === "1") return false;
@@ -13797,6 +15698,7 @@ function renderLivePreviewCameraTimeline(card){
     ensureLivePreviewCameraPopover(card);
     card.__liveTimelineController.update(options);
     loadLiveTimelineWaveform(card);
+    renderOverlayTimeline(card);
     return true;
   }
   if (card.__liveTimelineLoading) return true;
@@ -13808,6 +15710,7 @@ function renderLivePreviewCameraTimeline(card){
     controller.update(liveTimelineOptionsForCard(card));
     ensureLivePreviewCameraPopover(card);
     loadLiveTimelineWaveform(card);
+    renderOverlayTimeline(card);
   }).catch(error => {
     console.warn("Timeline viva indisponivel; usando timeline compacta.", error);
     delete card.__liveTimelineLoading;
@@ -13983,6 +15886,7 @@ function renderLegacyPreviewCameraTimeline(card){
   bindPreviewCameraTimeline(card);
   renderPreviewAudioWaveform(card);
   updatePreviewCameraTimelinePlayhead(card);
+  renderOverlayTimeline(card);
 }
 function renderPreviewAudioWaveform(card){
   const layer = card.querySelector("[data-preview-audio-waveform]");
@@ -14583,6 +16487,7 @@ function buildExportData(){
       bumpers: edit.bumpers,
       captions_enabled: captions.enabled,
       caption_style: captions.style,
+      animated_caption_windows: captions.style.mode === "animated" ? previewAnimatedCaptionTimeline(moment) : [],
       clip_file: moment.clip_file,
       title: moment.title,
       peak_text: moment.peak_text,
@@ -14648,6 +16553,7 @@ function normalizePublishEdit(value){
     coverZoom: normalizePublishCoverZoom(source.coverZoom, null),
     coverX: normalizePublishCoverPosition(source.coverX, source.coverZoom || 1),
     coverY: normalizePublishCoverPosition(source.coverY, source.coverZoom || 1),
+    coverLayers: normalizeCoverOverlayLayers(source.coverLayers),
     hashtags: normalizePublishHashtags(source.hashtags)
   };
 }
@@ -14673,9 +16579,11 @@ function normalizePublishHashtags(value){
 }
 function publishCoverFromEdit(edit, generated, moment){
   const cover = generated?.cover && typeof generated.cover === "object" ? generated.cover : {};
-  const candidates = publishCoverCandidates(moment, cover);
-  const fallback = cover.selected_frame || candidates[0] || moment.frame_file || "";
-  const selected = candidates.includes(edit.coverFrame) ? edit.coverFrame : fallback;
+  const editedFrame = cleanPublishField(edit.coverFrame, 260);
+  const baseCandidates = publishCoverCandidates(moment, cover);
+  const fallback = cover.selected_frame || baseCandidates[0] || moment.frame_file || "";
+  const selected = editedFrame || fallback;
+  const candidates = uniqueCoverFrames([selected, ...baseCandidates]);
   const zoom = normalizePublishCoverZoom(edit.coverZoom, normalizePublishCoverZoom(cover.zoom, 1));
   return {
     selected_frame: selected,
@@ -14683,8 +16591,41 @@ function publishCoverFromEdit(edit, generated, moment){
     zoom,
     x: normalizePublishCoverPosition(edit.coverX ?? cover.x, zoom),
     y: normalizePublishCoverPosition(edit.coverY ?? cover.y, zoom),
+    layers: normalizeCoverOverlayLayers(edit.coverLayers.length ? edit.coverLayers : cover.layers),
     reason: cover.reason || "Frame de pico extraido do corte."
   };
+}
+function normalizeCoverOverlayLayers(layers){
+  const source = Array.isArray(layers) ? layers : [];
+  return source.map(normalizeOverlayLayer).filter(layer => layer.key !== "none");
+}
+function liftedCoverLayerY(y){
+  return clampNumber(Number(y || 0) - coverLayerVerticalLift, 0, 1);
+}
+function publishCoverLayerHtml(layer){
+  const current = normalizeOverlayLayer(layer);
+  const left = clampNumber(current.x * 100, 0, 100);
+  const top = clampNumber(liftedCoverLayerY(current.y) * 100, 0, 100);
+  const width = clampNumber(current.width * 100, 8, 90);
+  const opacity = clampNumber(current.opacity / 100, .1, 1);
+  const fontSize = clampNumber((current.font_size || 34) * .42, 10, 24);
+  const selected = document.querySelector(`.card[data-rank="${CSS.escape(String(activeRankForCoverLayer(current)))}"]`)?.dataset.selectedCoverLayer === current.id;
+  const selectedClass = selected ? " is-selected" : "";
+  const resize = '<button class="publish-cover-resize" data-publish-cover-resize type="button" title="Redimensionar"></button>';
+  if (current.kind === "image") {
+    const src = current.image_data_url || current.image_file || "";
+    if (!src) return "";
+    return `<div class="publish-cover-layer${selectedClass}" data-publish-cover-layer="${escapeAttr(current.id)}" data-cover-layer-kind="image" style="left:${left}%;top:${top}%;width:${width}%;--cover-layer-opacity:${opacity}"><img src="${escapeAttr(src)}" alt="">${resize}</div>`;
+  }
+  const bg = hexToRgb(current.background_color || "#000000").join(",");
+  const bgOpacity = clampNumber((current.background_opacity ?? 70) / 100, 0, 1);
+  const color = normalizeHexColor(current.color, current.kind === "speech" ? "#050505" : "#ffffff");
+  const text = escapeHtml(current.text || current.label || "");
+  return `<div class="publish-cover-layer${selectedClass}" data-publish-cover-layer="${escapeAttr(current.id)}" data-cover-layer-kind="${escapeAttr(current.kind)}" style="left:${left}%;top:${top}%;width:${width}%;font-size:${fontSize}px;opacity:${opacity};--cover-layer-color:${color};--cover-layer-bg:${bg};--cover-layer-bg-opacity:${bgOpacity}"><span>${text}</span>${resize}</div>`;
+}
+function activeRankForCoverLayer(layer){
+  const card = Array.from(document.querySelectorAll(".card")).find(item => coverLayersForRank(item.dataset.rank).some(current => current.id === layer.id));
+  return card?.dataset.rank || "";
 }
 function normalizePublishCoverZoom(value, fallback = 1){
   if (value === null || value === undefined || value === "") return fallback;
@@ -15046,8 +16987,14 @@ function overlayPreviewItemHtml(item){
 function bindOverlayPreviewControls(){
   document.querySelectorAll("[data-overlay-preview] .caption-item video").forEach(video => {
     video.volume = defaultPreviewVolume;
+    ["loadedmetadata", "durationchange", "seeked", "timeupdate"].forEach(eventName => {
+      video.addEventListener(eventName, () => syncTimedOverlayVisibility(video.closest(".caption-item")));
+    });
   });
-  document.querySelectorAll("[data-overlay-preview] .caption-item").forEach(item => bindOverlayDrag(item));
+  document.querySelectorAll("[data-overlay-preview] .caption-item").forEach(item => {
+    bindOverlayDrag(item);
+    syncTimedOverlayVisibility(item);
+  });
 }
 function bindOverlayDrag(item){
   const surface = item.querySelector("[data-overlay-surface]");
@@ -15159,9 +17106,10 @@ function renderFinalStage(){
     const cameraCount = queue.filter(item => cameraEditHasMovement(item)).length;
     const effectCount = queue.filter(item => normalizeEffect(item.effect).key !== "none").length;
     const overlayCount = queue.reduce((count, item) => count + normalizeOverlayLayers(item.overlays, item.overlay).length, 0);
+    const coverLayerCount = queue.reduce((count, item) => count + normalizeCoverOverlayLayers(item.publish_metadata?.cover?.layers).length, 0);
     const bumperCount = queue.reduce((count, item) => count + Object.keys(normalizeBumpers(item.bumpers)).length, 0);
     summary.textContent = queue.length
-      ? `${queue.length} na fila; ${cameraCount} camera; ${effectCount} efeito; ${overlayCount} camada; ${bumperCount} vinheta.`
+      ? `${queue.length} na fila; ${cameraCount} camera; ${effectCount} efeito; ${overlayCount} camada; ${coverLayerCount} capa; ${bumperCount} vinheta.`
       : "Nada na fila.";
   }
 }
@@ -15519,22 +17467,45 @@ function defaultCaptionSize(){
   const format = document.body.dataset.format || "tiktok";
   return format === "youtube" || format === "facebook" ? 54 : 72;
 }
+function captionBottom(){
+  return Number(localStorage.getItem("cutted-caption-bottom") || defaultCaptionBottom());
+}
+function defaultCaptionBottom(){
+  const format = document.body.dataset.format || "tiktok";
+  if (format === "youtube") return 11;
+  if (format === "facebook") return 9;
+  return 16;
+}
+function captionMode(){
+  const saved = localStorage.getItem("cutted-caption-mode");
+  if (saved === "animated" || saved === "on" || saved === "off") return saved;
+  return localStorage.getItem("cutted-caption-enabled") === "0" ? "off" : "on";
+}
 function captionTextColor(){
   return normalizeCaptionColor(localStorage.getItem("cutted-caption-text-color"), "#ffffff");
 }
 function captionBackgroundColor(){
   return normalizeCaptionBackground(localStorage.getItem("cutted-caption-background-color"));
 }
+function captionHighlightBackgroundColor(){
+  const stored = localStorage.getItem("cutted-caption-highlight-background-color");
+  if (stored) return normalizeCaptionHighlightBackground(stored);
+  const background = captionBackgroundColor();
+  return background === "transparent" ? "#000000" : normalizeCaptionHighlightBackground(background);
+}
 function captionStyle(){
   return {
     size: captionSize(),
     width: captionWidth(),
+    bottom: captionBottom(),
+    mode: captionMode(),
     textColor: captionTextColor(),
-    backgroundColor: captionBackgroundColor()
+    backgroundColor: captionBackgroundColor(),
+    highlightBackgroundColor: captionHighlightBackgroundColor()
   };
 }
 function captionEnabled(){
-  return localStorage.getItem("cutted-caption-enabled") !== "0";
+  return captionMode() !== "off";
 }
 function normalizeCaptionColor(value, fallback){
   const raw = String(value || "").trim();
@@ -15545,12 +17516,18 @@ function normalizeCaptionBackground(value){
   if (!raw || raw === "transparent" || raw === "none") return "transparent";
   return normalizeCaptionColor(raw, "#000000");
 }
+function normalizeCaptionHighlightBackground(value){
+  return normalizeCaptionColor(value, "#000000");
+}
 function storeCaptionStyle(style){
   if (!style || typeof style !== "object") return;
   if (Number.isFinite(Number(style.size))) localStorage.setItem("cutted-caption-size", String(clampNumber(Number(style.size), 24, 140)));
   if (Number.isFinite(Number(style.width))) localStorage.setItem("cutted-caption-width", String(clampNumber(Number(style.width), 12, 56)));
+  if (Number.isFinite(Number(style.bottom))) localStorage.setItem("cutted-caption-bottom", String(clampNumber(Number(style.bottom), 6, 32)));
+  if (style.mode) localStorage.setItem("cutted-caption-mode", normalizeCaptionMode(style.mode));
   if (style.textColor) localStorage.setItem("cutted-caption-text-color", normalizeCaptionColor(style.textColor, captionTextColor()));
   if (style.backgroundColor) localStorage.setItem("cutted-caption-background-color", normalizeCaptionBackground(style.backgroundColor));
+  if (style.highlightBackgroundColor) localStorage.setItem("cutted-caption-highlight-background-color", normalizeCaptionHighlightBackground(style.highlightBackgroundColor));
 }
 function captionSettingsForCard(card){
   if (!card?.dataset?.rank) return defaultCaptionSettings();
@@ -15567,16 +17544,31 @@ function syncPreviewCaptions(card, time = null){
   if (!captions.enabled) {
     layer.dataset.visible = "false";
     layer.innerHTML = "";
+    delete layer.dataset.captionPopKey;
     return;
   }
-  const event = previewCaptionEventForCard(card, time);
-  if (!event) {
+  const context = previewCaptionContextForCard(card, time);
+  if (!context?.event) {
     layer.dataset.visible = "false";
     layer.innerHTML = "";
+    delete layer.dataset.captionPopKey;
     return;
   }
-  const lines = wrapPreviewCaptionLines(event.text, captions.style.width, captionLines());
-  layer.innerHTML = `<span>${lines.map(escapeHtml).join("<br>")}</span>`;
+  layer.dataset.mode = captions.style.mode === "animated" ? "animated" : "static";
+  if (captions.style.mode === "animated") {
+    const rendered = previewAnimatedCaptionRender(context.event, context.position);
+    if (!rendered.html) {
+      layer.innerHTML = "";
+      delete layer.dataset.captionPopKey;
+    } else if (layer.dataset.captionPopKey !== rendered.key || !layer.innerHTML.trim()) {
+      layer.innerHTML = rendered.html;
+      layer.dataset.captionPopKey = rendered.key;
+    }
+  } else {
+    delete layer.dataset.captionPopKey;
+    const lines = wrapPreviewCaptionLines(context.event.text, captions.style.width, captionLines());
+    layer.innerHTML = `<span>${lines.map(escapeHtml).join("<br>")}</span>`;
+  }
   layer.dataset.visible = "true";
 }
 function applyPreviewCaptionStyle(card, layer){
@@ -15586,31 +17578,44 @@ function applyPreviewCaptionStyle(card, layer){
   const platformWidth = previewCaptionPlatformWidth(card);
   const fontSize = mediaWidth > 0 ? clampNumber((style.size / platformWidth) * mediaWidth, 14, 72) : style.size;
   layer.style.setProperty("--preview-caption-size", `${fontSize.toFixed(2)}px`);
+  layer.style.setProperty("--preview-caption-bottom", `${clampNumber(Number(style.bottom || defaultCaptionBottom()), 6, 32).toFixed(1)}%`);
   layer.style.setProperty("--preview-caption-color", style.textColor);
   layer.style.setProperty("--preview-caption-bg", captionBackgroundCss(style.backgroundColor));
+  layer.style.setProperty("--preview-caption-highlight-bg", captionBackgroundCss(style.highlightBackgroundColor || "#000000", true));
   layer.style.setProperty("--preview-caption-padding", style.backgroundColor === "transparent" ? "0" : ".12em .28em");
 }
 function previewCaptionPlatformWidth(card){
   const format = card?.dataset?.previewFormat || document.body.dataset.format || "tiktok";
   return format === "youtube" ? 1920 : 1080;
 }
-function captionBackgroundCss(value){
-  if (value === "transparent") return "transparent";
+function captionBackgroundCss(value, forceFallback = false){
+  if (value === "transparent") return forceFallback ? "#000000cc" : "transparent";
   const color = normalizeCaptionColor(value, "#000000");
   return `${color}cc`;
 }
 function previewCaptionEventForCard(card, time = null){
+  return previewCaptionContextForCard(card, time)?.event || null;
+}
+function previewCaptionContextForCard(card, time = null){
   const moment = previewMomentForCard(card);
   if (!moment) return null;
   const row = adjustedMoment(moment);
-  const events = previewCaptionEvents(row);
-  if (!events.length) return null;
   const values = trimValues(card);
   const video = primaryCameraVideo(card);
   const raw = time === null && video && Number.isFinite(video.currentTime) ? video.currentTime : time;
   const current = clampPreviewTime(values, Number(raw ?? values.trimStart));
   const position = Math.max(0, current - values.trimStart);
-  return events.find(event => position >= event.start && position < event.end) || null;
+  if (captionSettingsForCard(card).style.mode === "animated") {
+    const window = previewAnimatedCaptionTimeline(row).find(item => position >= item.start && position < item.end) || null;
+    return window ? { event: window, position } : null;
+  }
+  const events = previewCaptionEvents(row);
+  if (!events.length) return null;
+  const event = events.find(item => position >= item.start && position < item.end) || null;
+  return event ? { event, position } : null;
+}
+function animatedCaptionLeadSeconds(){
+  return .14;
 }
 function previewMomentForCard(card){
   const rank = String(card?.dataset?.rank || "");
@@ -15626,7 +17631,7 @@ function previewCaptionEvents(row){
 function previewCaptionEventsFromSegments(row){
   const segments = Array.isArray(row.caption_segments) ? row.caption_segments : [];
   const clipStart = Number(row.adjusted_start || row.start || 0);
-  const clipEnd = Number(row.adjusted_end || row.end || clipStart);
+  const clipEnd = Number(row.adjusted_end || row.end || (clipStart + Number(row.adjusted_duration || 0)));
   return segments.map(item => previewCaptionEventFromSegment(item, clipStart, clipEnd)).filter(Boolean);
 }
 function previewCaptionEventFromSegment(item, clipStart, clipEnd){
@@ -15655,6 +17660,254 @@ function distributedPreviewCaptionEvents(chunks, duration){
     end: Number((index === chunks.length - 1 ? duration : (index + 1) * slot).toFixed(3)),
     text
   }));
+}
+function previewAnimatedCaptionHtml(event, position){
+  return previewAnimatedCaptionRender(event, position).html;
+}
+function previewAnimatedCaptionRender(event, position){
+  const wordWindow = event?.active ? event : previewAnimatedCaptionWindow(event, position);
+  if (!wordWindow) return { key: "", html: "" };
+  const key = wordWindow.key || `${Number(event.start || 0).toFixed(2)}-${wordWindow.index || 0}`;
+  const html = `<span class="preview-caption-window" data-caption-pop-key="${key}">
+    <span class="preview-caption-word preview-caption-side preview-caption-prev">${escapeHtml(wordWindow.previous)}</span>
+    <span class="preview-caption-word preview-caption-active">${escapeHtml(wordWindow.active)}</span>
+    <span class="preview-caption-word preview-caption-side preview-caption-next">${escapeHtml(wordWindow.next)}</span>
+  </span>`;
+  return { key, html };
+}
+function previewAnimatedCaptionWindow(event, position){
+  const words = previewSmartAnimatedCaptionWords(event);
+  if (!words.length) return null;
+  const timings = previewAnimatedCaptionWordTimings(event, words);
+  const slot = timings.find(item => position >= item.start && position < item.end) || timings[timings.length - 1];
+  const index = slot ? slot.index : 0;
+  return {
+    index,
+    previous: index > 0 ? words[index - 1] : "",
+    active: words[index] || words[0],
+    next: index + 1 < words.length ? words[index + 1] : ""
+  };
+}
+function previewAnimatedCaptionTimeline(row){
+  const duration = Math.max(Number(row.adjusted_duration || 0), .1);
+  const raw = [];
+  previewCaptionEvents(row).forEach(event => {
+    const words = previewSmartAnimatedCaptionWords(event);
+    if (!words.length) return;
+    const timings = previewAnimatedCaptionWordTimings(event, words);
+    timings.forEach((slot, index) => {
+      raw.push({
+        start: slot.start,
+        end: slot.end,
+        previous: index > 0 ? timings[index - 1].word : "",
+        active: slot.word,
+        next: index + 1 < timings.length ? timings[index + 1].word : "",
+        sourceStart: event.start
+      });
+    });
+  });
+  return previewAnimatedCaptionDisplayWindows(raw, duration);
+}
+function previewAnimatedCaptionDisplayWindows(windows, duration){
+  let previousEnd = 0;
+  return windows.map((window, index) => {
+    const rawStart = clampNumber(Number(window.start || 0), 0, duration);
+    const rawEnd = clampNumber(Number(window.end || rawStart), rawStart, duration);
+    const rawDuration = Math.max(rawEnd - rawStart, .08);
+    let start = clampNumber(rawStart - animatedCaptionLeadSeconds(), 0, duration);
+    let end = clampNumber(rawEnd - animatedCaptionLeadSeconds(), start, duration);
+    if (rawStart <= animatedCaptionLeadSeconds()) {
+      end = clampNumber(Math.max(end, start + rawDuration), start, duration);
+    }
+    if (start < previousEnd) {
+      start = previousEnd;
+      end = clampNumber(Math.max(end, start + .08), start, duration);
+    }
+    previousEnd = end;
+    if (end <= start) return null;
+    return {
+      key: `${start.toFixed(3)}-${index}`,
+      index,
+      start: Number(start.toFixed(3)),
+      end: Number(end.toFixed(3)),
+      previous: window.previous || "",
+      active: window.active || "",
+      next: window.next || ""
+    };
+  }).filter(Boolean);
+}
+function previewAnimatedCaptionWord(word){
+  const text = String(word || "");
+  return text.length <= 18 ? text : `${text.slice(0, 17)}...`;
+}
+const PREVIEW_ANIMATED_CAPTION_MIN_DISPLAY_SECONDS = .22;
+const PREVIEW_ANIMATED_CAPTION_TARGET_MIN_WORD_SECONDS = .24;
+const PREVIEW_ANIMATED_CAPTION_FAST_WORD_SECONDS = .20;
+const PREVIEW_ANIMATED_CAPTION_MAX_GROUP_WORDS = 3;
+const PREVIEW_ANIMATED_CAPTION_PROPER_NOUN_STOPWORDS = new Set([
+  "a", "as", "o", "os", "um", "uma", "uns", "umas", "de", "da", "das", "do", "dos",
+  "e", "ou", "mas", "porque", "por", "para", "pra", "com", "sem", "em", "no", "na",
+  "nos", "nas", "ao", "aos", "ai", "aí", "entao", "então", "so", "só", "que", "quem",
+  "qual", "quando", "onde", "como", "isso", "essa", "esse", "isto", "esta", "este",
+  "eu", "tu", "ele", "ela", "nos", "nós", "voces", "vocês", "voce", "você", "meu",
+  "minha", "seu", "sua", "me", "te", "se", "lhe", "nao", "não", "sim", "e", "é", "eh",
+  "foi", "era", "ser", "ter", "tem", "ta", "tá", "tava", "vai", "vou", "vao", "vão",
+  "fui", "faz", "fazer", "da", "dá", "dar", "precisa", "preciso", "precisava", "acho",
+  "tipo", "cara", "ne", "né", "olha", "bom", "certo", "agora"
+]);
+const PREVIEW_ANIMATED_CAPTION_FILLER_WORDS = new Set([
+  "ah", "aham", "uhum", "hum", "eh", "Ã©", "e", "ai", "aÃ­", "entao", "entÃ£o",
+  "tipo", "assim", "ne", "nÃ©", "cara", "mano", "bom", "olha", "certo"
+]);
+const PREVIEW_ANIMATED_CAPTION_ATTACH_PREVIOUS = new Set([
+]);
+const PREVIEW_ANIMATED_CAPTION_ATTACH_NEXT = new Set([
+  "a", "as", "o", "os", "um", "uma", "uns", "umas", "me", "te", "se", "meu", "minha", "seu", "sua",
+  "de", "da", "das", "do", "dos", "com", "sem", "pra", "para", "por", "em", "no", "na", "nos", "nas", "ao", "aos"
+]);
+function cleanPreviewAnimatedCaptionText(text){
+  const clean = cleanPreviewCaptionText(text);
+  const properNouns = previewAnimatedCaptionProperNouns(clean);
+  return clean.split(/\\s+/)
+    .map(word => previewAnimatedCaptionDisplayWord(word, properNouns))
+    .filter(Boolean)
+    .join(" ");
+}
+function previewSmartAnimatedCaptionWords(event){
+  const start = Number(event?.start || 0);
+  const end = Math.max(Number(event?.end || start + .12), start + .12);
+  let words = cleanPreviewAnimatedCaptionText(event?.text || "").split(/\\s+/).filter(Boolean).map(previewAnimatedCaptionWord);
+  if (!words.length) return [];
+  words = previewSmartAnimatedCaptionDropFillers(words, end - start);
+  return previewSmartAnimatedCaptionGroupWords(words, end - start);
+}
+function previewSmartAnimatedCaptionDropFillers(words, duration){
+  const wordSeconds = duration / Math.max(words.length, 1);
+  if (wordSeconds >= PREVIEW_ANIMATED_CAPTION_FAST_WORD_SECONDS) return words;
+  const filtered = words.filter(word => previewAnimatedCaptionIsNumericToken(word) || !PREVIEW_ANIMATED_CAPTION_FILLER_WORDS.has(previewAnimatedCaptionWordKey(word)));
+  return filtered.length ? filtered : words;
+}
+function previewSmartAnimatedCaptionGroupWords(words, duration){
+  const wordSeconds = duration / Math.max(words.length, 1);
+  if (wordSeconds >= PREVIEW_ANIMATED_CAPTION_TARGET_MIN_WORD_SECONDS) return words;
+  const groups = [];
+  words.forEach(word => {
+    if (previewSmartAnimatedCaptionShouldAttachToPrevious(groups, word)) {
+      groups[groups.length - 1] = `${groups[groups.length - 1]} ${word}`;
+      return;
+    }
+    groups.push(word);
+  });
+  return previewSmartAnimatedCaptionBalanceGroups(groups);
+}
+function previewSmartAnimatedCaptionShouldAttachToPrevious(groups, word){
+  if (!groups.length) return false;
+  const key = previewAnimatedCaptionWordKey(word);
+  const previous = groups[groups.length - 1].split(/\\s+/).filter(Boolean).pop() || "";
+  if (PREVIEW_ANIMATED_CAPTION_ATTACH_PREVIOUS.has(key)) return previewSmartAnimatedCaptionGroupSize(groups[groups.length - 1]) < PREVIEW_ANIMATED_CAPTION_MAX_GROUP_WORDS;
+  if (PREVIEW_ANIMATED_CAPTION_ATTACH_NEXT.has(previewAnimatedCaptionWordKey(previous))) return previewSmartAnimatedCaptionGroupSize(groups[groups.length - 1]) < PREVIEW_ANIMATED_CAPTION_MAX_GROUP_WORDS;
+  return key === previewAnimatedCaptionWordKey(previous) && previewSmartAnimatedCaptionGroupSize(groups[groups.length - 1]) < PREVIEW_ANIMATED_CAPTION_MAX_GROUP_WORDS;
+}
+function previewSmartAnimatedCaptionBalanceGroups(groups){
+  const result = [];
+  groups.forEach(group => {
+    const key = previewAnimatedCaptionWordKey(group);
+    if (result.length && PREVIEW_ANIMATED_CAPTION_ATTACH_PREVIOUS.has(key) && previewSmartAnimatedCaptionGroupSize(result[result.length - 1]) < PREVIEW_ANIMATED_CAPTION_MAX_GROUP_WORDS) {
+      result[result.length - 1] = `${result[result.length - 1]} ${group}`;
+      return;
+    }
+    result.push(group);
+  });
+  return result;
+}
+function previewSmartAnimatedCaptionGroupSize(group){
+  return String(group || "").split(/\\s+/).filter(Boolean).length;
+}
+function previewAnimatedCaptionIsNumericToken(word){
+  return /\\d/.test(String(word || ""));
+}
+function previewAnimatedCaptionProperNouns(text){
+  const matches = Array.from(String(text || "").matchAll(/[\\p{L}\\p{N}_]+/gu));
+  const result = new Set();
+  matches.forEach((match, index) => {
+    const word = match[0];
+    if (!previewAnimatedCaptionIsCapitalizedWord(word)) return;
+    const key = previewAnimatedCaptionWordKey(word);
+    if (PREVIEW_ANIMATED_CAPTION_PROPER_NOUN_STOPWORDS.has(key)) return;
+    const before = String(text || "").slice(0, match.index || 0);
+    const sentenceStart = !before.trim() || /[.!?…]\\s*$/.test(before);
+    const previousCapitalized = index > 0 && previewAnimatedCaptionIsCapitalizedWord(matches[index - 1][0]);
+    const nextCapitalized = index + 1 < matches.length && previewAnimatedCaptionIsCapitalizedWord(matches[index + 1][0]);
+    if (!sentenceStart || previousCapitalized || nextCapitalized) result.add(key);
+  });
+  return result;
+}
+function previewAnimatedCaptionDisplayWord(word, properNouns){
+  const clean = previewAnimatedCaptionCleanWord(word);
+  if (!clean) return "";
+  const key = previewAnimatedCaptionWordKey(clean);
+  if (previewAnimatedCaptionIsAcronym(clean) || properNouns.has(key)) return clean;
+  return clean.toLocaleLowerCase("pt-BR");
+}
+function previewAnimatedCaptionCleanWord(word){
+  const raw = String(word || "").replace(/[^\\p{L}\\p{N}_.,:%]+/gu, "");
+  return Array.from(raw).filter((char, index, chars) => {
+    if (".,:".includes(char)) {
+      return index > 0 && index + 1 < chars.length && /\\p{N}/u.test(chars[index - 1]) && /\\p{N}/u.test(chars[index + 1]);
+    }
+    if (char === "%") {
+      return index > 0 && /\\p{N}/u.test(chars[index - 1]);
+    }
+    return true;
+  }).join("");
+}
+function previewAnimatedCaptionWordKey(word){
+  return String(word || "").replace(/[^\\p{L}\\p{N}_]+/gu, "").toLocaleLowerCase("pt-BR");
+}
+function previewAnimatedCaptionIsCapitalizedWord(word){
+  const letters = Array.from(String(word || "").matchAll(/\\p{L}/gu)).map(match => match[0]);
+  return Boolean(letters.length) && letters[0] === letters[0].toLocaleUpperCase("pt-BR") && !previewAnimatedCaptionIsAcronym(word);
+}
+function previewAnimatedCaptionIsAcronym(word){
+  const letters = Array.from(String(word || "").matchAll(/\\p{L}/gu)).map(match => match[0]).join("");
+  return letters.length > 1 && letters.length <= 6 && letters === letters.toLocaleUpperCase("pt-BR");
+}
+function previewAnimatedCaptionWordTimings(event, words){
+  const start = Number(event.start || 0);
+  const end = Math.max(Number(event.end || start + .12), start + .12);
+  const duration = end - start;
+  const weights = words.map(previewAnimatedCaptionWordWeight);
+  const total = weights.reduce((sum, value) => sum + value, 0) || Math.max(words.length, 1);
+  let cursor = start;
+  const timings = words.map((word, index) => {
+    const wordEnd = index === words.length - 1 ? end : Math.min(end, cursor + (duration * weights[index] / total));
+    const timing = { index, word, start: cursor, end: wordEnd };
+    cursor = wordEnd;
+    return timing;
+  });
+  return previewMergeFastAnimatedCaptionTimings(timings);
+}
+function previewMergeFastAnimatedCaptionTimings(timings){
+  const groups = timings.map(item => ({ word: item.word, start: item.start, end: item.end }));
+  while (groups.length > 1) {
+    const index = groups.findIndex(item => item.end - item.start < PREVIEW_ANIMATED_CAPTION_MIN_DISPLAY_SECONDS);
+    if (index < 0) break;
+    const target = index + 1 < groups.length ? index + 1 : index - 1;
+    const firstIndex = Math.min(index, target);
+    const secondIndex = Math.max(index, target);
+    const first = groups[firstIndex];
+    const second = groups[secondIndex];
+    groups.splice(firstIndex, secondIndex - firstIndex + 1, {
+      word: `${first.word} ${second.word}`,
+      start: first.start,
+      end: second.end
+    });
+  }
+  return groups.map((item, index) => ({ index, word: item.word, start: item.start, end: item.end }));
+}
+function previewAnimatedCaptionWordWeight(word){
+  const core = String(word || "").replace(/[^\\p{L}\\p{N}_]+/gu, "");
+  return clampNumber(Math.sqrt(Math.max(core.length, 1)), .7, 3);
 }
 function previewCaptionSourceText(row){
   const transcript = String(row.transcript || "").trim();
@@ -15734,11 +17987,19 @@ function cleanPreviewCaptionText(text){
     .replace(/(^|\\s)(>{1,3}|-{1,2})\\s*/g, " ")
     .replace(/\\s+/g, " ")
     .replace(/\\s+([,.;:!?])/g, "$1")
-    .replace(/([,.;:!?])([^\\s,.;:!?])/g, "$1 $2")
+    .replace(/(\\d)([.,:])\\s+(?=\\d)/g, "$1$2")
+    .replace(/([,.;:!?])([^\\s,.;:!?])/g, spaceAfterPreviewCaptionPunctuation)
     .replace(/^(ne\\??|aham|uhum|hum|entao|mas)\\s+/i, "")
     .trim()
     .replace(/^-+|-+$/g, "")
     .trim();
+}
+function spaceAfterPreviewCaptionPunctuation(match, punctuation, nextChar, offset, value){
+  const previousChar = offset > 0 ? String(value || "")[offset - 1] : "";
+  if (".,:".includes(punctuation) && /\\d/.test(previousChar) && /\\d/.test(nextChar)) {
+    return `${punctuation}${nextChar}`;
+  }
+  return `${punctuation} ${nextChar}`;
 }
 function previewCaptionChunks(text, charsPerLine, maxLines, duration){
   const lineWidth = Math.max(12, Number(charsPerLine) || 28);
@@ -15783,16 +18044,22 @@ function syncCaptionInputs(){
   document.querySelectorAll("[data-caption-lines]").forEach(input => { input.value = String(captionLines()); });
   document.querySelectorAll("[data-caption-width]").forEach(input => { input.value = String(captionWidth()); });
   document.querySelectorAll("[data-caption-size]").forEach(input => { input.value = String(captionSize()); });
+  document.querySelectorAll("[data-caption-bottom]").forEach(input => { input.value = String(captionBottom()); });
   document.querySelectorAll("[data-caption-text-color]").forEach(input => { input.value = captionTextColor(); });
   document.querySelectorAll("[data-caption-background-color]").forEach(input => { input.value = captionBackgroundColor() === "transparent" ? "#000000" : captionBackgroundColor(); });
+  document.querySelectorAll("[data-caption-highlight-background-color]").forEach(input => { input.value = captionHighlightBackgroundColor(); });
   document.querySelectorAll("[data-caption-enabled]").forEach(input => { input.checked = captionEnabled(); });
-  document.querySelectorAll("[data-caption-current]").forEach(item => { item.textContent = captionEnabled() ? "Ativada" : "Desligada"; });
+  document.querySelectorAll("[data-caption-current]").forEach(item => { item.textContent = captionMode() === "animated" ? "Animada" : captionEnabled() ? "Ativada" : "Desligada"; });
 }
 function captionCommand(){
   const chars = captionWidth();
   const lines = captionLines();
   const script = window.CUTTED_SCRIPT || "cutted.py";
-  return `python "${script}" caption-selected "caption-queue.json" --out "captioned-clips" --base-dir "." --chars-per-line ${chars} --max-lines ${lines}`;
+  const coverFrame = renderCoverFrameEnabled() ? " --cover-frame" : "";
+  return `python "${script}" caption-selected "caption-queue.json" --out "captioned-clips" --base-dir "." --chars-per-line ${chars} --max-lines ${lines}${coverFrame}`;
+}
+function renderCoverFrameEnabled(){
+  return Boolean(renderQueueState.coverFrame);
 }
 async function finalizeVideos(){
   const button = document.getElementById("finalize-videos");
@@ -15816,6 +18083,7 @@ async function finalizeVideos(){
         chars_per_line: captionWidth(),
         max_lines: captionLines(),
         captions_enabled: queue.some(item => item.captions_enabled !== false),
+        cover_frame_enabled: renderCoverFrameEnabled(),
         gallery_path: currentGalleryPath()
       })
     });
@@ -15903,6 +18171,10 @@ function renderFinalizeResults(files, options = {}){
     const open = index === 0 ? " open" : "";
     const downloadName = file.download_name || file.url?.split("/").pop() || "cuted-video.mp4";
     const finalFile = file.final_file || file.local_file || "";
+    const coverFile = file.final_cover_file || file.local_cover_file || file.cover_file || "";
+    const coverFrameUrl = file.cover_frame_url || "";
+    const coverFrameFile = file.final_cover_frame_file || file.local_cover_frame_file || file.cover_frame_file || "";
+    const coverFrameDownloadName = file.download_cover_frame_name || coverFrameUrl.split("/").pop() || "cuted-tiktok-cover-frame.mp4";
     const finalDir = file.final_dir || "";
     const fileStatus = finalFile ? "Arquivo final exportado" : "Preview temporario";
     return `<details class="result-item"${open}>
@@ -15919,26 +18191,42 @@ function renderFinalizeResults(files, options = {}){
             <dt>Chamada</dt><dd>${escapeHtml(overlay.label)}</dd>
             <dt>Vinhetas</dt><dd>${escapeHtml(bumperText)}</dd>
             ${finalFile ? `<dt>Arquivo final</dt><dd><span class="result-path">${escapeHtml(finalFile)}</span></dd>` : ""}
+            ${coverFile ? `<dt>Capa final</dt><dd><span class="result-path">${escapeHtml(coverFile)}</span></dd>` : ""}
+            ${coverFrameFile ? `<dt>Versao TikTok</dt><dd><span class="result-path">${escapeHtml(coverFrameFile)}</span></dd>` : ""}
             ${finalDir ? `<dt>Pasta final</dt><dd><span class="result-path">${escapeHtml(finalDir)}</span></dd>` : ""}
           </dl>
           <div class="result-actions">
             <a href="${escapeAttr(file.url)}" target="_blank" rel="noopener">Abrir preview</a>
             <a class="secondary" href="${escapeAttr(file.url)}" download="${escapeAttr(downloadName)}">Baixar preview</a>
+            ${coverFrameUrl ? `<a class="secondary" href="${escapeAttr(coverFrameUrl)}" target="_blank" rel="noopener">Abrir TikTok</a>` : ""}
+            ${coverFrameUrl ? `<a class="secondary" href="${escapeAttr(coverFrameUrl)}" download="${escapeAttr(coverFrameDownloadName)}">Baixar TikTok</a>` : ""}
             ${finalDir ? `<button class="secondary" type="button" data-open-folder="${escapeAttr(finalDir)}">Abrir pasta</button>` : ""}
             ${finalFile ? `<button class="secondary" type="button" data-copy-path="${escapeAttr(finalFile)}">Copiar caminho</button>` : ""}
+            ${coverFrameFile ? `<button class="secondary" type="button" data-copy-path="${escapeAttr(coverFrameFile)}">Copiar TikTok</button>` : ""}
           </div>
         </div>
       </div>
     </details>`;
   }).join("");
 }
-const renderQueueState = { profile: localStorage.getItem("cuted-render-profile") || "medium", pollId: null, activityPollId: null, lastFocus: null, lastJobs: [] };
+const renderQueueState = {
+  profile: localStorage.getItem("cuted-render-profile") || "medium",
+  coverFrame: localStorage.getItem("cuted-render-cover-frame") === "1",
+  pollId: null,
+  activityPollId: null,
+  lastFocus: null,
+  lastJobs: []
+};
 function setupRenderQueuePanel(){
   const modal = document.querySelector("[data-render-queue-modal]");
   if (!modal) return;
   document.querySelectorAll("[data-render-profile]").forEach(button => {
     button.classList.toggle("active", button.dataset.renderProfile === renderQueueState.profile);
     button.addEventListener("click", () => setRenderQueueProfile(button.dataset.renderProfile || "medium"));
+  });
+  document.querySelectorAll("[data-render-cover-frame]").forEach(input => {
+    input.checked = renderQueueState.coverFrame;
+    input.addEventListener("change", () => setRenderCoverFrameEnabled(input.checked));
   });
   document.querySelector("[data-render-queue-close]")?.addEventListener("click", () => closeRenderQueuePanel());
   modal.addEventListener("click", event => { if (event.target === modal) closeRenderQueuePanel(); });
@@ -16040,6 +18328,7 @@ function renderQueueJobHtml(job){
   const meta = [
     summary.platform || "",
     summary.duration ? fixed(summary.duration) : "",
+    summary.cover_frame_enabled ? "Capa TikTok" : "",
     renderProfileLabel(job.resource_profile),
     job.speed || "",
     eta > 0 && job.status === "rendering" ? `${formatRenderEta(eta)} restantes` : ""
@@ -16105,6 +18394,19 @@ async function setRenderQueueProfile(profile){
     if (status) status.textContent = error.message || "Nao consegui atualizar o perfil da fila.";
   }
 }
+function setRenderCoverFrameEnabled(enabled){
+  renderQueueState.coverFrame = Boolean(enabled);
+  localStorage.setItem("cuted-render-cover-frame", renderQueueState.coverFrame ? "1" : "0");
+  document.querySelectorAll("[data-render-cover-frame]").forEach(input => {
+    input.checked = renderQueueState.coverFrame;
+  });
+  const status = document.querySelector("[data-render-queue-status]");
+  if (status) {
+    status.textContent = renderQueueState.coverFrame
+      ? "Capa TikTok ligada para os proximos renders."
+      : "Capa TikTok desligada para os proximos renders.";
+  }
+}
 async function updateRenderQueueProfileJob(jobId, profile){
   if (!jobId) return { changed: false };
   const response = await fetch(`/api/render-jobs/${encodeURIComponent(jobId)}/profile`, {
@@ -16156,6 +18458,7 @@ async function sendCardToRenderQueue(card){
         max_lines: captionLines(),
         captions_enabled: queue.caption_queue.some(item => item.captions_enabled !== false),
         gallery_path: currentGalleryPath(),
+        cover_frame_enabled: renderCoverFrameEnabled(),
         resource_profile: renderQueueState.profile
       })
     });
@@ -16269,8 +18572,11 @@ function clearNewProjectState(){
   localStorage.removeItem("cutted-caption-lines");
   localStorage.removeItem("cutted-caption-width");
   localStorage.removeItem("cutted-caption-size");
+  localStorage.removeItem("cutted-caption-bottom");
+  localStorage.removeItem("cutted-caption-mode");
   localStorage.removeItem("cutted-caption-text-color");
   localStorage.removeItem("cutted-caption-background-color");
+  localStorage.removeItem("cutted-caption-highlight-background-color");
   localStorage.removeItem("cutted-caption-enabled");
 }
 function resetCardPanels(card){
@@ -16514,17 +18820,17 @@ document.querySelectorAll(".card").forEach(card => {
       card.dataset.playbackMode = "range";
       delete card.dataset.timelineSeekIntent;
       if (Math.abs(video.currentTime - nextTime) > .05) video.currentTime = nextTime;
-      startCameraFrameSync(video, () => updateCameraSurfaceForCard(card));
+      startCameraFrameSync(video, () => syncPreviewPlaybackFrame(card));
       syncCameraFitBackground(card);
       syncPreviewPlaybackState(card);
     });
     video.addEventListener("pause", () => {
-      stopCameraFrameSync(video, () => updateCameraSurfaceForCard(card));
+      stopCameraFrameSync(video, () => syncPreviewPlaybackFrame(card));
       syncCameraFitBackground(card);
       syncPreviewPlaybackState(card);
     });
     video.addEventListener("ended", () => {
-      stopCameraFrameSync(video, () => updateCameraSurfaceForCard(card));
+      stopCameraFrameSync(video, () => syncPreviewPlaybackFrame(card));
       syncCameraFitBackground(card);
       syncPreviewPlaybackState(card);
     });
@@ -16609,14 +18915,19 @@ document.querySelector("[data-render-results]")?.addEventListener("click", event
   if (!copyButton) return;
   copyResultPath(copyButton.dataset.copyPath || "", copyButton);
 });
-document.querySelectorAll("[data-caption-lines],[data-caption-width],[data-caption-size],[data-caption-text-color],[data-caption-background-color],[data-caption-enabled]").forEach(input => {
+document.querySelectorAll("[data-caption-lines],[data-caption-width],[data-caption-size],[data-caption-bottom],[data-caption-text-color],[data-caption-background-color],[data-caption-highlight-background-color],[data-caption-enabled]").forEach(input => {
   const update = () => {
     if (input.matches("[data-caption-lines]")) localStorage.setItem("cutted-caption-lines", input.value);
     if (input.matches("[data-caption-width]")) localStorage.setItem("cutted-caption-width", input.value);
     if (input.matches("[data-caption-size]")) localStorage.setItem("cutted-caption-size", input.value);
+    if (input.matches("[data-caption-bottom]")) localStorage.setItem("cutted-caption-bottom", input.value);
     if (input.matches("[data-caption-text-color]")) localStorage.setItem("cutted-caption-text-color", normalizeCaptionColor(input.value, "#ffffff"));
     if (input.matches("[data-caption-background-color]")) localStorage.setItem("cutted-caption-background-color", normalizeCaptionBackground(input.value));
-    if (input.matches("[data-caption-enabled]")) localStorage.setItem("cutted-caption-enabled", input.checked ? "1" : "0");
+    if (input.matches("[data-caption-highlight-background-color]")) localStorage.setItem("cutted-caption-highlight-background-color", normalizeCaptionHighlightBackground(input.value));
+    if (input.matches("[data-caption-enabled]")) {
+      localStorage.setItem("cutted-caption-enabled", input.checked ? "1" : "0");
+      localStorage.setItem("cutted-caption-mode", input.checked ? "on" : "off");
+    }
     syncCaptionInputs();
     syncPreviewCaptionsForOpenCards();
     renderFinalStage();
