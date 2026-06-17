@@ -13,8 +13,9 @@ the main application code is organized here.
   profile and overlay files.
 - `channels/`: social channel operations, content backlogs, publishing
   experiments, and metrics logs.
-- `samples/`: generated clipping experiments with review HTML, frames, clips,
-  caption queues, subtitles, and rendered outputs.
+- `samples/`: lightweight development fixtures and QA metadata. Generated
+  videos, rendered clips, temporary imports, and final media outputs should live
+  in the local CUTED workspace or local archive, not in Git.
 - `tools/cutted/`: versioned copy of the local CUTED skill used to generate
   galleries, serve the local finalize API, and render captioned outputs.
 - `docs/`: product, architecture, QA, and local operations documentation for
@@ -48,3 +49,11 @@ OpenCV Auto camera pass that writes face-based `camera_path` keyframes. OpenCV
 itself does not add API cost; future cost would come only from optional cloud
 APIs or paid model hosting if automatic face/speaker detection moves outside
 the local machine.
+
+## Media Artifact Policy
+
+CUTED generated media is intentionally local-first. Do not commit imported
+videos, preview clips, captioned renders, final smoke renders, or workspace
+source media to this repository. Keep reusable code, docs, manifests, fixtures,
+and small QA metadata in Git; keep generated video outputs under the CUTED
+workspace or an external archive.
