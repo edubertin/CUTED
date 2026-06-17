@@ -2,6 +2,17 @@ samples/**/cutted-serve-*.log
 samples/**/cutted-serve-*.err.log
 samples/**/_imports/
 samples/**/overlay-assets/
+samples/**/*.mp4
+samples/**/*.mov
+samples/**/*.mkv
+samples/**/*.webm
+samples/**/clips/
+samples/**/captioned-clips/
+samples/**/captioned-clips-v2/
+samples/**/final-smoke/
+samples/**/_source/
+samples/**/waveforms/
+samples/**/camera-analysis/
 .codex-cuted-*.log
 __pycache__/
 *.pyc

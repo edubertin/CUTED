@@ -101,8 +101,10 @@ samples/*/captioned-clips/subtitles/
 samples/*/overlay-assets/
 ```
 
-These files are useful for QA evidence, but they can dirty the repository. Check
-scope before staging.
+These files are useful for QA evidence, but generated media should not be
+committed. Keep videos and final renders in the local CUTED workspace or a local
+archive; only small manifests, subtitles, docs, and intentional fixtures should
+be considered for Git. Check scope before staging.
 
 ## Troubleshooting
 
