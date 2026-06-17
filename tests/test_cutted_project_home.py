@@ -77,6 +77,10 @@ class CuttedProjectHomeTests(unittest.TestCase):
             self.assertIn("project-table-head", html)
             self.assertIn("project-row", html)
             self.assertIn("Sample", html)
+            self.assertIn("Remover recente", html)
+            self.assertIn("Excluir projeto", html)
+            self.assertIn("projectDeleteMessage", html)
+            self.assertIn("Renders finais fora da pasta do projeto nao sao apagados", html)
             self.assertNotIn("data-tab=\"edit\"", html)
             self.assertNotIn("1. Importar", html)
             self.assertNotIn("project-intro", html)
@@ -186,7 +190,9 @@ class CuttedProjectHomeTests(unittest.TestCase):
             project_dir.mkdir(parents=True)
             (project_dir / "index.html").write_text("ok", encoding="utf-8")
             original_catalog_path = CUTTED.project_catalog_path
+            original_recycle = CUTTED.move_project_dir_to_recycle_bin
             CUTTED.project_catalog_path = lambda: catalog_path
+            CUTTED.move_project_dir_to_recycle_bin = lambda path: CUTTED.shutil.rmtree(path) or True
             try:
                 CUTTED.upsert_project_catalog_entry({"id": "sample", "title": "Sample", "path": str(project_dir)})
 
@@ -194,14 +200,40 @@ class CuttedProjectHomeTests(unittest.TestCase):
 
                 self.assertTrue(result["ok"])
                 self.assertTrue(project_dir.exists())
+                self.assertEqual(result["delete_method"], "")
 
                 CUTTED.upsert_project_catalog_entry({"id": "sample", "title": "Sample", "path": str(project_dir)})
                 result = CUTTED.delete_project_from_catalog("sample", workspace, True)
 
                 self.assertTrue(result["deleted_files"])
+                self.assertEqual(result["delete_method"], "recycle-bin")
                 self.assertFalse(project_dir.exists())
             finally:
                 CUTTED.project_catalog_path = original_catalog_path
+                CUTTED.move_project_dir_to_recycle_bin = original_recycle
+
+    def test_project_delete_falls_back_when_recycle_bin_is_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            catalog_path = workspace / "projects.json"
+            project_dir = workspace / "projects" / "sample"
+            project_dir.mkdir(parents=True)
+            (project_dir / "index.html").write_text("ok", encoding="utf-8")
+            original_catalog_path = CUTTED.project_catalog_path
+            original_recycle = CUTTED.move_project_dir_to_recycle_bin
+            CUTTED.project_catalog_path = lambda: catalog_path
+            CUTTED.move_project_dir_to_recycle_bin = lambda path: False
+            try:
+                CUTTED.upsert_project_catalog_entry({"id": "sample", "title": "Sample", "path": str(project_dir)})
+
+                result = CUTTED.delete_project_from_catalog("sample", workspace, True)
+
+                self.assertTrue(result["deleted_files"])
+                self.assertEqual(result["delete_method"], "permanent-delete")
+                self.assertFalse(project_dir.exists())
+            finally:
+                CUTTED.project_catalog_path = original_catalog_path
+                CUTTED.move_project_dir_to_recycle_bin = original_recycle
 
     def test_recent_projects_only_include_current_workspace_projects(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

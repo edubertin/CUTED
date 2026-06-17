@@ -895,13 +895,49 @@ def delete_project_from_catalog(project_id: str, workspace: Path, delete_files: 
     if target is None:
         raise ValueError("Projeto nao encontrado.")
     deleted = False
+    delete_method = ""
     if delete_files:
         project_dir = safe_project_delete_dir(Path(str(target.get("path") or "")), workspace)
-        shutil.rmtree(project_dir)
+        delete_method = delete_project_dir(project_dir)
         deleted = True
     catalog["projects"] = [row for row in rows if not (isinstance(row, dict) and clean_project_id(row.get("id")) == project_id)]
     write_project_catalog(catalog)
-    return {"ok": True, "deleted_files": deleted, "projects": project_catalog_recent(workspace)}
+    return {"ok": True, "deleted_files": deleted, "delete_method": delete_method, "projects": project_catalog_recent(workspace)}
+
+
+def delete_project_dir(project_dir: Path) -> str:
+    if move_project_dir_to_recycle_bin(project_dir):
+        return "recycle-bin"
+    shutil.rmtree(project_dir)
+    return "permanent-delete"
+
+
+def move_project_dir_to_recycle_bin(project_dir: Path) -> bool:
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+    except ImportError:
+        return False
+
+    class SHFILEOPSTRUCTW(ctypes.Structure):
+        _fields_ = [
+            ("hwnd", ctypes.c_void_p),
+            ("wFunc", ctypes.c_uint),
+            ("pFrom", ctypes.c_wchar_p),
+            ("pTo", ctypes.c_wchar_p),
+            ("fFlags", ctypes.c_ushort),
+            ("fAnyOperationsAborted", ctypes.c_bool),
+            ("hNameMappings", ctypes.c_void_p),
+            ("lpszProgressTitle", ctypes.c_wchar_p),
+        ]
+
+    operation = SHFILEOPSTRUCTW()
+    operation.wFunc = 0x0003
+    operation.pFrom = str(project_dir.resolve()) + "\0\0"
+    operation.fFlags = 0x0040 | 0x0010 | 0x0400 | 0x0004
+    result = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(operation))
+    return result == 0 and not operation.fAnyOperationsAborted and not project_dir.exists()
 
 
 def touch_project_catalog_entry(gallery_dir: Path, workspace: Path) -> dict[str, object]:
@@ -11108,7 +11144,7 @@ def project_home_card_html(project: dict[str, object]) -> str:
     open_action = f'<a href="{url}">Abrir</a>' if url else '<button type="button" disabled>Abrir</button>'
     updated = html.escape(str(project.get("last_opened_at") or ""))
     return f"""
-        <article class="project-row" data-project-id="{project_id}">
+        <article class="project-row" data-project-id="{project_id}" data-project-title="{title}" data-project-path="{path}" data-project-size="{size_label}">
           <div class="project-name-cell">
             <strong>{title}</strong>
             <p>{source}</p>
@@ -11122,8 +11158,8 @@ def project_home_card_html(project: dict[str, object]) -> str:
           <time class="project-updated-cell">{updated}</time>
           <div class="project-row-actions">
             {open_action}
-            <button type="button" data-forget-project>Remover</button>
-            <button type="button" data-delete-project>Apagar</button>
+            <button type="button" data-forget-project>Remover recente</button>
+            <button type="button" data-delete-project>Excluir projeto</button>
           </div>
         </article>"""
 
@@ -12338,11 +12374,12 @@ function setupImportKeyBanner(){
 }
 function projectCard(project){
   const open = project.url ? `<a href="${escapeAttr(project.url)}">Abrir</a>` : `<button type="button" disabled>Abrir</button>`;
-  return `<article class="project-row" data-project-id="${escapeAttr(project.id)}">
+  const size = sizeLabel(project.size_bytes || 0);
+  return `<article class="project-row" data-project-id="${escapeAttr(project.id)}" data-project-title="${escapeAttr(project.title || "Projeto sem titulo")}" data-project-path="${escapeAttr(project.path || "")}" data-project-size="${escapeAttr(size)}">
     <div class="project-name-cell"><strong>${escapeHtml(project.title || "Projeto sem titulo")}</strong><p>${escapeHtml(project.source_label || "")}</p><small>${escapeHtml(project.path || "")}</small></div>
-    <dl class="project-meta-cell"><div><dt>Cortes</dt><dd>${Number(project.clip_count || 0)}</dd></div><div><dt>Renders</dt><dd>${Number(project.render_count || 0)}</dd></div><div><dt>Tamanho</dt><dd>${escapeHtml(sizeLabel(project.size_bytes || 0))}</dd></div></dl>
+    <dl class="project-meta-cell"><div><dt>Cortes</dt><dd>${Number(project.clip_count || 0)}</dd></div><div><dt>Renders</dt><dd>${Number(project.render_count || 0)}</dd></div><div><dt>Tamanho</dt><dd>${escapeHtml(size)}</dd></div></dl>
     <time class="project-updated-cell">${escapeHtml(project.last_opened_at || "")}</time>
-    <div class="project-row-actions">${open}<button type="button" data-forget-project>Remover</button><button type="button" data-delete-project>Apagar</button></div>
+    <div class="project-row-actions">${open}<button type="button" data-forget-project>Remover recente</button><button type="button" data-delete-project>Excluir projeto</button></div>
   </article>`;
 }
 function emptyProjectState(){
@@ -12367,10 +12404,34 @@ async function refreshProjects(){
 }
 async function deleteProject(card, deleteFiles){
   const projectId = card?.dataset.projectId || "";
-  const message = deleteFiles ? "Apagar os arquivos locais deste projeto?" : "Remover este projeto da lista recente?";
+  const title = card?.dataset.projectTitle || "Projeto sem titulo";
+  const path = card?.dataset.projectPath || "";
+  const size = card?.dataset.projectSize || "tamanho desconhecido";
+  const message = projectDeleteMessage(title, path, size, deleteFiles);
   if (!projectId || !window.confirm(message)) return;
-  await postJson(`/api/projects/${encodeURIComponent(projectId)}/delete`, { delete_files: deleteFiles });
+  const result = await postJson(`/api/projects/${encodeURIComponent(projectId)}/delete`, { delete_files: deleteFiles });
   await refreshProjects();
+  if (deleteFiles) {
+    const method = result.delete_method === "recycle-bin" ? "Projeto enviado para a Lixeira." : "Projeto excluido localmente.";
+    setStatus(method);
+  } else {
+    setStatus("Projeto removido dos recentes. Os arquivos continuam no disco.");
+  }
+}
+function projectDeleteMessage(title, path, size, deleteFiles){
+  if (!deleteFiles) {
+    return `Remover "${title}" da lista de recentes?\n\nOs arquivos continuam no disco:\n${path}`;
+  }
+  return [
+    `Excluir projeto "${title}"?`,
+    "",
+    `Tamanho aproximado: ${size}`,
+    `Pasta: ${path}`,
+    "",
+    "A pasta do projeto sera enviada para a Lixeira quando disponivel.",
+    "Se a Lixeira nao estiver disponivel, os arquivos locais serao removidos.",
+    "Renders finais fora da pasta do projeto nao sao apagados por esta acao."
+  ].join("\n");
 }
 document.querySelectorAll("[data-new-project]").forEach(button => {
   button.addEventListener("click", () => {
