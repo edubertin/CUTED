@@ -338,8 +338,38 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertNotRegex(ass, r"Dialogue: [12],[^\\n]+,Default,,0,0,0,,\\{[^}]*\\p1")
         self.assertNotRegex(ass, r"\\p1[^\\n]+\\fscx112")
 
-    def test_render_fingerprint_invalidates_cover_parity_jobs(self) -> None:
+    def test_render_fingerprint_invalidates_caption_timing_and_cover_parity_jobs(self) -> None:
+        self.assertIn("caption-timing", CUTTED.RENDER_JOB_FINGERPRINT_VERSION)
         self.assertIn("cover-parity", CUTTED.RENDER_JOB_FINGERPRINT_VERSION)
+
+    def test_animated_caption_render_timing_preserves_first_word_duration(self) -> None:
+        first = CUTTED.AnimatedCaptionWindow(0.0, 0.327, "", "cade", "a")
+        second = CUTTED.AnimatedCaptionWindow(0.327, 0.49, "cade", "a", "roupa")
+
+        first_start, first_end = CUTTED.animated_caption_render_window_times(first, 2.0)
+        second_start, second_end = CUTTED.animated_caption_render_window_times(second, 2.0, first_end)
+
+        self.assertEqual(first_start, 0.0)
+        self.assertGreaterEqual(first_end - first_start, 0.32)
+        self.assertGreaterEqual(second_start, first_end)
+        self.assertGreaterEqual(second_end - second_start, CUTTED.ANIMATED_CAPTION_MIN_RENDER_SECONDS)
+
+    def test_captioned_ffmpeg_command_uses_precise_seek_after_input(self) -> None:
+        command = CUTTED.captioned_ffmpeg_command(
+            Path("clip.mp4"),
+            Path("out.mp4"),
+            {"trim_start_seconds": 47.664, "adjusted_duration": 55.046},
+            CUTTED.PLATFORM_PRESETS["tiktok"],
+            "ffmpeg",
+            [],
+        )
+
+        input_index = command.index("-i")
+        seek_index = command.index("-ss")
+
+        self.assertLess(input_index, seek_index)
+        self.assertEqual(command[input_index + 1], "clip.mp4")
+        self.assertEqual(command[seek_index + 1], "47.664")
 
     def test_render_queue_manifest_retries_transient_access_denied(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
