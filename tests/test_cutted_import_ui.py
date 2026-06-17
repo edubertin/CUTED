@@ -382,7 +382,7 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertEqual(windows[1].next, "")
         self.assertTrue(all(item[3] - item[2] >= CUTTED.ANIMATED_CAPTION_MIN_RENDER_SECONDS for item in timings))
 
-    def test_captioned_ffmpeg_command_uses_precise_seek_after_input(self) -> None:
+    def test_captioned_ffmpeg_command_seeks_before_input_for_filter_trim_parity(self) -> None:
         command = CUTTED.captioned_ffmpeg_command(
             Path("clip.mp4"),
             Path("out.mp4"),
@@ -395,7 +395,7 @@ class CuttedImportUiTests(unittest.TestCase):
         input_index = command.index("-i")
         seek_index = command.index("-ss")
 
-        self.assertLess(input_index, seek_index)
+        self.assertLess(seek_index, input_index)
         self.assertEqual(command[input_index + 1], "clip.mp4")
         self.assertEqual(command[seek_index + 1], "47.664")
 
