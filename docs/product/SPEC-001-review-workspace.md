@@ -29,6 +29,9 @@ into a dedicated app.
 
 - The first screen is the main editing workspace.
 - Each clip is represented as a dropdown card.
+- After import completes and CUTED enters the Editar tab, all clip dropdown
+  cards should start closed. The user chooses which clip/card to open first;
+  the first card must not auto-open by default.
 - Only the active card should load and play its video preview.
 - Each clip owns its own platform switcher; there is no global Format toolbar in
   the Edit tab.

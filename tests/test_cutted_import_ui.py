@@ -535,9 +535,15 @@ class CuttedImportUiTests(unittest.TestCase):
 
     def test_import_progress_names_publish_seo_stage(self) -> None:
         stages = CUTTED.import_job_running_stages("youtube", "openai")
+        source = MODULE_PATH.read_text(encoding="utf-8")
 
         self.assertIn(("Publicacao IA", "Analisando SEO e tendencias..."), stages)
         self.assertIn('data-import-step="publish"', CUTTED.project_home_import_loading_html("assets/brand/cuted-logo-transparent.png"))
+        self.assertIn(
+            'const importStageOrder = ["prepare", "media", "audio", "analysis", "suggestions", "previews", "publish", "editor"];',
+            source,
+        )
+        self.assertIn("const currentIndex = importStageOrder.includes(stage) ? importStageOrder.indexOf(stage) : 0;", source)
 
     def test_partial_captioned_files_are_recovered_before_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -954,6 +960,7 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("data-cuted-control-surface", html)
         self.assertIn('data-clip-title="Teste"', html)
         self.assertIn("data-clip-summary", html)
+        self.assertNotIn('data-preview-format="tiktok" open', html)
         self.assertNotIn("clip-control-row", html)
         self.assertNotIn("clip-control-meta", html)
         self.assertIn("clip-control-surface", html)

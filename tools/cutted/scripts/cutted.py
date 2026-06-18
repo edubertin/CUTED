@@ -11448,11 +11448,10 @@ def card_html(moment: Moment) -> str:
     video_tag = media_html(moment)
     cover_panel, copy_panel = publish_panels_html(moment)
     duration = max(0.0, moment.end - moment.start)
-    open_attr = " open" if moment.rank == 1 else ""
     title = html.escape(clean_clip_title(moment.title))
     summary = f"{moment.start:.1f}s - {moment.end:.1f}s ({duration:.1f}s)"
     return f"""
-    <details class="card" data-rank="{moment.rank}" data-clip-title="{title}" data-clip-summary="{html.escape(summary)}" data-start="{moment.start:.3f}" data-end="{moment.end:.3f}" data-duration="{duration:.3f}" data-preview-format="tiktok"{open_attr}>
+    <details class="card" data-rank="{moment.rank}" data-clip-title="{title}" data-clip-summary="{html.escape(summary)}" data-start="{moment.start:.3f}" data-end="{moment.end:.3f}" data-duration="{duration:.3f}" data-preview-format="tiktok">
       <summary class="clip-summary">
         <span class="clip-control-surface cuted-control-surface-slot" data-cuted-control-surface aria-label="Control surface do corte"></span>
         <span data-card-summary hidden>{html.escape(summary)}</span>
@@ -11954,7 +11953,7 @@ let importOpenaiState = { provider: "local", keyConfigured: true };
 function importNeedsOpenaiKey(){
   return importOpenaiState.provider === "openai" && !importOpenaiState.keyConfigured;
 }
-const importStageOrder = ["prepare", "media", "audio", "analysis", "suggestions", "previews", "editor"];
+const importStageOrder = ["prepare", "media", "audio", "analysis", "suggestions", "previews", "publish", "editor"];
 function setImportLoading(message, label = "Importacao", percent = 8, progress = {}){
   const loading = document.querySelector("[data-import-loading]");
   if (!loading) return;
@@ -11983,7 +11982,7 @@ function importProgressDetail(progress){
   return "Acompanhe as etapas enquanto o projeto nasce.";
 }
 function updateImportSteps(stage){
-  const currentIndex = Math.max(0, importStageOrder.indexOf(stage));
+  const currentIndex = importStageOrder.includes(stage) ? importStageOrder.indexOf(stage) : 0;
   document.querySelectorAll("[data-import-step]").forEach(item => {
     const index = importStageOrder.indexOf(item.dataset.importStep || "");
     item.dataset.state = index < currentIndex ? "done" : index === currentIndex ? "active" : "";

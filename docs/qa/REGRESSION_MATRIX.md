@@ -16,6 +16,7 @@ review workspace, data contracts, or render pipeline.
 | Brand | Header logo | Transparent official PNG appears without black rectangle |
 | Brand | UI tokens | `:root` exposes CUTED blue, green, white, black, gray, surface, and border tokens |
 | Brand | CUTED Liquid UI | Glass tokens style tabs, preview dock, tool panels, overlay menu, and render actions |
+| Edit | Enter Editar after import | All clip dropdown cards start closed; the user chooses which card to open |
 | Preview | Expand one clip card | Only active video is loaded |
 | Preview | Inspect preview stack | Platform tags sit above controls, and controls sit above video |
 | Preview | Mobile width | Preview dock stays constrained to video width without horizontal overflow |
@@ -83,6 +84,7 @@ review workspace, data contracts, or render pipeline.
 | AI import UI | Save an OpenAI key | Key banner disappears without reloading the page |
 | AI import UI | Suggestion count | Dropdown offers 1 through 20 |
 | AI import UI | Duration profile | Short, medium, and long map to expected duration arguments |
+| AI import UI | Observe SEO loading step | SEO starts idle, becomes active after Previews, and only turns done/green before Editor starts |
 | Render UI | Open Renderizar tab | Exportar fila is absent and render action remains available |
 
 ## Overlay Regression Checks
