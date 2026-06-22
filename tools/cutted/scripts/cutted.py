@@ -104,6 +104,19 @@ from cuted_media_source import (
     yt_dlp_extra_args as media_yt_dlp_extra_args,
     yt_dlp_runtime_args as media_yt_dlp_runtime_args,
 )
+from cuted_render_queue import (
+    clean_render_resource_profile as queue_clean_render_resource_profile,
+    read_render_queue_manifest as queue_read_render_queue_manifest,
+    render_job_fingerprint as queue_render_job_fingerprint,
+    render_job_output_dir as queue_render_job_output_dir,
+    render_job_summary as queue_render_job_summary,
+    render_profile_label as queue_render_profile_label,
+    render_queue_cleanup_temp_manifest as queue_render_queue_cleanup_temp_manifest,
+    render_queue_manifest_path as queue_render_queue_manifest_path,
+    render_queue_temp_manifest_path as queue_render_queue_temp_manifest_path,
+    render_queue_write_error_is_retryable as queue_render_queue_write_error_is_retryable,
+    write_render_queue_manifest as queue_write_render_queue_manifest,
+)
 
 
 BRAND_LOGO_FILE = "cuted-logo-transparent.png"
@@ -1473,50 +1486,23 @@ def restore_render_jobs_from_manifest(gallery_dir: Path, base_dir: Path) -> None
 
 
 def render_job_fingerprint(payload: dict[str, object], profile: str) -> str:
-    relevant = {
-        "queue": payload.get("queue"),
-        "chars_per_line": payload.get("chars_per_line"),
-        "max_lines": payload.get("max_lines"),
-        "captions_enabled": payload.get("captions_enabled"),
-        "cover_frame_enabled": bool(payload.get("cover_frame_enabled", False)),
-        "resource_profile": profile,
-        "renderer": RENDER_JOB_FINGERPRINT_VERSION,
-    }
-    raw = json.dumps(relevant, ensure_ascii=False, sort_keys=True, default=str)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
+    return queue_render_job_fingerprint(payload, profile, RENDER_JOB_FINGERPRINT_VERSION)
 
 
 def render_job_summary(payload: dict[str, object]) -> dict[str, object]:
-    queue = payload.get("queue") if isinstance(payload, dict) else None
-    rows = queue.get("caption_queue") if isinstance(queue, dict) else []
-    first = rows[0] if isinstance(rows, list) and rows and isinstance(rows[0], dict) else {}
-    return {
-        "count": len(rows) if isinstance(rows, list) else 0,
-        "rank": first.get("rank", ""),
-        "title": first.get("title") or first.get("peak_text") or "Render CUTED",
-        "platform": first.get("platform_label") or first.get("platform") or "",
-        "duration": first.get("adjusted_duration") or "",
-        "cover_frame_enabled": bool(payload.get("cover_frame_enabled", False)),
-    }
+    return queue_render_job_summary(payload)
 
 
 def render_queue_manifest_path(gallery_dir: Path) -> Path:
-    return gallery_dir / PROJECT_RENDERS_DIR_NAME / "render-queue.json"
+    return queue_render_queue_manifest_path(gallery_dir, PROJECT_RENDERS_DIR_NAME)
 
 
 def render_job_output_dir(gallery_dir: Path, job_id: str) -> Path:
-    return gallery_dir / PROJECT_RENDERS_DIR_NAME / "jobs" / job_id
+    return queue_render_job_output_dir(gallery_dir, PROJECT_RENDERS_DIR_NAME, job_id)
 
 
 def read_render_queue_manifest(gallery_dir: Path) -> dict[str, object]:
-    path = render_queue_manifest_path(gallery_dir)
-    if not path.exists():
-        return {"version": 1, "jobs": []}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8-sig"))
-    except (OSError, json.JSONDecodeError):
-        return {"version": 1, "jobs": []}
-    return data if isinstance(data, dict) else {"version": 1, "jobs": []}
+    return queue_read_render_queue_manifest(render_queue_manifest_path(gallery_dir))
 
 
 def persist_render_queue(gallery_dir: Path) -> None:
@@ -1525,36 +1511,24 @@ def persist_render_queue(gallery_dir: Path) -> None:
 
 
 def write_render_queue_manifest(gallery_dir: Path, jobs: list[dict[str, object]]) -> None:
-    path = render_queue_manifest_path(gallery_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = json.dumps({"version": 1, "jobs": jobs}, ensure_ascii=False, indent=2)
-    for attempt in range(RENDER_QUEUE_WRITE_ATTEMPTS):
-        temp_path = render_queue_temp_manifest_path(path)
-        try:
-            temp_path.write_text(payload, encoding="utf-8")
-            temp_path.replace(path)
-            return
-        except OSError as error:
-            if not render_queue_write_error_is_retryable(error) or attempt + 1 >= RENDER_QUEUE_WRITE_ATTEMPTS:
-                raise
-            render_queue_cleanup_temp_manifest(temp_path)
-            time.sleep(RENDER_QUEUE_WRITE_RETRY_SECONDS * (attempt + 1))
+    queue_write_render_queue_manifest(
+        render_queue_manifest_path(gallery_dir),
+        jobs,
+        RENDER_QUEUE_WRITE_ATTEMPTS,
+        RENDER_QUEUE_WRITE_RETRY_SECONDS,
+    )
 
 
 def render_queue_temp_manifest_path(path: Path) -> Path:
-    suffix = f"{os.getpid()}-{threading.get_ident()}-{uuid.uuid4().hex[:8]}"
-    return path.with_name(f"{path.stem}.{suffix}.tmp")
+    return queue_render_queue_temp_manifest_path(path)
 
 
 def render_queue_write_error_is_retryable(error: OSError) -> bool:
-    return isinstance(error, PermissionError) or getattr(error, "winerror", None) == 5
+    return queue_render_queue_write_error_is_retryable(error)
 
 
 def render_queue_cleanup_temp_manifest(path: Path) -> None:
-    try:
-        path.unlink(missing_ok=True)
-    except OSError as error:
-        print(f"[cutted] render queue temp cleanup failed: {error}", file=sys.stderr)
+    queue_render_queue_cleanup_temp_manifest(path)
 
 
 def render_queue_snapshot_without_lock(gallery_dir: Path) -> list[dict[str, object]]:
@@ -1568,14 +1542,11 @@ def render_queue_snapshot_without_lock(gallery_dir: Path) -> list[dict[str, obje
 
 
 def clean_render_resource_profile(value: object) -> str:
-    profile = str(value or "medium").strip().lower()
-    aliases = {"medio": "medium", "médio": "medium", "alto": "high", "eco": "eco"}
-    profile = aliases.get(profile, profile)
-    return profile if profile in {"eco", "medium", "high"} else "medium"
+    return queue_clean_render_resource_profile(value)
 
 
 def render_profile_label(profile: str) -> str:
-    return {"eco": "Eco", "medium": "Medio", "high": "Alto"}.get(profile, "Medio")
+    return queue_render_profile_label(profile)
 
 
 def finalized_results_from_gallery(gallery_dir: Path) -> dict[str, object]:
