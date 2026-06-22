@@ -153,6 +153,50 @@ from cuted_bumpers import (
     normalize_bumper_slot as bumpers_normalize_bumper_slot,
     normalize_bumpers_from_row as bumpers_normalize_bumpers_from_row,
 )
+from cuted_caption_render import (
+    caption_trim_start as caption_render_caption_trim_start,
+    captioned_ffmpeg_command as caption_render_captioned_ffmpeg_command,
+    captioned_row as caption_render_captioned_row,
+    render_captioned_clip as caption_render_render_captioned_clip,
+    subtitle_filter_path as caption_render_subtitle_filter_path,
+)
+from cuted_render_pipeline import (
+    apply_bumpers_to_output as render_pipeline_apply_bumpers_to_output,
+    bumper_duration as render_pipeline_bumper_duration,
+    clamp as render_pipeline_clamp,
+    concat_file_entry as render_pipeline_concat_file_entry,
+    default_overlay as render_pipeline_default_overlay,
+    effect_filter as render_pipeline_effect_filter,
+    effect_from_row as render_pipeline_effect_from_row,
+    ffmpeg_color as render_pipeline_ffmpeg_color,
+    ffmpeg_filter_path as render_pipeline_ffmpeg_filter_path,
+    ffmpeg_media_duration as render_pipeline_ffmpeg_media_duration,
+    ffmpeg_text_value as render_pipeline_ffmpeg_text_value,
+    find_overlay_font as render_pipeline_find_overlay_font,
+    image_overlay_filter as render_pipeline_image_overlay_filter,
+    image_overlay_from_raw as render_pipeline_image_overlay_from_raw,
+    media_has_audio as render_pipeline_media_has_audio,
+    normalize_bumper_segment as render_pipeline_normalize_bumper_segment,
+    overlay_filter as render_pipeline_overlay_filter,
+    overlay_from_raw as render_pipeline_overlay_from_raw,
+    overlay_from_row as render_pipeline_overlay_from_row,
+    overlay_layer_filter as render_pipeline_overlay_layer_filter,
+    overlay_layer_from_raw as render_pipeline_overlay_layer_from_raw,
+    overlay_layers_from_row as render_pipeline_overlay_layers_from_row,
+    render_cover_frame_segment as render_pipeline_render_cover_frame_segment,
+    render_cover_frame_tail_video as render_pipeline_render_cover_frame_tail_video,
+    resolve_bumper_asset_path as render_pipeline_resolve_bumper_asset_path,
+    safe_hex_color as render_pipeline_safe_hex_color,
+    scaled_float as render_pipeline_scaled_float,
+    scaled_value as render_pipeline_scaled_value,
+    speech_overlay_filter as render_pipeline_speech_overlay_filter,
+    speech_overlay_from_raw as render_pipeline_speech_overlay_from_raw,
+    text_overlay_filter as render_pipeline_text_overlay_filter,
+    text_overlay_from_raw as render_pipeline_text_overlay_from_raw,
+    timed_overlay_enable as render_pipeline_timed_overlay_enable,
+    video_crf as render_pipeline_video_crf,
+    visible_effect_intensity as render_pipeline_visible_effect_intensity,
+)
 from cuted_project_catalog import (
     clean_project_id as catalog_clean_project_id,
     directory_size as catalog_directory_size,
@@ -7281,37 +7325,40 @@ def render_captioned_clip(
     input_path: Path, output_path: Path, subtitle_path: Path | None, row: dict[str, object],
     preset: PlatformPreset, base_dir: Path, out_dir: Path, ffmpeg: str
 ) -> dict[str, object]:
-    filters = [f"ass={subtitle_filter_path(subtitle_path, out_dir)}"] if subtitle_path else []
-    effect = effect_filter(row)
-    if effect:
-        filters.append(effect)
-    overlay = overlay_filter(row, preset)
-    if overlay:
-        filters.append(overlay)
-    command = captioned_ffmpeg_command(input_path, output_path, row, preset, ffmpeg, filters)
-    run_ffmpeg_command(command, row, cwd=str(out_dir))
-    return apply_bumpers_to_output(output_path, row, preset, base_dir, out_dir, ffmpeg)
+    return caption_render_render_captioned_clip(
+        input_path,
+        output_path,
+        subtitle_path,
+        row,
+        preset,
+        base_dir,
+        out_dir,
+        ffmpeg,
+        caption_duration,
+        effect_filter,
+        overlay_filter,
+        render_command,
+        run_ffmpeg_command,
+        apply_bumpers_to_output,
+        fmt_time,
+    )
 
 
 def captioned_ffmpeg_command(
     input_path: Path, output_path: Path, row: dict[str, object], preset: PlatformPreset,
     ffmpeg: str, filters: list[str]
 ) -> list[str]:
-    base = [
-        ffmpeg, "-y", "-ss", fmt_time(caption_trim_start(row)), "-i", str(input_path),
-        "-t", fmt_time(caption_duration(row)),
-    ]
-    return render_command(base, output_path, row, preset, filters, caption_duration(row))
+    return caption_render_captioned_ffmpeg_command(
+        input_path, output_path, row, preset, ffmpeg, filters, caption_duration, render_command, fmt_time
+    )
 
 
 def caption_trim_start(row: dict[str, object]) -> float:
-    if isinstance(row.get("file"), str) and row.get("file"):
-        return 0.0
-    return float(row.get("trim_start_seconds") or 0.0)
+    return caption_render_caption_trim_start(row)
 
 
 def subtitle_filter_path(subtitle_path: Path, out_dir: Path) -> str:
-    return subtitle_path.relative_to(out_dir).as_posix()
+    return caption_render_subtitle_filter_path(subtitle_path, out_dir)
 
 
 def captioned_row(
@@ -7319,159 +7366,71 @@ def captioned_row(
     cover_path: Path | None = None, cover_frame_path: Path | None = None,
 ) -> dict[str, object]:
     base_duration = caption_duration(row)
-    return {
-        "rank": row.get("rank"),
-        "platform": preset.key,
-        "label": preset.label,
-        "width": preset.width,
-        "height": preset.height,
-        "file": str(output_path),
-        "subtitle_file": str(subtitle_path) if subtitle_path else "",
-        "captions_enabled": bool(subtitle_path),
-        "caption_style": caption_style_from_row(row, preset),
-        "adjusted_start": row.get("adjusted_start"),
-        "adjusted_end": row.get("adjusted_end"),
-        "adjusted_duration": base_duration,
-        "base_duration": base_duration,
-        "final_duration": base_duration,
-        "cover_file": str(cover_path) if cover_path else "",
-        "cover_frame_file": str(cover_frame_path) if cover_frame_path else "",
-        "cover_frame_duration": round(base_duration + COVER_FRAME_TAIL_SECONDS, 3) if cover_frame_path else 0.0,
-        "publish_metadata": row.get("publish_metadata") if isinstance(row.get("publish_metadata"), dict) else {},
-        "camera": camera_from_row(row),
-        "camera_path": camera_path_from_row(row, base_duration),
-        "effect": effect_from_row(row),
-        "overlay": overlay_from_row(row),
-        "overlays": overlay_layers_from_row(row),
-        "bumpers": normalize_bumpers_from_row(row),
-    }
+    return caption_render_captioned_row(
+        row,
+        preset,
+        output_path,
+        subtitle_path,
+        cover_path,
+        cover_frame_path,
+        base_duration,
+        COVER_FRAME_TAIL_SECONDS,
+        caption_style_from_row(row, preset),
+        camera_from_row(row),
+        camera_path_from_row(row, base_duration),
+        effect_from_row(row),
+        overlay_from_row(row),
+        overlay_layers_from_row(row),
+        normalize_bumpers_from_row(row),
+    )
 
 
 def apply_bumpers_to_output(
     output_path: Path, row: dict[str, object], preset: PlatformPreset, base_dir: Path, out_dir: Path, ffmpeg: str
 ) -> dict[str, object]:
-    bumpers = normalize_bumpers_from_row(row)
-    if not bumpers:
-        return {}
-    base_duration = caption_duration(row)
-    work_dir = out_dir / "bumper-work" / output_path.stem
-    if work_dir.exists():
-        shutil.rmtree(work_dir)
-    work_dir.mkdir(parents=True, exist_ok=True)
-    core_source = work_dir / "core-source.mp4"
-    shutil.copy2(output_path, core_source)
-    segments: list[Path] = []
-    intro_duration = 0.0
-    outro_duration = 0.0
-    if "intro" in bumpers:
-        intro = resolve_bumper_asset_path(base_dir, bumpers["intro"])
-        intro_duration = bumper_duration(bumpers["intro"], intro, ffmpeg)
-        intro_segment = work_dir / "intro.mp4"
-        normalize_bumper_segment(intro, intro_segment, intro_duration, preset, ffmpeg, row)
-        segments.append(intro_segment)
-    core_segment = work_dir / "core.mp4"
-    normalize_bumper_segment(core_source, core_segment, base_duration, preset, ffmpeg, row)
-    segments.append(core_segment)
-    if "outro" in bumpers:
-        outro = resolve_bumper_asset_path(base_dir, bumpers["outro"])
-        outro_duration = bumper_duration(bumpers["outro"], outro, ffmpeg)
-        outro_segment = work_dir / "outro.mp4"
-        normalize_bumper_segment(outro, outro_segment, outro_duration, preset, ffmpeg, row)
-        segments.append(outro_segment)
-    concat_path = work_dir / "concat.txt"
-    concat_path.write_text("".join(concat_file_entry(path) for path in segments), encoding="utf-8")
-    temp_output = work_dir / "final.mp4"
-    command = [ffmpeg, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_path), "-c", "copy", "-movflags", "+faststart", str(temp_output)]
-    run_ffmpeg_command(command, row)
-    shutil.copy2(temp_output, output_path)
-    shutil.rmtree(work_dir, ignore_errors=True)
-    final_duration = base_duration + intro_duration + outro_duration
-    return {
-        "bumpers": bumpers,
-        "base_duration": round(base_duration, 3),
-        "intro_duration": round(intro_duration, 3),
-        "outro_duration": round(outro_duration, 3),
-        "final_duration": round(final_duration, 3),
-    }
+    return render_pipeline_apply_bumpers_to_output(
+        output_path,
+        row,
+        preset,
+        base_dir,
+        out_dir,
+        ffmpeg,
+        caption_duration,
+        run_ffmpeg_command,
+        fmt_time,
+        ffmpeg_codec_thread_args,
+        media_has_audio,
+        resolve_media_path,
+        FINAL_VIDEO_CRF,
+    )
 
 
 def normalize_bumper_segment(
     source: Path, output: Path, duration: float, preset: PlatformPreset, ffmpeg: str, row: dict[str, object]
 ) -> None:
-    safe_duration = max(float(duration or 0.0), 0.1)
-    video_filter_arg = ",".join([
-        f"scale={preset.width}:{preset.height}:force_original_aspect_ratio=increase",
-        f"crop={preset.width}:{preset.height}",
-        "setsar=1",
-        "fps=30",
-        "format=yuv420p",
-    ])
-    command = [ffmpeg, "-y", "-i", str(source)]
-    if media_has_audio(source, ffmpeg):
-        command.extend(["-t", fmt_time(safe_duration), "-vf", video_filter_arg, "-map", "0:v:0", "-map", "0:a:0"])
-    else:
-        command.extend([
-            "-f", "lavfi", "-t", fmt_time(safe_duration), "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
-            "-t", fmt_time(safe_duration), "-vf", video_filter_arg, "-map", "0:v:0", "-map", "1:a:0", "-shortest",
-        ])
-    command.extend([
-        "-c:v", "libx264",
-        "-preset", "medium",
-        "-profile:v", "main",
-        "-level", "4.1",
-        *ffmpeg_codec_thread_args(row),
-        "-pix_fmt", "yuv420p",
-        "-r", "30",
-        "-crf", FINAL_VIDEO_CRF,
-        "-c:a", "aac",
-        "-b:a", "192k",
-        "-ar", "44100",
-        "-movflags", "+faststart",
-        str(output),
-    ])
-    run_ffmpeg_command(command, row)
+    render_pipeline_normalize_bumper_segment(
+        source, output, duration, preset, ffmpeg, row, fmt_time, ffmpeg_codec_thread_args, media_has_audio, run_ffmpeg_command, FINAL_VIDEO_CRF
+    )
 
 
 def media_has_audio(path: Path, ffmpeg: str) -> bool:
-    command = [ffmpeg, "-hide_banner", "-i", str(path)]
-    result = subprocess.run(command, capture_output=True, text=True)
-    return "Audio:" in f"{result.stdout}\n{result.stderr}"
+    return render_pipeline_media_has_audio(path, ffmpeg)
 
 
 def bumper_duration(bumper: dict[str, object], path: Path, ffmpeg: str) -> float:
-    duration = float(bumper.get("duration") or 0.0)
-    if duration > 0:
-        return duration
-    return max(ffmpeg_media_duration(path, ffmpeg), 0.1)
+    return render_pipeline_bumper_duration(bumper, path, ffmpeg)
 
 
 def ffmpeg_media_duration(path: Path, ffmpeg: str) -> float:
-    command = [ffmpeg, "-hide_banner", "-i", str(path)]
-    result = subprocess.run(command, capture_output=True, text=True)
-    match = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", f"{result.stdout}\n{result.stderr}")
-    if not match:
-        return 0.0
-    hours, minutes, seconds = match.groups()
-    return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+    return render_pipeline_ffmpeg_media_duration(path, ffmpeg)
 
 
 def concat_file_entry(path: Path) -> str:
-    normalized = path.resolve().as_posix().replace("'", r"'\''")
-    return f"file '{normalized}'\n"
+    return render_pipeline_concat_file_entry(path)
 
 
 def resolve_bumper_asset_path(base_dir: Path, bumper: dict[str, object]) -> Path:
-    asset_file = str(bumper.get("asset_file") or "")
-    if not asset_file:
-        raise ValueError("Vinheta sem arquivo local.")
-    candidate = resolve_media_path(base_dir, asset_file).resolve()
-    try:
-        candidate.relative_to(base_dir.resolve())
-    except ValueError as error:
-        raise ValueError("Caminho de vinheta invalido.") from error
-    if not candidate.exists() or not candidate.is_file():
-        raise FileNotFoundError(f"Vinheta nao encontrada: {candidate}")
-    return candidate
+    return render_pipeline_resolve_bumper_asset_path(base_dir, bumper, resolve_media_path)
 
 
 def normalize_bumpers_from_row(row: dict[str, object]) -> dict[str, dict[str, object]]:
@@ -7514,53 +7473,9 @@ def render_cover_frame_tail_video(
     out_dir: Path,
     ffmpeg: str,
 ) -> Path | None:
-    if cover_path is None or not cover_path.exists() or not video_path.exists():
-        return None
-    output = out_dir / f"clip-{int(row.get('rank', 0)):03d}-{preset.key}-cover-frame.mp4"
-    work_dir = out_dir / "cover-frame-work" / f"{output.stem}-{uuid.uuid4().hex[:8]}"
-    work_dir.mkdir(parents=True, exist_ok=False)
-    try:
-        cover_segment = work_dir / "cover-frame.mp4"
-        render_cover_frame_segment(cover_path, cover_segment, media_has_audio(video_path, ffmpeg), preset, row, ffmpeg)
-        concat_path = work_dir / "concat.txt"
-        concat_path.write_text(concat_file_entry(video_path) + concat_file_entry(cover_segment), encoding="utf-8")
-        temp_output = work_dir / "cover-frame-final.mp4"
-        command = [
-            ffmpeg,
-            "-y",
-            "-f",
-            "concat",
-            "-safe",
-            "0",
-            "-i",
-            str(concat_path),
-            "-c",
-            "copy",
-            "-movflags",
-            "+faststart",
-            str(temp_output),
-        ]
-        try:
-            run_ffmpeg_command(command, row, cwd=str(out_dir))
-        except subprocess.CalledProcessError:
-            temp_output = work_dir / "cover-frame-final-reencoded.mp4"
-            fallback = [
-                ffmpeg,
-                "-y",
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                str(concat_path),
-                *mp4_output_args(row),
-                str(temp_output),
-            ]
-            run_ffmpeg_command(fallback, row, cwd=str(out_dir))
-        shutil.copy2(temp_output, output)
-        return output if output.exists() and output.stat().st_size > 0 else None
-    finally:
-        shutil.rmtree(work_dir, ignore_errors=True)
+    return render_pipeline_render_cover_frame_tail_video(
+        video_path, cover_path, row, preset, out_dir, ffmpeg, COVER_FRAME_TAIL_SECONDS, fmt_time, mp4_output_args, media_has_audio, run_ffmpeg_command
+    )
 
 
 def render_cover_frame_segment(
@@ -7571,23 +7486,9 @@ def render_cover_frame_segment(
     row: dict[str, object],
     ffmpeg: str,
 ) -> None:
-    duration = fmt_time(COVER_FRAME_TAIL_SECONDS)
-    video_filter_arg = ",".join([
-        f"scale={preset.width}:{preset.height}:force_original_aspect_ratio=increase",
-        f"crop={preset.width}:{preset.height}",
-        "setsar=1",
-        "fps=30",
-        "format=yuv420p",
-    ])
-    command = [ffmpeg, "-y", "-loop", "1", "-t", duration, "-i", str(cover_path)]
-    if include_audio:
-        command.extend(["-f", "lavfi", "-t", duration, "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"])
-        command.extend(["-t", duration, "-vf", video_filter_arg, "-map", "0:v:0", "-map", "1:a:0", "-shortest"])
-    else:
-        command.extend(["-t", duration, "-vf", video_filter_arg, "-map", "0:v:0"])
-    command.extend(mp4_output_args(row))
-    command.append(str(output))
-    run_ffmpeg_command(command, row)
+    render_pipeline_render_cover_frame_segment(
+        cover_path, output, include_audio, preset, row, ffmpeg, COVER_FRAME_TAIL_SECONDS, fmt_time, mp4_output_args, run_ffmpeg_command
+    )
 
 
 def render_publish_cover_image(
@@ -8349,364 +8250,107 @@ def camera_segment_bounds(duration: float) -> list[tuple[float, float]]:
 
 
 def effect_filter(row: dict[str, object]) -> str:
-    effect = effect_from_row(row)
-    key = effect["key"]
-    intensity = visible_effect_intensity(float(effect["intensity"]))
-    if key == "none" or intensity <= 0:
-        return ""
-    if key == "light-grain":
-        grain = scaled_value(intensity, 10, 28)
-        contrast = scaled_float(intensity, 1.04, 1.12)
-        return f"eq=contrast={contrast}:saturation=0.96,noise=alls={grain}:allf=t+u,unsharp=3:3:0.22"
-    if key == "old-film":
-        grain = scaled_value(intensity, 11, 26)
-        contrast = scaled_float(intensity, 1.18, 1.32)
-        brightness = scaled_float(intensity, -0.04, -0.08)
-        return f"curves=preset=vintage,eq=saturation=0.56:contrast={contrast}:brightness={brightness},noise=alls={grain}:allf=t+u,vignette=PI/3"
-    if key == "vhs":
-        grain = scaled_value(intensity, 14, 34)
-        contrast = scaled_float(intensity, 1.2, 1.34)
-        return f"eq=saturation=0.55:contrast={contrast}:brightness=-0.06,noise=alls={grain}:allf=t+u,drawgrid=w=iw:h=4:t=1:c=white@0.08"
-    if key == "bw-old":
-        grain = scaled_value(intensity, 12, 30)
-        contrast = scaled_float(intensity, 1.18, 1.34)
-        return f"hue=s=0,eq=contrast={contrast}:brightness=-0.04,noise=alls={grain}:allf=t+u,vignette=PI/3"
-    return ""
+    return render_pipeline_effect_filter(row)
 
 
 def video_crf(row: dict[str, object]) -> str:
-    return FINAL_EFFECT_VIDEO_CRF if effect_from_row(row)["key"] != "none" else FINAL_VIDEO_CRF
+    return render_pipeline_video_crf(row, FINAL_VIDEO_CRF, FINAL_EFFECT_VIDEO_CRF)
 
 
 def visible_effect_intensity(intensity: float) -> float:
-    if intensity <= 0:
-        return 0.0
-    return max(clamp(intensity, 0.0, 100.0), 24.0)
+    return render_pipeline_visible_effect_intensity(intensity)
 
 
 def scaled_value(intensity: float, low: int, high: int) -> int:
-    value = low + ((clamp(intensity, 0.0, 100.0) / 100.0) * (high - low))
-    return int(round(value))
+    return render_pipeline_scaled_value(intensity, low, high)
 
 
 def scaled_float(intensity: float, low: float, high: float) -> str:
-    value = low + ((clamp(intensity, 0.0, 100.0) / 100.0) * (high - low))
-    return f"{value:.3f}".rstrip("0").rstrip(".")
+    return render_pipeline_scaled_float(intensity, low, high)
 
 
 def effect_from_row(row: dict[str, object]) -> dict[str, object]:
-    raw = row.get("effect")
-    if not isinstance(raw, dict):
-        return {"key": "none", "label": EFFECT_PRESETS["none"].label, "intensity": 0}
-    key = str(raw.get("key") or "none")
-    preset = EFFECT_PRESETS.get(key, EFFECT_PRESETS["none"])
-    intensity = clamp(float(raw.get("intensity") or 0.0), 0.0, 100.0)
-    return {"key": preset.key, "label": preset.label, "intensity": intensity}
+    return render_pipeline_effect_from_row(row)
 
 
 def overlay_filter(row: dict[str, object], preset: PlatformPreset) -> str:
-    filters = [overlay_layer_filter(layer, preset) for layer in overlay_layers_from_row(row) if layer.get("kind") != "image"]
-    return ",".join(item for item in filters if item)
+    return render_pipeline_overlay_filter(row, preset)
 
 
 def overlay_layer_filter(overlay: dict[str, object], preset: PlatformPreset) -> str:
-    if overlay["key"] == "none":
-        return ""
-    if overlay.get("kind") == "image":
-        return image_overlay_filter(overlay, preset)
-    if overlay.get("kind") == "speech":
-        return speech_overlay_filter(overlay, preset)
-    if overlay.get("kind") == "text":
-        return text_overlay_filter(overlay, preset)
-    card = OVERLAY_PRESETS[str(overlay["key"])]
-    box_w = int(round(preset.width * float(overlay["width"])))
-    box_h = max(int(round(box_w * 0.28)), int(round(preset.height * 0.052)))
-    x = min(int(round(preset.width * float(overlay["x"]))), max(preset.width - box_w, 0))
-    y = min(int(round(preset.height * float(overlay["y"]))), max(preset.height - box_h, 0))
-    pad = max(18, int(round(box_h * 0.18)))
-    bar_w = max(8, int(round(box_w * 0.035)))
-    title_size = max(28, int(round(box_h * 0.34)))
-    subtitle_size = max(18, int(round(box_h * 0.21)))
-    text_x = x + pad + bar_w
-    title_y = y + max(14, int(round(box_h * 0.18)))
-    subtitle_y = title_y + title_size + max(4, int(round(box_h * 0.08)))
-    opacity = clamp(float(overlay["opacity"]) / 100.0, 0.35, 1.0)
-    font = ffmpeg_filter_path(find_overlay_font())
-    title = ffmpeg_text_value(card.title)
-    subtitle = ffmpeg_text_value(card.subtitle)
-    return ",".join([
-        f"drawbox=x={x}:y={y}:w={box_w}:h={box_h}:color=black@{opacity:.2f}:t=fill",
-        f"drawbox=x={x}:y={y}:w={bar_w}:h={box_h}:color={card.accent}@1.0:t=fill",
-        f"drawtext=fontfile='{font}':text='{title}':x={text_x}:y={title_y}:fontsize={title_size}:fontcolor=white",
-        f"drawtext=fontfile='{font}':text='{subtitle}':x={text_x}:y={subtitle_y}:fontsize={subtitle_size}:fontcolor=white@0.78",
-    ])
+    return render_pipeline_overlay_layer_filter(overlay, preset)
 
 
 def text_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> str:
-    text = str(overlay.get("text") or overlay.get("label") or "").strip()
-    if not text:
-        return ""
-    box_w = int(round(preset.width * float(overlay["width"])))
-    font_size = max(18, int(round(float(overlay["font_size"]) * preset.width / 1080.0)))
-    box_h = max(int(round(font_size * 1.65)), int(round(preset.height * 0.04)))
-    x = min(int(round(preset.width * float(overlay["x"]))), max(preset.width - box_w, 0))
-    y = min(int(round(preset.height * float(overlay["y"]))), max(preset.height - box_h, 0))
-    pad = max(10, int(round(font_size * 0.35)))
-    text_y = y + max(6, int(round((box_h - font_size) / 2)))
-    opacity = clamp(float(overlay["opacity"]) / 100.0, 0.1, 1.0)
-    font = ffmpeg_filter_path(find_overlay_font())
-    color = ffmpeg_color(str(overlay.get("color") or "#ffffff"))
-    escaped_text = ffmpeg_text_value(text)
-    enable = timed_overlay_enable(overlay)
-    filters = []
-    if bool(overlay.get("background_enabled")):
-        background = ffmpeg_color(str(overlay.get("background_color") or "#000000"))
-        background_opacity = clamp(float(overlay.get("background_opacity") or 70.0) / 100.0, 0.0, 1.0)
-        filters.append(f"drawbox=x={x}:y={y}:w={box_w}:h={box_h}:color={background}@{background_opacity:.2f}:t=fill{enable}")
-    filters.append(
-        f"drawtext=fontfile='{font}':text='{escaped_text}':x={x + pad}:y={text_y}:"
-        f"fontsize={font_size}:fontcolor={color}@{opacity:.2f}{enable}"
-    )
-    return ",".join(filters)
+    return render_pipeline_text_overlay_filter(overlay, preset)
 
 
 def timed_overlay_enable(overlay: dict[str, object]) -> str:
-    start = max(float(overlay.get("start_seconds") if overlay.get("start_seconds") is not None else 0.0), 0.0)
-    duration = max(float(overlay.get("duration_seconds") if overlay.get("duration_seconds") is not None else 3.0), 0.0)
-    if duration <= 0.0:
-        return ""
-    return f":enable='between(t,{start:.3f},{start + duration:.3f})'"
+    return render_pipeline_timed_overlay_enable(overlay)
 
 
 def speech_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> str:
-    text = str(overlay.get("text") or overlay.get("label") or "").strip()
-    if not text:
-        return ""
-    box_w = int(round(preset.width * float(overlay["width"])))
-    font_size = max(18, int(round(float(overlay["font_size"]) * preset.width / 1080.0)))
-    box_h = max(int(round(font_size * 1.95)), int(round(preset.height * 0.054)))
-    x = min(int(round(preset.width * float(overlay["x"]))), max(preset.width - box_w, 0))
-    y = min(int(round(preset.height * float(overlay["y"]))), max(preset.height - box_h, 0))
-    pad = max(12, int(round(font_size * 0.44)))
-    tail_w = max(18, int(round(font_size * 0.5)))
-    tail_h = max(16, int(round(font_size * 0.44)))
-    tail_x = min(x + max(pad, int(round(box_w * 0.2))), max(preset.width - tail_w, 0))
-    tail_y = min(y + box_h - max(2, int(round(tail_h * 0.2))), preset.height)
-    text_y = y + max(8, int(round((box_h - font_size) / 2)))
-    opacity = clamp(float(overlay["opacity"]) / 100.0, 0.1, 1.0)
-    font = ffmpeg_filter_path(find_overlay_font())
-    color = ffmpeg_color(str(overlay.get("color") or "#050505"))
-    background = ffmpeg_color(str(overlay.get("background_color") or "#ffffff"))
-    escaped_text = ffmpeg_text_value(text)
-    enable = timed_overlay_enable(overlay)
-    return ",".join([
-        f"drawbox=x={tail_x}:y={tail_y}:w={tail_w}:h={tail_h}:color={background}@{opacity:.2f}:t=fill{enable}",
-        f"drawbox=x={x}:y={y}:w={box_w}:h={box_h}:color={background}@{opacity:.2f}:t=fill{enable}",
-        f"drawtext=fontfile='{font}':text='{escaped_text}':x={x + pad}:y={text_y}:"
-        f"fontsize={font_size}:fontcolor={color}@1.0{enable}",
-    ])
+    return render_pipeline_speech_overlay_filter(overlay, preset)
 
 
 def image_overlay_filter(overlay: dict[str, object], preset: PlatformPreset) -> str:
-    image_file = str(overlay.get("image_file") or "")
-    if not image_file:
-        return ""
-    width = int(round(preset.width * float(overlay["width"])))
-    x = min(int(round(preset.width * float(overlay["x"]))), max(preset.width - width, 0))
-    y = min(int(round(preset.height * float(overlay["y"]))), preset.height)
-    opacity = clamp(float(overlay["opacity"]) / 100.0, 0.1, 1.0)
-    path = ffmpeg_filter_path(Path(image_file))
-    enable = timed_overlay_enable(overlay)
-    return f"movie='{path}',scale={width}:-1,colorchannelmixer=aa={opacity:.2f}[img];[in][img]overlay={x}:{y}:format=auto{enable}[out]"
+    return render_pipeline_image_overlay_filter(overlay, preset)
 
 
 def overlay_from_row(row: dict[str, object]) -> dict[str, object]:
-    layers = overlay_layers_from_row(row)
-    for layer in layers:
-        if layer.get("kind") != "image":
-            return layer
-    raw = row.get("overlay")
-    if not isinstance(raw, dict):
-        return default_overlay()
-    return overlay_from_raw(raw)
+    return render_pipeline_overlay_from_row(row)
 
 
 def overlay_layers_from_row(row: dict[str, object]) -> list[dict[str, object]]:
-    raw_layers = row.get("overlays")
-    if isinstance(raw_layers, list):
-        layers = [overlay_layer_from_raw(item) for item in raw_layers if isinstance(item, dict)]
-        return [item for item in layers if item["key"] != "none"]
-    legacy = overlay_from_raw(row.get("overlay") if isinstance(row.get("overlay"), dict) else {})
-    return [] if legacy["key"] == "none" else [legacy]
+    return render_pipeline_overlay_layers_from_row(row)
 
 
 def overlay_layer_from_raw(raw: dict[str, object]) -> dict[str, object]:
-    if str(raw.get("kind") or raw.get("key") or "") == "image":
-        return image_overlay_from_raw(raw)
-    if str(raw.get("kind") or raw.get("key") or "") == "speech":
-        return speech_overlay_from_raw(raw)
-    if str(raw.get("kind") or raw.get("key") or "") == "text":
-        return text_overlay_from_raw(raw)
-    return overlay_from_raw(raw)
+    return render_pipeline_overlay_layer_from_raw(raw)
 
 
 def overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
-    key = str(raw.get("key") or "none")
-    preset = OVERLAY_PRESETS.get(key, OVERLAY_PRESETS["none"])
-    if preset.key == "none":
-        return default_overlay()
-    return {
-        "id": str(raw.get("id") or ""),
-        "kind": "cta",
-        "key": preset.key,
-        "label": preset.label,
-        "x": clamp(float(raw.get("x") if raw.get("x") is not None else 0.62), 0.0, 1.0),
-        "y": clamp(float(raw.get("y") if raw.get("y") is not None else 0.78), 0.0, 1.0),
-        "width": clamp(float(raw.get("width") if raw.get("width") is not None else 0.34), 0.18, 0.72),
-        "opacity": clamp(float(raw.get("opacity") if raw.get("opacity") is not None else 95.0), 35.0, 100.0),
-    }
+    return render_pipeline_overlay_from_raw(raw)
 
 
 def image_overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
-    image_file = str(raw.get("image_file") or "")
-    image_data_url = str(raw.get("image_data_url") or "")
-    if not image_file and not image_data_url:
-        return default_overlay()
-    return {
-        "id": str(raw.get("id") or ""),
-        "kind": "image",
-        "key": "image",
-        "label": str(raw.get("label") or "Imagem"),
-        "x": clamp(float(raw.get("x") if raw.get("x") is not None else 0.58), 0.0, 1.0),
-        "y": clamp(float(raw.get("y") if raw.get("y") is not None else 0.68), 0.0, 1.0),
-        "width": clamp(float(raw.get("width") if raw.get("width") is not None else 0.28), 0.08, 0.9),
-        "opacity": clamp(float(raw.get("opacity") if raw.get("opacity") is not None else 100.0), 10.0, 100.0),
-        "image_file": image_file,
-        "image_data_url": image_data_url,
-        "start_seconds": clamp(
-            float(raw.get("start_seconds") if raw.get("start_seconds") is not None else 0.0),
-            0.0,
-            9999.0,
-        ),
-        "duration_seconds": clamp(
-            float(raw.get("duration_seconds") if raw.get("duration_seconds") is not None else 3.0),
-            0.3,
-            60.0,
-        ),
-    }
+    return render_pipeline_image_overlay_from_raw(raw)
 
 
 def text_overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
-    text = str(raw.get("text") or raw.get("label") or "").strip()
-    if not text:
-        return default_overlay()
-    return {
-        "id": str(raw.get("id") or ""),
-        "kind": "text",
-        "key": "text",
-        "label": text,
-        "text": text,
-        "x": clamp(float(raw.get("x") if raw.get("x") is not None else 0.36), 0.0, 1.0),
-        "y": clamp(float(raw.get("y") if raw.get("y") is not None else 0.34), 0.0, 1.0),
-        "width": clamp(float(raw.get("width") if raw.get("width") is not None else 0.42), 0.16, 0.9),
-        "opacity": clamp(float(raw.get("opacity") if raw.get("opacity") is not None else 100.0), 10.0, 100.0),
-        "font_size": clamp(float(raw.get("font_size") if raw.get("font_size") is not None else 44.0), 14.0, 96.0),
-        "font_weight": str(raw.get("font_weight") or "700"),
-        "color": safe_hex_color(str(raw.get("color") or "#ffffff"), "#ffffff"),
-        "background_enabled": bool(raw.get("background_enabled", True)),
-        "background_color": safe_hex_color(str(raw.get("background_color") or "#000000"), "#000000"),
-        "background_opacity": clamp(
-            float(raw.get("background_opacity") if raw.get("background_opacity") is not None else 70.0),
-            0.0,
-            100.0,
-        ),
-        "start_seconds": clamp(
-            float(raw.get("start_seconds") if raw.get("start_seconds") is not None else 0.0),
-            0.0,
-            9999.0,
-        ),
-        "duration_seconds": clamp(
-            float(raw.get("duration_seconds") if raw.get("duration_seconds") is not None else 3.0),
-            0.3,
-            60.0,
-        ),
-    }
+    return render_pipeline_text_overlay_from_raw(raw)
 
 
 def speech_overlay_from_raw(raw: dict[str, object]) -> dict[str, object]:
-    layer = text_overlay_from_raw({
-        **raw,
-        "text": raw.get("text") or raw.get("label") or "Fala rapida",
-        "background_enabled": True,
-        "background_color": raw.get("background_color") or "#ffffff",
-        "background_opacity": raw.get("background_opacity") if raw.get("background_opacity") is not None else 94,
-        "color": raw.get("color") or "#050505",
-        "font_size": raw.get("font_size") if raw.get("font_size") is not None else 34,
-        "width": raw.get("width") if raw.get("width") is not None else 0.56,
-    })
-    if layer["key"] == "none":
-        return layer
-    layer["kind"] = "speech"
-    layer["key"] = "speech"
-    layer["label"] = str(layer["text"])
-    layer["tail"] = str(raw.get("tail") or "bottom-left")
-    layer["start_seconds"] = clamp(
-        float(raw.get("start_seconds") if raw.get("start_seconds") is not None else 0.0),
-        0.0,
-        9999.0,
-    )
-    layer["duration_seconds"] = clamp(
-        float(raw.get("duration_seconds") if raw.get("duration_seconds") is not None else 3.0),
-        0.3,
-        60.0,
-    )
-    return layer
+    return render_pipeline_speech_overlay_from_raw(raw)
 
 
 def default_overlay() -> dict[str, object]:
-    return {"id": "", "kind": "cta", "key": "none", "label": OVERLAY_PRESETS["none"].label, "x": 0.62, "y": 0.78, "width": 0.34, "opacity": 95}
+    return render_pipeline_default_overlay()
 
 
 def find_overlay_font() -> Path:
-    candidates = [
-        Path(os.environ.get("WINDIR", "C:\\Windows")) / "Fonts" / "arialbd.ttf",
-        Path(os.environ.get("WINDIR", "C:\\Windows")) / "Fonts" / "arial.ttf",
-        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
-        Path("/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf"),
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    raise RuntimeError("No usable font found for video overlays.")
+    return render_pipeline_find_overlay_font()
 
 
 def ffmpeg_filter_path(path: Path) -> str:
-    return str(path).replace("\\", "/").replace(":", r"\:")
+    return render_pipeline_ffmpeg_filter_path(path)
 
 
 def ffmpeg_text_value(value: str) -> str:
-    return value.replace("\\", r"\\").replace(":", r"\:").replace("'", r"\'")
+    return render_pipeline_ffmpeg_text_value(value)
 
 
 def safe_hex_color(value: str, fallback: str) -> str:
-    color = value.strip()
-    if len(color) == 7 and color.startswith("#"):
-        digits = color[1:]
-    elif len(color) == 6:
-        digits = color
-    else:
-        return fallback
-    if all(char in "0123456789abcdefABCDEF" for char in digits):
-        return f"#{digits.lower()}"
-    return fallback
+    return render_pipeline_safe_hex_color(value, fallback)
 
 
 def ffmpeg_color(value: str) -> str:
-    return "0x" + safe_hex_color(value, "#ffffff").removeprefix("#")
+    return render_pipeline_ffmpeg_color(value)
 
 
 def clamp(value: float, minimum: float, maximum: float) -> float:
-    return min(max(value, minimum), maximum)
+    return render_pipeline_clamp(value, minimum, maximum)
 
 
 def rendered_row(row: dict[str, object], preset: PlatformPreset, output_path: Path, cover_path: Path | None = None) -> dict[str, object]:
