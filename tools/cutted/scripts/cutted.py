@@ -62,6 +62,7 @@ from cuted_caption_queue import (
     selected_rows_to_caption_rows as queue_selected_rows_to_caption_rows,
 )
 from cuted_caption_text import (
+    CAPTION_MOJIBAKE_REPLACEMENTS,
     caption_chunks as caption_text_caption_chunks,
     caption_duration as caption_text_caption_duration,
     caption_events as caption_text_caption_events,
@@ -6950,25 +6951,10 @@ def distributed_caption_events(chunks: list[str], duration: float) -> list[Capti
 
 def clean_caption_text(text: str) -> str:
     return caption_text_clean_caption_text(text)
-    clean = normalize_caption_symbols(text)
-    clean = re.sub(r"(^|\s)(>{1,3}|-{1,2})\s*", " ", clean)
-    clean = re.sub(r"\s+", " ", clean)
-    clean = re.sub(r"\s+([,.;:!?])", r"\1", clean)
-    clean = re.sub(r"(\d)([.,:])\s+(?=\d)", r"\1\2", clean)
-    clean = re.sub(r"([,.;:!?])([^\s,.;:!?])", space_after_caption_punctuation, clean)
-    clean = re.sub(r"^(né\??|aham|uhum|hum|então|mas)\s+", "", clean, flags=re.IGNORECASE)
-    clean = re.sub(r"\b(\w+)(\s+\1\b){2,}", r"\1", clean, flags=re.IGNORECASE)
-    return clean.strip(" -")
 
 
 def space_after_caption_punctuation(match: re.Match[str]) -> str:
     return caption_text_space_after_caption_punctuation(match)
-    punctuation, next_char = match.group(1), match.group(2)
-    previous_index = match.start(1) - 1
-    previous_char = match.string[previous_index] if previous_index >= 0 else ""
-    if punctuation in ".,:" and previous_char.isdigit() and next_char.isdigit():
-        return f"{punctuation}{next_char}"
-    return f"{punctuation} {next_char}"
 
 
 ANIMATED_CAPTION_PROPER_NOUN_STOPWORDS = {
@@ -7140,80 +7126,24 @@ def smart_animated_caption_group_size(group: str) -> int:
     return len([word for word in group.split() if word])
 
 
-CAPTION_MOJIBAKE_REPLACEMENTS = {
-    "\u00c3\u00a1": "\u00e1",
-    "\u00c3\u00a0": "\u00e0",
-    "\u00c3\u00a2": "\u00e2",
-    "\u00c3\u00a3": "\u00e3",
-    "\u00c3\u00a4": "\u00e4",
-    "\u00c3\u00a9": "\u00e9",
-    "\u00c3\u00aa": "\u00ea",
-    "\u00c3\u00ad": "\u00ed",
-    "\u00c3\u00b3": "\u00f3",
-    "\u00c3\u00b4": "\u00f4",
-    "\u00c3\u00b5": "\u00f5",
-    "\u00c3\u00ba": "\u00fa",
-    "\u00c3\u00bc": "\u00fc",
-    "\u00c3\u00a7": "\u00e7",
-    "\u00c3\u0081": "\u00c1",
-    "\u00c3\u0080": "\u00c0",
-    "\u00c3\u0082": "\u00c2",
-    "\u00c3\u0083": "\u00c3",
-    "\u00c3\u0089": "\u00c9",
-    "\u00c3\u008a": "\u00ca",
-    "\u00c3\u008d": "\u00cd",
-    "\u00c3\u0093": "\u00d3",
-    "\u00c3\u0094": "\u00d4",
-    "\u00c3\u0095": "\u00d5",
-    "\u00c3\u009a": "\u00da",
-    "\u00c3\u009c": "\u00dc",
-    "\u00c3\u0087": "\u00c7",
-    "\u00c2\u00ba": "\u00ba",
-    "\u00c2\u00aa": "\u00aa",
-    "\u00c2\u00b7": "\u00b7",
-    "\u00c2\u00b4": "\u00b4",
-}
-
-
 def repair_caption_encoding(text: str) -> str:
     return caption_text_repair_caption_encoding(text)
-    if not any(marker in text for marker in ("Ã", "Â", "â")):
-        return text
-    candidate = repair_caption_encoding_as_utf8(text)
-    mapped = replace_caption_mojibake_sequences(candidate)
-    return mapped if caption_mojibake_score(mapped) <= caption_mojibake_score(text) else text
 
 
 def repair_caption_encoding_as_utf8(text: str) -> str:
     return caption_text_repair_caption_encoding_as_utf8(text)
-    try:
-        repaired = text.encode("latin-1").decode("utf-8")
-    except UnicodeError:
-        return text
-    return repaired if caption_mojibake_score(repaired) < caption_mojibake_score(text) else text
 
 
 def replace_caption_mojibake_sequences(text: str) -> str:
     return caption_text_replace_caption_mojibake_sequences(text)
-    clean = text
-    for source, target in CAPTION_MOJIBAKE_REPLACEMENTS.items():
-        clean = clean.replace(source, target)
-    return clean
 
 
 def caption_mojibake_score(text: str) -> int:
     return caption_text_caption_mojibake_score(text)
-    return sum(text.count(marker) for marker in ("Ã", "Â", "â€", "â™", "�"))
 
 
 def normalize_caption_symbols(text: str) -> str:
     return caption_text_normalize_caption_symbols(text)
-    text = repair_caption_encoding(text)
-    return (
-        text.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
-        .replace("…", "...").replace("♪", " ").replace("\ufeff", " ")
-        .replace("–", "-").replace("—", "-")
-    )
 
 
 def caption_chunks(text: str, chars_per_line: int, max_lines: int, duration: float) -> list[str]:
