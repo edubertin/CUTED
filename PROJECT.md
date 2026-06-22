@@ -82,21 +82,23 @@ Do not move folders just for symmetry. CUTED currently fits the standard as an e
 Recommended future shape when extraction is justified:
 
 ```text
-apps/web/                 # local development UI, never a hosted SaaS target
-apps/desktop/             # Windows launcher/app shell when separated from the script
-packages/cutted-core/     # data contracts, project model, queue logic
-packages/cutted-renderer/ # FFmpeg rendering and manifest behavior
-packages/cutted-ai/       # provider adapters, transcription, cost ledger
-packages/cutted-ui/       # reusable local editor UI assets/components
-tools/cutted/             # reference CLI and migration bridge until retired
-content/tiktok/           # optional future home for channel operations
-experiments/              # optional future home for prototypes after migration
+apps/web/                # local development UI, never a hosted SaaS target
+apps/desktop/            # Windows launcher/app shell when separated from the script
+packages/cuted-core/     # data contracts, project model, queue logic
+packages/cuted-renderer/ # FFmpeg rendering and manifest behavior
+packages/cuted-ai/       # provider adapters, transcription, cost ledger
+packages/cuted-ui/       # reusable local editor UI assets/components
+tools/cutted/            # legacy reference CLI and migration bridge until retired
+content/tiktok/          # optional future home for channel operations
+experiments/             # optional future home for prototypes after migration
 ```
 
 `apps/web` is valid for the local development UI. It should not imply hosted
 deployment, cloud render, web auth, or SaaS. `apps/desktop` is the compiled
-Windows product shell, and `packages/cutted-ui` should hold reusable UI code
-when extraction is justified.
+Windows product shell, and `packages/cuted-ui` should hold reusable UI code
+when extraction is justified. Existing `tools/cutted/` and `cutted.py` names are
+legacy compatibility paths; future module and package names should use
+CUTED/Cuted with one `t`.
 
 ## Commands
 
@@ -115,6 +117,7 @@ If `python` is not available on this Windows machine, use the bundled Codex Pyth
 - Product overview: `docs/product/PRD.md`
 - Data contracts: `docs/architecture/DATA_CONTRACTS.md`
 - Render pipeline: `docs/architecture/RENDER_PIPELINE.md`
+- Engine extraction: `docs/architecture/ADR-0006-cuted-engine-incremental-extraction.md`
 - Local project model: `docs/architecture/ADR-0005-local-project-memory-and-cleanup.md`
 - Project Home plan: `docs/product/PLAN-001-project-home-clean-workspace-implementation.md`
 - Desktop structure plan: `docs/product/PLAN-002-local-desktop-repository-structure.md`
