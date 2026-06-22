@@ -144,6 +144,15 @@ from cuted_ass_subtitles import (
     normalize_hex_color as ass_subtitles_normalize_hex_color,
     wrap_caption_text as ass_subtitles_wrap_caption_text,
 )
+from cuted_bumpers import (
+    BUMPER_MAX_SOURCE_BYTES,
+    BUMPER_SLOTS,
+    BUMPER_VIDEO_MIME_EXTENSIONS,
+    clean_bumper_label as bumpers_clean_bumper_label,
+    decode_data_url_video as bumpers_decode_data_url_video,
+    normalize_bumper_slot as bumpers_normalize_bumper_slot,
+    normalize_bumpers_from_row as bumpers_normalize_bumpers_from_row,
+)
 from cuted_project_catalog import (
     clean_project_id as catalog_clean_project_id,
     directory_size as catalog_directory_size,
@@ -234,14 +243,6 @@ GROUP_FIT_LOGO_OPACITY = 0.9
 GROUP_FIT_MIN_HOLD_SECONDS = 3.0
 AI_DIRECTOR_MIN_MOVE_HOLD_SECONDS = 4.0
 RANGE_MEDIA_EXTENSIONS = {".m4v", ".mov", ".mp4", ".webm"}
-BUMPER_VIDEO_MIME_EXTENSIONS = {
-    "video/mp4": "mp4",
-    "video/quicktime": "mov",
-    "video/webm": "webm",
-    "video/x-m4v": "m4v",
-}
-BUMPER_MAX_SOURCE_BYTES = 48_000_000
-BUMPER_SLOTS = {"intro", "outro"}
 YOUTUBE_HIGH_QUALITY_FORMAT = (
     "bv*[height<=1440][vcodec^=avc1]+ba[ext=m4a]/"
     "bv*[height<=1440]+ba/"
@@ -1863,30 +1864,15 @@ def save_bumper_asset_from_request(handler: http.server.BaseHTTPRequestHandler, 
 
 
 def normalize_bumper_slot(value: object) -> str:
-    slot = str(value or "").strip().lower()
-    if slot not in BUMPER_SLOTS:
-        raise ValueError("Slot de vinheta invalido.")
-    return slot
+    return bumpers_normalize_bumper_slot(value)
 
 
 def clean_bumper_label(value: object) -> str:
-    label = clean_optional_text(value, 180)
-    return Path(label).name if label else "vinheta.mp4"
+    return bumpers_clean_bumper_label(value)
 
 
 def decode_data_url_video(value: str) -> tuple[bytes, str]:
-    if not value.startswith("data:") or ";base64," not in value:
-        raise ValueError("Envie uma vinheta em video.")
-    header, encoded = value.split(";base64,", 1)
-    mime = header.removeprefix("data:").lower()
-    extension = BUMPER_VIDEO_MIME_EXTENSIONS.get(mime)
-    if extension is None:
-        raise ValueError("Use MP4, MOV, M4V ou WebM para a vinheta.")
-    try:
-        video_bytes = base64.b64decode(encoded, validate=True)
-    except ValueError as exc:
-        raise ValueError("Vinheta invalida ou corrompida.") from exc
-    return video_bytes, extension
+    return bumpers_decode_data_url_video(value)
 
 
 def normalize_camera_analysis_mode(value: object) -> str:
@@ -7489,29 +7475,7 @@ def resolve_bumper_asset_path(base_dir: Path, bumper: dict[str, object]) -> Path
 
 
 def normalize_bumpers_from_row(row: dict[str, object]) -> dict[str, dict[str, object]]:
-    raw = row.get("bumpers")
-    if not isinstance(raw, dict):
-        return {}
-    result: dict[str, dict[str, object]] = {}
-    for slot in ("intro", "outro"):
-        value = raw.get(slot)
-        if not isinstance(value, dict):
-            continue
-        asset_file = str(value.get("asset_file") or "")
-        data_url = str(value.get("video_data_url") or "")
-        if not asset_file and not data_url:
-            continue
-        result[slot] = {
-            "id": str(value.get("id") or f"bumper-{slot}"),
-            "slot": slot,
-            "label": clean_bumper_label(value.get("label")),
-            "asset_file": asset_file,
-            "video_data_url": data_url,
-            "width": int(float(value.get("width") or 0)),
-            "height": int(float(value.get("height") or 0)),
-            "duration": round(max(float(value.get("duration") or 0.0), 0.0), 3),
-        }
-    return result
+    return bumpers_normalize_bumpers_from_row(row)
 
 
 def normalize_platforms(value: object) -> list[str]:
