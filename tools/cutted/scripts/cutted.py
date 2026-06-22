@@ -178,8 +178,11 @@ WEAK_STARTINGS = (
 
 OPENAI_TRANSCRIBE_LIMIT_BYTES = 22 * 1024 * 1024
 OPENAI_TRANSCRIBE_CHUNK_SECONDS = 600
-OPENAI_PRICING_SOURCE = "https://platform.openai.com/docs/pricing"
-OPENAI_PRICING_UPDATED = "2026-06-06"
+AI_CONTEXT_AUDIO_MAX_BYTES = 12 * 1024 * 1024
+AI_CONTEXT_AUDIO_MAX_SECONDS = 120
+AI_CONTEXT_MIN_AUDIO_SECONDS = 0.8
+OPENAI_PRICING_SOURCE = "https://developers.openai.com/api/docs/pricing"
+OPENAI_PRICING_UPDATED = "2026-06-20"
 OPENAI_TEXT_PRICES_USD_PER_1M = {
     "gpt-5": {"input": 1.25, "cached_input": 0.125, "output": 10.0},
     "gpt-5-mini": {"input": 0.25, "cached_input": 0.025, "output": 2.0},
@@ -187,6 +190,8 @@ OPENAI_TEXT_PRICES_USD_PER_1M = {
 }
 OPENAI_TRANSCRIBE_PRICES_USD_PER_MINUTE = {
     "whisper-1": 0.006,
+    "gpt-4o-transcribe": 0.006,
+    "gpt-4o-mini-transcribe": 0.003,
 }
 PUBLISH_INTELLIGENCE_VERSION = "publish-intelligence-v1"
 PUBLISH_INTELLIGENCE_TIMEOUT_SECONDS = 35
@@ -542,37 +547,37 @@ def main() -> int:
 
 
 def analyze(args: argparse.Namespace) -> None:
-    emit_import_progress("prepare", "Preparando", "Criando pasta do projeto...", 8)
+    emit_import_progress("prepare", "Preparing", "Creating project folder...", 8)
     out_dir = args.out.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     config = build_config(args)
-    emit_import_progress("prepare", "Preparando", "Conferindo ferramentas locais...", 12)
+    emit_import_progress("prepare", "Preparing", "Checking local tools...", 12)
     ffmpeg = find_ffmpeg()
     ffprobe = find_ffprobe()
-    media_message = "Baixando e preparando video do YouTube..." if args.youtube_url else "Lendo video local..."
-    emit_import_progress("media", "Midia", media_message, 18)
+    media_message = "Downloading and preparing YouTube video..." if args.youtube_url else "Reading local video..."
+    emit_import_progress("media", "Media", media_message, 18)
     source = prepare_source(args, out_dir, ffmpeg, ffprobe)
     write_source_metadata(out_dir, source.metadata)
-    emit_import_progress("media", "Midia", "Midia pronta para analise.", 30, detail=source.label)
+    emit_import_progress("media", "Media", "Media ready for analysis.", 30, detail=source.label)
     duration = probe_duration(source.render_source, ffprobe)
     provider = requested_ai_provider(args)
-    audio_detail = "OpenAI" if provider == "openai" else "transcricao local"
-    emit_import_progress("audio", "Audio", "Transcrevendo audio...", 36, detail=audio_detail)
+    audio_detail = "OpenAI" if provider == "openai" else "local transcription"
+    emit_import_progress("audio", "Audio", "Transcribing audio...", 36, detail=audio_detail)
     segments = load_segments(args, source.transcribe_source)
-    emit_import_progress("analysis", "Analise", "Analisando transcricao...", 58, detail=f"{len(segments)} segmentos")
+    emit_import_progress("analysis", "Analysis", "Analyzing transcript...", 58, detail=f"{len(segments)} segments")
     moments = pick_moments_for_import(args, segments, config, duration)
-    emit_import_progress("suggestions", "Sugestoes", "Gerando sugestoes de cortes...", 66, detail=f"{len(moments)} cortes")
-    emit_import_progress("previews", "Previews", "Renderizando previews...", 72, step=0, steps=len(moments))
+    emit_import_progress("suggestions", "Suggestions", "Generating clip suggestions...", 66, detail=f"{len(moments)} clips")
+    emit_import_progress("previews", "Previews", "Rendering previews...", 72, step=0, steps=len(moments))
     rendered = render_outputs(source.render_source, out_dir, moments, ffmpeg, args.skip_render, emit_preview_import_progress)
-    emit_import_progress("publish", "Publicacao IA", "Analisando SEO e tendencias...", 93, detail="SEO e hashtags")
+    emit_import_progress("publish", "Post AI", "Analyzing SEO and trends...", 93, detail="SEO and hashtags")
     rendered = apply_publish_intelligence(rendered, source.label, config, args, source.metadata)
-    emit_import_progress("editor", "Editor", "Montando area de edicao...", 94)
+    emit_import_progress("editor", "Editor", "Building editing workspace...", 94)
     write_json(out_dir / "moments.json", rendered, source.label, duration, config)
     write_html(out_dir / "index.html", rendered, source.label)
     start_visual_map_background(out_dir, source)
     if args.cleanup_source:
         cleanup_sources(source.cleanup_paths)
-    emit_import_progress("ready", "Pronto", "Projeto importado. Abrindo editor...", 100)
+    emit_import_progress("ready", "Ready", "Project imported. Opening editor...", 100)
     print(f"[cutted] Generated {len(rendered)} moments in {out_dir}")
     print(f"[cutted] Open: {out_dir / 'index.html'}")
 
@@ -1058,6 +1063,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if path == "/api/import-jobs":
                 self.handle_import_job(base_dir)
                 return
+            if path == "/api/ai-context/audio":
+                self.handle_ai_context_audio()
+                return
             if path == "/api/render-jobs":
                 self.handle_render_job(base_dir)
                 return
@@ -1196,6 +1204,13 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
         def handle_import_job(self, request_base_dir: Path) -> None:
             try:
                 result = start_import_job(self, request_base_dir)
+                send_json_response(self, 200, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
+
+        def handle_ai_context_audio(self) -> None:
+            try:
+                result = ai_context_audio_from_request(self)
                 send_json_response(self, 200, result)
             except Exception as error:
                 send_json_response(self, 400, {"ok": False, "error": str(error)})
@@ -1342,7 +1357,7 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
                 payload = read_json_body(self)
                 key = clean_optional_text(payload.get("api_key"), 2048) or openai_api_key()
                 test_openai_connection(key)
-                send_json_response(self, 200, {"ok": True, "message": "Conexao OpenAI validada."})
+                send_json_response(self, 200, {"ok": True, "message": "OpenAI connection validated."})
             except Exception as error:
                 send_json_response(self, 400, {"ok": False, "error": str(error)})
 
@@ -5921,11 +5936,11 @@ def import_request_metadata(payload: dict[str, object]) -> dict[str, object]:
     source_url = str(payload.get("source_url") or "").strip()
     source_path = str(payload.get("source_path") or "").strip()
     if not source_url and not source_path:
-        raise ValueError("Informe um link ou caminho local para importar.")
+        raise ValueError("Provide a link or a local file to import.")
     output_path = clean_output_path(payload.get("output_path"))
     ai_provider = configured_ai_provider()
     if ai_provider == "openai" and not openai_api_key():
-        raise ValueError("Adicione sua chave OpenAI nas configuracoes (engrenagem) antes de importar com IA.")
+        raise ValueError("Add your OpenAI key in Settings before importing with AI.")
     return {
         "source_url": source_url,
         "source_path": source_path,
@@ -5965,7 +5980,7 @@ def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path
         base_dir,
         output_url,
         process,
-        "Importacao iniciada.",
+        "Import started.",
         source_kind,
         str(metadata["ai_provider"]),
     )
@@ -5974,6 +5989,103 @@ def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path
     thread = threading.Thread(target=wait_for_import_job, args=(job_id,), daemon=True)
     thread.start()
     return {"ok": True, "job": import_job_to_dict(job)}
+
+
+def ai_context_audio_from_request(handler: http.server.BaseHTTPRequestHandler) -> dict[str, object]:
+    language = ai_context_language(handler.path)
+    suffix = ai_context_audio_suffix(handler.headers.get("Content-Type", ""))
+    raw = read_binary_body(handler, AI_CONTEXT_AUDIO_MAX_BYTES)
+    temp_path = write_ai_context_audio(raw, suffix)
+    try:
+        audio = ai_context_audio_info(temp_path, len(raw))
+        validate_ai_context_audio(audio)
+        context = transcribe_ai_context_audio(temp_path, language, audio)
+    finally:
+        remove_temp_file(temp_path)
+    return {"ok": True, "context": context, "warnings": []}
+
+
+def ai_context_language(path: str) -> str | None:
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(path).query)
+    value = clean_optional_text((query.get("language") or ["auto"])[0], 12).lower()
+    return None if value in {"", "auto", "detect"} else value
+
+
+def ai_context_audio_suffix(content_type: str) -> str:
+    mime = content_type.split(";", 1)[0].strip().lower()
+    mapping = {"audio/webm": ".webm", "audio/mp4": ".mp4", "audio/wav": ".wav", "audio/ogg": ".ogg"}
+    if mime not in mapping:
+        raise ValueError("Unsupported microphone audio format.")
+    return mapping[mime]
+
+
+def write_ai_context_audio(raw: bytes, suffix: str) -> Path:
+    folder = cuted_data_dir() / "drafts" / "ai-context-audio"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{uuid.uuid4().hex}{suffix}"
+    path.write_bytes(raw)
+    return path
+
+
+def remove_temp_file(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def transcribe_ai_context_audio(path: Path, language: str | None, audio: dict[str, object]) -> dict[str, object]:
+    if openai_api_key():
+        return transcribe_ai_context_with_openai(path, language, audio)
+    return transcribe_ai_context_with_faster_whisper(path, language, audio)
+
+
+def transcribe_ai_context_with_openai(path: Path, language: str | None, audio: dict[str, object]) -> dict[str, object]:
+    model = ai_context_transcribe_model()
+    fields = {"model": model, "response_format": "json"}
+    if language:
+        fields["language"] = language
+    data = openai_multipart_request(
+        "https://api.openai.com/v1/audio/transcriptions",
+        openai_api_key(),
+        fields,
+        "file",
+        path,
+        ai_context_audio_content_type(path),
+    )
+    text = clean_optional_text(data.get("text"), 5000)
+    if not text:
+        raise RuntimeError(ai_context_empty_transcript_message(audio))
+    duration = ai_context_audio_seconds(audio) or openai_transcription_response_duration(data)
+    record_openai_transcribe_usage(model, duration)
+    return ai_context_payload(text, language, "openai", model, duration)
+
+
+def transcribe_ai_context_with_faster_whisper(path: Path, language: str | None, audio: dict[str, object]) -> dict[str, object]:
+    try:
+        rows = transcribe_with_faster_whisper(path, "small", language)
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("Set up OpenAI or install faster-whisper to transcribe microphone briefings.") from exc
+    text = clean_optional_text(" ".join(row.text for row in rows), 5000)
+    if not text:
+        raise RuntimeError(ai_context_empty_transcript_message(audio))
+    return ai_context_payload(text, language, "local", "faster-whisper-small", transcription_duration(rows))
+
+
+def ai_context_payload(text: str, language: str | None, provider: str, model: str, duration: float) -> dict[str, object]:
+    return {
+        "text": text,
+        "language": language or "auto",
+        "provider": provider,
+        "model": model,
+        "audio_seconds": round(min(duration, AI_CONTEXT_AUDIO_MAX_SECONDS), 3),
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+
+def openai_transcription_response_duration(data: dict[str, object]) -> float:
+    value = data.get("duration")
+    return clamp(float(value), 0.0, float(AI_CONTEXT_AUDIO_MAX_SECONDS)) if isinstance(value, (int, float)) else 0.0
 
 
 def import_command(
@@ -6020,7 +6132,7 @@ def wait_for_import_job(job_id: str) -> None:
     stdout = "".join(stdout_lines)
     stderr = "".join(stderr_lines)
     status = "ready" if return_code == 0 else "failed"
-    message = "Projeto importado." if status == "ready" else "Falha ao importar projeto."
+    message = "Project imported." if status == "ready" else "Project import failed."
     with IMPORT_JOBS_LOCK:
         current = IMPORT_JOBS.get(job_id)
         if current is None:
@@ -6078,8 +6190,8 @@ def parse_import_progress_line(line: str) -> dict[str, object] | None:
 
 def import_progress_payload(data: dict[str, object]) -> dict[str, object]:
     stage = clean_optional_text(data.get("stage"), 32) or "running"
-    label = clean_optional_text(data.get("label"), 32) or "Importacao"
-    message = clean_optional_text(data.get("message"), 180) or "Processando importacao..."
+    label = clean_optional_text(data.get("label"), 32) or "Import"
+    message = clean_optional_text(data.get("message"), 180) or "Processing import..."
     payload: dict[str, object] = {
         "stage": stage,
         "label": label,
@@ -6120,7 +6232,7 @@ def cancel_import_job(job_id: str) -> dict[str, object]:
         if job.process is not None and job.status == "running":
             job.process.terminate()
             job.status = "cancelled"
-            job.message = "Importacao cancelada."
+            job.message = "Import cancelled."
             job.updated_at = time.time()
     return {"ok": True, "job": import_job_to_dict(job)}
 
@@ -6150,11 +6262,11 @@ def import_job_to_dict(job: ImportJob) -> dict[str, object]:
 
 def import_job_progress(job: ImportJob) -> dict[str, object]:
     if job.status == "ready":
-        return {"percent": 100, "stage": "editor", "label": "Pronto", "message": "Projeto importado. Abrindo editor..."}
+        return {"percent": 100, "stage": "editor", "label": "Ready", "message": "Project imported. Opening editor..."}
     if job.status == "failed":
-        return {"percent": 100, "stage": str(job.progress.get("stage") or "prepare"), "label": "Falha", "message": job.message or "Falha ao importar projeto."}
+        return {"percent": 100, "stage": str(job.progress.get("stage") or "prepare"), "label": "Failed", "message": job.message or "Project import failed."}
     if job.status == "cancelled":
-        return {"percent": 100, "stage": str(job.progress.get("stage") or "prepare"), "label": "Cancelado", "message": job.message or "Importacao cancelada."}
+        return {"percent": 100, "stage": str(job.progress.get("stage") or "prepare"), "label": "Cancelled", "message": job.message or "Import cancelled."}
     if job.progress:
         return job.progress
     elapsed = max(0.0, time.time() - job.created_at)
@@ -6166,16 +6278,16 @@ def import_job_progress(job: ImportJob) -> dict[str, object]:
 
 
 def import_job_running_stages(source_kind: str, ai_provider: str) -> list[tuple[str, str]]:
-    media_message = "Baixando video..." if source_kind == "youtube" else "Lendo video local..."
-    ai_message = "Consultando IA..." if ai_provider == "openai" else "Analisando cortes..."
+    media_message = "Downloading video..." if source_kind == "youtube" else "Reading local video..."
+    ai_message = "Consulting AI..." if ai_provider == "openai" else "Analyzing clips..."
     return [
-        ("Preparando", "Preparando projeto..."),
-        ("Midia", media_message),
-        ("Audio", "Transcrevendo audio..."),
-        ("Analise", ai_message),
-        ("Sugestoes", "Gerando sugestoes de cortes..."),
-        ("Publicacao IA", "Analisando SEO e tendencias..."),
-        ("Editor", "Montando area de edicao..."),
+        ("Preparing", "Preparing project..."),
+        ("Media", media_message),
+        ("Audio", "Transcribing audio..."),
+        ("Analysis", ai_message),
+        ("Suggestions", "Generating clip suggestions..."),
+        ("Post AI", "Analyzing SEO and trends..."),
+        ("Editor", "Building editing workspace..."),
     ]
 
 
@@ -6506,7 +6618,7 @@ def pricing_payload() -> dict[str, object]:
 
 def test_openai_connection(api_key: str) -> None:
     if not api_key:
-        raise RuntimeError("Configure um token OpenAI antes de testar.")
+        raise RuntimeError("Configure an OpenAI token before testing.")
     request = urllib.request.Request(
         "https://api.openai.com/v1/models",
         headers={"Authorization": f"Bearer {api_key}"},
@@ -6515,11 +6627,11 @@ def test_openai_connection(api_key: str) -> None:
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             if response.status >= 400:
-                raise RuntimeError("A OpenAI recusou a conexao.")
+                raise RuntimeError("OpenAI refused the connection.")
     except urllib.error.HTTPError as error:
-        raise RuntimeError(f"A OpenAI recusou a conexao (HTTP {error.code}).") from error
+        raise RuntimeError(f"OpenAI refused the connection (HTTP {error.code}).") from error
     except urllib.error.URLError as error:
-        raise RuntimeError("Nao consegui conectar na OpenAI agora.") from error
+        raise RuntimeError("Could not connect to OpenAI right now.") from error
 
 
 def local_usage_payload() -> dict[str, object]:
@@ -6574,6 +6686,59 @@ def read_json_body(handler: http.server.BaseHTTPRequestHandler) -> dict[str, obj
     if not isinstance(data, dict):
         raise ValueError("Request body must be a JSON object.")
     return data
+
+
+def read_binary_body(handler: http.server.BaseHTTPRequestHandler, limit: int) -> bytes:
+    length = int(handler.headers.get("Content-Length") or "0")
+    if length <= 0:
+        raise ValueError("No audio was received.")
+    if length > limit:
+        raise ValueError("Microphone briefing is too long.")
+    return handler.rfile.read(length)
+
+
+def ai_context_transcribe_model() -> str:
+    raw = os.environ.get("CUTED_CONTEXT_TRANSCRIBE_MODEL", "").strip()
+    model = raw or openai_transcribe_model()
+    if model in OPENAI_TRANSCRIBE_PRICES_USD_PER_MINUTE:
+        return model
+    return "whisper-1"
+
+
+def ai_context_audio_info(path: Path, byte_count: int) -> dict[str, object]:
+    seconds = ai_context_audio_duration(path)
+    return {"bytes": byte_count, "seconds": seconds, "duration_known": seconds > 0}
+
+
+def validate_ai_context_audio(audio: dict[str, object]) -> None:
+    seconds = ai_context_audio_seconds(audio)
+    if seconds and seconds < AI_CONTEXT_MIN_AUDIO_SECONDS:
+        raise ValueError(f"Recording is too short ({seconds:.1f}s). Hold the mic for at least 1 second and speak clearly.")
+
+
+def ai_context_audio_seconds(audio: dict[str, object]) -> float:
+    value = audio.get("seconds")
+    return clamp(float(value), 0.0, float(AI_CONTEXT_AUDIO_MAX_SECONDS)) if isinstance(value, (int, float)) else 0.0
+
+
+def ai_context_empty_transcript_message(audio: dict[str, object]) -> str:
+    seconds = ai_context_audio_seconds(audio)
+    size = file_size_label(int(audio.get("bytes") or 0))
+    detail = f" The app received {seconds:.1f}s / {size}." if seconds else f" The app received {size}, but could not read the duration."
+    return f"No speech was detected.{detail} Check the selected browser microphone and try recording a clear sentence."
+
+
+def ai_context_audio_duration(path: Path) -> float:
+    try:
+        duration = probe_duration(path, find_ffprobe())
+    except Exception:
+        return 0.0
+    return clamp(duration, 0.0, float(AI_CONTEXT_AUDIO_MAX_SECONDS))
+
+
+def ai_context_audio_content_type(path: Path) -> str:
+    mapping = {".webm": "audio/webm", ".mp4": "audio/mp4", ".wav": "audio/wav", ".ogg": "audio/ogg"}
+    return mapping.get(path.suffix.lower(), "application/octet-stream")
 
 
 def finalized_file_urls(rows: list[dict[str, object]], base_dir: Path) -> list[dict[str, object]]:
@@ -9889,7 +10054,14 @@ def openai_json_request(
     return read_openai_json(request, timeout)
 
 
-def openai_multipart_request(url: str, api_key: str, fields: dict[str, str], file_field: str, file_path: Path) -> dict[str, object]:
+def openai_multipart_request(
+    url: str,
+    api_key: str,
+    fields: dict[str, str],
+    file_field: str,
+    file_path: Path,
+    file_content_type: str = "application/octet-stream",
+) -> dict[str, object]:
     boundary = f"----cuted{uuid.uuid4().hex}"
     chunks: list[bytes] = []
     for key, value in fields.items():
@@ -9898,7 +10070,7 @@ def openai_multipart_request(url: str, api_key: str, fields: dict[str, str], fil
     chunks.append(f"--{boundary}\r\n".encode("utf-8"))
     chunks.append(
         f'Content-Disposition: form-data; name="{file_field}"; filename="{file_path.name}"\r\n'
-        f"Content-Type: application/octet-stream\r\n\r\n".encode("utf-8")
+        f"Content-Type: {file_content_type}\r\n\r\n".encode("utf-8")
     )
     chunks.append(file_path.read_bytes())
     chunks.append(f"\r\n--{boundary}--\r\n".encode("utf-8"))
@@ -11087,7 +11259,7 @@ def write_project_home(path: Path, workspace: Path) -> None:
 def project_home_html(workspace: Path, logo_src: str, recent: list[dict[str, object]]) -> str:
     project_rows = "\n".join(project_home_card_html(project) for project in recent) if recent else project_home_empty_state_html()
     return f"""<!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11096,27 +11268,27 @@ def project_home_html(workspace: Path, logo_src: str, recent: list[dict[str, obj
 </head>
 <body data-project-home>
   <main class="project-home">
-    <button id="open-settings" class="home-settings-button icon-button" type="button" aria-label="Configuracoes OpenAI" title="Configuracoes OpenAI">{gear_icon_svg()}</button>
+    <button id="open-settings" class="home-settings-button icon-button" type="button" aria-label="OpenAI settings" title="OpenAI settings">{gear_icon_svg()}</button>
     <section class="home-brand-stage" aria-label="CUTED">
       <div class="home-logo-orbit">
         <img class="home-brand-logo" src="{html.escape(logo_src)}" alt="CUTED">
       </div>
     </section>
-    <section class="project-library" data-project-library aria-label="Projetos recentes">
+    <section class="project-library" data-project-library aria-label="Recent projects">
       <div class="project-section-head">
-        <strong>Projetos recentes</strong>
-        <div class="project-toolbar" aria-label="Acoes dos projetos">
-          <button type="button" class="project-icon-button project-primary" data-new-project aria-label="Novo projeto" title="Novo projeto">+</button>
-          <button type="button" class="project-icon-button" data-refresh-projects aria-label="Atualizar" title="Atualizar">↻</button>
-          <button type="button" data-open-workspace title="Projetos locais">Workspace</button>
+        <strong>Recent projects</strong>
+        <div class="project-toolbar" aria-label="Project actions">
+          <button type="button" class="project-icon-button project-primary" data-new-project aria-label="New project" title="New project">+</button>
+          <button type="button" class="project-icon-button" data-refresh-projects aria-label="Refresh" title="Refresh">↻</button>
+          <button type="button" data-open-workspace title="Local projects">Workspace</button>
         </div>
       </div>
-      <div class="project-table" data-project-list>
-        <div class="project-table-head" aria-hidden="true">
-          <span>Projeto</span>
+        <div class="project-table" data-project-list>
+          <div class="project-table-head" aria-hidden="true">
+          <span>Project</span>
           <span>Status</span>
-          <span>Atualizado</span>
-          <span>Acoes</span>
+          <span>Updated</span>
+          <span>Actions</span>
         </div>
         {project_rows}
       </div>
@@ -11133,7 +11305,7 @@ def project_home_html(workspace: Path, logo_src: str, recent: list[dict[str, obj
 
 
 def project_home_card_html(project: dict[str, object]) -> str:
-    title = html.escape(str(project.get("title") or "Projeto sem titulo"))
+    title = html.escape(str(project.get("title") or "Untitled project"))
     source = html.escape(str(project.get("source_label") or ""))
     url = html.escape(str(project.get("url") or ""))
     project_id = html.escape(str(project.get("id") or ""))
@@ -11141,7 +11313,7 @@ def project_home_card_html(project: dict[str, object]) -> str:
     clip_count = int(project.get("clip_count") or 0)
     render_count = int(project.get("render_count") or 0)
     size_label = file_size_label(int(project.get("size_bytes") or 0))
-    open_action = f'<a href="{url}">Abrir</a>' if url else '<button type="button" disabled>Abrir</button>'
+    open_action = f'<a href="{url}">Open</a>' if url else '<button type="button" disabled>Open</button>'
     updated = html.escape(str(project.get("last_opened_at") or ""))
     return f"""
         <article class="project-row" data-project-id="{project_id}" data-project-title="{title}" data-project-path="{path}" data-project-size="{size_label}">
@@ -11151,15 +11323,15 @@ def project_home_card_html(project: dict[str, object]) -> str:
             <small>{html.escape(path)}</small>
           </div>
           <dl class="project-meta-cell">
-            <div><dt>Cortes</dt><dd>{clip_count}</dd></div>
+            <div><dt>Clips</dt><dd>{clip_count}</dd></div>
             <div><dt>Renders</dt><dd>{render_count}</dd></div>
-            <div><dt>Tamanho</dt><dd>{size_label}</dd></div>
+            <div><dt>Size</dt><dd>{size_label}</dd></div>
           </dl>
           <time class="project-updated-cell">{updated}</time>
           <div class="project-row-actions">
             {open_action}
-            <button type="button" data-forget-project>Remover recente</button>
-            <button type="button" data-delete-project>Excluir projeto</button>
+            <button type="button" data-forget-project>Remove recent</button>
+            <button type="button" data-delete-project>Delete project</button>
           </div>
         </article>"""
 
@@ -11167,8 +11339,8 @@ def project_home_card_html(project: dict[str, object]) -> str:
 def project_home_empty_state_html() -> str:
     return """
         <article class="project-empty-state" data-project-empty-state>
-          <strong>Nenhum projeto recente</strong>
-          <p>Crie um novo projeto para comecar.</p>
+          <strong>No recent projects</strong>
+          <p>Create a new project to start.</p>
         </article>"""
 
 
@@ -11176,86 +11348,96 @@ def project_import_form_html() -> str:
     return f"""
       <form class="import-panel new-project-panel" data-import-form data-source-mode="local">
         <div class="new-project-head">
-          <strong>Novo projeto</strong>
-          <button type="button" data-show-projects>Recentes</button>
+          <strong>New project</strong>
+          <button type="button" data-show-projects>Recent projects</button>
         </div>
         <div class="import-key-banner" data-import-key-banner hidden>
-          <span>Adicione sua chave OpenAI nas configuracoes antes de importar com IA.</span>
-          <button type="button" data-import-key-open>Configurar</button>
+          <span>Add your OpenAI key in Settings before importing with AI.</span>
+          <button type="button" data-import-key-open>Settings</button>
         </div>
         <div class="new-project-config-grid">
-          <section class="new-project-config-block source-config-block" aria-label="Midia de origem">
-            <div class="new-project-block-title"><strong>Midia</strong><span>Arquivo ou link</span></div>
-            <div class="source-toggle icon-source-toggle" role="group" aria-label="Origem do projeto">
-              <label title="Video local"><input name="source_mode" type="radio" value="local" aria-label="Video local" checked><span>{project_home_icon_svg("local-video")}<strong>Local</strong></span></label>
+          <section class="new-project-config-block source-config-block" aria-label="Source media">
+            <div class="new-project-block-title"><strong>Media</strong><span>File or link</span></div>
+            <div class="source-toggle icon-source-toggle" role="group" aria-label="Project source">
+              <label title="Local video"><input name="source_mode" type="radio" value="local" aria-label="Local video" checked><span>{project_home_icon_svg("local-video")}<strong>Local</strong></span></label>
               <label title="YouTube"><input name="source_mode" type="radio" value="youtube" aria-label="YouTube"><span>{project_home_icon_svg("youtube")}<strong>YouTube</strong></span></label>
             </div>
             <div class="source-panel" data-source-panel="local">
-              <input name="source_path" type="text" value="" placeholder="Nenhum video selecionado" autocomplete="off" readonly>
-              <button class="icon-action-button" type="button" data-select-video-file aria-label="Selecionar video" title="Selecionar video">{project_home_icon_svg("folder-video")}</button>
+              <input name="source_path" type="text" value="" placeholder="No video selected" autocomplete="off" readonly>
+              <button class="icon-action-button" type="button" data-select-video-file aria-label="Select video" title="Select video">{project_home_icon_svg("folder-video")}</button>
             </div>
             <div class="source-panel" data-source-panel="youtube" hidden>
-              <input name="source_url" type="url" placeholder="Cole o link do YouTube" autocomplete="off">
+              <input name="source_url" type="url" placeholder="Paste a YouTube link" autocomplete="off">
             </div>
           </section>
-          <section class="new-project-config-block tuning-config-block" aria-label="Ajustes do projeto">
-            <div class="new-project-block-title"><strong>Cortes</strong><span>Sugestoes e duracao</span></div>
+          <section class="new-project-config-block tuning-config-block" aria-label="Project tuning">
+            <div class="new-project-block-title"><strong>Clips</strong><span>Suggestions and duration</span></div>
             <div class="cuts-control-grid">
-              <label class="cut-count-field" title="Quantidade de cortes">
-                <span class="tuning-copy">Quantidade</span>
-                <select name="preview_count" aria-label="Quantidade de cortes">
+              <label class="cut-count-field" title="Clip count">
+                <span class="tuning-copy">Count</span>
+                <select name="preview_count" aria-label="Clip count">
                   {suggestion_count_options()}
                 </select>
               </label>
-              <fieldset class="duration-profile duration-size-toggle duration-tile-grid" aria-label="Duracao dos cortes">
-                <legend class="sr-only">Duracao dos cortes</legend>
-                <label class="duration-option-short" title="Curto: 20 a 45 segundos"><input name="duration_profile" type="radio" value="short" aria-label="Curto"><span><strong>S</strong><small>20-45s</small></span></label>
-                <label class="duration-option-medium" title="Medio: 30 a 70 segundos"><input name="duration_profile" type="radio" value="medium" aria-label="Medio" checked><span><strong>M</strong><small>30-70s</small></span></label>
-                <label class="duration-option-long" title="Longo: 60 a 120 segundos"><input name="duration_profile" type="radio" value="long" aria-label="Longo"><span><strong>L</strong><small>60-120s</small></span></label>
+              <fieldset class="duration-profile duration-size-toggle duration-tile-grid" aria-label="Clip duration">
+                <legend class="sr-only">Clip duration</legend>
+                <label class="duration-option-short" title="Short: 20 to 45 seconds"><input name="duration_profile" type="radio" value="short" aria-label="Short"><span><strong>S</strong><small>20-45s</small></span></label>
+                <label class="duration-option-medium" title="Medium: 30 to 70 seconds"><input name="duration_profile" type="radio" value="medium" aria-label="Medium" checked><span><strong>M</strong><small>30-70s</small></span></label>
+                <label class="duration-option-long" title="Long: 60 to 120 seconds"><input name="duration_profile" type="radio" value="long" aria-label="Long"><span><strong>L</strong><small>60-120s</small></span></label>
               </fieldset>
             </div>
           </section>
         </div>
-        <input name="language" type="hidden" value="pt">
+        <input name="language" type="hidden" value="en">
         <input name="preset" type="hidden" value="tiktok">
-        <section class="ai-context-box" aria-label="Contexto para IA">
+        <section class="ai-context-box" aria-label="AI briefing" data-ai-context-box>
           <div class="ai-context-head">
-            <strong>Contexto IA</strong>
-            <button class="icon-action-button context-audio-button" type="button" data-context-audio aria-label="Transcrever por audio" title="Transcrever por audio">{project_home_icon_svg("mic")}</button>
+            <div class="ai-context-title">
+              <strong>AI Briefing</strong>
+              <small>Speak or write what the AI should prioritize.</small>
+            </div>
+            <button class="icon-action-button context-audio-button" type="button" data-context-audio aria-label="Record voice briefing" title="Record voice briefing">{project_home_icon_svg("mic")}</button>
           </div>
-          <textarea name="context_prompt" rows="5" placeholder="Direcao, publico, ganchos e cortes que a IA deve priorizar."></textarea>
+          <div class="ai-context-device-row">
+            <select data-context-audio-device aria-label="Microphone input">
+              <option value="">Default microphone</option>
+            </select>
+            <div class="ai-context-level" aria-hidden="true"><span data-context-audio-level></span></div>
+          </div>
+          <textarea name="context_prompt" rows="5" placeholder="Example: prioritize sharp hooks, practical advice, complete thoughts, and moments that will work as short-form clips."></textarea>
+          <div class="ai-context-status" data-context-audio-status>Ready for a typed or spoken briefing.</div>
         </section>
-        <div class="import-status" data-import-status>Pronto.</div>
+        <div class="import-status" data-import-status>Ready.</div>
         <div class="import-result" data-import-result></div>
         <footer class="new-project-footer">
-          <span>Renders salvos automaticamente no projeto.</span>
-          <button class="import-submit-button" type="submit">Importar</button>
+          <span>Renders are saved automatically inside the project.</span>
+          <button class="import-submit-button" type="submit">Import</button>
         </footer>
       </form>"""
 
 
 def project_home_import_loading_html(logo_src: str) -> str:
     return f"""
-  <section class="home-import-loading" data-import-loading hidden aria-live="polite" aria-label="Importando projeto">
+  <section class="home-import-loading" data-import-loading hidden aria-live="polite" aria-label="Importing project">
     <div class="home-import-loading-inner">
       <img src="{html.escape(logo_src)}" alt="CUTED">
       <div class="home-import-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="8">
         <span data-import-loading-bar></span>
-        <strong data-import-loading-message>Preparando projeto...</strong>
+        <strong data-import-loading-message>Preparing project...</strong>
       </div>
-      <small data-import-loading-label>Importacao</small>
-      <p class="home-import-detail" data-import-loading-detail>Organizando arquivos locais.</p>
-      <ol class="home-import-steps" data-import-loading-steps aria-label="Etapas do import">
-        <li data-import-step="prepare" data-state="active"><span></span>Projeto</li>
-        <li data-import-step="media"><span></span>Midia</li>
+      <small data-import-loading-label>Import</small>
+      <p class="home-import-detail" data-import-loading-detail>Organizing local files.</p>
+      <ol class="home-import-steps" data-import-loading-steps aria-label="Import steps">
+        <li data-import-step="prepare" data-state="active"><span></span>Project</li>
+        <li data-import-step="media"><span></span>Media</li>
         <li data-import-step="audio"><span></span>Audio</li>
-        <li data-import-step="analysis"><span></span>Analise</li>
-        <li data-import-step="suggestions"><span></span>Cortes</li>
+        <li data-import-step="analysis"><span></span>AI</li>
+        <li data-import-step="suggestions"><span></span>Clips</li>
         <li data-import-step="previews"><span></span>Previews</li>
-        <li data-import-step="publish"><span></span>SEO</li>
-        <li data-import-step="editor"><span></span>Editor</li>
+        <li data-import-step="publish"><span></span>Post</li>
+        <li data-import-step="editor"><span></span>Edit</li>
       </ol>
-      <button type="button" data-import-loading-back hidden>Voltar</button>
+      <button type="button" data-import-loading-back hidden>Back</button>
     </div>
   </section>"""
 
@@ -11270,41 +11452,41 @@ def settings_modal_html() -> str:
           <span class="settings-orb" aria-hidden="true">{gear_icon_svg()}</span>
           <div>
             <strong id="settings-title">OpenAI</strong>
-            <p id="settings-description">Chave, modelos e teste de conexao do CUTED.</p>
+            <p id="settings-description">Key, models, and CUTED connection test.</p>
           </div>
         </div>
-        <button class="settings-close-button" type="button" data-settings-close aria-label="Fechar configuracoes">X</button>
+        <button class="settings-close-button" type="button" data-settings-close aria-label="Close settings">X</button>
       </div>
       <form data-settings-form class="settings-form">
-        <div class="settings-status" data-settings-status>Carregando...</div>
+        <div class="settings-status" data-settings-status>Loading...</div>
         <label class="settings-field settings-token-field">Token OpenAI
-          <input name="api_key" type="password" autocomplete="off" placeholder="Cole aqui apenas se quiser trocar o token">
+          <input name="api_key" type="password" autocomplete="off" placeholder="Paste only when you want to replace the token">
         </label>
         <div class="settings-grid">
-          <label class="settings-field">Provedor IA
+          <label class="settings-field">AI provider
             <select name="ai_provider">
               <option value="openai">OpenAI</option>
               <option value="auto">Auto</option>
               <option value="local">Local</option>
             </select>
           </label>
-          <label class="settings-field">Modelo de analise
+          <label class="settings-field">Analysis model
             <select name="openai_model">
               {openai_model_options()}
             </select>
           </label>
-          <label class="settings-field">Transcricao
+          <label class="settings-field">Transcription
             <select name="transcribe_model">
               {transcribe_model_options()}
             </select>
           </label>
         </div>
-        <div class="settings-usage" data-settings-usage>Sem uso registrado nesta maquina.</div>
+        <div class="settings-usage" data-settings-usage>No local usage recorded on this machine.</div>
         <div class="settings-actions">
-          <button type="button" data-settings-test>Testar conexao</button>
-          <button type="submit">Salvar</button>
+          <button type="button" data-settings-test>Test connection</button>
+          <button type="submit">Save</button>
         </div>
-        <small>Estimativa local. Confira o valor oficial no painel da OpenAI.</small>
+        <small>Local estimate. Check the official amount in the OpenAI dashboard.</small>
       </form>
     </section>
   </div>"""
@@ -11877,7 +12059,9 @@ def project_home_compact_import_css() -> str:
 .duration-option-long{grid-column:1/-1}
 .duration-size-toggle svg{width:14px;height:14px;opacity:.72}
 .duration-size-toggle strong{font-size:17px;line-height:1}
+.ai-context-title{display:grid;gap:2px}.ai-context-title small{color:var(--color-text-muted);font-size:11px;line-height:1.25}.ai-context-device-row{display:grid;grid-template-columns:minmax(160px,240px) minmax(120px,1fr);gap:8px;align-items:center}.ai-context-device-row select{min-height:32px;padding:5px 8px;border-color:rgba(231,231,232,.12);font-size:12px}.ai-context-level{height:8px;overflow:hidden;border:1px solid rgba(231,231,232,.12);border-radius:999px;background:rgba(0,0,0,.32)}.ai-context-level span{display:block;width:0%;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--color-brand-blue),var(--color-brand-green));transition:width .16s ease}.ai-context-status{min-height:18px;color:rgba(231,231,232,.68);font-size:12px}.ai-context-box[data-audio-state=recording]{border-color:rgba(17,162,207,.72);box-shadow:0 0 0 1px rgba(17,162,207,.22),0 0 28px rgba(17,162,207,.12)}.ai-context-box[data-audio-state=recording] .context-audio-button{border-color:rgba(17,162,207,.8);background:rgba(17,162,207,.18);color:var(--color-text);animation:context-mic-pulse 1.1s ease-in-out infinite}.ai-context-box[data-audio-state=transcribing] .context-audio-button{border-color:rgba(175,207,42,.7);background:rgba(175,207,42,.14);color:var(--color-text)}.ai-context-box[data-audio-state=applied]{border-color:rgba(175,207,42,.52)}.ai-context-box[data-audio-state=error]{border-color:rgba(255,111,111,.52)}
 .context-audio-button{border-radius:999px}
+@keyframes context-mic-pulse{0%,100%{box-shadow:0 0 0 0 rgba(17,162,207,.18)}50%{box-shadow:0 0 0 7px rgba(17,162,207,.08)}}
 .import-submit-button{min-width:116px;min-height:42px!important;border-color:var(--color-brand-white)!important;background:var(--color-brand-white)!important;color:var(--color-brand-black)!important;font-weight:900;box-shadow:0 10px 24px rgba(0,0,0,.32)}
 .import-submit-button:hover{transform:translateY(-1px);border-color:var(--color-brand-green)!important;background:var(--color-brand-green)!important;color:var(--color-brand-black)!important;box-shadow:0 12px 26px rgba(0,0,0,.36),0 0 16px rgba(175,207,42,.16)}
 .home-import-loading{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:radial-gradient(circle at 50% 42%,rgba(17,162,207,.12),transparent 30%),radial-gradient(circle at 56% 52%,rgba(175,207,42,.09),transparent 34%),rgba(5,5,5,.88);backdrop-filter:blur(18px) saturate(1.25)}
@@ -11946,7 +12130,7 @@ function setResult(html){
 async function postJson(url, payload){
   const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload || {}) });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.ok) throw new Error(data.error || "Operacao local falhou.");
+  if (!response.ok || !data.ok) throw new Error(data.error || "Local operation failed.");
   return data;
 }
 let importOpenaiState = { provider: "local", keyConfigured: true };
@@ -11954,7 +12138,7 @@ function importNeedsOpenaiKey(){
   return importOpenaiState.provider === "openai" && !importOpenaiState.keyConfigured;
 }
 const importStageOrder = ["prepare", "media", "audio", "analysis", "suggestions", "previews", "publish", "editor"];
-function setImportLoading(message, label = "Importacao", percent = 8, progress = {}){
+function setImportLoading(message, label = "Import", percent = 8, progress = {}){
   const loading = document.querySelector("[data-import-loading]");
   if (!loading) return;
   const value = Math.max(0, Math.min(100, Number(percent || 0)));
@@ -11962,8 +12146,8 @@ function setImportLoading(message, label = "Importacao", percent = 8, progress =
   loading.hidden = false;
   loading.dataset.state = "running";
   document.body.dataset.importing = "true";
-  loading.querySelector("[data-import-loading-message]").textContent = message || "Processando...";
-  loading.querySelector("[data-import-loading-label]").textContent = label || "Importacao";
+  loading.querySelector("[data-import-loading-message]").textContent = message || "Processing...";
+  loading.querySelector("[data-import-loading-label]").textContent = label || "Import";
   loading.querySelector("[data-import-loading-detail]").textContent = importProgressDetail(progress);
   loading.querySelector("[data-import-loading-bar]").style.width = `${value}%`;
   loading.querySelector("[role=progressbar]").setAttribute("aria-valuenow", String(value));
@@ -11974,12 +12158,12 @@ function importProgressDetail(progress){
   if (progress.detail) return String(progress.detail);
   const step = Number(progress.step || 0);
   const steps = Number(progress.steps || 0);
-  if (step && steps) return `${step} de ${steps}`;
-  if (progress.stage === "media") return "Preparando fonte de video.";
-  if (progress.stage === "audio") return "Audio sendo convertido e transcrito.";
-  if (progress.stage === "analysis") return "Procurando trechos com gancho e fechamento.";
-  if (progress.stage === "previews") return "Gerando amostras para revisar no editor.";
-  return "Acompanhe as etapas enquanto o projeto nasce.";
+  if (step && steps) return `${step} of ${steps}`;
+  if (progress.stage === "media") return "Preparing the video source.";
+  if (progress.stage === "audio") return "Converting and transcribing audio.";
+  if (progress.stage === "analysis") return "Finding strong hooks and complete thoughts.";
+  if (progress.stage === "previews") return "Generating samples for editor review.";
+  return "Follow the steps while the project is created.";
 }
 function updateImportSteps(stage){
   const currentIndex = importStageOrder.includes(stage) ? importStageOrder.indexOf(stage) : 0;
@@ -11990,16 +12174,16 @@ function updateImportSteps(stage){
 }
 function updateImportLoading(job){
   const progress = job.progress || {};
-  setImportLoading(progress.message || job.message || "Processando importacao...", progress.label || job.status || "Importacao", progress.percent || 35, progress);
+  setImportLoading(progress.message || job.message || "Processing import...", progress.label || job.status || "Import", progress.percent || 35, progress);
 }
 function failImportLoading(message){
   const loading = document.querySelector("[data-import-loading]");
   if (!loading) return;
   loading.hidden = false;
   loading.dataset.state = "failed";
-  loading.querySelector("[data-import-loading-message]").textContent = message || "Nao consegui importar este projeto.";
-  loading.querySelector("[data-import-loading-label]").textContent = "Importacao interrompida";
-  loading.querySelector("[data-import-loading-detail]").textContent = "Confira a mensagem abaixo e tente novamente.";
+  loading.querySelector("[data-import-loading-message]").textContent = message || "Could not import this project.";
+  loading.querySelector("[data-import-loading-label]").textContent = "Import stopped";
+  loading.querySelector("[data-import-loading-detail]").textContent = "Check the message below and try again.";
   loading.querySelector("[data-import-loading-bar]").style.width = "100%";
   loading.querySelector("[role=progressbar]").setAttribute("aria-valuenow", "100");
   loading.querySelector("[data-import-loading-back]").hidden = false;
@@ -12015,7 +12199,7 @@ function importJobStorage(){
   try {
     return window.sessionStorage;
   } catch (error) {
-    console.warn("Nao foi possivel acessar sessionStorage para import.", error);
+    console.warn("Could not access sessionStorage for import recovery.", error);
     return null;
   }
 }
@@ -12050,9 +12234,9 @@ async function completeImportJob(job, button, options = {}){
   activeImportPollJobId = "";
   clearActiveImportJob(job.id || options.jobId);
   if (button) button.disabled = false;
-  setImportLoading("Projeto pronto. Abrindo editor...", "Concluido", 100, { stage: "editor", detail: "Atualizando projetos recentes." });
-  if (job.output_url) setResult(`<a href="${escapeAttr(job.output_url)}">Abrir projeto importado</a>`);
-  await refreshProjects().catch(error => console.warn("Nao consegui atualizar projetos apos import.", error));
+  setImportLoading("Project ready. Opening editor...", "Done", 100, { stage: "editor", detail: "Updating recent projects." });
+  if (job.output_url) setResult(`<a href="${escapeAttr(job.output_url)}">Open imported project</a>`);
+  await refreshProjects().catch(error => console.warn("Could not refresh projects after import.", error));
   if (job.output_url && options.open !== false) {
     window.setTimeout(() => window.location.assign(job.output_url), 450);
   }
@@ -12069,19 +12253,19 @@ async function importOutputIsReady(outputUrl){
 function recoverActiveImportJob(options = {}){
   const active = storedActiveImportJob();
   if (!active?.id || activeImportPollJobId === active.id) return;
-  setImportLoading("Retomando importacao...", "Acompanhando", 35, { stage: "analysis", detail: "Reconectando ao job ativo." });
+  setImportLoading("Resuming import...", "Tracking", 35, { stage: "analysis", detail: "Reconnecting to the active job." });
   pollImport(active.id, document.querySelector("[data-import-form] button[type=submit]"), options);
 }
 function setupImportRecovery(){
-  refreshProjects().catch(error => console.warn("Nao consegui atualizar projetos ao abrir a home.", error));
+  refreshProjects().catch(error => console.warn("Could not refresh projects on Home load.", error));
   recoverActiveImportJob();
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
-    refreshProjects().catch(error => console.warn("Nao consegui atualizar projetos ao voltar para a aba.", error));
+    refreshProjects().catch(error => console.warn("Could not refresh projects when the tab returned.", error));
     recoverActiveImportJob();
   });
   window.addEventListener("focus", () => {
-    refreshProjects().catch(error => console.warn("Nao consegui atualizar projetos no foco da aba.", error));
+    refreshProjects().catch(error => console.warn("Could not refresh projects on focus.", error));
     recoverActiveImportJob();
   });
 }
@@ -12089,29 +12273,29 @@ async function startImport(form){
   const button = form.querySelector("button[type=submit]");
   const payload = projectPayload(form);
   if (!payload.source_path && !payload.source_url) {
-    setStatus(form.dataset.sourceMode === "youtube" ? "Cole um link do YouTube." : "Selecione um video local.");
+    setStatus(form.dataset.sourceMode === "youtube" ? "Paste a YouTube link." : "Select a local video.");
     form.querySelector(form.dataset.sourceMode === "youtube" ? "[name=source_url]" : "[name=source_path]")?.focus();
     return;
   }
   if (importNeedsOpenaiKey()) {
-    setStatus("Adicione sua chave OpenAI nas configuracoes para importar com IA.");
+    setStatus("Add your OpenAI key in Settings to import with AI.");
     openSettingsPanel();
     return;
   }
   setResult("");
-  setImportLoading("Preparando projeto...", "Preparando", 8, { stage: "prepare", detail: "Organizando arquivos locais." });
-  setStatus("Criando job de importacao...");
+  setImportLoading("Preparing project...", "Preparing", 8, { stage: "prepare", detail: "Organizing local files." });
+  setStatus("Creating import job...");
   if (button) button.disabled = true;
   try {
     const data = await postJson("/api/import-jobs", payload);
-    setStatus(data.job?.message || "Importacao iniciada.");
+    setStatus(data.job?.message || "Import started.");
     updateImportLoading(data.job || {});
     saveActiveImportJob(data.job || {});
     pollImport(data.job.id, button);
   } catch (error) {
     if (button) button.disabled = false;
-    failImportLoading(error.message || "Nao consegui iniciar a importacao.");
-    setStatus("Nao consegui iniciar a importacao.");
+    failImportLoading(error.message || "Could not start the import.");
+    setStatus("Could not start the import.");
     setResult(`<code>${escapeHtml(error.message || String(error))}</code>`);
   }
 }
@@ -12121,9 +12305,9 @@ async function pollImport(jobId, button, options = {}){
   try {
     const response = await fetch(`/api/import-jobs/${encodeURIComponent(jobId)}`);
     const data = await response.json();
-    if (!response.ok || !data.ok) throw new Error(data.error || "Job nao encontrado.");
+    if (!response.ok || !data.ok) throw new Error(data.error || "Job not found.");
     const job = data.job || {};
-    setStatus(`${job.message || "Processando..."} (${job.status || "running"})`);
+    setStatus(`${job.message || "Processing..."} (${job.status || "running"})`);
     updateImportLoading(job);
     if (job.status === "ready") {
       await completeImportJob(job, button, { jobId, open: options.open !== false });
@@ -12133,8 +12317,8 @@ async function pollImport(jobId, button, options = {}){
       activeImportPollJobId = "";
       clearActiveImportJob(jobId);
       if (button) button.disabled = false;
-      failImportLoading(job.stderr || job.message || "Importacao encerrada.");
-      setResult(`<code>${escapeHtml(job.stderr || job.message || "Importacao encerrada.")}</code>`);
+      failImportLoading(job.stderr || job.message || "Import ended.");
+      setResult(`<code>${escapeHtml(job.stderr || job.message || "Import ended.")}</code>`);
       return;
     }
     window.setTimeout(() => pollImport(jobId, button), 1200);
@@ -12146,11 +12330,185 @@ async function pollImport(jobId, button, options = {}){
       return;
     }
     if (button) button.disabled = false;
-    setImportLoading("Reconectando importacao...", "Acompanhando", 35, { stage: "analysis", detail: "A aba perdeu o acompanhamento; vou tentar retomar." });
-    setStatus("Nao consegui acompanhar a importacao. Vou tentar retomar quando a aba voltar.");
+    setImportLoading("Reconnecting import...", "Tracking", 35, { stage: "analysis", detail: "The tab lost the job stream; retrying." });
+    setStatus("Could not track the import. I will retry when the tab comes back.");
     setResult(`<code>${escapeHtml(error.message || String(error))}</code>`);
     refreshProjects().catch(() => {});
   }
+}
+let contextAudio = { recorder: null, stream: null, chunks: [], startedAt: 0, audioContext: null, analyser: null, levelTimer: 0, maxLevel: 0, deviceLabel: "" };
+function setContextAudioState(form, state, message){
+  const box = form.querySelector("[data-ai-context-box]");
+  const status = form.querySelector("[data-context-audio-status]");
+  const button = form.querySelector("[data-context-audio]");
+  if (box) box.dataset.audioState = state || "ready";
+  if (status) status.textContent = message || "";
+  if (button) button.disabled = state === "transcribing";
+  if (button) button.title = state === "recording" ? "Stop recording" : "Record voice briefing";
+}
+function contextAudioMimeType(){
+  if (!window.MediaRecorder) return "";
+  const types = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+  return types.find(type => MediaRecorder.isTypeSupported(type)) || "";
+}
+function selectedContextAudioDeviceId(form){
+  return String(form.querySelector("[data-context-audio-device]")?.value || "");
+}
+function contextAudioConstraints(form){
+  const deviceId = selectedContextAudioDeviceId(form);
+  const audio = { echoCancellation: false, noiseSuppression: false, autoGainControl: true };
+  if (deviceId) audio.deviceId = { exact: deviceId };
+  return { audio };
+}
+async function refreshContextAudioDevices(form){
+  const select = form.querySelector("[data-context-audio-device]");
+  if (!select || !navigator.mediaDevices?.enumerateDevices) return;
+  const current = select.value;
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const audioInputs = devices.filter(device => device.kind === "audioinput");
+    select.innerHTML = '<option value="">Default microphone</option>';
+    audioInputs.forEach((device, index) => {
+      const option = document.createElement("option");
+      option.value = device.deviceId;
+      option.textContent = device.label || `Microphone ${index + 1}`;
+      select.appendChild(option);
+    });
+    if (current && Array.from(select.options).some(option => option.value === current)) select.value = current;
+  } catch (error) {
+    console.warn("Could not list microphones:", error);
+  }
+}
+async function toggleContextAudio(form){
+  if (contextAudio.recorder?.state === "recording") {
+    contextAudio.recorder.requestData?.();
+    contextAudio.recorder.stop();
+    return;
+  }
+  await startContextAudio(form);
+}
+async function startContextAudio(form){
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    throw new Error("Microphone recording is not available in this browser.");
+  }
+  const stream = await navigator.mediaDevices.getUserMedia(contextAudioConstraints(form));
+  await refreshContextAudioDevices(form);
+  const mimeType = contextAudioMimeType();
+  const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+  const track = stream.getAudioTracks()[0];
+  contextAudio = { recorder, stream, chunks: [], startedAt: Date.now(), audioContext: null, analyser: null, levelTimer: 0, maxLevel: 0, deviceLabel: track?.label || "microphone" };
+  const activeDeviceId = track?.getSettings?.().deviceId || "";
+  const deviceSelect = form.querySelector("[data-context-audio-device]");
+  if (activeDeviceId && deviceSelect && !deviceSelect.value) deviceSelect.value = activeDeviceId;
+  recorder.addEventListener("dataavailable", event => {
+    if (event.data?.size) contextAudio.chunks.push(event.data);
+  });
+  recorder.addEventListener("stop", () => finishContextAudio(form, mimeType));
+  recorder.start(250);
+  startContextAudioLevelMonitor(form, stream);
+  setContextAudioState(form, "recording", `Recording from ${contextAudio.deviceLabel} - input 0%... click the mic again to stop.`);
+}
+async function finishContextAudio(form, mimeType){
+  const maxLevel = contextAudio.maxLevel || 0;
+  const deviceLabel = contextAudio.deviceLabel || "microphone";
+  stopContextAudioLevelMonitor(form);
+  contextAudio.stream?.getTracks().forEach(track => track.stop());
+  const seconds = Math.max(0, (Date.now() - contextAudio.startedAt) / 1000);
+  const blob = new Blob(contextAudio.chunks, { type: mimeType || "audio/webm" });
+  contextAudio = { recorder: null, stream: null, chunks: [], startedAt: 0, audioContext: null, analyser: null, levelTimer: 0, maxLevel: 0, deviceLabel: "" };
+  if (!blob.size || seconds < .35) {
+    setContextAudioState(form, "ready", "No briefing was recorded.");
+    return;
+  }
+  if (seconds >= 2 && maxLevel < .006) {
+    setContextAudioState(form, "error", `Microphone input stayed very low from ${deviceLabel}. Pick another microphone or check Windows input settings.`);
+    return;
+  }
+  await transcribeContextAudio(form, blob, seconds, maxLevel);
+}
+function startContextAudioLevelMonitor(form, stream){
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+  const meter = form.querySelector("[data-context-audio-level]");
+  try {
+    const audioContext = new AudioContextClass();
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 1024;
+    const source = audioContext.createMediaStreamSource(stream);
+    const data = new Uint8Array(analyser.fftSize);
+    source.connect(analyser);
+    contextAudio.audioContext = audioContext;
+    contextAudio.analyser = analyser;
+    const tick = () => {
+      analyser.getByteTimeDomainData(data);
+      const level = contextAudioInputLevel(data);
+      contextAudio.maxLevel = Math.max(contextAudio.maxLevel || 0, level);
+      const percent = contextAudioLevelPercent(level);
+      if (meter) meter.style.width = `${percent}%`;
+      setContextAudioState(form, "recording", `Recording from ${contextAudio.deviceLabel || "microphone"} - input ${percent}%... click the mic again to stop.`);
+    };
+    contextAudio.levelTimer = window.setInterval(tick, 250);
+    tick();
+  } catch (error) {
+    console.warn("Could not monitor microphone level:", error);
+  }
+}
+function stopContextAudioLevelMonitor(form){
+  if (contextAudio.levelTimer) window.clearInterval(contextAudio.levelTimer);
+  contextAudio.audioContext?.close?.().catch?.(() => {});
+  const meter = form.querySelector("[data-context-audio-level]");
+  if (meter) meter.style.width = "0%";
+}
+function contextAudioInputLevel(data){
+  let sum = 0;
+  for (const value of data) {
+    const centered = (value - 128) / 128;
+    sum += centered * centered;
+  }
+  return Math.sqrt(sum / Math.max(1, data.length));
+}
+function contextAudioLevelPercent(level){
+  return Math.max(0, Math.min(100, Math.round(Number(level || 0) * 420)));
+}
+async function transcribeContextAudio(form, blob, seconds, maxLevel){
+  const sizeKb = Math.max(1, Math.round(blob.size / 1024));
+  setContextAudioState(form, "transcribing", `Transcribing ${seconds.toFixed(1)}s / ${sizeKb} KB, peak input ${contextAudioLevelPercent(maxLevel)}%...`);
+  try {
+    const language = "auto";
+    const response = await fetch(`/api/ai-context/audio?language=${encodeURIComponent(language)}`, {
+      method: "POST",
+      headers: { "Content-Type": blob.type || "audio/webm" },
+      body: blob
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new Error(data.error || "Transcription failed.");
+    const transcript = String(data.context?.text || "").trim();
+    if (isWeakContextTranscript(transcript, seconds)) {
+      throw new Error(weakContextTranscriptMessage(transcript, seconds, sizeKb, maxLevel));
+    }
+    applyContextTranscript(form, transcript);
+    setContextAudioState(form, "applied", `Voice briefing applied (${seconds.toFixed(1)}s / ${sizeKb} KB). Review it before importing.`);
+  } catch (error) {
+    setContextAudioState(form, "error", error.message || "Could not transcribe the briefing.");
+  }
+}
+function isWeakContextTranscript(text, seconds){
+  const clean = String(text || "").trim().toLowerCase();
+  if (!clean) return true;
+  if (seconds < 1.2) return clean.length <= 3;
+  return clean.length <= 4 || ["you", "you.", "yeah", "ok", "okay"].includes(clean);
+}
+function weakContextTranscriptMessage(text, seconds, sizeKb, maxLevel){
+  const detected = String(text || "").trim() || "no speech";
+  return `Only "${detected}" was detected from ${seconds.toFixed(1)}s / ${sizeKb} KB, peak input ${contextAudioLevelPercent(maxLevel)}%. Pick another microphone or record closer to the input.`;
+}
+function applyContextTranscript(form, text){
+  const textarea = form.querySelector("[name=context_prompt]");
+  const transcript = String(text || "").trim();
+  if (!textarea || !transcript) return;
+  const current = textarea.value.trim();
+  textarea.value = current ? `${current}\n\n${transcript}` : transcript;
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
 }
 function bindImportForm(){
   const form = document.querySelector("[data-import-form]");
@@ -12160,8 +12518,10 @@ function bindImportForm(){
     event.preventDefault();
     startImport(form);
   });
-  form.querySelector("[data-select-video-file]")?.addEventListener("click", () => selectPath("/api/select-video-file", "[name=source_path]", "Video local selecionado."));
-  form.querySelector("[data-context-audio]")?.addEventListener("click", () => setStatus("Transcricao por audio entra na proxima fase."));
+  form.querySelector("[data-select-video-file]")?.addEventListener("click", () => selectPath("/api/select-video-file", "[name=source_path]", "Local video selected."));
+  form.querySelector("[data-context-audio]")?.addEventListener("click", () => {
+    toggleContextAudio(form).catch(error => setContextAudioState(form, "error", error.message || "Microphone unavailable."));
+  });
   document.querySelector("[data-import-loading-back]")?.addEventListener("click", () => hideImportLoading());
 }
 function bindSourceMode(form){
@@ -12177,14 +12537,14 @@ function bindSourceMode(form){
   sync();
 }
 async function selectPath(url, selector, message){
-  setStatus("Abrindo seletor local...");
+  setStatus("Opening local picker...");
   try {
     const data = await postJson(url);
     const input = document.querySelector(selector);
     if (input) input.value = data.path || input.value;
     setStatus(message);
   } catch (error) {
-    setStatus(error.message || "Seletor local indisponivel.");
+    setStatus(error.message || "Local picker unavailable.");
   }
 }
 let settingsLastFocus = null;
@@ -12258,10 +12618,10 @@ async function loadOpenaiSettings(){
   try {
     const response = await fetch("/api/settings/openai");
     const payload = await response.json();
-    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao carregar configuracoes.");
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Could not load settings.");
     applySettingsPayload(form, payload.settings || {}, payload.usage || {});
   } catch (error) {
-    if (status) status.textContent = error.message || "Nao consegui carregar configuracoes.";
+    if (status) status.textContent = error.message || "Could not load settings.";
   }
 }
 function applySettingsPayload(form, settings, usage){
@@ -12275,7 +12635,7 @@ function applySettingsPayload(form, settings, usage){
   };
   const status = document.querySelector("[data-settings-status]");
   if (status) {
-    const key = settings.key_configured ? "Token configurado" : "Token nao configurado";
+    const key = settings.key_configured ? "Token configured" : "Token not configured";
     status.textContent = `${key} - ${settings.openai_model || "gpt-5-mini"} / ${settings.transcribe_model || "whisper-1"}`;
   }
   renderSettingsUsage(usage);
@@ -12294,7 +12654,7 @@ function settingsPayloadFromForm(form){
 }
 async function saveSettingsForm(form){
   const status = document.querySelector("[data-settings-status]");
-  if (status) status.textContent = "Salvando...";
+  if (status) status.textContent = "Saving...";
   try {
     const response = await fetch("/api/settings/openai", {
       method: "POST",
@@ -12302,17 +12662,17 @@ async function saveSettingsForm(form){
       body: JSON.stringify(settingsPayloadFromForm(form))
     });
     const payload = await response.json();
-    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao salvar configuracoes.");
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Could not save settings.");
     applySettingsPayload(form, payload.settings || {}, payload.usage || {});
-    if (status) status.textContent = `Salvo. ${status.textContent}`;
+    if (status) status.textContent = `Saved. ${status.textContent}`;
   } catch (error) {
-    if (status) status.textContent = error.message || "Nao consegui salvar.";
+    if (status) status.textContent = error.message || "Could not save.";
   }
 }
 async function testSettingsConnection(form){
   const status = document.querySelector("[data-settings-status]");
   const button = document.querySelector("[data-settings-test]");
-  if (status) status.textContent = "Testando conexao...";
+  if (status) status.textContent = "Testing connection...";
   if (button) button.disabled = true;
   try {
     const response = await fetch("/api/settings/openai/test", {
@@ -12321,10 +12681,10 @@ async function testSettingsConnection(form){
       body: JSON.stringify(settingsPayloadFromForm(form))
     });
     const data = await response.json();
-    if (!response.ok || !data.ok) throw new Error(data.error || "Falha ao testar conexao.");
-    if (status) status.textContent = data.message || "Conexao OpenAI validada.";
+    if (!response.ok || !data.ok) throw new Error(data.error || "Could not test connection.");
+    if (status) status.textContent = data.message || "OpenAI connection validated.";
   } catch (error) {
-    if (status) status.textContent = error.message || "Nao consegui validar a conexao.";
+    if (status) status.textContent = error.message || "Could not validate the connection.";
   } finally {
     if (button) button.disabled = false;
   }
@@ -12336,9 +12696,9 @@ function renderSettingsUsage(usage){
   const count = Number(usage?.event_count || 0);
   const last = usage?.last_event || {};
   const lastText = last.operation
-    ? `Ultimo: ${escapeHtml(last.operation)} em ${escapeHtml(last.model || "-")} - ${formatUsd(last.estimated_usd || 0)}`
-    : "Ultimo: sem registro.";
-  target.innerHTML = `<strong>Total local estimado: ${formatUsd(total)}</strong><span>${count} evento(s) registrado(s).</span><span>${lastText}</span>`;
+    ? `Last: ${escapeHtml(last.operation)} on ${escapeHtml(last.model || "-")} - ${formatUsd(last.estimated_usd || 0)}`
+    : "Last: no record.";
+  target.innerHTML = `<strong>Estimated local total: ${formatUsd(total)}</strong><span>${count} event(s) recorded.</span><span>${lastText}</span>`;
 }
 function formatUsd(value){
   return `$${Number(value || 0).toFixed(4)}`;
@@ -12349,14 +12709,14 @@ async function refreshImportKeyBanner(){
   try {
     const response = await fetch("/api/settings/openai");
     const payload = await response.json();
-    if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao carregar configuracoes.");
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Could not load settings.");
     const settings = payload.settings || {};
     importOpenaiState = {
       provider: String(settings.ai_provider || "local"),
       keyConfigured: Boolean(settings.key_configured)
     };
   } catch (error) {
-    console.warn("Nao consegui checar a chave OpenAI:", error);
+    console.warn("Could not check the OpenAI key:", error);
     importOpenaiState = { provider: "local", keyConfigured: true };
   }
   refreshImportKeyBannerFromState();
@@ -12372,17 +12732,17 @@ function setupImportKeyBanner(){
   refreshImportKeyBanner();
 }
 function projectCard(project){
-  const open = project.url ? `<a href="${escapeAttr(project.url)}">Abrir</a>` : `<button type="button" disabled>Abrir</button>`;
+  const open = project.url ? `<a href="${escapeAttr(project.url)}">Open</a>` : `<button type="button" disabled>Open</button>`;
   const size = sizeLabel(project.size_bytes || 0);
-  return `<article class="project-row" data-project-id="${escapeAttr(project.id)}" data-project-title="${escapeAttr(project.title || "Projeto sem titulo")}" data-project-path="${escapeAttr(project.path || "")}" data-project-size="${escapeAttr(size)}">
-    <div class="project-name-cell"><strong>${escapeHtml(project.title || "Projeto sem titulo")}</strong><p>${escapeHtml(project.source_label || "")}</p><small>${escapeHtml(project.path || "")}</small></div>
-    <dl class="project-meta-cell"><div><dt>Cortes</dt><dd>${Number(project.clip_count || 0)}</dd></div><div><dt>Renders</dt><dd>${Number(project.render_count || 0)}</dd></div><div><dt>Tamanho</dt><dd>${escapeHtml(size)}</dd></div></dl>
+  return `<article class="project-row" data-project-id="${escapeAttr(project.id)}" data-project-title="${escapeAttr(project.title || "Untitled project")}" data-project-path="${escapeAttr(project.path || "")}" data-project-size="${escapeAttr(size)}">
+    <div class="project-name-cell"><strong>${escapeHtml(project.title || "Untitled project")}</strong><p>${escapeHtml(project.source_label || "")}</p><small>${escapeHtml(project.path || "")}</small></div>
+    <dl class="project-meta-cell"><div><dt>Clips</dt><dd>${Number(project.clip_count || 0)}</dd></div><div><dt>Renders</dt><dd>${Number(project.render_count || 0)}</dd></div><div><dt>Size</dt><dd>${escapeHtml(size)}</dd></div></dl>
     <time class="project-updated-cell">${escapeHtml(project.last_opened_at || "")}</time>
-    <div class="project-row-actions">${open}<button type="button" data-forget-project>Remover recente</button><button type="button" data-delete-project>Excluir projeto</button></div>
+    <div class="project-row-actions">${open}<button type="button" data-forget-project>Remove recent</button><button type="button" data-delete-project>Delete project</button></div>
   </article>`;
 }
 function emptyProjectState(){
-  return `<article class="project-empty-state" data-project-empty-state><strong>Nenhum projeto recente</strong><p>Crie um novo projeto para comecar.</p></article>`;
+  return `<article class="project-empty-state" data-project-empty-state><strong>No recent projects</strong><p>Create a new project to start.</p></article>`;
 }
 function sizeLabel(bytes){
   let value = Number(bytes || 0);
@@ -12396,40 +12756,40 @@ async function refreshProjects(){
   if (!projectList) return;
   const response = await fetch("/api/projects");
   const data = await response.json();
-  if (!response.ok || !data.ok) throw new Error(data.error || "Nao consegui carregar projetos.");
+  if (!response.ok || !data.ok) throw new Error(data.error || "Could not load projects.");
   const projects = Array.isArray(data.projects) ? data.projects : [];
   const content = projects.length ? projects.map(projectCard).join("") : emptyProjectState();
-  projectList.innerHTML = `<div class="project-table-head" aria-hidden="true"><span>Projeto</span><span>Status</span><span>Atualizado</span><span>Acoes</span></div>${content}`;
+  projectList.innerHTML = `<div class="project-table-head" aria-hidden="true"><span>Project</span><span>Status</span><span>Updated</span><span>Actions</span></div>${content}`;
 }
 async function deleteProject(card, deleteFiles){
   const projectId = card?.dataset.projectId || "";
-  const title = card?.dataset.projectTitle || "Projeto sem titulo";
+  const title = card?.dataset.projectTitle || "Untitled project";
   const path = card?.dataset.projectPath || "";
-  const size = card?.dataset.projectSize || "tamanho desconhecido";
+  const size = card?.dataset.projectSize || "unknown size";
   const message = projectDeleteMessage(title, path, size, deleteFiles);
   if (!projectId || !window.confirm(message)) return;
   const result = await postJson(`/api/projects/${encodeURIComponent(projectId)}/delete`, { delete_files: deleteFiles });
   await refreshProjects();
   if (deleteFiles) {
-    const method = result.delete_method === "recycle-bin" ? "Projeto enviado para a Lixeira." : "Projeto excluido localmente.";
+    const method = result.delete_method === "recycle-bin" ? "Project moved to the Recycle Bin." : "Project deleted locally.";
     setStatus(method);
   } else {
-    setStatus("Projeto removido dos recentes. Os arquivos continuam no disco.");
+    setStatus("Project removed from recents. Files remain on disk.");
   }
 }
 function projectDeleteMessage(title, path, size, deleteFiles){
   if (!deleteFiles) {
-    return `Remover "${title}" da lista de recentes?\n\nOs arquivos continuam no disco:\n${path}`;
+    return `Remove "${title}" from recents?\n\nFiles remain on disk:\n${path}`;
   }
   return [
-    `Excluir projeto "${title}"?`,
+    `Delete project "${title}"?`,
     "",
-    `Tamanho aproximado: ${size}`,
-    `Pasta: ${path}`,
+    `Approximate size: ${size}`,
+    `Folder: ${path}`,
     "",
-    "A pasta do projeto sera enviada para a Lixeira quando disponivel.",
-    "Se a Lixeira nao estiver disponivel, os arquivos locais serao removidos.",
-    "Renders finais fora da pasta do projeto nao sao apagados por esta acao."
+    "The project folder will be moved to the Recycle Bin when available.",
+    "If the Recycle Bin is unavailable, local files will be removed.",
+    "Final renders outside the project folder are not deleted by this action."
   ].join("\n");
 }
 document.querySelectorAll("[data-new-project]").forEach(button => {
@@ -12444,9 +12804,9 @@ document.querySelector("[data-show-projects]")?.addEventListener("click", () => 
   if (projectLibrary) projectLibrary.hidden = false;
 });
 document.querySelectorAll("[data-open-workspace]").forEach(button => {
-  button.addEventListener("click", () => postJson("/api/open-folder", { path: workspacePath }).catch(error => setStatus(error.message || "Nao consegui abrir a pasta.")));
+  button.addEventListener("click", () => postJson("/api/open-folder", { path: workspacePath }).catch(error => setStatus(error.message || "Could not open the folder.")));
 });
-document.querySelector("[data-refresh-projects]")?.addEventListener("click", () => refreshProjects().catch(error => setStatus(error.message || "Nao consegui atualizar projetos.")));
+document.querySelector("[data-refresh-projects]")?.addEventListener("click", () => refreshProjects().catch(error => setStatus(error.message || "Could not refresh projects.")));
 projectList?.addEventListener("click", event => {
   const card = event.target.closest("[data-project-id]");
   if (event.target.closest("[data-forget-project]")) deleteProject(card, false);

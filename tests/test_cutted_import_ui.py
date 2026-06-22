@@ -537,7 +537,7 @@ class CuttedImportUiTests(unittest.TestCase):
         stages = CUTTED.import_job_running_stages("youtube", "openai")
         source = MODULE_PATH.read_text(encoding="utf-8")
 
-        self.assertIn(("Publicacao IA", "Analisando SEO e tendencias..."), stages)
+        self.assertIn(("Post AI", "Analyzing SEO and trends..."), stages)
         self.assertIn('data-import-step="publish"', CUTTED.project_home_import_loading_html("assets/brand/cuted-logo-transparent.png"))
         self.assertIn(
             'const importStageOrder = ["prepare", "media", "audio", "analysis", "suggestions", "previews", "publish", "editor"];',
@@ -1316,7 +1316,7 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("progress", payload)
         self.assertIn("message", payload["progress"])
         self.assertGreaterEqual(payload["progress"]["percent"], 8)
-        self.assertIn(payload["progress"]["label"], {"Preparando", "Midia", "Audio", "Analise", "Sugestoes", "Editor"})
+        self.assertIn(payload["progress"]["label"], {"Preparing", "Media", "Audio", "Analysis", "Suggestions", "Editor"})
 
     def test_import_progress_event_is_parsed_for_job_snapshot(self) -> None:
         event = CUTTED.parse_import_progress_line(
@@ -1363,7 +1363,7 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertEqual(payload["events"][0]["step"], 3)
 
     def test_import_request_metadata_requires_source(self) -> None:
-        with self.assertRaisesRegex(ValueError, "link ou caminho local"):
+        with self.assertRaisesRegex(ValueError, "link or a local file"):
             CUTTED.import_request_metadata({"output_path": "C:\\videos"})
 
     def test_import_request_metadata_uses_automatic_render_destination(self) -> None:
@@ -1413,7 +1413,7 @@ class CuttedLaunchTests(unittest.TestCase):
             self.assertTrue(index_path.exists())
             html = index_path.read_text(encoding="utf-8")
             self.assertIn("data-project-home", html)
-            self.assertIn("Novo projeto", html)
+            self.assertIn("New project", html)
             self.assertIn("data-import-form", html)
             self.assertNotIn('data-tab="edit"', html)
 

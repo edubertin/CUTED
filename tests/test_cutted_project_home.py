@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -64,7 +65,7 @@ class CuttedProjectHomeTests(unittest.TestCase):
             html = CUTTED.project_home_html(workspace, "assets/brand/cuted-logo-transparent.png", recent)
 
             self.assertIn("data-project-home", html)
-            self.assertIn("Novo projeto", html)
+            self.assertIn("New project", html)
             self.assertIn("data-home-import", html)
             self.assertIn("data-project-list", html)
             self.assertIn("id=\"open-settings\"", html)
@@ -77,10 +78,10 @@ class CuttedProjectHomeTests(unittest.TestCase):
             self.assertIn("project-table-head", html)
             self.assertIn("project-row", html)
             self.assertIn("Sample", html)
-            self.assertIn("Remover recente", html)
-            self.assertIn("Excluir projeto", html)
+            self.assertIn("Remove recent", html)
+            self.assertIn("Delete project", html)
             self.assertIn("projectDeleteMessage", html)
-            self.assertIn("Renders finais fora da pasta do projeto nao sao apagados", html)
+            self.assertIn("Final renders outside the project folder are not deleted", html)
             self.assertNotIn("data-tab=\"edit\"", html)
             self.assertNotIn("1. Importar", html)
             self.assertNotIn("project-intro", html)
@@ -93,8 +94,8 @@ class CuttedProjectHomeTests(unittest.TestCase):
 
             self.assertIn("home-brand-logo", html)
             self.assertIn("data-project-empty-state", html)
-            self.assertIn("Nenhum projeto recente", html)
-            self.assertIn("Crie um novo projeto para comecar.", html)
+            self.assertIn("No recent projects", html)
+            self.assertIn("Create a new project to start.", html)
             self.assertNotIn("data-project-mock", html)
             self.assertNotIn('data-project-id="mock-', html)
             self.assertIn("data-new-project", html)
@@ -110,21 +111,21 @@ class CuttedProjectHomeTests(unittest.TestCase):
             self.assertIn('data-project-library', html)
             self.assertIn('data-show-projects', html)
             self.assertIn('name="source_mode" type="radio" value="local"', html)
-            self.assertIn('aria-label="Video local" checked', html)
+            self.assertIn('aria-label="Local video" checked', html)
             self.assertIn('name="source_mode" type="radio" value="youtube"', html)
             self.assertIn('aria-label="YouTube"', html)
             self.assertIn('new-project-config-grid', html)
             self.assertIn('source-config-block', html)
             self.assertIn('tuning-config-block', html)
             self.assertIn('new-project-block-title', html)
-            self.assertIn('<strong>Midia</strong>', html)
-            self.assertIn('<strong>Cortes</strong>', html)
+            self.assertIn('<strong>Media</strong>', html)
+            self.assertIn('<strong>Clips</strong>', html)
             self.assertIn('<strong>Local</strong>', html)
             self.assertIn('<strong>YouTube</strong>', html)
-            self.assertIn('Sugestoes e duracao', html)
+            self.assertIn('Suggestions and duration', html)
             self.assertIn('cut-count-field', html)
-            self.assertIn('Quantidade</span>', html)
-            self.assertIn('aria-label="Quantidade de cortes"', html)
+            self.assertIn('Count</span>', html)
+            self.assertIn('aria-label="Clip count"', html)
             self.assertIn('duration-option-long', html)
             self.assertIn('data-source-panel="local"', html)
             self.assertIn('data-source-panel="youtube"', html)
@@ -132,9 +133,9 @@ class CuttedProjectHomeTests(unittest.TestCase):
             self.assertIn('data-cuted-icon="youtube"', html)
             self.assertIn('data-cuted-icon="folder-video"', html)
             self.assertIn('data-cuted-icon="mic"', html)
-            self.assertIn('title="Curto: 20 a 45 segundos"', html)
-            self.assertIn('title="Medio: 30 a 70 segundos"', html)
-            self.assertIn('title="Longo: 60 a 120 segundos"', html)
+            self.assertIn('title="Short: 20 to 45 seconds"', html)
+            self.assertIn('title="Medium: 30 to 70 seconds"', html)
+            self.assertIn('title="Long: 60 to 120 seconds"', html)
             self.assertIn('<strong>S</strong>', html)
             self.assertIn('<strong>M</strong>', html)
             self.assertIn('<strong>L</strong>', html)
@@ -144,10 +145,40 @@ class CuttedProjectHomeTests(unittest.TestCase):
             self.assertNotIn('data-cuted-icon="clock"', html)
             self.assertIn('import-submit-button', html)
             self.assertIn('data-context-audio', html)
+            self.assertIn('data-context-audio-device', html)
+            self.assertIn('data-context-audio-level', html)
+            self.assertIn('data-context-audio-status', html)
+            self.assertIn('function toggleContextAudio(form)', html)
+            self.assertIn('function refreshContextAudioDevices(form)', html)
+            self.assertIn('function contextAudioInputLevel(data)', html)
+            self.assertIn('function isWeakContextTranscript(text, seconds)', html)
+            self.assertIn('Only "${detected}" was detected', html)
+            self.assertIn('Microphone input stayed very low', html)
+            self.assertIn('/api/ai-context/audio?language=', html)
             self.assertNotIn('>Audio</button>', html)
             self.assertIn('data-import-key-open', html)
-            self.assertIn('Renders salvos automaticamente no projeto.', html)
+            self.assertIn('Renders are saved automatically inside the project.', html)
             self.assertNotIn('name="output_path"', html)
+
+    def test_ai_context_audio_contract_accepts_media_recorder_audio(self) -> None:
+        self.assertEqual(CUTTED.ai_context_audio_suffix("audio/webm;codecs=opus"), ".webm")
+        self.assertEqual(CUTTED.ai_context_audio_suffix("audio/mp4"), ".mp4")
+        self.assertIsNone(CUTTED.ai_context_language("/api/ai-context/audio?language=auto"))
+        self.assertEqual(CUTTED.ai_context_language("/api/ai-context/audio?language=pt"), "pt")
+        self.assertEqual(CUTTED.ai_context_transcribe_model(), CUTTED.openai_transcribe_model())
+        previous = os.environ.get("CUTED_CONTEXT_TRANSCRIBE_MODEL")
+        os.environ["CUTED_CONTEXT_TRANSCRIBE_MODEL"] = "gpt-4o-mini-transcribe"
+        try:
+            self.assertEqual(CUTTED.ai_context_transcribe_model(), "gpt-4o-mini-transcribe")
+        finally:
+            if previous is None:
+                os.environ.pop("CUTED_CONTEXT_TRANSCRIBE_MODEL", None)
+            else:
+                os.environ["CUTED_CONTEXT_TRANSCRIBE_MODEL"] = previous
+
+    def test_ai_context_audio_contract_rejects_non_audio(self) -> None:
+        with self.assertRaises(ValueError):
+            CUTTED.ai_context_audio_suffix("application/json")
 
     def test_project_home_recovers_backgrounded_import_job(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
