@@ -53,6 +53,14 @@ from cuted_contracts import (
     Segment,
     SourceMedia,
 )
+from cuted_caption_queue import (
+    caption_rows_from_data as queue_caption_rows_from_data,
+    platform_edit_from_row as queue_platform_edit_from_row,
+    queue_rows_for_assets as queue_queue_rows_for_assets,
+    resolution_edit_from_row as queue_resolution_edit_from_row,
+    row_for_platform as queue_row_for_platform,
+    selected_rows_to_caption_rows as queue_selected_rows_to_caption_rows,
+)
 from cuted_project_catalog import (
     clean_project_id as catalog_clean_project_id,
     directory_size as catalog_directory_size,
@@ -6532,14 +6540,7 @@ def stale_server_payload() -> dict[str, object]:
 
 
 def caption_rows_from_data(data: object) -> list[dict[str, object]]:
-    if isinstance(data, list):
-        return [row for row in data if isinstance(row, dict)]
-    if not isinstance(data, dict):
-        return []
-    queue = data.get("caption_queue")
-    if isinstance(queue, list):
-        return [row for row in queue if isinstance(row, dict)]
-    return selected_rows_to_caption_rows(data.get("selected") or data.get("moments"))
+    return queue_caption_rows_from_data(data, selected_rows_to_caption_rows)
 
 
 def materialize_queue_image_assets(data: object, asset_dir: Path) -> None:
@@ -6586,18 +6587,7 @@ def materialize_queue_bumper_assets(data: object, asset_dir: Path) -> None:
 
 
 def queue_rows_for_assets(data: object) -> list[dict[str, object]]:
-    if isinstance(data, list):
-        return [row for row in data if isinstance(row, dict)]
-    if not isinstance(data, dict):
-        return []
-    rows: list[dict[str, object]] = []
-    for key in ("caption_queue", "selected", "moments"):
-        value = data.get(key)
-        if isinstance(value, list):
-            rows.extend(row for row in value if isinstance(row, dict))
-            if key != "caption_queue":
-                rows.extend(selected_rows_to_caption_rows(value))
-    return rows
+    return queue_queue_rows_for_assets(data, selected_rows_to_caption_rows)
 
 
 def materialize_image_layer(layer: dict[str, object], asset_dir: Path) -> None:
@@ -6632,45 +6622,19 @@ def decode_data_url_image(value: str) -> tuple[bytes, str] | None:
 
 
 def selected_rows_to_caption_rows(rows: object) -> list[dict[str, object]]:
-    if not isinstance(rows, list):
-        return []
-    queue: list[dict[str, object]] = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        for platform in normalize_platforms(row.get("platforms")):
-            queue.append(row_for_platform(row, platform))
-    return queue
+    return queue_selected_rows_to_caption_rows(rows, normalize_platforms, row_for_platform)
 
 
 def row_for_platform(row: dict[str, object], platform: str) -> dict[str, object]:
-    result = {**row, "platform": platform}
-    edit = platform_edit_from_row(row, platform)
-    if edit:
-        result.update(edit)
-    return result
+    return queue_row_for_platform(row, platform, platform_edit_from_row)
 
 
 def platform_edit_from_row(row: dict[str, object], platform: str) -> dict[str, object]:
-    edits = row.get("platform_edits")
-    raw = edits.get(platform) if isinstance(edits, dict) else None
-    if not isinstance(raw, dict):
-        raw = resolution_edit_from_row(row, platform)
-    if not isinstance(raw, dict):
-        return {}
-    result: dict[str, object] = {}
-    for key in ("camera", "camera_path", "effect", "overlay", "overlays", "bumpers", "director_plan"):
-        if key in raw:
-            result[key] = raw[key]
-    return result
+    return queue_platform_edit_from_row(row, platform, resolution_key_for_platform)
 
 
 def resolution_edit_from_row(row: dict[str, object], platform: str) -> dict[str, object]:
-    edits = row.get("resolution_edits")
-    if not isinstance(edits, dict):
-        return {}
-    raw = edits.get(resolution_key_for_platform(platform))
-    return raw if isinstance(raw, dict) else {}
+    return queue_resolution_edit_from_row(row, platform, resolution_key_for_platform)
 
 
 def render_selected_rows(rows: list[dict[str, object]], base_dir: Path, out_dir: Path, ffmpeg: str) -> list[dict[str, object]]:
