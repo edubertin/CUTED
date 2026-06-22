@@ -9,7 +9,6 @@ import json
 import math
 import os
 import re
-import shlex
 import shutil
 import socket
 import subprocess
@@ -78,6 +77,32 @@ from cuted_launch import (
     prepare_workspace_dir as launch_prepare_workspace_dir,
     running_workspace_port as launch_running_workspace_port,
     workspace_index_is_empty_shell as launch_workspace_index_is_empty_shell,
+)
+from cuted_media_source import (
+    bundled_node_path as media_bundled_node_path,
+    caption_event_to_segment as media_caption_event_to_segment,
+    cleanup_sources as media_cleanup_sources,
+    download_youtube_audio as media_download_youtube_audio,
+    download_youtube_render_source as media_download_youtube_render_source,
+    find_ffmpeg as media_find_ffmpeg,
+    find_ffprobe as media_find_ffprobe,
+    friendly_ytdlp_error as media_friendly_ytdlp_error,
+    probe_duration as media_probe_duration,
+    probe_media_metadata as media_probe_media_metadata,
+    require_file as media_require_file,
+    resolved_youtube_render_file as media_resolved_youtube_render_file,
+    run_ytdlp as media_run_ytdlp,
+    source_media_metadata as media_source_media_metadata,
+    try_youtube_transcript as media_try_youtube_transcript,
+    write_source_metadata as media_write_source_metadata,
+    write_youtube_transcript as media_write_youtube_transcript,
+    youtube_caption_lang as media_youtube_caption_lang,
+    youtube_high_quality_format as media_youtube_high_quality_format,
+    youtube_render_url as media_youtube_render_url,
+    youtube_title as media_youtube_title,
+    yt_dlp_command as media_yt_dlp_command,
+    yt_dlp_extra_args as media_yt_dlp_extra_args,
+    yt_dlp_runtime_args as media_yt_dlp_runtime_args,
 )
 
 
@@ -9363,250 +9388,102 @@ def prepare_youtube_source(args: argparse.Namespace, out_dir: Path, ffmpeg: str,
 
 
 def require_file(path: Path) -> None:
-    if not path.exists() or not path.is_file():
-        raise FileNotFoundError(f"Video file not found: {path}")
+    media_require_file(path)
 
 
 def find_ffmpeg() -> str:
-    env_bin = os.environ.get("FFMPEG_BIN")
-    if env_bin:
-        return env_bin
-    path_bin = shutil.which("ffmpeg")
-    if path_bin:
-        return path_bin
-    try:
-        import imageio_ffmpeg
-
-        return imageio_ffmpeg.get_ffmpeg_exe()
-    except Exception as exc:
-        raise RuntimeError("FFmpeg not found. Install ffmpeg or `python -m pip install imageio-ffmpeg`.") from exc
+    return media_find_ffmpeg()
 
 
 def find_ffprobe() -> str | None:
-    env_bin = os.environ.get("FFPROBE_BIN")
-    if env_bin:
-        return env_bin
-    return shutil.which("ffprobe")
+    return media_find_ffprobe()
 
 
 def probe_duration(video: Path | str, ffprobe: str | None) -> float:
-    if not ffprobe:
-        return 0.0
-    command = [ffprobe, "-v", "error", "-show_entries", "format=duration", "-of", "json", str(video)]
-    result = subprocess.run(command, capture_output=True, text=True, check=True)
-    data = json.loads(result.stdout)
-    return float(data["format"]["duration"])
+    return media_probe_duration(video, ffprobe)
 
 
 def probe_media_metadata(video: Path | str, ffprobe: str | None) -> dict[str, object]:
-    if not ffprobe:
-        return {"probe_available": False}
-    command = [
-        ffprobe, "-v", "error",
-        "-show_entries",
-        "stream=index,codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate,bit_rate:format=duration,bit_rate,format_name",
-        "-of", "json", str(video),
-    ]
-    try:
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
-    except subprocess.SubprocessError as exc:
-        return {"probe_available": True, "probe_error": str(exc)}
-    data = json.loads(result.stdout or "{}")
-    data["probe_available"] = True
-    return data
+    return media_probe_media_metadata(video, ffprobe)
 
 
 def source_media_metadata(
     kind: str, label: str, render_source: str, probe: dict[str, object],
     format_selector: str | None, download_error: str | None
 ) -> dict[str, object]:
-    is_remote = render_source.startswith(("http://", "https://"))
-    path = Path(render_source) if not is_remote else None
-    is_local = bool(path and path.exists())
-    metadata: dict[str, object] = {
-        "kind": kind,
-        "label": label,
-        "render_source_kind": "local-file" if is_local else "remote-url",
-        "render_source_file": path.name if path and is_local else "",
-        "format_selector": format_selector or "",
-        "download_error": download_error or "",
-        "probe": probe,
-    }
-    return metadata
+    return media_source_media_metadata(kind, label, render_source, probe, format_selector, download_error)
 
 
 def write_source_metadata(out_dir: Path, metadata: dict[str, object] | None) -> None:
-    if not metadata:
-        return
-    source_dir = out_dir / "_source"
-    source_dir.mkdir(exist_ok=True)
-    (source_dir / "source-metadata.json").write_text(
-        json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    media_write_source_metadata(out_dir, metadata)
 
 
 def yt_dlp_command() -> list[str]:
-    path_bin = shutil.which("yt-dlp")
-    command = [path_bin] if path_bin else [sys.executable, "-m", "yt_dlp"]
-    return command + yt_dlp_runtime_args() + yt_dlp_extra_args()
+    return media_yt_dlp_command()
 
 
 def yt_dlp_runtime_args() -> list[str]:
-    runtime = os.environ.get("CUTED_YTDLP_JS_RUNTIME", "").strip()
-    if runtime:
-        return ["--js-runtimes", runtime]
-    node = bundled_node_path() or shutil.which("node")
-    return ["--js-runtimes", f"node:{node}"] if node else []
+    return media_yt_dlp_runtime_args()
 
 
 def bundled_node_path() -> str | None:
-    exe_name = "node.exe" if os.name == "nt" else "node"
-    candidate = Path(sys.executable).resolve().parent.parent / "node" / "bin" / exe_name
-    return str(candidate) if candidate.exists() else None
+    return media_bundled_node_path()
 
 
 def yt_dlp_extra_args() -> list[str]:
-    raw = os.environ.get("CUTED_YTDLP_EXTRA_ARGS", "").strip()
-    return shlex.split(raw) if raw else []
+    return media_yt_dlp_extra_args()
 
 
 def youtube_high_quality_format() -> str:
-    return os.environ.get("CUTED_YOUTUBE_RENDER_FORMAT", "").strip() or YOUTUBE_HIGH_QUALITY_FORMAT
+    return media_youtube_high_quality_format(YOUTUBE_HIGH_QUALITY_FORMAT)
 
 
 def run_ytdlp(command: list[str]) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(command, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(friendly_ytdlp_error(result.stderr or result.stdout or "yt-dlp failed"))
-    return result
+    return media_run_ytdlp(command)
 
 
 def friendly_ytdlp_error(message: str) -> str:
-    clean = "\n".join(line for line in message.strip().splitlines() if line.strip())
-    lower = clean.lower()
-    if "sign in to confirm" in lower or "not a bot" in lower or "cookies-from-browser" in lower:
-        return (
-            "O YouTube pediu login/confirmacao anti-bot. "
-            "Baixe o video com a ferramenta de sua preferencia e importe o arquivo local no CUTED."
-        )
-    if "private video" in lower or "login required" in lower:
-        return "O YouTube pediu login para este video. Importe o arquivo local no CUTED."
-    return clean
+    return media_friendly_ytdlp_error(message)
 
 
 def youtube_title(url: str) -> str:
-    command = yt_dlp_command() + ["--no-playlist", "--print", "%(title)s", url]
-    result = run_ytdlp(command)
-    return result.stdout.strip() or "YouTube video"
+    return media_youtube_title(url)
 
 
 def youtube_render_url(url: str) -> str:
-    command = yt_dlp_command() + ["-f", YOUTUBE_STREAM_FALLBACK_FORMAT, "-g", "--no-playlist", url]
-    result = run_ytdlp(command)
-    urls = [line.strip() for line in result.stdout.splitlines() if line.strip().startswith(("http://", "https://"))]
-    if not urls:
-        raise RuntimeError("Could not resolve a renderable YouTube media URL.")
-    return urls[0]
+    return media_youtube_render_url(url, YOUTUBE_STREAM_FALLBACK_FORMAT)
 
 
 def download_youtube_render_source(url: str, temp_dir: Path, ffmpeg: str, format_selector: str) -> Path:
-    output_template = temp_dir / "source.%(ext)s"
-    command = yt_dlp_command() + [
-        "--no-playlist",
-        "--ffmpeg-location", ffmpeg,
-        "-f", format_selector,
-        "--merge-output-format", "mp4",
-        "--remux-video", "mp4",
-        "-o", str(output_template),
-        url,
-    ]
-    result = subprocess.run(command, capture_output=True, text=True)
-    if result.returncode != 0:
-        message = friendly_ytdlp_error(result.stderr or result.stdout or "yt-dlp high quality download failed")
-        raise RuntimeError(message)
-    return resolved_youtube_render_file(temp_dir)
+    return media_download_youtube_render_source(url, temp_dir, ffmpeg, format_selector, RANGE_MEDIA_EXTENSIONS)
 
 
 def resolved_youtube_render_file(temp_dir: Path) -> Path:
-    candidates = sorted(
-        path for path in temp_dir.glob("source.*")
-        if path.is_file() and path.suffix.lower() in RANGE_MEDIA_EXTENSIONS
-    )
-    if not candidates:
-        raise RuntimeError("High quality YouTube source download did not produce a media file.")
-    return candidates[-1].resolve()
+    return media_resolved_youtube_render_file(temp_dir, RANGE_MEDIA_EXTENSIONS)
 
 
 def try_youtube_transcript(url: str, temp_dir: Path, language: str | None) -> Path | None:
-    lang = youtube_caption_lang(language)
-    command = yt_dlp_command() + [
-        "--skip-download",
-        "--write-auto-subs",
-        "--sub-langs", lang,
-        "--sub-format", "json3",
-        "--no-playlist",
-        "-o", str(temp_dir / "captions"),
-        url,
-    ]
-    subprocess.run(command, check=False, capture_output=True, text=True)
-    captions = sorted(temp_dir.glob("*.json3"))
-    if not captions:
-        return None
-    transcript = temp_dir / "youtube-transcript.json"
-    write_youtube_transcript(captions[0], transcript)
-    return transcript
+    return media_try_youtube_transcript(url, temp_dir, language)
 
 
 def youtube_caption_lang(language: str | None) -> str:
-    if not language:
-        return "pt-orig,pt"
-    if language == "pt":
-        return "pt-orig,pt"
-    return f"{language}-orig,{language}"
+    return media_youtube_caption_lang(language)
 
 
 def write_youtube_transcript(caption_path: Path, transcript_path: Path) -> None:
-    data = json.loads(caption_path.read_text(encoding="utf-8-sig"))
-    rows = [caption_event_to_segment(event) for event in data.get("events", [])]
-    segments = [row for row in rows if row and row["text"]]
-    transcript_path.write_text(json.dumps(segments, ensure_ascii=False, indent=2), encoding="utf-8")
+    media_write_youtube_transcript(caption_path, transcript_path)
 
 
 def caption_event_to_segment(event: dict[str, object]) -> dict[str, object] | None:
-    start_ms = event.get("tStartMs")
-    if start_ms is None or "segs" not in event:
-        return None
-    duration_ms = float(event.get("dDurationMs") or 2500)
-    text = "".join(str(seg.get("utf8", "")) for seg in event.get("segs", []) if isinstance(seg, dict))
-    text = " ".join(text.replace("\n", " ").split())
-    start = float(start_ms) / 1000.0
-    return {"start": start, "end": start + (duration_ms / 1000.0), "text": text}
+    return media_caption_event_to_segment(event)
 
 
 def download_youtube_audio(url: str, output: Path, ffmpeg: str) -> Path:
-    command = yt_dlp_command() + [
-        "--no-playlist",
-        "--ffmpeg-location", ffmpeg,
-        "-f", "139/bestaudio[ext=m4a]/bestaudio",
-        "-o", str(output),
-        url,
-    ]
-    run_ytdlp(command)
-    return output
+    return media_download_youtube_audio(url, output, ffmpeg)
 
 
 def cleanup_sources(paths: tuple[Path, ...]) -> None:
-    for path in paths:
-        resolved = path.resolve()
-        if resolved.exists() and "_source" in resolved.parts:
-            resolved.unlink()
-        parent = resolved.parent
-        if parent.exists() and parent.name == "_source":
-            for child in parent.iterdir():
-                if child.is_file():
-                    child.unlink()
-            if not any(parent.iterdir()):
-                parent.rmdir()
+    media_cleanup_sources(paths)
 
 
 def load_segments(args: argparse.Namespace, video: Path | str) -> list[Segment]:
