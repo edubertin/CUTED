@@ -56,6 +56,19 @@ from cuted_contracts import (
     Segment,
     SourceMedia,
 )
+from cuted_project_catalog import (
+    clean_project_id as catalog_clean_project_id,
+    directory_size as catalog_directory_size,
+    empty_project_catalog as catalog_empty_project_catalog,
+    iso_timestamp as catalog_iso_timestamp,
+    move_project_dir_to_recycle_bin as catalog_move_project_dir_to_recycle_bin,
+    project_id_for_path as catalog_project_id_for_path,
+    project_source_label as catalog_project_source_label,
+    project_url_for_workspace as catalog_project_url_for_workspace,
+    read_gallery_moments as catalog_read_gallery_moments,
+    safe_project_delete_dir as catalog_safe_project_delete_dir,
+    valid_recent_project_dir as catalog_valid_recent_project_dir,
+)
 
 
 BRAND_LOGO_FILE = "cuted-logo-transparent.png"
@@ -639,7 +652,7 @@ def project_catalog_path() -> Path:
 
 
 def empty_project_catalog() -> dict[str, object]:
-    return {"version": PROJECT_CATALOG_VERSION, "projects": []}
+    return catalog_empty_project_catalog(PROJECT_CATALOG_VERSION)
 
 
 def read_project_catalog(path: Path | None = None) -> dict[str, object]:
@@ -715,7 +728,7 @@ def project_home_entry(row: dict[str, object], workspace: Path) -> dict[str, obj
 
 
 def clean_project_id(value: object) -> str:
-    return re.sub(r"[^a-zA-Z0-9_-]+", "-", str(value or "")).strip("-")[:80]
+    return catalog_clean_project_id(value)
 
 
 def upsert_project_catalog_entry(entry: dict[str, object], path: Path | None = None) -> None:
@@ -761,31 +774,7 @@ def delete_project_dir(project_dir: Path) -> str:
 
 
 def move_project_dir_to_recycle_bin(project_dir: Path) -> bool:
-    if os.name != "nt":
-        return False
-    try:
-        import ctypes
-    except ImportError:
-        return False
-
-    class SHFILEOPSTRUCTW(ctypes.Structure):
-        _fields_ = [
-            ("hwnd", ctypes.c_void_p),
-            ("wFunc", ctypes.c_uint),
-            ("pFrom", ctypes.c_wchar_p),
-            ("pTo", ctypes.c_wchar_p),
-            ("fFlags", ctypes.c_ushort),
-            ("fAnyOperationsAborted", ctypes.c_bool),
-            ("hNameMappings", ctypes.c_void_p),
-            ("lpszProgressTitle", ctypes.c_wchar_p),
-        ]
-
-    operation = SHFILEOPSTRUCTW()
-    operation.wFunc = 0x0003
-    operation.pFrom = str(project_dir.resolve()) + "\0\0"
-    operation.fFlags = 0x0040 | 0x0010 | 0x0400 | 0x0004
-    result = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(operation))
-    return result == 0 and not operation.fAnyOperationsAborted and not project_dir.exists()
+    return catalog_move_project_dir_to_recycle_bin(project_dir)
 
 
 def touch_project_catalog_entry(gallery_dir: Path, workspace: Path) -> dict[str, object]:
@@ -801,25 +790,11 @@ def touch_project_catalog_entry(gallery_dir: Path, workspace: Path) -> dict[str,
 
 
 def valid_recent_project_dir(project_dir: Path, workspace: Path) -> bool:
-    try:
-        resolved = project_dir.expanduser().resolve()
-        root = workspace.resolve()
-        resolved.relative_to(root)
-    except (OSError, ValueError):
-        return False
-    return resolved != root and (resolved / "index.html").is_file()
+    return catalog_valid_recent_project_dir(project_dir, workspace)
 
 
 def safe_project_delete_dir(project_dir: Path, workspace: Path) -> Path:
-    resolved = project_dir.expanduser().resolve()
-    root = workspace.resolve()
-    try:
-        resolved.relative_to(root)
-    except ValueError as error:
-        raise ValueError("So posso apagar projetos dentro do workspace atual.") from error
-    if resolved == root or not (resolved / "index.html").exists():
-        raise ValueError("Diretorio de projeto invalido para apagar.")
-    return resolved
+    return catalog_safe_project_delete_dir(project_dir, workspace)
 
 
 def project_entry_from_gallery(gallery_dir: Path, workspace: Path) -> dict[str, object]:
@@ -840,57 +815,27 @@ def project_entry_from_gallery(gallery_dir: Path, workspace: Path) -> dict[str, 
 
 
 def project_source_label(metadata: dict[str, object], gallery_dir: Path) -> str:
-    source_path = str(metadata.get("source_path") or "").strip()
-    source_url = str(metadata.get("source_url") or "").strip()
-    if source_path:
-        return Path(source_path).name or gallery_dir.name
-    if source_url:
-        parsed = urllib.parse.urlparse(source_url)
-        return parsed.netloc or source_url[:80]
-    return gallery_dir.name
+    return catalog_project_source_label(metadata, gallery_dir)
 
 
 def read_gallery_moments(gallery_dir: Path) -> list[object]:
-    path = gallery_dir / "moments.json"
-    if not path.exists():
-        return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8-sig"))
-    except (OSError, json.JSONDecodeError):
-        return []
-    moments = data.get("moments") if isinstance(data, dict) else data
-    return moments if isinstance(moments, list) else []
+    return catalog_read_gallery_moments(gallery_dir)
 
 
 def project_id_for_path(path: Path) -> str:
-    return f"{safe_slug(path.name)}-{hashlib.sha1(str(path.resolve()).encode('utf-8')).hexdigest()[:8]}"
+    return catalog_project_id_for_path(path, safe_slug(path.name))
 
 
 def project_url_for_workspace(project_path: Path, workspace: Path) -> str:
-    try:
-        rel = project_path.resolve().relative_to(workspace.resolve())
-    except (OSError, ValueError):
-        return ""
-    return f"/{urllib.parse.quote(rel.as_posix(), safe='/')}/index.html"
+    return catalog_project_url_for_workspace(project_path, workspace)
 
 
 def directory_size(path: Path) -> int:
-    total = 0
-    count = 0
-    for item in path.rglob("*"):
-        if count >= PROJECT_CATALOG_SIZE_FILE_LIMIT:
-            break
-        if item.is_file():
-            count += 1
-            try:
-                total += item.stat().st_size
-            except OSError:
-                continue
-    return total
+    return catalog_directory_size(path, PROJECT_CATALOG_SIZE_FILE_LIMIT)
 
 
 def iso_timestamp() -> str:
-    return time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    return catalog_iso_timestamp()
 
 
 def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler]:
