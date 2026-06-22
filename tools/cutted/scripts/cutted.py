@@ -61,6 +61,25 @@ from cuted_caption_queue import (
     row_for_platform as queue_row_for_platform,
     selected_rows_to_caption_rows as queue_selected_rows_to_caption_rows,
 )
+from cuted_caption_text import (
+    caption_chunks as caption_text_caption_chunks,
+    caption_duration as caption_text_caption_duration,
+    caption_events as caption_text_caption_events,
+    caption_events_from_segments as caption_text_caption_events_from_segments,
+    caption_mojibake_score as caption_text_caption_mojibake_score,
+    caption_source_text as caption_text_caption_source_text,
+    clean_caption_text as caption_text_clean_caption_text,
+    distributed_caption_events as caption_text_distributed_caption_events,
+    ellipsize_caption as caption_text_ellipsize_caption,
+    event_from_segment as caption_text_event_from_segment,
+    greedy_word_chunks as caption_text_greedy_word_chunks,
+    normalize_caption_events as caption_text_normalize_caption_events,
+    normalize_caption_symbols as caption_text_normalize_caption_symbols,
+    repair_caption_encoding as caption_text_repair_caption_encoding,
+    repair_caption_encoding_as_utf8 as caption_text_repair_caption_encoding_as_utf8,
+    replace_caption_mojibake_sequences as caption_text_replace_caption_mojibake_sequences,
+    space_after_caption_punctuation as caption_text_space_after_caption_punctuation,
+)
 from cuted_project_catalog import (
     clean_project_id as catalog_clean_project_id,
     directory_size as catalog_directory_size,
@@ -6900,80 +6919,37 @@ def write_ass_subtitles(path: Path, row: dict[str, object], preset: PlatformPres
 
 
 def caption_duration(row: dict[str, object]) -> float:
-    duration = float(row.get("adjusted_duration") or 0.0)
-    if duration > 0:
-        return duration
-    start = float(row.get("adjusted_start") or row.get("start") or 0.0)
-    end = float(row.get("adjusted_end") or row.get("end") or 0.0)
-    return max(end - start, 0.1)
+    return caption_text_caption_duration(row)
 
 
 def caption_source_text(row: dict[str, object]) -> str:
-    transcript = str(row.get("transcript") or "").strip()
-    if transcript:
-        return clean_caption_text(transcript)
-    fallback = str(row.get("peak_text") or row.get("title") or "Legenda do corte")
-    return clean_caption_text(fallback)
+    return caption_text_caption_source_text(row)
 
 
 def caption_events(row: dict[str, object], chars_per_line: int, max_lines: int, duration: float) -> list[CaptionEvent]:
-    segment_events = caption_events_from_segments(row, chars_per_line, max_lines)
-    if segment_events:
-        return normalize_caption_events(segment_events, duration)
-    text = caption_source_text(row)
-    chunks = caption_chunks(text, chars_per_line, max_lines, duration)
-    return normalize_caption_events(distributed_caption_events(chunks, duration), duration)
+    return caption_text_caption_events(row, chars_per_line, max_lines, duration)
 
 
 def caption_events_from_segments(row: dict[str, object], chars_per_line: int, max_lines: int) -> list[CaptionEvent]:
-    segments = row.get("caption_segments")
-    if not isinstance(segments, list):
-        return []
-    start = float(row.get("adjusted_start") or row.get("start") or 0.0)
-    fallback_end = start + float(row.get("adjusted_duration") or 0.0)
-    end = float(row.get("adjusted_end") or row.get("end") or fallback_end)
-    events = [event_from_segment(item, start, end, chars_per_line, max_lines) for item in segments]
-    return [event for event in events if event is not None]
+    return caption_text_caption_events_from_segments(row, chars_per_line, max_lines)
 
 
 def event_from_segment(
     item: object, clip_start: float, clip_end: float, chars_per_line: int, max_lines: int
 ) -> CaptionEvent | None:
-    if not isinstance(item, dict):
-        return None
-    start = max(float(item.get("start") or 0.0), clip_start) - clip_start
-    end = min(float(item.get("end") or 0.0), clip_end) - clip_start
-    text = clean_caption_text(str(item.get("text") or ""))
-    if not text or end <= start:
-        return None
-    return CaptionEvent(round(start, 3), round(max(end, start + 0.35), 3), text)
+    return caption_text_event_from_segment(item, clip_start, clip_end, chars_per_line, max_lines)
 
 
 def normalize_caption_events(events: list[CaptionEvent], duration: float) -> list[CaptionEvent]:
-    sorted_events = sorted(events, key=lambda event: (event.start, event.end))
-    normalized: list[CaptionEvent] = []
-    for index, event in enumerate(sorted_events):
-        start = clamp(event.start, 0.0, duration)
-        end = clamp(event.end, start, duration)
-        if index + 1 < len(sorted_events):
-            next_start = clamp(sorted_events[index + 1].start, 0.0, duration)
-            end = min(end, max(start, next_start - 0.04))
-        if end - start >= 0.12:
-            normalized.append(CaptionEvent(round(start, 3), round(end, 3), event.text))
-    return normalized
+    return caption_text_normalize_caption_events(events, duration)
 
 
 def distributed_caption_events(chunks: list[str], duration: float) -> list[CaptionEvent]:
-    slot = duration / max(len(chunks), 1)
-    events: list[CaptionEvent] = []
-    for index, chunk in enumerate(chunks):
-        start = index * slot
-        end = duration if index == len(chunks) - 1 else (index + 1) * slot
-        events.append(CaptionEvent(round(start, 3), round(end, 3), chunk))
-    return events
+    return caption_text_distributed_caption_events(chunks, duration)
 
 
 def clean_caption_text(text: str) -> str:
+    return caption_text_clean_caption_text(text)
     clean = normalize_caption_symbols(text)
     clean = re.sub(r"(^|\s)(>{1,3}|-{1,2})\s*", " ", clean)
     clean = re.sub(r"\s+", " ", clean)
@@ -6986,6 +6962,7 @@ def clean_caption_text(text: str) -> str:
 
 
 def space_after_caption_punctuation(match: re.Match[str]) -> str:
+    return caption_text_space_after_caption_punctuation(match)
     punctuation, next_char = match.group(1), match.group(2)
     previous_index = match.start(1) - 1
     previous_char = match.string[previous_index] if previous_index >= 0 else ""
@@ -7199,6 +7176,7 @@ CAPTION_MOJIBAKE_REPLACEMENTS = {
 
 
 def repair_caption_encoding(text: str) -> str:
+    return caption_text_repair_caption_encoding(text)
     if not any(marker in text for marker in ("Ã", "Â", "â")):
         return text
     candidate = repair_caption_encoding_as_utf8(text)
@@ -7207,6 +7185,7 @@ def repair_caption_encoding(text: str) -> str:
 
 
 def repair_caption_encoding_as_utf8(text: str) -> str:
+    return caption_text_repair_caption_encoding_as_utf8(text)
     try:
         repaired = text.encode("latin-1").decode("utf-8")
     except UnicodeError:
@@ -7215,6 +7194,7 @@ def repair_caption_encoding_as_utf8(text: str) -> str:
 
 
 def replace_caption_mojibake_sequences(text: str) -> str:
+    return caption_text_replace_caption_mojibake_sequences(text)
     clean = text
     for source, target in CAPTION_MOJIBAKE_REPLACEMENTS.items():
         clean = clean.replace(source, target)
@@ -7222,10 +7202,12 @@ def replace_caption_mojibake_sequences(text: str) -> str:
 
 
 def caption_mojibake_score(text: str) -> int:
+    return caption_text_caption_mojibake_score(text)
     return sum(text.count(marker) for marker in ("Ã", "Â", "â€", "â™", "�"))
 
 
 def normalize_caption_symbols(text: str) -> str:
+    return caption_text_normalize_caption_symbols(text)
     text = repair_caption_encoding(text)
     return (
         text.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
@@ -7235,33 +7217,15 @@ def normalize_caption_symbols(text: str) -> str:
 
 
 def caption_chunks(text: str, chars_per_line: int, max_lines: int, duration: float) -> list[str]:
-    capacity = max(18, chars_per_line * max_lines)
-    chunks = greedy_word_chunks(text.split(), capacity)
-    limit = max(1, int(max(duration, 1.0) / 1.35))
-    if len(chunks) > limit:
-        chunks = chunks[:limit]
-        chunks[-1] = ellipsize_caption(chunks[-1])
-    return chunks or ["Legenda do corte"]
+    return caption_text_caption_chunks(text, chars_per_line, max_lines, duration)
 
 
 def greedy_word_chunks(words: list[str], capacity: int) -> list[str]:
-    chunks: list[str] = []
-    current: list[str] = []
-    for word in words:
-        candidate = " ".join([*current, word])
-        if current and len(candidate) > capacity:
-            chunks.append(" ".join(current))
-            current = [word]
-        else:
-            current.append(word)
-    if current:
-        chunks.append(" ".join(current))
-    return chunks
+    return caption_text_greedy_word_chunks(words, capacity)
 
 
 def ellipsize_caption(text: str) -> str:
-    clean = text.rstrip(" .,;:")
-    return f"{clean}..." if clean else "..."
+    return caption_text_ellipsize_caption(text)
 
 
 def ass_document(events: list[CaptionEvent], duration: float, preset: PlatformPreset, chars_per_line: int, max_lines: int) -> str:
