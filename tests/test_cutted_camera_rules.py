@@ -10,12 +10,17 @@ from pathlib import Path
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "scripts" / "cutted.py"
+UI_ASSET_PATH = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "scripts" / "cuted_ui_assets.py"
 SPEC = importlib.util.spec_from_file_location("cutted_camera_test_module", MODULE_PATH)
 if SPEC is None or SPEC.loader is None:
     raise RuntimeError("Unable to load cutted.py for camera tests.")
 CUTTED = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = CUTTED
 SPEC.loader.exec_module(CUTTED)
+
+
+def ui_asset_source() -> str:
+    return UI_ASSET_PATH.read_text(encoding="utf-8")
 
 
 def face(x: float, width: float = 8.0) -> dict[str, float]:
@@ -1199,7 +1204,7 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertFalse(CUTTED.camera_analysis_bypasses_cache({}, "ai-director"))
 
     def test_preview_holds_before_upcoming_hard_cut_or_fit(self) -> None:
-        source = MODULE_PATH.read_text(encoding="utf-8")
+        source = ui_asset_source()
 
         self.assertIn("cameraFrameUsesHardCut(next)", source)
         self.assertIn("cameraFrameUsesGroupFit(next)", source)

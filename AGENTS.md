@@ -142,13 +142,15 @@ desktop product:
 ```text
 apps/web/
 apps/desktop/
-packages/cutted-core/
-packages/cutted-renderer/
-packages/cutted-ai/
-packages/cutted-ui/
+packages/cuted-core/
+packages/cuted-renderer/
+packages/cuted-ai/
+packages/cuted-ui/
 tools/cutted/
 ```
 
 `apps/web` is valid for local development. It must not be treated as a hosted
 SaaS/deploy target unless Eduardo explicitly changes the product direction.
-`apps/desktop` is the future compiled Windows app shell.
+`apps/desktop` is the future compiled Windows app shell. `tools/cutted/` and
+`cutted.py` are legacy compatibility paths; new module/package names should use
+the CUTED/Cuted spelling with one `t`.

@@ -11,6 +11,7 @@ from pathlib import Path
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "scripts" / "cutted.py"
+UI_ASSET_PATH = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "scripts" / "cuted_ui_assets.py"
 SPEC = importlib.util.spec_from_file_location("cutted_import_ui_test_module", MODULE_PATH)
 if SPEC is None or SPEC.loader is None:
     raise RuntimeError("Unable to load cutted.py for import UI tests.")
@@ -29,6 +30,10 @@ LAUNCHER_SPEC.loader.exec_module(LAUNCHER)
 
 def gallery_html() -> str:
     return CUTTED.page_html("Teste", "", "{}", "assets/brand/cuted-logo-transparent.png")
+
+
+def ui_asset_source() -> str:
+    return UI_ASSET_PATH.read_text(encoding="utf-8")
 
 
 class CuttedImportUiTests(unittest.TestCase):
@@ -230,7 +235,7 @@ class CuttedImportUiTests(unittest.TestCase):
     def test_animated_caption_text_uses_social_display_style(self) -> None:
         raw = ">> Mas, Tati Cariani falou com IA; Porque isso."
         numeric = "Eu ganhei 10.000 e paguei 4.299,00 em 3.2 segundos com 80% pronto."
-        source = MODULE_PATH.read_text(encoding="utf-8")
+        source = ui_asset_source()
 
         self.assertEqual(CUTTED.clean_caption_text(raw), "Mas, Tati Cariani falou com IA; Porque isso.")
         self.assertEqual(CUTTED.clean_animated_caption_text(raw), "mas Tati Cariani falou com IA porque isso")
@@ -438,7 +443,7 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertAlmostEqual(timings[-1][3], 3.0)
 
     def test_preview_animation_uses_frame_sync_for_captions(self) -> None:
-        source = MODULE_PATH.read_text(encoding="utf-8")
+        source = ui_asset_source()
 
         self.assertIn("function syncPreviewPlaybackFrame", source)
         self.assertIn("startCameraFrameSync(video, () => syncPreviewPlaybackFrame(card))", source)
@@ -535,7 +540,7 @@ class CuttedImportUiTests(unittest.TestCase):
 
     def test_import_progress_names_publish_seo_stage(self) -> None:
         stages = CUTTED.import_job_running_stages("youtube", "openai")
-        source = MODULE_PATH.read_text(encoding="utf-8")
+        source = ui_asset_source()
 
         self.assertIn(("Post AI", "Analyzing SEO and trends..."), stages)
         self.assertIn('data-import-step="publish"', CUTTED.project_home_import_loading_html("assets/brand/cuted-logo-transparent.png"))
@@ -750,7 +755,7 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn(".cuted-render-zone.is-locked", styles)
 
     def test_control_surface_uses_app_state_for_discarded(self) -> None:
-        source = MODULE_PATH.read_text(encoding="utf-8")
+        source = ui_asset_source()
 
         self.assertIn('discarded: current.status === "discarded"', source)
         self.assertIn('current.status === "discarded"', source)
@@ -758,7 +763,7 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("mockBumpers: false", source)
 
     def test_control_surface_does_not_persist_effect_feedback(self) -> None:
-        source = MODULE_PATH.read_text(encoding="utf-8")
+        source = ui_asset_source()
         script = (Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar" / "control-bar.js").read_text(
             encoding="utf-8"
         )
@@ -770,14 +775,14 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertNotIn("statusProgress", script)
 
     def test_control_surface_ready_cancel_restores_discarded(self) -> None:
-        source = MODULE_PATH.read_text(encoding="utf-8")
+        source = ui_asset_source()
 
         self.assertIn('if (current.status === "discarded")', source)
         self.assertIn('setCardState(card.dataset.rank, { status: null, platforms: [] })', source)
         self.assertIn("renderFinalStage();", source)
 
     def test_control_surface_locks_during_mapping_and_ai_apply(self) -> None:
-        source = MODULE_PATH.read_text(encoding="utf-8")
+        source = ui_asset_source()
         asset_dir = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar"
         script = (asset_dir / "control-bar.js").read_text(encoding="utf-8")
         styles = (asset_dir / "control-bar.css").read_text(encoding="utf-8")
@@ -822,7 +827,7 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertNotIn("<button type=\"button\" disabled>Submit</button>", html)
 
     def test_control_surface_timeline_click_does_not_toggle_card(self) -> None:
-        source = MODULE_PATH.read_text(encoding="utf-8")
+        source = ui_asset_source()
 
         self.assertIn("const isSummaryTimelineTarget", source)
         self.assertIn('!target.closest(".cuted-clip-info")', source)
@@ -831,7 +836,7 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn('summary.addEventListener("touchstart", stopSummaryTimelinePointer, { passive: true })', source)
 
     def test_control_surface_card_layout_is_compact_and_centered(self) -> None:
-        source = MODULE_PATH.read_text(encoding="utf-8")
+        source = ui_asset_source()
         styles = (Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar" / "control-bar.css").read_text(
             encoding="utf-8"
         )
@@ -910,7 +915,7 @@ class CuttedImportUiTests(unittest.TestCase):
         styles = (root / "tools" / "cutted" / "assets" / "control-bar" / "control-bar.css").read_text(
             encoding="utf-8"
         )
-        source = (root / "tools" / "cutted" / "scripts" / "cutted.py").read_text(encoding="utf-8")
+        source = ui_asset_source()
         timeline = (root / "prototypes" / "live-timeline" / "src" / "liveTimeline.ts").read_text(encoding="utf-8")
         timeline_styles = (root / "prototypes" / "live-timeline" / "src" / "timeline.css").read_text(
             encoding="utf-8"
@@ -987,7 +992,7 @@ class CuttedImportUiTests(unittest.TestCase):
 
     def test_workspace_new_project_button_confirms_exit_to_home(self) -> None:
         html = CUTTED.page_html("Projeto", "", "{}", "assets/brand/cuted-logo-transparent.png")
-        source = MODULE_PATH.read_text(encoding="utf-8")
+        source = ui_asset_source()
 
         self.assertIn("data-workspace-exit-modal", html)
         self.assertIn("Sair deste projeto?", html)
@@ -1005,11 +1010,12 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertNotIn('confirm("Iniciar novo projeto?', source)
 
     def test_edit_header_icon_buttons_follow_cuted_style(self) -> None:
-        source = MODULE_PATH.read_text(encoding="utf-8")
+        engine_source = MODULE_PATH.read_text(encoding="utf-8")
+        source = ui_asset_source()
 
-        self.assertIn("def header_action_icon_svg(name: str) -> str:", source)
-        self.assertIn('"new-project"', source)
-        self.assertIn('"render"', source)
+        self.assertIn("def header_action_icon_svg(name: str) -> str:", engine_source)
+        self.assertIn('"new-project"', engine_source)
+        self.assertIn('"render"', engine_source)
         self.assertIn(".header-actions .header-icon-button,#reset-ui.header-icon-button,#finalize-videos.header-icon-button,#open-settings.header-icon-button", source)
         self.assertIn(".header-actions{position:absolute;right:26px;top:50%;display:flex;justify-content:flex-end;align-items:center;gap:10px;width:auto;margin:0;transform:translateY(-50%)}", source)
         self.assertIn("header{grid-template-columns:1fr!important;justify-items:center;padding:18px 26px 2px!important}", source)
@@ -1033,7 +1039,7 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn('updateOpenaiSettingsIndicator({ ...settingsPayloadFromForm(form), key_configured: true });', source)
 
     def test_openai_settings_uses_centered_animated_dialog(self) -> None:
-        source = MODULE_PATH.read_text(encoding="utf-8")
+        source = ui_asset_source()
         html = CUTTED.page_html("Projeto", "", "{}", "assets/brand/cuted-logo-transparent.png")
 
         self.assertIn("data-settings-panel", html)

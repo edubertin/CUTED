@@ -49,10 +49,10 @@ repo/
     web/
     desktop/
   packages/
-    cutted-core/
-    cutted-renderer/
-    cutted-ai/
-    cutted-ui/
+    cuted-core/
+    cuted-renderer/
+    cuted-ai/
+    cuted-ui/
   tools/
     cutted/
   docs/
@@ -70,13 +70,13 @@ Intent:
   installer-facing entrypoints.
 - `apps/web/`: local development browser UI. It can run on `127.0.0.1`, but is
   not a hosted deployment target.
-- `packages/cutted-core/`: project model, data contracts, queue logic, platform
+- `packages/cuted-core/`: project model, data contracts, queue logic, platform
   presets, safe path rules.
-- `packages/cutted-renderer/`: FFmpeg graph construction, render jobs, manifests,
+- `packages/cuted-renderer/`: FFmpeg graph construction, render jobs, manifests,
   output copying.
-- `packages/cutted-ai/`: OpenAI/local provider adapters, transcription,
+- `packages/cuted-ai/`: OpenAI/local provider adapters, transcription,
   selection, cost ledger, visual director integration.
-- `packages/cutted-ui/`: reusable local editor UI assets/components, timeline,
+- `packages/cuted-ui/`: reusable local editor UI assets/components, timeline,
   control surfaces.
 - `tools/cutted/`: legacy/reference CLI and bridge until all extracted modules
   are proven.
@@ -125,10 +125,10 @@ New decision:
 ```text
 apps/desktop
 apps/web
-packages/cutted-core
-packages/cutted-renderer
-packages/cutted-ai
-packages/cutted-ui
+packages/cuted-core
+packages/cuted-renderer
+packages/cuted-ai
+packages/cuted-ui
 tools/cutted
 ```
 
@@ -159,7 +159,7 @@ Acceptance:
 
 Create packages only when code starts moving:
 
-- `packages/cutted-core`
+- `packages/cuted-core`
 - tests for project/catalog/queue/path rules
 - typed data-contract documentation or schemas
 

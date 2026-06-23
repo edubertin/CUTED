@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Substituir a timeline compacta atual do preview por uma timeline viva, visualmente rica e reutilizavel, sem reescrever a logica de camera, trim, audio e efeitos que ja existe no Cutted.
+Substituir a timeline compacta atual do preview por uma timeline viva, visualmente rica e reutilizavel, sem reescrever a logica de camera, trim, audio e efeitos que ja existe no CUTED.
 
 ## Escopo
 
@@ -50,7 +50,7 @@ Builds:
 - Demo: `npm run build`
 - Biblioteca: `npm run build:lib`
 
-## Adapter Do Cutted
+## Adapter Do CUTED
 
 O app real deve converter:
 
@@ -93,11 +93,11 @@ Esses arquivos sao copiados para:
 - `tools/cutted/assets/live-timeline/live-timeline.js`
 - `tools/cutted/assets/live-timeline/live-timeline.css`
 
-Durante `write_html`, o Cutted copia esses assets para a galeria em `assets/live-timeline/` e injeta o CSS/JS antes do script principal. Se os assets nao existirem, o app cai para a timeline compacta atual.
+Durante `write_html`, o CUTED copia esses assets para a galeria em `assets/live-timeline/` e injeta o CSS/JS antes do script principal. Se os assets nao existirem, o app cai para a timeline compacta atual.
 
 ## Sequencia De Importacao
 
-1. Copiar o bundle de `dist-lib` para os assets gerados pelo Cutted.
+1. Copiar o bundle de `dist-lib` para os assets gerados pelo CUTED.
 2. Injetar `live-timeline.css` e `live-timeline.js` no HTML gerado.
 3. Trocar o corpo de `renderPreviewCameraTimeline(card)` para montar/atualizar o componente.
 4. Guardar o controller no card, por exemplo `card.__liveTimeline`.
@@ -129,7 +129,7 @@ Enquanto isso nao renderiza no video final, a camada verde pode existir como UI 
 ## Riscos
 
 - A timeline nova trabalha melhor em tempo absoluto do clip; a timeline compacta atual trabalha muito em janela ajustada pelo trim.
-- O Cutted atual gera HTML/JS a partir de Python, entao o bundle precisa ser tratado como asset estatico.
+- O CUTED atual gera HTML/JS a partir de Python, entao o bundle precisa ser tratado como asset estatico.
 - Cards multiplos exigem lifecycle claro: montar no card ativo e destruir quando necessario.
 - Pixi/GSAP aumentam o custo visual; em lista grande, o componente deve ser lazy.
 - O bundle da timeline aumenta o HTML gerado por assets externos. O fallback legado deve continuar funcionando.

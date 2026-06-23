@@ -20,15 +20,17 @@ Proposed future boundaries:
 
 ```text
 apps/web
-packages/cutted-core
-packages/cutted-renderer
-packages/cutted-ai
-packages/cutted-ui
+packages/cuted-core
+packages/cuted-renderer
+packages/cuted-ai
+packages/cuted-ui
 tools/cutted
 ```
 
 The current `tools/cutted` implementation remains the reference implementation
-until the replacement modules are proven with equivalent QA coverage.
+until the replacement modules are proven with equivalent QA coverage. The
+`tools/cutted` and `cutted.py` names are legacy compatibility paths; new package
+and module names should use CUTED/Cuted with one `t`.
 
 ## Consequences
 

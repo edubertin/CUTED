@@ -3,11 +3,11 @@ name: cutted
 description: Local AI-assisted video clipping workflow. Use when Codex needs to analyze local videos or rights-approved YouTube test URLs, transcribe speech, suggest short-form highlight moments with smart phrase boundaries, render preview clips, extract peak frames, generate a black HTML curation gallery with trim controls, and optionally clean temporary source media.
 ---
 
-# Cutted
+# CUTED
 
 ## Overview
 
-Cutted turns a long-form video into a local review gallery of suggested short clips. It is designed for fast MVP tests: local processing, no app server, no public publishing, and simple HTML output.
+CUTED turns a long-form video into a local review gallery of suggested short clips. It is designed for fast MVP tests: local processing, no app server, no public publishing, and simple HTML output.
 
 Use `scripts/cutted.py` for deterministic work. Prefer local files supplied by the user. For YouTube URLs, proceed only when the user confirms the use is a private/rights-approved test or the source is clearly open/licensed.
 
