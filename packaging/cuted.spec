@@ -11,11 +11,14 @@
 #   precisam ser declaradas aqui (collect_all/hiddenimports).
 
 from PyInstaller.utils.hooks import collect_all
+from pathlib import Path
 
 REPO_ROOT = ".."
+SCRIPT_DIR = Path(REPO_ROOT) / "tools" / "cutted" / "scripts"
 
 datas = [
     (f"{REPO_ROOT}/tools/cutted/scripts/cutted.py", "tools/cutted/scripts"),
+    *[(str(path), "tools/cutted/scripts") for path in sorted(SCRIPT_DIR.glob("cuted_*.py"))],
     (f"{REPO_ROOT}/assets/brand/cuted-logo-transparent.png", "assets/brand"),
     (f"{REPO_ROOT}/assets/brand/cuted-logo-official.png", "assets/brand"),
 ]
