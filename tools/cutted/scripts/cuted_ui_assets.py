@@ -64,7 +64,7 @@ def project_home_compact_import_css() -> str:
 .home-import-progress strong{position:relative;z-index:1;display:grid;place-items:center;height:100%;padding:0 18px;color:var(--color-text);font-size:13px;text-align:center;text-shadow:0 1px 8px rgba(0,0,0,.6)}
 .home-import-loading small{color:var(--color-text-muted);font-size:12px;text-transform:uppercase}
 .home-import-detail{min-height:18px;margin:-4px 0 0;color:rgba(231,231,232,.7);font-size:12px;text-align:center}
-.home-import-steps{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;width:100%;margin:2px 0 0;padding:0;list-style:none}
+.home-import-steps{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;width:100%;margin:2px 0 0;padding:0;list-style:none}
 .home-import-steps li{display:grid;justify-items:center;gap:6px;min-width:0;color:rgba(231,231,232,.48);font-size:10px;font-weight:800;text-transform:uppercase}
 .home-import-steps li span{display:block;width:10px;height:10px;border:1px solid rgba(231,231,232,.18);border-radius:999px;background:rgba(231,231,232,.08);box-shadow:inset 0 1px rgba(255,255,255,.12)}
 .home-import-steps li[data-state=done]{color:rgba(175,207,42,.86)}.home-import-steps li[data-state=done] span{border-color:rgba(175,207,42,.62);background:var(--color-brand-green);box-shadow:0 0 14px rgba(175,207,42,.3)}

@@ -543,7 +543,12 @@ class CuttedImportUiTests(unittest.TestCase):
         source = ui_asset_source()
 
         self.assertIn(("Post AI", "Analyzing SEO and trends..."), stages)
-        self.assertIn('data-import-step="publish"', CUTTED.project_home_import_loading_html("assets/brand/cuted-logo-transparent.png"))
+        loading_html = CUTTED.project_home_import_loading_html("assets/brand/cuted-logo-transparent.png")
+        self.assertIn('data-import-step="publish"', loading_html)
+        self.assertIn('data-import-step="editor"', loading_html)
+        self.assertEqual(loading_html.count("data-import-step="), 8)
+        self.assertIn(".home-import-steps{display:grid;grid-template-columns:repeat(8,minmax(0,1fr))", source)
+        self.assertIn("@media(max-width:680px){.home-import-steps{grid-template-columns:repeat(4,minmax(0,1fr))}", source)
         self.assertIn(
             'const importStageOrder = ["prepare", "media", "audio", "analysis", "suggestions", "previews", "publish", "editor"];',
             source,
