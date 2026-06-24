@@ -26,13 +26,14 @@ class application workflow.
 17. [Project Home and Workspace Lifecycle Spec](product/SPEC-014-project-home-and-workspace-lifecycle.md)
 18. [Project Home Implementation Plan](product/PLAN-001-project-home-clean-workspace-implementation.md)
 19. [AI Briefing Microphone Spec](product/SPEC-016-ai-briefing-microphone.md)
-20. [Local Desktop Repository Structure Plan](product/PLAN-002-local-desktop-repository-structure.md)
-21. [CUTED Engine Incremental Extraction ADR](architecture/ADR-0006-cuted-engine-incremental-extraction.md)
-22. [AI Director Visual Map Refactor](AI_DIRECTOR_VISUAL_MAP_REFACTOR.md)
-23. [AI Director Visual Map First ADR](architecture/ADR-0004-ai-director-visual-map-first.md)
-24. [Local Project Memory and Cleanup ADR](architecture/ADR-0005-local-project-memory-and-cleanup.md)
-25. [QA Regression Matrix](qa/REGRESSION_MATRIX.md)
-26. [Local Development Runbook](operations/LOCAL_DEV.md)
+20. [Dual Caption Language Tracks Spec](product/SPEC-017-dual-caption-language-tracks.md)
+21. [Local Desktop Repository Structure Plan](product/PLAN-002-local-desktop-repository-structure.md)
+22. [CUTED Engine Incremental Extraction ADR](architecture/ADR-0006-cuted-engine-incremental-extraction.md)
+23. [AI Director Visual Map Refactor](AI_DIRECTOR_VISUAL_MAP_REFACTOR.md)
+24. [AI Director Visual Map First ADR](architecture/ADR-0004-ai-director-visual-map-first.md)
+25. [Local Project Memory and Cleanup ADR](architecture/ADR-0005-local-project-memory-and-cleanup.md)
+26. [QA Regression Matrix](qa/REGRESSION_MATRIX.md)
+27. [Local Development Runbook](operations/LOCAL_DEV.md)
 
 ## Current Source of Truth
 

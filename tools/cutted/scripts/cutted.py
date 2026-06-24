@@ -615,6 +615,7 @@ def analyze(args: argparse.Namespace) -> None:
     emit_import_progress("suggestions", "Suggestions", "Generating clip suggestions...", 66, detail=f"{len(moments)} clips")
     emit_import_progress("previews", "Previews", "Rendering previews...", 72, step=0, steps=len(moments))
     rendered = render_outputs(source.render_source, out_dir, moments, ffmpeg, args.skip_render, emit_preview_import_progress)
+    rendered = apply_caption_language_tracks(rendered, args)
     emit_import_progress("publish", "Post AI", "Analyzing SEO and trends...", 93, detail="SEO and hashtags")
     rendered = apply_publish_intelligence(rendered, source.label, config, args, source.metadata)
     emit_import_progress("editor", "Editor", "Building editing workspace...", 94)
@@ -5756,7 +5757,7 @@ def import_request_metadata(payload: dict[str, object]) -> dict[str, object]:
         "source_path": source_path,
         "output_path": output_path,
         "preview_count": clamp_int(payload.get("preview_count"), 1, 10, 10),
-        "language": clean_optional_text(payload.get("language"), 24) or "pt",
+        "language": import_request_language(payload.get("language")),
         "preset": clean_preset(payload.get("preset")),
         "duration_profile": clean_duration_profile(payload.get("duration_profile")),
         "context_prompt": clean_optional_text(payload.get("context_prompt"), 5000),
@@ -5764,6 +5765,13 @@ def import_request_metadata(payload: dict[str, object]) -> dict[str, object]:
         "ai_provider": ai_provider,
         "mode": "openai_import" if ai_provider == "openai" else "local_fallback",
     }
+
+
+def import_request_language(value: object) -> str:
+    raw = clean_optional_text(value, 24).lower()
+    if raw in {"pt", "pt-br", "pt_br", "portuguese", "portugues", "portugues-br"}:
+        return "pt"
+    return "pt"
 
 
 def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
@@ -6784,6 +6792,7 @@ def caption_selected_rows(
     captioned: list[dict[str, object]] = []
     captions_enabled = bool(getattr(args, "captions_enabled", True))
     for row in rows:
+        row = row_with_selected_caption_track(row)
         platform = str(row.get("platform") or "")
         if platform not in PLATFORM_PRESETS:
             continue
@@ -6806,6 +6815,33 @@ def caption_selected_rows(
             result["cover_frame_duration"] = round(float(result.get("final_duration") or caption_duration(row)) + COVER_FRAME_TAIL_SECONDS, 3)
         captioned.append(result)
     return captioned
+
+
+def row_with_selected_caption_track(row: dict[str, object]) -> dict[str, object]:
+    language = normalize_caption_language(row.get("caption_language") or row.get("captionLanguage"))
+    segments = caption_segments_for_row_language(row, language)
+    if language != CAPTION_LANGUAGE_DEFAULT and not segments:
+        language = CAPTION_LANGUAGE_DEFAULT
+        segments = caption_segments_for_row_language(row, language)
+    result = {**row, "caption_language": language}
+    if segments:
+        result["caption_segments"] = segments
+    return result
+
+
+def caption_segments_for_row_language(row: dict[str, object], language: str) -> list[dict[str, object]]:
+    tracks = row.get("caption_tracks")
+    if isinstance(tracks, dict):
+        raw_track = tracks.get(language)
+        if raw_track is None and language == CAPTION_LANGUAGE_DEFAULT:
+            raw_track = tracks.get("pt")
+        if isinstance(raw_track, dict):
+            status = str(raw_track.get("status") or "").strip().lower()
+            segments = raw_track.get("segments")
+            if status == "ready" and isinstance(segments, list):
+                return [segment for segment in segments if isinstance(segment, dict)]
+    fallback = row.get("caption_segments")
+    return [segment for segment in fallback if isinstance(segment, dict)] if isinstance(fallback, list) else []
 
 
 def caption_cover_frame_enabled(args: argparse.Namespace) -> bool:
@@ -8926,6 +8962,7 @@ def openai_select_candidates(args: argparse.Namespace, candidates: list[Moment],
         "ou insight especifico. Evite filler generico, repeticao, sobreposicao e trechos que dependem de "
         "contexto externo demais. Evite escolher mais de um corte do mesmo cluster_id, exceto se forem "
         "momentos claramente diferentes. Use o contexto editorial do usuario para desempatar. "
+        "Escreva title e reason sempre em portugues brasileiro, preservando o sentido do transcript. "
         "Responda apenas no JSON estruturado solicitado."
     )
     user = json.dumps(
@@ -8957,7 +8994,7 @@ def openai_selected_moments(payload: dict[str, object], candidates: list[Moment]
             continue
         title = clean_optional_text(row.get("title"), 80) or candidate.title
         reason_text = clean_optional_text(row.get("reason"), 160) or candidate.reason
-        selected.append(Moment(0, candidate.start, candidate.end, candidate.peak, candidate.score, title, reason_text, candidate.transcript, candidate.peak_text, candidate.clip_file, candidate.frame_file, candidate.caption_segments))
+        selected.append(replace(candidate, rank=0, title=title, reason=reason_text))
         if len(selected) >= requested:
             break
     if not selected:
@@ -9172,9 +9209,7 @@ def overlap_ratio(left: Moment, right: Moment) -> float:
 
 
 def with_rank(moment: Moment, rank: int) -> Moment:
-    return Moment(rank, moment.start, moment.end, moment.peak, moment.score, moment.title, moment.reason,
-                  moment.transcript, moment.peak_text, moment.clip_file, moment.frame_file, moment.caption_segments,
-                  moment.waveform_file)
+    return replace(moment, rank=rank)
 
 
 def render_outputs(
@@ -9206,13 +9241,15 @@ def render_one(video: Path | str, clips_dir: Path, frames_dir: Path, waveforms_d
         extract_frame(video, frame_path, moment.peak, ffmpeg)
         cover_candidates = extract_cover_candidates(video, frames_dir, stem, frame_path, moment, ffmpeg)
     else:
-        return Moment(moment.rank, moment.start, moment.end, moment.peak, moment.score, moment.title, moment.reason,
-                      moment.transcript, moment.peak_text, None, None, moment.caption_segments, None)
+        return replace(moment, clip_file=None, frame_file=None, waveform_file=None, cover_candidates=())
     waveform_file = write_audio_waveform_file(clip_path, waveform_path, ffmpeg)
-    return Moment(moment.rank, moment.start, moment.end, moment.peak, moment.score, moment.title, moment.reason,
-                  moment.transcript, moment.peak_text, rel(clip_path, clips_dir.parent), rel(frame_path, frames_dir.parent),
-                  moment.caption_segments, rel(waveform_path, waveforms_dir.parent) if waveform_file else None,
-                  None, tuple(rel(path, frames_dir.parent) for path in cover_candidates))
+    return replace(
+        moment,
+        clip_file=rel(clip_path, clips_dir.parent),
+        frame_file=rel(frame_path, frames_dir.parent),
+        waveform_file=rel(waveform_path, waveforms_dir.parent) if waveform_file else None,
+        cover_candidates=tuple(rel(path, frames_dir.parent) for path in cover_candidates),
+    )
 
 
 def extract_cover_candidates(
@@ -9379,6 +9416,7 @@ def openai_publish_intelligence(
 def publish_intelligence_system_prompt() -> str:
     return (
         "Voce e o estrategista de publicacao do CUTED para clips curtos. "
+        "Todo texto gerado para hook, title, description, trend_context.summary e reason deve ser em portugues brasileiro. "
         "Use no maximo uma busca web para entender SEO e tendencias atuais. "
         "O titulo original do video ou nome do arquivo e contexto, nao copy final. "
         "Reescreva tudo em portugues natural do Brasil, com acentuacao, pontuacao "
@@ -9447,8 +9485,8 @@ def publish_source_context_payload(context: PublishSourceContext) -> dict[str, o
         "user_context": context.user_context,
         "source_url": context.source_url,
         "priority": (
-            "Use this origin context to identify people, topic and event. "
-            "Do not copy it as the clip title unless the clip transcript supports it."
+            "Use este contexto de origem para identificar pessoas, tema e evento. "
+            "Nao copie como titulo do corte se o transcript do corte nao sustentar."
         ),
     }
 
@@ -9898,6 +9936,198 @@ def config_to_dict(config: CuttedConfig) -> dict[str, object]:
     }
 
 
+CAPTION_LANGUAGE_DEFAULT = "pt-BR"
+CAPTION_LANGUAGE_ENGLISH = "en"
+
+
+def normalize_caption_language(value: object) -> str:
+    text = str(value or "").strip().lower().replace("_", "-")
+    if text in {"en", "eng", "english", "ingles"}:
+        return CAPTION_LANGUAGE_ENGLISH
+    return CAPTION_LANGUAGE_DEFAULT
+
+
+def apply_caption_language_tracks(moments: list[Moment], args: argparse.Namespace) -> list[Moment]:
+    english_segments: dict[int, tuple[Segment, ...]] = {}
+    english_error = ""
+    if should_translate_caption_tracks(args, moments):
+        try:
+            english_segments = translate_caption_tracks_to_english(moments)
+        except (RuntimeError, OSError, ValueError, KeyError, json.JSONDecodeError) as error:
+            english_error = str(error)
+            print(f"Warning: could not prepare English caption track: {error}", file=sys.stderr)
+    return [
+        replace(moment, caption_tracks=caption_tracks_for_moment(moment, english_segments.get(moment.rank), english_error))
+        for moment in moments
+    ]
+
+
+def should_translate_caption_tracks(args: argparse.Namespace, moments: list[Moment]) -> bool:
+    if requested_ai_provider(args) == "local":
+        return False
+    return bool(openai_api_key() and any(moment.caption_segments for moment in moments))
+
+
+def translate_caption_tracks_to_english(moments: list[Moment]) -> dict[int, tuple[Segment, ...]]:
+    rows = [
+        {
+            "rank": moment.rank,
+            "segments": [
+                {"index": index, "text": segment.text}
+                for index, segment in enumerate(moment.caption_segments)
+            ],
+        }
+        for moment in moments
+        if moment.caption_segments
+    ]
+    if not rows:
+        return {}
+    payload = openai_structured_response(
+        "You translate video subtitles from Brazilian Portuguese to natural English.",
+        json.dumps(
+            {
+                "instructions": [
+                    "Translate only the caption text.",
+                    "Keep the same clip ranks, segment indexes, order, and number of segments.",
+                    "Use concise spoken English suitable for burned-in social captions.",
+                    "Do not add timestamps, notes, markdown, hashtags, or explanations.",
+                ],
+                "clips": rows,
+            },
+            ensure_ascii=False,
+        ),
+        "cuted_caption_translation",
+        caption_translation_schema(),
+        operation="caption_translation",
+    )
+    return validated_english_caption_segments(payload, moments)
+
+
+def caption_translation_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["clips"],
+        "properties": {
+            "clips": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["rank", "segments"],
+                    "properties": {
+                        "rank": {"type": "integer"},
+                        "segments": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": ["index", "text"],
+                                "properties": {
+                                    "index": {"type": "integer"},
+                                    "text": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                },
+            }
+        },
+    }
+
+
+def validated_english_caption_segments(payload: dict[str, object], moments: list[Moment]) -> dict[int, tuple[Segment, ...]]:
+    source = {moment.rank: moment.caption_segments for moment in moments if moment.caption_segments}
+    translated: dict[int, tuple[Segment, ...]] = {}
+    rows = payload.get("clips")
+    if not isinstance(rows, list):
+        raise RuntimeError("Caption translation response did not include clips.")
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        rank = int(row.get("rank", 0))
+        source_segments = source.get(rank)
+        raw_segments = row.get("segments")
+        if not source_segments or not isinstance(raw_segments, list) or len(raw_segments) != len(source_segments):
+            continue
+        by_index: dict[int, str] = {}
+        for item in raw_segments:
+            if not isinstance(item, dict):
+                continue
+            index = int(item.get("index", -1))
+            if 0 <= index < len(source_segments):
+                by_index[index] = clean_caption_translation_text(item.get("text"))
+        if len(by_index) != len(source_segments):
+            continue
+        translated[rank] = tuple(
+            Segment(segment.start, segment.end, by_index.get(index) or segment.text)
+            for index, segment in enumerate(source_segments)
+        )
+    return translated
+
+
+def clean_caption_translation_text(value: object) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    return text.strip(" -")
+
+
+def caption_tracks_for_moment(
+    moment: Moment, english_segments: tuple[Segment, ...] | None = None, english_error: str = ""
+) -> dict[str, object]:
+    tracks = normalized_existing_caption_tracks(moment)
+    tracks[CAPTION_LANGUAGE_DEFAULT] = caption_track_payload(
+        CAPTION_LANGUAGE_DEFAULT,
+        "PT-BR",
+        "ready",
+        "transcript",
+        moment.caption_segments,
+    )
+    if english_segments:
+        tracks[CAPTION_LANGUAGE_ENGLISH] = caption_track_payload(
+            CAPTION_LANGUAGE_ENGLISH,
+            "EN",
+            "ready",
+            "openai_translation",
+            english_segments,
+        )
+    elif CAPTION_LANGUAGE_ENGLISH not in tracks:
+        tracks[CAPTION_LANGUAGE_ENGLISH] = caption_track_payload(
+            CAPTION_LANGUAGE_ENGLISH,
+            "EN",
+            "unavailable",
+            "not_generated",
+            (),
+            english_error or "English captions were not generated for this import.",
+        )
+    return tracks
+
+
+def normalized_existing_caption_tracks(moment: Moment) -> dict[str, object]:
+    if not isinstance(moment.caption_tracks, dict):
+        return {}
+    tracks: dict[str, object] = {}
+    for key, value in moment.caption_tracks.items():
+        language = normalize_caption_language(key)
+        if isinstance(value, dict):
+            tracks[language] = value
+    return tracks
+
+
+def caption_track_payload(
+    language: str, label: str, status: str, source: str, segments: tuple[Segment, ...], error: str = ""
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "language": language,
+        "label": label,
+        "status": status,
+        "source": source,
+        "segments": [segment_to_dict(segment) for segment in segments],
+    }
+    if error:
+        payload["error"] = error
+    return payload
+
+
 def moment_to_dict(moment: Moment) -> dict[str, object]:
     return {
         "rank": moment.rank, "start": moment.start, "end": moment.end, "peak": moment.peak, "score": moment.score,
@@ -9906,6 +10136,8 @@ def moment_to_dict(moment: Moment) -> dict[str, object]:
         "waveform_file": moment.waveform_file,
         "publish_metadata": moment.publish_metadata or {},
         "cover_candidates": list(moment.cover_candidates),
+        "caption_language_default": CAPTION_LANGUAGE_DEFAULT,
+        "caption_tracks": caption_tracks_for_moment(moment),
         "caption_segments": [segment_to_dict(item) for item in moment.caption_segments],
     }
 
@@ -10061,7 +10293,7 @@ def project_import_form_html() -> str:
             </div>
           </section>
         </div>
-        <input name="language" type="hidden" value="en">
+        <input name="language" type="hidden" value="pt">
         <input name="preset" type="hidden" value="tiktok">
         <section class="ai-context-box" aria-label="AI briefing" data-ai-context-box>
           <div class="ai-context-head">

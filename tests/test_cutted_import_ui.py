@@ -68,6 +68,12 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertNotIn("youtube_cookies_from_browser", html)
         self.assertNotIn("youtube_cookies_file", html)
 
+    def test_import_form_defaults_generated_content_to_portuguese(self) -> None:
+        html = gallery_html()
+
+        self.assertIn('name="language" type="hidden" value="pt"', html)
+        self.assertIn('const language = "pt";', ui_asset_source())
+
     def test_import_payload_excludes_youtube_cookie_fields(self) -> None:
         html = gallery_html()
 
@@ -187,6 +193,9 @@ class CuttedImportUiTests(unittest.TestCase):
 
     def test_closed_captions_can_render_in_preview(self) -> None:
         html = gallery_html()
+        control_bar_script = (
+            Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar" / "control-bar.js"
+        ).read_text(encoding="utf-8")
 
         self.assertIn("data-preview-caption-layer", html)
         self.assertIn(".preview-caption-layer", html)
@@ -195,7 +204,11 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("function previewCaptionEventForCard", html)
         self.assertIn("syncPreviewCaptionsForOpenCards();", html)
         self.assertIn("syncPreviewCaptions(card, current);", html)
-        self.assertIn("caption_segments: moment.caption_segments || []", html)
+        self.assertIn("caption_language: captionLanguage", html)
+        self.assertIn("caption_tracks: captionTracks", html)
+        self.assertIn("caption_segments: captionSegments", html)
+        self.assertIn('data-cuted-caption-language="pt-BR"', control_bar_script)
+        self.assertIn("onCaptionLanguageChange: payload => setControlSurfaceCaptionLanguage(payload.captionLanguage)", html)
         self.assertIn("onCaptionToggle: payload => setControlSurfaceCaptions(payload.captionsEnabled, payload.captionStyle)", html)
         self.assertIn("caption_style: captions.style", html)
         self.assertIn("captions_enabled: captions.enabled", html)
@@ -222,6 +235,64 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn(".preview-caption-layer[data-mode=animated] .preview-caption-side", html)
         self.assertIn("background:var(--preview-caption-bg,transparent)", html)
         self.assertIn("background:var(--preview-caption-highlight-bg", html)
+
+    def test_caption_language_tracks_are_serialized_and_resolved(self) -> None:
+        moment = CUTTED.Moment(
+            1,
+            0.0,
+            3.0,
+            1.0,
+            0.8,
+            "Titulo",
+            "Motivo",
+            "Transcricao",
+            "Pico",
+            "clips/clip-001.mp4",
+            "frames/clip-001.jpg",
+            (CUTTED.Segment(0.0, 1.5, "Fala em portugues."),),
+            caption_tracks={
+                "en": {
+                    "language": "en",
+                    "label": "EN",
+                    "status": "ready",
+                    "source": "openai_translation",
+                    "segments": [{"start": 0.0, "end": 1.5, "text": "English speech."}],
+                }
+            },
+        )
+
+        payload = CUTTED.moment_to_dict(moment)
+        row = CUTTED.row_with_selected_caption_track({**payload, "caption_language": "en"})
+
+        self.assertEqual(payload["caption_language_default"], "pt-BR")
+        self.assertEqual(payload["caption_tracks"]["pt-BR"]["status"], "ready")
+        self.assertEqual(payload["caption_tracks"]["en"]["status"], "ready")
+        self.assertEqual(row["caption_language"], "en")
+        self.assertEqual(row["caption_segments"][0]["text"], "English speech.")
+
+    def test_caption_track_generation_keeps_ptbr_when_english_unavailable(self) -> None:
+        moment = CUTTED.Moment(
+            1,
+            0.0,
+            2.0,
+            1.0,
+            0.7,
+            "Titulo",
+            "Motivo",
+            "Transcricao",
+            "Pico",
+            None,
+            None,
+            (CUTTED.Segment(0.0, 1.2, "Fala curta."),),
+        )
+        args = mock.Mock()
+        with mock.patch.object(CUTTED, "requested_ai_provider", return_value="local"):
+            [result] = CUTTED.apply_caption_language_tracks([moment], args)
+
+        payload = CUTTED.moment_to_dict(result)
+
+        self.assertEqual(payload["caption_tracks"]["pt-BR"]["segments"][0]["text"], "Fala curta.")
+        self.assertEqual(payload["caption_tracks"]["en"]["status"], "unavailable")
 
     def test_preview_caption_text_repairs_portuguese_mojibake(self) -> None:
         html = gallery_html()
@@ -820,8 +891,10 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("captions: normalizeCaptionSettings({", html)
         self.assertIn("const captions = normalizeCaptionSettings(edit.captions)", html)
         self.assertIn("captions_enabled: captions.enabled", html)
+        self.assertIn("caption_language: captionLanguage", html)
+        self.assertIn("caption_tracks: captionTracks", html)
         self.assertIn("caption_style: captions.style", html)
-        self.assertIn('animated_caption_windows: captions.style.mode === "animated" ? previewAnimatedCaptionTimeline(moment) : []', html)
+        self.assertIn('animated_caption_windows: captions.style.mode === "animated" ? previewAnimatedCaptionTimeline(captionMoment) : []', html)
         self.assertIn("captions_enabled: queue.some(item => item.captions_enabled !== false)", html)
         self.assertIn("captions_enabled: queue.caption_queue.some(item => item.captions_enabled !== false)", html)
 
@@ -1387,6 +1460,17 @@ class CuttedImportUiTests(unittest.TestCase):
 
         self.assertEqual(metadata["output_path"], "")
         self.assertEqual(metadata["preview_count"], 10)
+        self.assertEqual(metadata["language"], "pt")
+
+    def test_import_request_metadata_keeps_project_home_imports_in_portuguese(self) -> None:
+        original_provider = CUTTED.configured_ai_provider
+        CUTTED.configured_ai_provider = lambda: "local"
+        try:
+            metadata = CUTTED.import_request_metadata({"source_path": "video.mp4", "language": "en"})
+        finally:
+            CUTTED.configured_ai_provider = original_provider
+
+        self.assertEqual(metadata["language"], "pt")
 
     def test_next_import_output_dir_uses_projects_folder(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

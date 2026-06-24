@@ -465,7 +465,7 @@ async function transcribeContextAudio(form, blob, seconds, maxLevel){
   const sizeKb = Math.max(1, Math.round(blob.size / 1024));
   setContextAudioState(form, "transcribing", `Transcribing ${seconds.toFixed(1)}s / ${sizeKb} KB, peak input ${contextAudioLevelPercent(maxLevel)}%...`);
   try {
-    const language = "auto";
+    const language = "pt";
     const response = await fetch(`/api/ai-context/audio?language=${encodeURIComponent(language)}`, {
       method: "POST",
       headers: { "Content-Type": blob.type || "audio/webm" },
@@ -1091,10 +1091,13 @@ function normalizePlatformEdit(edit, fallback){
   const pathSource = Object.prototype.hasOwnProperty.call(source, "camera_path") ? source.camera_path : base.camera_path;
   const captionSource = Object.prototype.hasOwnProperty.call(source, "captions") ? source.captions : null;
   const captionBase = Object.prototype.hasOwnProperty.call(base, "captions") ? base.captions : null;
+  const captionLanguageSource = Object.prototype.hasOwnProperty.call(source, "captionLanguage") ? source.captionLanguage : source.caption_language;
+  const captionLanguageBase = Object.prototype.hasOwnProperty.call(base, "captionLanguage") ? base.captionLanguage : base.caption_language;
   return {
     camera: normalizeCamera(source.camera || base.camera || defaultCamera()),
     camera_path: normalizeCameraPath(pathSource),
     captions: normalizeCaptionSettings(captionSource, captionBase),
+    captionLanguage: normalizeCaptionLanguage(captionLanguageSource || captionLanguageBase || defaultCaptionLanguage()),
     director_plan: normalizeDirectorPlan(source.director_plan || base.director_plan),
     effect: normalizeEffect(source.effect || base.effect || defaultEffect()),
     overlay: overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
@@ -1122,6 +1125,59 @@ function setPlatformEditForRank(rank, platform, patch){
 }
 function defaultCaptionSettings(){
   return { enabled: captionEnabled(), style: captionStyle() };
+}
+function defaultCaptionLanguage(){
+  return "pt-BR";
+}
+function normalizeCaptionLanguage(value){
+  const text = String(value || "").trim().toLowerCase().replace("_", "-");
+  if (["en", "eng", "english", "ingles"].includes(text)) return "en";
+  return "pt-BR";
+}
+function normalizeCaptionTracks(value, fallbackSegments = []){
+  const source = value && typeof value === "object" ? value : {};
+  const tracks = {};
+  ["pt-BR", "en"].forEach(language => {
+    const aliases = language === "pt-BR" ? ["pt-BR", "pt", "pt_br", "pt-BR".toLowerCase()] : ["en", "eng", "english"];
+    const raw = aliases.map(key => source[key]).find(item => item && typeof item === "object");
+    if (raw) {
+      tracks[language] = Object.assign({}, raw, {
+        language,
+        label: raw.label || (language === "pt-BR" ? "PT-BR" : "EN"),
+        status: raw.status || (Array.isArray(raw.segments) && raw.segments.length ? "ready" : "unavailable"),
+        segments: Array.isArray(raw.segments) ? raw.segments : []
+      });
+    }
+  });
+  if (!tracks["pt-BR"]) {
+    tracks["pt-BR"] = {
+      language: "pt-BR",
+      label: "PT-BR",
+      status: "ready",
+      source: "legacy_caption_segments",
+      segments: Array.isArray(fallbackSegments) ? fallbackSegments : []
+    };
+  }
+  if (!tracks.en) {
+    tracks.en = { language: "en", label: "EN", status: "unavailable", source: "not_generated", segments: [] };
+  }
+  return tracks;
+}
+function captionTrackForMoment(moment, language){
+  const tracks = normalizeCaptionTracks(moment?.caption_tracks, moment?.caption_segments || []);
+  return tracks[normalizeCaptionLanguage(language)] || tracks["pt-BR"];
+}
+function captionTrackAvailable(moment, language){
+  const track = captionTrackForMoment(moment, language);
+  return Boolean(track && track.status === "ready" && Array.isArray(track.segments) && track.segments.length);
+}
+function captionSegmentsForMoment(moment, language){
+  const track = captionTrackForMoment(moment, language);
+  if (track?.status === "ready" && Array.isArray(track.segments)) return track.segments;
+  return Array.isArray(moment?.caption_segments) ? moment.caption_segments : [];
+}
+function captionLanguageOptionsForMoment(moment){
+  return { "pt-BR": true, en: captionTrackAvailable(moment, "en") };
 }
 function normalizeCaptionSettings(value, fallback = null){
   const source = value && typeof value === "object" ? value : {};
@@ -2383,11 +2439,14 @@ function controlSurfaceStateForCard(card){
   const platforms = uniquePlatforms(current.platforms);
   const busy = controlSurfaceBusy(card);
   const trim = trimValues(card);
+  const moment = previewMomentForCard(card);
   return {
     aiStatus: busy ? "loading" : controlSurfaceAiStatus(card),
     aspectRatio: controlSurfaceAspectRatio(platform),
     bumpers: bumpersForRank(rank, platform),
     busy,
+    captionLanguage: edit.captionLanguage,
+    captionLanguageOptions: captionLanguageOptionsForMoment(moment),
     captionMode: edit.captions.style.mode,
     captionsEnabled: edit.captions.enabled,
     captionStyle: edit.captions.style,
@@ -2415,6 +2474,7 @@ function controlSurfaceCallbacksForCard(card){
     onBumperClick: payload => openControlSurfaceBumperInput(card, payload.slot),
     onBumperRemove: payload => removeBumperForRank(card.dataset.rank, payload.slot),
     onCaptionToggle: payload => setControlSurfaceCaptions(payload.captionsEnabled, payload.captionStyle),
+    onCaptionLanguageChange: payload => setControlSurfaceCaptionLanguage(payload.captionLanguage),
     onCaptionStyleChange: payload => setControlSurfaceCaptions(payload.captionsEnabled, payload.captionStyle),
     onDiscardClick: () => discardControlSurfaceCard(card),
     onEffectStyleChange: payload => setEffectForRank(card.dataset.rank, { key: appEffectKeyFromControlSurface(payload.effectStyle) }),
@@ -2504,6 +2564,18 @@ function setControlSurfaceCaptions(enabled, style = null){
   localStorage.setItem("cutted-caption-mode", nextMode);
   storeCaptionStyle(Object.assign({}, style || {}, { mode: nextMode }));
   syncCaptionInputs();
+  syncPreviewCaptionsForOpenCards();
+  renderCaptionQueue();
+  renderFinalStage();
+  document.querySelectorAll(".card[open]").forEach(updateControlSurfaceForCard);
+}
+function setControlSurfaceCaptionLanguage(language){
+  const nextLanguage = normalizeCaptionLanguage(language);
+  document.querySelectorAll(".card[open]").forEach(card => {
+    const rank = card.dataset.rank;
+    const platform = activePlatformForRank(rank);
+    setPlatformEditForRank(rank, platform, { captionLanguage: nextLanguage });
+  });
   syncPreviewCaptionsForOpenCards();
   renderCaptionQueue();
   renderFinalStage();
@@ -4807,6 +4879,8 @@ function adjustedMoment(moment){
   const platforms = Array.isArray(current.platforms) ? current.platforms : [];
   const adjustedDuration = Number((moment.end - trimEnd - moment.start - trimStart).toFixed(3));
   const edit = platformEditForRank(moment.rank);
+  const captionLanguage = normalizeCaptionLanguage(edit.captionLanguage);
+  const captionTracks = normalizeCaptionTracks(moment.caption_tracks, moment.caption_segments || []);
   const sourceDuration = sourceDurationForMoment(moment);
   return Object.assign({}, moment, {
     status: current.status || null,
@@ -4820,6 +4894,9 @@ function adjustedMoment(moment){
     camera_path: exportCameraPathForEdit(edit, sourceDuration, trimStart, adjustedDuration),
     director_plan: edit.director_plan,
     camera_motion_ms: current.cameraMotionMs,
+    caption_language: captionLanguage,
+    caption_tracks: captionTracks,
+    caption_segments: captionSegmentsForMoment(Object.assign({}, moment, { caption_tracks: captionTracks }), captionLanguage),
     effect: effectForRank(moment.rank),
     overlay: primaryOverlayForRank(moment.rank),
     overlays: overlayLayersForRank(moment.rank),
@@ -4838,6 +4915,7 @@ function resolutionEditForPlatform(rank, platform, sourceDuration, trimStart, du
     camera_path: exportCameraPathForEdit(edit, sourceDuration, trimStart, duration),
     director_plan: edit.director_plan,
     camera_motion_ms: cardState(String(rank)).cameraMotionMs,
+    caption_language: normalizeCaptionLanguage(edit.captionLanguage),
     effect: edit.effect,
     overlay: edit.overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
     overlays: edit.overlays,
@@ -4873,6 +4951,10 @@ function buildExportData(){
     const cameraPath = exportCameraPathForEdit(edit, sourceDurationForMoment(moment), moment.trim_start_seconds, moment.adjusted_duration);
     const resolutionKey = resolutionPresetForPlatform(platform);
     const captions = normalizeCaptionSettings(edit.captions);
+    const captionLanguage = normalizeCaptionLanguage(edit.captionLanguage);
+    const captionTracks = normalizeCaptionTracks(moment.caption_tracks, moment.caption_segments || []);
+    const captionSegments = captionSegmentsForMoment(Object.assign({}, moment, { caption_tracks: captionTracks }), captionLanguage);
+    const captionMoment = Object.assign({}, moment, { caption_segments: captionSegments });
     return {
       rank: moment.rank,
       platform,
@@ -4897,13 +4979,15 @@ function buildExportData(){
       overlays,
       bumpers: edit.bumpers,
       captions_enabled: captions.enabled,
+      caption_language: captionLanguage,
+      caption_tracks: captionTracks,
       caption_style: captions.style,
-      animated_caption_windows: captions.style.mode === "animated" ? previewAnimatedCaptionTimeline(moment) : [],
+      animated_caption_windows: captions.style.mode === "animated" ? previewAnimatedCaptionTimeline(captionMoment) : [],
       clip_file: moment.clip_file,
       title: moment.title,
       peak_text: moment.peak_text,
       transcript: moment.transcript,
-      caption_segments: moment.caption_segments || []
+      caption_segments: captionSegments
     };
   }));
   return data;
