@@ -185,12 +185,13 @@ function hideImportLoading(){
   delete document.body.dataset.importing;
 }
 const activeImportJobStorageKey = "cuted-active-import-job";
+const activeImportJobMaxAgeMs = 6 * 60 * 60 * 1000;
 let activeImportPollJobId = "";
 function importJobStorage(){
   try {
-    return window.sessionStorage;
+    return window.localStorage;
   } catch (error) {
-    console.warn("Could not access sessionStorage for import recovery.", error);
+    console.warn("Could not access localStorage for import recovery.", error);
     return null;
   }
 }
@@ -201,6 +202,7 @@ function saveActiveImportJob(job){
   storage.setItem(activeImportJobStorageKey, JSON.stringify({
     id: job.id,
     output_url: job.output_url || "",
+    output_dir: job.output_dir || "",
     updated_at: Date.now()
   }));
 }
@@ -209,7 +211,12 @@ function storedActiveImportJob(){
   if (!storage) return null;
   try {
     const data = JSON.parse(storage.getItem(activeImportJobStorageKey) || "null");
-    return data && data.id ? data : null;
+    if (!data || !data.id) return null;
+    if (Date.now() - Number(data.updated_at || 0) > activeImportJobMaxAgeMs) {
+      storage.removeItem(activeImportJobStorageKey);
+      return null;
+    }
+    return data;
   } catch (error) {
     storage.removeItem(activeImportJobStorageKey);
     return null;
@@ -298,6 +305,7 @@ async function pollImport(jobId, button, options = {}){
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error(data.error || "Job not found.");
     const job = data.job || {};
+    saveActiveImportJob(job);
     setStatus(`${job.message || "Processing..."} (${job.status || "running"})`);
     updateImportLoading(job);
     if (job.status === "ready") {
@@ -5888,6 +5896,73 @@ function setupImportKeyBanner(){
   banner.querySelector("[data-import-key-open]")?.addEventListener("click", () => openSettingsPanel());
   refreshImportKeyBanner();
 }
+const activeImportJobStorageKey = "cuted-active-import-job";
+const activeImportJobMaxAgeMs = 6 * 60 * 60 * 1000;
+let activeImportPollJobId = "";
+function importJobStorage(){
+  try {
+    return window.localStorage;
+  } catch (error) {
+    console.warn("Nao consegui acessar o localStorage para recuperar importacao:", error);
+    return null;
+  }
+}
+function saveActiveImportJob(job){
+  if (!job?.id) return;
+  const storage = importJobStorage();
+  if (!storage) return;
+  storage.setItem(activeImportJobStorageKey, JSON.stringify({
+    id: job.id,
+    output_url: job.output_url || "",
+    output_dir: job.output_dir || "",
+    updated_at: Date.now()
+  }));
+}
+function storedActiveImportJob(){
+  const storage = importJobStorage();
+  if (!storage) return null;
+  try {
+    const data = JSON.parse(storage.getItem(activeImportJobStorageKey) || "null");
+    if (!data || !data.id) return null;
+    if (Date.now() - Number(data.updated_at || 0) > activeImportJobMaxAgeMs) {
+      storage.removeItem(activeImportJobStorageKey);
+      return null;
+    }
+    return data;
+  } catch (error) {
+    storage.removeItem(activeImportJobStorageKey);
+    return null;
+  }
+}
+function clearActiveImportJob(jobId){
+  const storage = importJobStorage();
+  if (!storage) return;
+  const active = storedActiveImportJob();
+  if (!jobId || !active || active.id === jobId) storage.removeItem(activeImportJobStorageKey);
+}
+async function importOutputIsReady(outputUrl){
+  if (!outputUrl) return false;
+  try {
+    const response = await fetch(outputUrl, { cache: "no-store" });
+    return response.ok;
+  } catch (error) {
+    return false;
+  }
+}
+function recoverActiveImportJob(){
+  const active = storedActiveImportJob();
+  if (!active?.id || activeImportPollJobId === active.id) return;
+  const status = document.querySelector("[data-import-status]");
+  if (status) status.textContent = "Retomando acompanhamento da importacao...";
+  pollImportJob(active.id, document.querySelector("[data-import-form] button[type=submit]"));
+}
+function setupLegacyImportRecovery(){
+  recoverActiveImportJob();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") recoverActiveImportJob();
+  });
+  window.addEventListener("focus", recoverActiveImportJob);
+}
 async function startImportJob(form){
   const status = document.querySelector("[data-import-status]");
   const result = document.querySelector("[data-import-result]");
@@ -5915,6 +5990,7 @@ async function startImportJob(form){
     const payload = await response.json();
     if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao importar.");
     if (status) status.textContent = payload.job?.message || "Importacao iniciada.";
+    saveActiveImportJob(payload.job || {});
     pollImportJob(payload.job.id, button);
   } catch (error) {
     if (button) button.disabled = false;
@@ -5925,27 +6001,42 @@ async function startImportJob(form){
 async function pollImportJob(jobId, button){
   const status = document.querySelector("[data-import-status]");
   const result = document.querySelector("[data-import-result]");
+  activeImportPollJobId = jobId;
   try {
     const response = await fetch(`/api/import-jobs/${encodeURIComponent(jobId)}`);
     const payload = await response.json();
     if (!response.ok || !payload.ok) throw new Error(payload.error || "Job nao encontrado.");
     const job = payload.job || {};
+    saveActiveImportJob(job);
     if (status) status.textContent = `${job.message || "Processando..."} (${job.status || "running"})`;
     if (job.status === "ready") {
+      activeImportPollJobId = "";
+      clearActiveImportJob(jobId);
       if (button) button.disabled = false;
       if (result) result.innerHTML = `<a href="${escapeAttr(job.output_url)}">Abrir projeto importado</a>`;
       if (job.output_url) window.location.assign(job.output_url);
       return;
     }
     if (job.status === "failed" || job.status === "cancelled") {
+      activeImportPollJobId = "";
+      clearActiveImportJob(jobId);
       if (button) button.disabled = false;
       if (result) result.innerHTML = `<code>${escapeHtml(job.stderr || job.message || "Importacao encerrada.")}</code>`;
       return;
     }
     window.setTimeout(() => pollImportJob(jobId, button), 1200);
   } catch (error) {
+    activeImportPollJobId = "";
+    const active = storedActiveImportJob();
+    if (active?.id === jobId && await importOutputIsReady(active.output_url)) {
+      clearActiveImportJob(jobId);
+      if (button) button.disabled = false;
+      if (result) result.innerHTML = `<a href="${escapeAttr(active.output_url)}">Abrir projeto importado</a>`;
+      window.location.assign(active.output_url);
+      return;
+    }
     if (button) button.disabled = false;
-    if (status) status.textContent = "Nao consegui acompanhar a importacao.";
+    if (status) status.textContent = "Perdi o acompanhamento da importacao. Vou tentar retomar quando a aba voltar.";
     if (result) result.innerHTML = `<code>${escapeHtml(error.message || String(error))}</code>`;
   }
 }
@@ -7209,6 +7300,7 @@ setupWorkspaceExitModal();
 touchCurrentProject().catch(error => console.warn("CUTED project was not added to recents", error));
 setupImportPathButtons();
 setupImportKeyBanner();
+setupLegacyImportRecovery();
 document.querySelector("[data-empty-import]")?.addEventListener("click", () => applyTab("import"));
 document.querySelector("[data-import-form]")?.addEventListener("submit", event => {
   event.preventDefault();

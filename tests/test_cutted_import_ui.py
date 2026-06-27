@@ -86,6 +86,29 @@ class CuttedImportUiTests(unittest.TestCase):
 
         self.assertIn("window.location.assign(job.output_url)", html)
 
+    def test_project_home_import_recovery_uses_durable_local_storage(self) -> None:
+        source = ui_asset_source()
+
+        self.assertIn('const activeImportJobStorageKey = "cuted-active-import-job";', source)
+        self.assertIn("const activeImportJobMaxAgeMs = 6 * 60 * 60 * 1000;", source)
+        self.assertIn("return window.localStorage;", source)
+        self.assertIn("Date.now() - Number(data.updated_at || 0) > activeImportJobMaxAgeMs", source)
+        self.assertIn("saveActiveImportJob(job);", source)
+        self.assertNotIn("return window.sessionStorage;", source)
+        self.assertNotIn("Could not access sessionStorage for import recovery.", source)
+
+    def test_legacy_import_flow_tracks_active_job_for_recovery(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("setupLegacyImportRecovery();", html)
+        self.assertIn("saveActiveImportJob(payload.job || {});", html)
+        self.assertIn("saveActiveImportJob(job);", html)
+        self.assertIn("clearActiveImportJob(jobId);", html)
+        self.assertIn("recoverActiveImportJob();", html)
+        self.assertIn("document.visibilityState === \"visible\"", html)
+        self.assertIn("active?.id === jobId && await importOutputIsReady(active.output_url)", html)
+        self.assertIn("Perdi o acompanhamento da importacao.", html)
+
     def test_editor_state_is_scoped_to_current_project(self) -> None:
         html = gallery_html()
 
@@ -293,6 +316,60 @@ class CuttedImportUiTests(unittest.TestCase):
 
         self.assertEqual(payload["caption_tracks"]["pt-BR"]["segments"][0]["text"], "Fala curta.")
         self.assertEqual(payload["caption_tracks"]["en"]["status"], "unavailable")
+
+    def test_caption_translation_batches_long_imports(self) -> None:
+        moments = [
+            CUTTED.Moment(
+                rank,
+                0.0,
+                10.0,
+                1.0,
+                0.7,
+                f"Titulo {rank}",
+                "Motivo",
+                "Transcricao",
+                "Pico",
+                None,
+                None,
+                tuple(CUTTED.Segment(float(index), float(index + 1), f"fala {rank}-{index}") for index in range(count)),
+            )
+            for rank, count in ((1, 21), (2, 55), (3, 51))
+        ]
+
+        batches = CUTTED.caption_translation_batches(moments)
+
+        self.assertEqual([[moment.rank for moment in batch] for batch in batches], [[1], [2], [3]])
+
+    def test_caption_translation_rejects_partial_batch_response(self) -> None:
+        moments = [
+            CUTTED.Moment(
+                rank,
+                0.0,
+                3.0,
+                1.0,
+                0.7,
+                f"Titulo {rank}",
+                "Motivo",
+                "Transcricao",
+                "Pico",
+                None,
+                None,
+                (CUTTED.Segment(0.0, 1.0, f"fala {rank}"),),
+            )
+            for rank in (1, 2)
+        ]
+        payload = {
+            "clips": [
+                {
+                    "rank": 1,
+                    "segments": [{"index": 0, "text": "speech one"}],
+                }
+            ]
+        }
+
+        with mock.patch.object(CUTTED, "request_caption_translation_batch", return_value=payload):
+            with self.assertRaisesRegex(RuntimeError, "missed clips"):
+                CUTTED.translate_caption_tracks_to_english(moments)
 
     def test_preview_caption_text_repairs_portuguese_mojibake(self) -> None:
         html = gallery_html()
@@ -1366,6 +1443,51 @@ class CuttedImportUiTests(unittest.TestCase):
             source = CUTTED.SourceMedia(str(video_path), video_path, video_path.name, (), metadata)
 
             self.assertEqual(CUTTED.visual_map_source_path(source), video_path.resolve())
+
+    def test_source_metadata_records_video_quality(self) -> None:
+        probe = {
+            "streams": [{"codec_type": "video", "width": 1920, "height": 1080, "bit_rate": "4200000"}],
+            "format": {"bit_rate": "4500000"},
+        }
+
+        metadata = CUTTED.source_media_metadata("youtube", "Video", "https://media.example/video.mp4", probe, "best", None)
+
+        self.assertEqual(metadata["render_source_kind"], "remote-url")
+        self.assertEqual(metadata["video_width"], 1920)
+        self.assertEqual(metadata["video_height"], 1080)
+        self.assertEqual(metadata["video_bit_rate"], "4200000")
+        self.assertEqual(metadata["format_bit_rate"], "4500000")
+
+    def test_youtube_fallback_quality_rejects_low_resolution(self) -> None:
+        probe = {"streams": [{"codec_type": "video", "width": 640, "height": 360}]}
+
+        with self.assertRaisesRegex(RuntimeError, "qualidade suficiente"):
+            CUTTED.validate_youtube_fallback_quality(probe, "HTTP Error 403")
+
+    def test_youtube_fallback_format_requires_720p_or_higher(self) -> None:
+        self.assertIn("height>=720", CUTTED.YOUTUBE_STREAM_FALLBACK_FORMAT)
+        self.assertNotIn("/18/", CUTTED.YOUTUBE_STREAM_FALLBACK_FORMAT)
+
+    def test_prepare_youtube_source_removes_partial_source_after_quality_failure(self) -> None:
+        args = mock.Mock(youtube_url="https://www.youtube.com/watch?v=test", language="pt", youtube_captions=False)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp)
+
+            def fail_download(*_args: object) -> Path:
+                partial = out_dir / "_source" / "source.f137.mp4.part"
+                partial.write_bytes(b"partial")
+                raise RuntimeError("HTTP Error 403: Forbidden")
+
+            with mock.patch.object(CUTTED, "youtube_title", return_value="Video"), \
+                mock.patch.object(CUTTED, "download_youtube_audio", return_value=out_dir / "_source" / "audio.m4a"), \
+                mock.patch.object(CUTTED, "youtube_high_quality_format", return_value="best"), \
+                mock.patch.object(CUTTED, "download_youtube_render_source", side_effect=fail_download), \
+                mock.patch.object(CUTTED, "youtube_render_url", side_effect=RuntimeError("Requested format is not available")):
+                with self.assertRaisesRegex(RuntimeError, "arquivo local"):
+                    CUTTED.prepare_youtube_source(args, out_dir, "ffmpeg", None)
+
+            self.assertFalse((out_dir / "_source" / "source.f137.mp4.part").exists())
 
     def test_friendly_ytdlp_error_explains_antibot(self) -> None:
         message = CUTTED.friendly_ytdlp_error("Sign in to confirm you're not a bot")

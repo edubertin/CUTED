@@ -226,6 +226,7 @@ from cuted_launch import (
 from cuted_media_source import (
     bundled_node_path as media_bundled_node_path,
     caption_event_to_segment as media_caption_event_to_segment,
+    cleanup_youtube_partial_sources as media_cleanup_youtube_partial_sources,
     cleanup_sources as media_cleanup_sources,
     download_youtube_audio as media_download_youtube_audio,
     download_youtube_render_source as media_download_youtube_render_source,
@@ -295,7 +296,8 @@ YOUTUBE_HIGH_QUALITY_FORMAT = (
     "bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]/"
     "b[height<=1080]/best"
 )
-YOUTUBE_STREAM_FALLBACK_FORMAT = "b[height<=1080]/b[height<=720]/18/b[height<=480]/best"
+YOUTUBE_MIN_FALLBACK_HEIGHT = 720
+YOUTUBE_STREAM_FALLBACK_FORMAT = "b[height>=720][height<=1080]/b[height>=720]/best[height>=720]"
 IMPORT_PROGRESS_PREFIX = "CUTED_IMPORT_EVENT "
 PREVIEW_VIDEO_CRF = "20"
 PREVIEW_DRAFT_VIDEO_CRF = "28"
@@ -8450,11 +8452,61 @@ def prepare_youtube_source(args: argparse.Namespace, out_dir: Path, ffmpeg: str,
         probe = probe_media_metadata(render_source_path, ffprobe)
     except (RuntimeError, subprocess.SubprocessError, OSError) as exc:
         download_error = str(exc)
-        render_source = youtube_render_url(url)
+        cleanup_youtube_partial_sources(temp_dir)
+        try:
+            render_source = youtube_render_url(url)
+        except RuntimeError as fallback_exc:
+            raise RuntimeError(youtube_quality_fallback_error(download_error, str(fallback_exc))) from fallback_exc
         probe = probe_media_metadata(render_source, ffprobe)
+        validate_youtube_fallback_quality(probe, download_error)
     metadata = source_media_metadata("youtube", label, render_source, probe, format_selector, download_error)
     cleanup = (transcribe_source,) if isinstance(transcribe_source, Path) else ()
     return SourceMedia(render_source, transcribe_source, label, cleanup, metadata)
+
+
+def validate_youtube_fallback_quality(probe: dict[str, object], download_error: str) -> None:
+    height = probed_video_height(probe)
+    if height is None:
+        return
+    if height < YOUTUBE_MIN_FALLBACK_HEIGHT:
+        raise RuntimeError(
+            youtube_quality_fallback_error(
+                download_error,
+                f"Fallback YouTube resolveu apenas {height}p.",
+            )
+        )
+
+
+def probed_video_height(probe: dict[str, object]) -> int | None:
+    streams = probe.get("streams")
+    if not isinstance(streams, list):
+        return None
+    for stream in streams:
+        if not isinstance(stream, dict) or stream.get("codec_type") != "video":
+            continue
+        try:
+            return int(stream.get("height") or 0) or None
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def youtube_quality_fallback_error(download_error: str, fallback_error: str) -> str:
+    detail = first_safe_error_line(download_error or fallback_error)
+    return (
+        "Nao consegui importar este YouTube com qualidade suficiente para cortes verticais. "
+        f"O download local em alta falhou e o fallback remoto nao chegou a {YOUTUBE_MIN_FALLBACK_HEIGHT}p. "
+        "Baixe o video em MP4 com boa qualidade e importe como arquivo local no CUTED."
+        + (f" Detalhe: {detail}" if detail else "")
+    )
+
+
+def first_safe_error_line(message: str) -> str:
+    for line in str(message or "").splitlines():
+        clean = line.strip()
+        if clean:
+            return clean[:220]
+    return ""
 
 
 def require_file(path: Path) -> None:
@@ -8486,6 +8538,10 @@ def source_media_metadata(
 
 def write_source_metadata(out_dir: Path, metadata: dict[str, object] | None) -> None:
     media_write_source_metadata(out_dir, metadata)
+
+
+def cleanup_youtube_partial_sources(temp_dir: Path) -> None:
+    media_cleanup_youtube_partial_sources(temp_dir)
 
 
 def yt_dlp_command() -> list[str]:
@@ -9938,6 +9994,7 @@ def config_to_dict(config: CuttedConfig) -> dict[str, object]:
 
 CAPTION_LANGUAGE_DEFAULT = "pt-BR"
 CAPTION_LANGUAGE_ENGLISH = "en"
+CAPTION_TRANSLATION_MAX_BATCH_SEGMENTS = 70
 
 
 def normalize_caption_language(value: object) -> str:
@@ -9969,20 +10026,43 @@ def should_translate_caption_tracks(args: argparse.Namespace, moments: list[Mome
 
 
 def translate_caption_tracks_to_english(moments: list[Moment]) -> dict[int, tuple[Segment, ...]]:
-    rows = [
-        {
-            "rank": moment.rank,
-            "segments": [
-                {"index": index, "text": segment.text}
-                for index, segment in enumerate(moment.caption_segments)
-            ],
-        }
-        for moment in moments
-        if moment.caption_segments
-    ]
-    if not rows:
-        return {}
-    payload = openai_structured_response(
+    translated: dict[int, tuple[Segment, ...]] = {}
+    for batch in caption_translation_batches(moments):
+        if not batch:
+            continue
+        payload = request_caption_translation_batch(batch)
+        batch_segments = validated_english_caption_segments(payload, batch)
+        missing = [moment.rank for moment in batch if moment.caption_segments and moment.rank not in batch_segments]
+        if missing:
+            raise RuntimeError(f"Caption translation response missed clips: {missing}")
+        translated.update(batch_segments)
+    return translated
+
+
+def caption_translation_batches(
+    moments: list[Moment], max_segments: int = CAPTION_TRANSLATION_MAX_BATCH_SEGMENTS
+) -> list[list[Moment]]:
+    batches: list[list[Moment]] = []
+    current: list[Moment] = []
+    current_segments = 0
+    for moment in moments:
+        segment_count = len(moment.caption_segments)
+        if segment_count <= 0:
+            continue
+        if current and current_segments + segment_count > max_segments:
+            batches.append(current)
+            current = []
+            current_segments = 0
+        current.append(moment)
+        current_segments += segment_count
+    if current:
+        batches.append(current)
+    return batches
+
+
+def request_caption_translation_batch(moments: list[Moment]) -> dict[str, object]:
+    rows = [caption_translation_row(moment) for moment in moments if moment.caption_segments]
+    return openai_structured_response(
         "You translate video subtitles from Brazilian Portuguese to natural English.",
         json.dumps(
             {
@@ -10000,7 +10080,16 @@ def translate_caption_tracks_to_english(moments: list[Moment]) -> dict[int, tupl
         caption_translation_schema(),
         operation="caption_translation",
     )
-    return validated_english_caption_segments(payload, moments)
+
+
+def caption_translation_row(moment: Moment) -> dict[str, object]:
+    return {
+        "rank": moment.rank,
+        "segments": [
+            {"index": index, "text": segment.text}
+            for index, segment in enumerate(moment.caption_segments)
+        ],
+    }
 
 
 def caption_translation_schema() -> dict[str, object]:
