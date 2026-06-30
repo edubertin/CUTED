@@ -196,6 +196,7 @@ from cuted_render_pipeline import (
     text_overlay_from_raw as render_pipeline_text_overlay_from_raw,
     timed_overlay_enable as render_pipeline_timed_overlay_enable,
     video_crf as render_pipeline_video_crf,
+    video_rate_control_args as render_pipeline_video_rate_control_args,
     visible_effect_intensity as render_pipeline_visible_effect_intensity,
 )
 from cuted_project_catalog import (
@@ -304,6 +305,9 @@ PREVIEW_DRAFT_VIDEO_CRF = "28"
 LOCAL_IMPORT_MAX_INITIAL_CLIPS = 4
 FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
+FINAL_GRAIN_EFFECT_VIDEO_CRF = "24"
+FINAL_GRAIN_EFFECT_MAXRATE = "12M"
+FINAL_GRAIN_EFFECT_BUFSIZE = "24M"
 MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
 MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
 CAMERA_ANALYSIS_VERSION = "auto-face-v31"
@@ -825,7 +829,13 @@ def read_project_catalog(path: Path | None = None) -> dict[str, object]:
     projects = data.get("projects")
     if not isinstance(projects, list):
         projects = []
-    return {"version": PROJECT_CATALOG_VERSION, "projects": [item for item in projects if isinstance(item, dict)]}
+    removed = data.get("removed_project_ids")
+    removed_ids = [clean_project_id(item) for item in removed] if isinstance(removed, list) else []
+    return {
+        "version": PROJECT_CATALOG_VERSION,
+        "projects": [item for item in projects if isinstance(item, dict)],
+        "removed_project_ids": [item for item in removed_ids if item],
+    }
 
 
 def write_project_catalog(catalog: dict[str, object], path: Path | None = None) -> None:
@@ -833,7 +843,13 @@ def write_project_catalog(catalog: dict[str, object], path: Path | None = None) 
     catalog_path.parent.mkdir(parents=True, exist_ok=True)
     rows = catalog.get("projects") if isinstance(catalog, dict) else []
     projects = rows if isinstance(rows, list) else []
-    payload = {"version": PROJECT_CATALOG_VERSION, "projects": projects[:200]}
+    removed = catalog.get("removed_project_ids") if isinstance(catalog, dict) else []
+    removed_ids = [clean_project_id(item) for item in removed] if isinstance(removed, list) else []
+    payload = {
+        "version": PROJECT_CATALOG_VERSION,
+        "projects": projects[:200],
+        "removed_project_ids": [item for item in removed_ids if item][:500],
+    }
     temp_path = catalog_path.with_suffix(".tmp")
     temp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     temp_path.replace(catalog_path)
@@ -843,6 +859,11 @@ def project_catalog_recent(workspace: Path, limit: int = PROJECT_CATALOG_LIMIT) 
     catalog = read_project_catalog()
     projects = catalog.get("projects")
     source_rows = projects if isinstance(projects, list) else []
+    if not source_rows and not project_catalog_removed_ids(catalog):
+        source_rows = discover_workspace_project_catalog(workspace)
+        if source_rows:
+            catalog["projects"] = source_rows
+            write_project_catalog(catalog)
     rows = []
     kept_projects = []
     for row in source_rows:
@@ -858,6 +879,37 @@ def project_catalog_recent(workspace: Path, limit: int = PROJECT_CATALOG_LIMIT) 
         write_project_catalog(catalog)
     rows.sort(key=lambda row: str(row.get("last_opened_at") or row.get("updated_at") or ""), reverse=True)
     return rows[:limit]
+
+
+def project_catalog_removed_ids(catalog: dict[str, object]) -> set[str]:
+    removed = catalog.get("removed_project_ids") if isinstance(catalog, dict) else []
+    values = removed if isinstance(removed, list) else []
+    return {clean_project_id(item) for item in values if clean_project_id(item)}
+
+
+def discover_workspace_project_catalog(workspace: Path) -> list[dict[str, object]]:
+    projects_root = workspace / PROJECTS_DIR_NAME
+    if not projects_root.is_dir():
+        return []
+    try:
+        candidates = [path for path in projects_root.iterdir() if path.is_dir()]
+    except OSError:
+        return []
+    rows = []
+    for project_dir in sorted(candidates, key=project_dir_mtime, reverse=True):
+        if not valid_recent_project_dir(project_dir, workspace):
+            continue
+        entry = project_entry_from_gallery(project_dir, workspace)
+        timestamp = iso_timestamp_from_epoch(project_dir_mtime(project_dir))
+        rows.append({**entry, "updated_at": timestamp, "last_opened_at": timestamp})
+    return rows
+
+
+def project_dir_mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
 
 
 def project_home_entry(row: dict[str, object], workspace: Path) -> dict[str, object]:
@@ -902,6 +954,9 @@ def upsert_project_catalog_entry(entry: dict[str, object], path: Path | None = N
     ]
     filtered.insert(0, {**entry, "id": project_id, "path": project_path})
     catalog["projects"] = filtered
+    removed_ids = project_catalog_removed_ids(catalog)
+    if project_id in removed_ids:
+        catalog["removed_project_ids"] = sorted(removed_ids - {project_id})
     write_project_catalog(catalog, path)
 
 
@@ -919,6 +974,8 @@ def delete_project_from_catalog(project_id: str, workspace: Path, delete_files: 
         delete_method = delete_project_dir(project_dir)
         deleted = True
     catalog["projects"] = [row for row in rows if not (isinstance(row, dict) and clean_project_id(row.get("id")) == project_id)]
+    if not delete_files:
+        catalog["removed_project_ids"] = sorted(project_catalog_removed_ids(catalog) | {clean_project_id(project_id)})
     write_project_catalog(catalog)
     return {"ok": True, "deleted_files": deleted, "delete_method": delete_method, "projects": project_catalog_recent(workspace)}
 
@@ -993,6 +1050,10 @@ def directory_size(path: Path) -> int:
 
 def iso_timestamp() -> str:
     return catalog_iso_timestamp()
+
+
+def iso_timestamp_from_epoch(value: float) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(max(0.0, value)))
 
 
 def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler]:
@@ -7440,7 +7501,8 @@ def apply_bumpers_to_output(
         ffmpeg_codec_thread_args,
         media_has_audio,
         resolve_media_path,
-        FINAL_VIDEO_CRF,
+        video_crf(row),
+        video_rate_control_args,
     )
 
 
@@ -7448,7 +7510,18 @@ def normalize_bumper_segment(
     source: Path, output: Path, duration: float, preset: PlatformPreset, ffmpeg: str, row: dict[str, object]
 ) -> None:
     render_pipeline_normalize_bumper_segment(
-        source, output, duration, preset, ffmpeg, row, fmt_time, ffmpeg_codec_thread_args, media_has_audio, run_ffmpeg_command, FINAL_VIDEO_CRF
+        source,
+        output,
+        duration,
+        preset,
+        ffmpeg,
+        row,
+        fmt_time,
+        ffmpeg_codec_thread_args,
+        media_has_audio,
+        run_ffmpeg_command,
+        video_crf(row),
+        video_rate_control_args,
     )
 
 
@@ -7858,6 +7931,7 @@ def mp4_output_args(row: dict[str, object]) -> list[str]:
         "-pix_fmt", "yuv420p",
         "-r", "30",
         "-crf", video_crf(row),
+        *video_rate_control_args(row),
         "-c:a", "aac",
         "-b:a", "192k",
         "-ar", "44100",
@@ -8293,7 +8367,11 @@ def effect_filter(row: dict[str, object]) -> str:
 
 
 def video_crf(row: dict[str, object]) -> str:
-    return render_pipeline_video_crf(row, FINAL_VIDEO_CRF, FINAL_EFFECT_VIDEO_CRF)
+    return render_pipeline_video_crf(row, FINAL_VIDEO_CRF, FINAL_EFFECT_VIDEO_CRF, FINAL_GRAIN_EFFECT_VIDEO_CRF)
+
+
+def video_rate_control_args(row: dict[str, object]) -> list[str]:
+    return render_pipeline_video_rate_control_args(row, FINAL_GRAIN_EFFECT_MAXRATE, FINAL_GRAIN_EFFECT_BUFSIZE)
 
 
 def visible_effect_intensity(intensity: float) -> float:
@@ -10030,13 +10108,44 @@ def translate_caption_tracks_to_english(moments: list[Moment]) -> dict[int, tupl
     for batch in caption_translation_batches(moments):
         if not batch:
             continue
-        payload = request_caption_translation_batch(batch)
-        batch_segments = validated_english_caption_segments(payload, batch)
-        missing = [moment.rank for moment in batch if moment.caption_segments and moment.rank not in batch_segments]
-        if missing:
-            raise RuntimeError(f"Caption translation response missed clips: {missing}")
-        translated.update(batch_segments)
+        translated.update(translate_caption_batch_with_retries(batch))
     return translated
+
+
+def translate_caption_batch_with_retries(moments: list[Moment]) -> dict[int, tuple[Segment, ...]]:
+    try:
+        payload = request_caption_translation_batch(moments)
+        translated = validated_english_caption_segments(payload, moments)
+    except (RuntimeError, OSError, ValueError, KeyError, json.JSONDecodeError) as error:
+        print(f"Warning: caption translation batch failed; retrying clips individually: {error}", file=sys.stderr)
+        return translate_caption_moments_individually(moments)
+    missing = caption_translation_missing_ranks(moments, translated)
+    if missing:
+        retry_moments = [moment for moment in moments if moment.rank in missing]
+        translated.update(translate_caption_moments_individually(retry_moments))
+    return translated
+
+
+def translate_caption_moments_individually(moments: list[Moment]) -> dict[int, tuple[Segment, ...]]:
+    translated: dict[int, tuple[Segment, ...]] = {}
+    for moment in moments:
+        try:
+            payload = request_caption_translation_batch([moment])
+            item_segments = validated_english_caption_segments(payload, [moment])
+        except (RuntimeError, OSError, ValueError, KeyError, json.JSONDecodeError) as error:
+            print(f"Warning: could not translate caption track for clip {moment.rank}: {error}", file=sys.stderr)
+            continue
+        if moment.rank in item_segments:
+            translated[moment.rank] = item_segments[moment.rank]
+        else:
+            print(f"Warning: caption translation response missed clip {moment.rank}.", file=sys.stderr)
+    return translated
+
+
+def caption_translation_missing_ranks(
+    moments: list[Moment], translated: dict[int, tuple[Segment, ...]]
+) -> list[int]:
+    return [moment.rank for moment in moments if moment.caption_segments and moment.rank not in translated]
 
 
 def caption_translation_batches(

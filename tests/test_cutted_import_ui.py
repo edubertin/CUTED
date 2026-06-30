@@ -340,7 +340,7 @@ class CuttedImportUiTests(unittest.TestCase):
 
         self.assertEqual([[moment.rank for moment in batch] for batch in batches], [[1], [2], [3]])
 
-    def test_caption_translation_rejects_partial_batch_response(self) -> None:
+    def test_caption_translation_retries_missing_clips_from_partial_batch(self) -> None:
         moments = [
             CUTTED.Moment(
                 rank,
@@ -366,10 +366,61 @@ class CuttedImportUiTests(unittest.TestCase):
                 }
             ]
         }
+        retry_payload = {
+            "clips": [
+                {
+                    "rank": 2,
+                    "segments": [{"index": 0, "text": "speech two"}],
+                }
+            ]
+        }
 
-        with mock.patch.object(CUTTED, "request_caption_translation_batch", return_value=payload):
-            with self.assertRaisesRegex(RuntimeError, "missed clips"):
-                CUTTED.translate_caption_tracks_to_english(moments)
+        with mock.patch.object(CUTTED, "request_caption_translation_batch", side_effect=[payload, retry_payload]) as request:
+            translated = CUTTED.translate_caption_tracks_to_english(moments)
+
+        self.assertEqual(request.call_count, 2)
+        self.assertEqual(translated[1][0].text, "speech one")
+        self.assertEqual(translated[2][0].text, "speech two")
+
+    def test_caption_translation_keeps_ready_tracks_when_one_retry_still_fails(self) -> None:
+        moments = [
+            CUTTED.Moment(
+                rank,
+                0.0,
+                3.0,
+                1.0,
+                0.7,
+                f"Titulo {rank}",
+                "Motivo",
+                "Transcricao",
+                "Pico",
+                None,
+                None,
+                (CUTTED.Segment(0.0, 1.0, f"fala {rank}"),),
+            )
+            for rank in (1, 2)
+        ]
+        partial_payload = {
+            "clips": [
+                {
+                    "rank": 1,
+                    "segments": [{"index": 0, "text": "speech one"}],
+                }
+            ]
+        }
+        missing_payload = {"clips": []}
+        args = mock.Mock()
+
+        with mock.patch.object(CUTTED, "requested_ai_provider", return_value="openai"), \
+            mock.patch.object(CUTTED, "openai_api_key", return_value="key"), \
+            mock.patch.object(CUTTED, "request_caption_translation_batch", side_effect=[partial_payload, missing_payload]):
+            results = CUTTED.apply_caption_language_tracks(moments, args)
+
+        payloads = [CUTTED.moment_to_dict(moment) for moment in results]
+        self.assertEqual(payloads[0]["caption_tracks"]["en"]["status"], "ready")
+        self.assertEqual(payloads[0]["caption_tracks"]["en"]["segments"][0]["text"], "speech one")
+        self.assertEqual(payloads[1]["caption_tracks"]["en"]["status"], "unavailable")
+        self.assertEqual(payloads[1]["caption_tracks"]["pt-BR"]["status"], "ready")
 
     def test_preview_caption_text_repairs_portuguese_mojibake(self) -> None:
         html = gallery_html()
@@ -821,6 +872,22 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertTrue(CUTTED.caption_cover_frame_enabled(type("Args", (), {"cover_frame_enabled": True})()))
         self.assertTrue(CUTTED.caption_cover_frame_enabled(type("Args", (), {"cover_frame": True})()))
         self.assertFalse(CUTTED.caption_cover_frame_enabled(type("Args", (), {})()))
+
+    def test_grain_effect_uses_bounded_render_rate_control(self) -> None:
+        args = CUTTED.mp4_output_args({"effect": {"key": "light-grain", "intensity": 65}})
+
+        self.assertEqual(args[args.index("-crf") + 1], CUTTED.FINAL_GRAIN_EFFECT_VIDEO_CRF)
+        self.assertIn("-maxrate", args)
+        self.assertEqual(args[args.index("-maxrate") + 1], CUTTED.FINAL_GRAIN_EFFECT_MAXRATE)
+        self.assertIn("-bufsize", args)
+        self.assertEqual(args[args.index("-bufsize") + 1], CUTTED.FINAL_GRAIN_EFFECT_BUFSIZE)
+
+    def test_normal_render_keeps_existing_crf_without_rate_cap(self) -> None:
+        args = CUTTED.mp4_output_args({"effect": {"key": "none", "intensity": 0}})
+
+        self.assertEqual(args[args.index("-crf") + 1], CUTTED.FINAL_VIDEO_CRF)
+        self.assertNotIn("-maxrate", args)
+        self.assertNotIn("-bufsize", args)
 
     def test_camera_analysis_fetch_has_timeout(self) -> None:
         html = gallery_html()
@@ -1600,6 +1667,51 @@ class CuttedImportUiTests(unittest.TestCase):
 
             self.assertEqual(output_dir.parent.name, CUTTED.PROJECTS_DIR_NAME)
             self.assertEqual(output_dir.parent.parent, Path(tmp))
+
+    def test_project_catalog_recent_reindexes_existing_workspace_projects(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "workspace"
+            project_dir = workspace / CUTTED.PROJECTS_DIR_NAME / "20260627-demo"
+            project_dir.mkdir(parents=True)
+            (project_dir / "index.html").write_text("<html>CUTED</html>", encoding="utf-8")
+            (project_dir / "moments.json").write_text(json.dumps({"moments": [{"rank": 1}]}), encoding="utf-8")
+            catalog_path = Path(tmp) / "projects.json"
+            original_path = CUTTED.project_catalog_path
+            CUTTED.project_catalog_path = lambda: catalog_path
+            try:
+                recent = CUTTED.project_catalog_recent(workspace)
+                catalog = CUTTED.read_project_catalog(catalog_path)
+            finally:
+                CUTTED.project_catalog_path = original_path
+
+        self.assertEqual(len(recent), 1)
+        self.assertEqual(recent[0]["title"], "20260627-demo")
+        self.assertEqual(recent[0]["clip_count"], 1)
+        self.assertEqual(len(catalog["projects"]), 1)
+
+    def test_project_catalog_reindex_respects_removed_recents(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "workspace"
+            project_dir = workspace / CUTTED.PROJECTS_DIR_NAME / "20260627-demo"
+            project_dir.mkdir(parents=True)
+            (project_dir / "index.html").write_text("<html>CUTED</html>", encoding="utf-8")
+            catalog_path = Path(tmp) / "projects.json"
+            removed_id = CUTTED.project_id_for_path(project_dir)
+            catalog_path.write_text(
+                json.dumps({"version": 1, "projects": [], "removed_project_ids": [removed_id]}),
+                encoding="utf-8",
+            )
+            original_path = CUTTED.project_catalog_path
+            CUTTED.project_catalog_path = lambda: catalog_path
+            try:
+                recent = CUTTED.project_catalog_recent(workspace)
+                catalog = CUTTED.read_project_catalog(catalog_path)
+            finally:
+                CUTTED.project_catalog_path = original_path
+
+        self.assertEqual(recent, [])
+        self.assertEqual(catalog["projects"], [])
+        self.assertIn(removed_id, catalog["removed_project_ids"])
 
     def test_render_export_dir_prefers_project_render_output_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
