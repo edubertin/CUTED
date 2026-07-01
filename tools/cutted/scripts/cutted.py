@@ -577,6 +577,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    configure_stdio()
     load_local_env()
     args = parse_args()
     if args.command == "analyze":
@@ -666,7 +667,21 @@ def emit_import_progress(
         payload["steps"] = max(0, int(steps))
     if detail:
         payload["detail"] = detail
-    print(f"{IMPORT_PROGRESS_PREFIX}{json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}", flush=True)
+    print(import_progress_line(payload), flush=True)
+
+
+def import_progress_line(payload: dict[str, object]) -> str:
+    return f"{IMPORT_PROGRESS_PREFIX}{json.dumps(payload, ensure_ascii=True, separators=(',', ':'))}"
+
+
+def configure_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (OSError, ValueError):
+                continue
 
 
 def render_selected(args: argparse.Namespace) -> None:
@@ -5863,7 +5878,15 @@ def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path
     command = import_command(out_dir, source_url, source_path, metadata)
     job_id = uuid.uuid4().hex[:12]
     output_url = import_output_url(base_dir, out_dir)
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=import_process_env(),
+    )
     source_kind = "youtube" if source_url else "local"
     job = ImportJob(
         job_id,
@@ -6002,6 +6025,13 @@ def import_command(
     if not metadata["render_previews"]:
         command.append("--skip-render")
     return command
+
+
+def import_process_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    env.setdefault("PYTHONUTF8", "1")
+    return env
 
 
 def import_preview_count(source_url: str, metadata: dict[str, object]) -> int:

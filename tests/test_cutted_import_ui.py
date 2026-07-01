@@ -1693,6 +1693,30 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertEqual(event["steps"], 4)
         self.assertEqual(event["detail"], "2 de 4 previews")
 
+    def test_import_progress_line_escapes_emoji_for_windows_charmap(self) -> None:
+        line = CUTTED.import_progress_line({
+            "stage": "media",
+            "label": "Media",
+            "message": "Ready",
+            "percent": 30,
+            "detail": "Alambique \U0001f37a",
+        })
+
+        line.encode("cp1252")
+        event = CUTTED.parse_import_progress_line(line)
+
+        self.assertIsNotNone(event)
+        self.assertEqual(event["detail"], "Alambique \U0001f37a")
+        self.assertIn("\\ud83c\\udf7a", line)
+
+    def test_import_subprocess_forces_utf8_stdio(self) -> None:
+        env = CUTTED.import_process_env()
+        source = inspect.getsource(CUTTED.start_import_job)
+
+        self.assertEqual(env["PYTHONIOENCODING"], "utf-8")
+        self.assertEqual(env["PYTHONUTF8"], "1")
+        self.assertIn("env=import_process_env()", source)
+
     def test_import_job_snapshot_prefers_real_progress_event(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             job = CUTTED.ImportJob(
