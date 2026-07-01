@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import json
 import sys
 import tempfile
@@ -231,7 +232,11 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("caption_tracks: captionTracks", html)
         self.assertIn("caption_segments: captionSegments", html)
         self.assertIn('data-cuted-caption-language="pt-BR"', control_bar_script)
-        self.assertIn("onCaptionLanguageChange: payload => setControlSurfaceCaptionLanguage(payload.captionLanguage)", html)
+        self.assertIn("onCaptionLanguageChange: payload => setControlSurfaceCaptionLanguage(card, payload.captionLanguage)", html)
+        self.assertIn("/api/caption-tracks/translate", html)
+        self.assertIn("function captionTrackCanGenerate", html)
+        self.assertIn("Generating EN captions...", html)
+        self.assertIn("Generate English captions for this clip", control_bar_script)
         self.assertIn("onCaptionToggle: payload => setControlSurfaceCaptions(payload.captionsEnabled, payload.captionStyle)", html)
         self.assertIn("caption_style: captions.style", html)
         self.assertIn("captions_enabled: captions.enabled", html)
@@ -316,6 +321,90 @@ class CuttedImportUiTests(unittest.TestCase):
 
         self.assertEqual(payload["caption_tracks"]["pt-BR"]["segments"][0]["text"], "Fala curta.")
         self.assertEqual(payload["caption_tracks"]["en"]["status"], "unavailable")
+
+    def test_import_analyze_does_not_prepare_english_captions_before_editor(self) -> None:
+        source = inspect.getsource(CUTTED.analyze)
+
+        self.assertNotIn("apply_caption_language_tracks", source)
+        self.assertIn("write_html(out_dir / \"index.html\", rendered, source.label)", source)
+
+    def test_caption_track_on_demand_generation_persists_project_files(self) -> None:
+        moment = CUTTED.Moment(
+            1,
+            0.0,
+            2.0,
+            1.0,
+            0.7,
+            "Titulo",
+            "Motivo",
+            "Transcricao",
+            "Pico",
+            "clips/clip-001.mp4",
+            "frames/clip-001.jpg",
+            (CUTTED.Segment(0.0, 1.2, "Fala curta."),),
+        )
+        translated_payload = {"clips": [{"rank": 1, "segments": [{"index": 0, "text": "Short speech."}]}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery_dir = Path(tmp)
+            moments = [CUTTED.moment_to_dict(moment)]
+            (gallery_dir / "moments.json").write_text(
+                json.dumps({"source": "Teste", "duration": 2.0, "config": {}, "moments": moments}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            (gallery_dir / "index.html").write_text(
+                CUTTED.page_html("Teste", "", json.dumps({"moments": moments}, ensure_ascii=False), "assets/brand/cuted-logo-transparent.png"),
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(CUTTED, "openai_api_key", return_value="key"), \
+                mock.patch.object(CUTTED, "request_caption_translation_batch", return_value=translated_payload) as request:
+                result = CUTTED.generate_gallery_caption_track(gallery_dir, 1, "en")
+
+            saved = json.loads((gallery_dir / "moments.json").read_text(encoding="utf-8"))
+            html = (gallery_dir / "index.html").read_text(encoding="utf-8")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(request.call_count, 1)
+        self.assertEqual(saved["moments"][0]["caption_tracks"]["en"]["status"], "ready")
+        self.assertEqual(saved["moments"][0]["caption_tracks"]["en"]["segments"][0]["text"], "Short speech.")
+        self.assertIn("Short speech.", html)
+
+    def test_caption_track_on_demand_generation_returns_cached_ready_track(self) -> None:
+        moment = CUTTED.Moment(
+            1,
+            0.0,
+            2.0,
+            1.0,
+            0.7,
+            "Titulo",
+            "Motivo",
+            "Transcricao",
+            "Pico",
+            None,
+            None,
+            (CUTTED.Segment(0.0, 1.2, "Fala curta."),),
+            caption_tracks={
+                "en": {
+                    "language": "en",
+                    "label": "EN",
+                    "status": "ready",
+                    "source": "openai_translation",
+                    "segments": [{"start": 0.0, "end": 1.2, "text": "Short speech."}],
+                }
+            },
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery_dir = Path(tmp)
+            moments = [CUTTED.moment_to_dict(moment)]
+            (gallery_dir / "moments.json").write_text(json.dumps({"moments": moments}), encoding="utf-8")
+            (gallery_dir / "index.html").write_text("window.CUTTED_DATA = {\"moments\": []}; window.CUTTED_SCRIPT = \"x\";", encoding="utf-8")
+
+            with mock.patch.object(CUTTED, "request_caption_translation_batch") as request:
+                result = CUTTED.generate_gallery_caption_track(gallery_dir, 1, "en")
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["cached"])
+        request.assert_not_called()
 
     def test_caption_translation_batches_long_imports(self) -> None:
         moments = [

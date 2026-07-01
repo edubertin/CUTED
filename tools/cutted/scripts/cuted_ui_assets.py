@@ -1179,13 +1179,18 @@ function captionTrackAvailable(moment, language){
   const track = captionTrackForMoment(moment, language);
   return Boolean(track && track.status === "ready" && Array.isArray(track.segments) && track.segments.length);
 }
+function captionTrackCanGenerate(moment, language){
+  if (normalizeCaptionLanguage(language) !== "en") return false;
+  if (captionTrackAvailable(moment, "en")) return false;
+  return captionSegmentsForMoment(moment, "pt-BR").length > 0;
+}
 function captionSegmentsForMoment(moment, language){
   const track = captionTrackForMoment(moment, language);
   if (track?.status === "ready" && Array.isArray(track.segments)) return track.segments;
   return Array.isArray(moment?.caption_segments) ? moment.caption_segments : [];
 }
 function captionLanguageOptionsForMoment(moment){
-  return { "pt-BR": true, en: captionTrackAvailable(moment, "en") };
+  return { "pt-BR": true, en: captionTrackAvailable(moment, "en") ? "ready" : captionTrackCanGenerate(moment, "en") ? "generate" : false };
 }
 function normalizeCaptionSettings(value, fallback = null){
   const source = value && typeof value === "object" ? value : {};
@@ -2482,7 +2487,7 @@ function controlSurfaceCallbacksForCard(card){
     onBumperClick: payload => openControlSurfaceBumperInput(card, payload.slot),
     onBumperRemove: payload => removeBumperForRank(card.dataset.rank, payload.slot),
     onCaptionToggle: payload => setControlSurfaceCaptions(payload.captionsEnabled, payload.captionStyle),
-    onCaptionLanguageChange: payload => setControlSurfaceCaptionLanguage(payload.captionLanguage),
+    onCaptionLanguageChange: payload => setControlSurfaceCaptionLanguage(card, payload.captionLanguage),
     onCaptionStyleChange: payload => setControlSurfaceCaptions(payload.captionsEnabled, payload.captionStyle),
     onDiscardClick: () => discardControlSurfaceCard(card),
     onEffectStyleChange: payload => setEffectForRank(card.dataset.rank, { key: appEffectKeyFromControlSurface(payload.effectStyle) }),
@@ -2510,6 +2515,15 @@ function controlSurfaceStatus(card){
   const platform = activePlatformForRank(card.dataset.rank);
   const platforms = uniquePlatforms(current.platforms);
   if (card.dataset.bumperStatus) return { kind: "error", label: card.dataset.bumperStatus, tone: "red" };
+  if (card.dataset.captionTranslationStatus) {
+    return {
+      kind: "caption",
+      label: card.dataset.captionTranslationStatus,
+      progress: card.dataset.captionTranslationBusy === "1" ? 62 : null,
+      persistent: card.dataset.captionTranslationBusy === "1",
+      tone: card.dataset.captionTranslationTone || "blue"
+    };
+  }
   if (current.status === "discarded") return { kind: "discarded", label: "CUT DISCARDED", persistent: true, tone: "red" };
   if (card.dataset.aiApplying === "1") return { kind: "ai", label: "IA ajustando keyframes...", progress: 58, persistent: true, tone: "blue" };
   if (controlSurfaceMapping(card)) return { kind: "mapping", label: "Projeto sendo mapeado...", progress: 28, persistent: true, tone: "blue" };
@@ -2577,17 +2591,82 @@ function setControlSurfaceCaptions(enabled, style = null){
   renderFinalStage();
   document.querySelectorAll(".card[open]").forEach(updateControlSurfaceForCard);
 }
-function setControlSurfaceCaptionLanguage(language){
-  const nextLanguage = normalizeCaptionLanguage(language);
-  document.querySelectorAll(".card[open]").forEach(card => {
+async function setControlSurfaceCaptionLanguage(cardOrLanguage, maybeLanguage = null){
+  const cards = maybeLanguage === null ? Array.from(document.querySelectorAll(".card[open]")) : [cardOrLanguage].filter(Boolean);
+  const nextLanguage = normalizeCaptionLanguage(maybeLanguage === null ? cardOrLanguage : maybeLanguage);
+  for (const card of cards) {
+    const moment = previewMomentForCard(card);
+    if (nextLanguage === "en" && !captionTrackAvailable(moment, "en")) {
+      const ready = await ensureEnglishCaptionTrackForCard(card);
+      if (!ready) {
+        updateControlSurfaceForCard(card);
+        continue;
+      }
+    }
     const rank = card.dataset.rank;
     const platform = activePlatformForRank(rank);
     setPlatformEditForRank(rank, platform, { captionLanguage: nextLanguage });
-  });
-  syncPreviewCaptionsForOpenCards();
+    syncPreviewCaptions(card);
+    updateControlSurfaceForCard(card);
+  }
   renderCaptionQueue();
   renderFinalStage();
-  document.querySelectorAll(".card[open]").forEach(updateControlSurfaceForCard);
+}
+async function ensureEnglishCaptionTrackForCard(card){
+  const moment = previewMomentForCard(card);
+  if (captionTrackAvailable(moment, "en")) return true;
+  if (!captionTrackCanGenerate(moment, "en")) {
+    setCaptionTranslationStatus(card, "EN unavailable", "red", false);
+    return false;
+  }
+  if (card.dataset.captionTranslationBusy === "1") return false;
+  setCaptionTranslationStatus(card, "Generating EN captions...", "blue", true);
+  updateControlSurfaceForCard(card);
+  try {
+    const response = await fetch("/api/caption-tracks/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gallery_path: currentGalleryPath(), rank: Number(card.dataset.rank || 0), language: "en" })
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Could not generate English captions.");
+    mergeTranslatedCaptionMoment(payload.moment || { rank: card.dataset.rank, caption_tracks: { en: payload.track } });
+    setCaptionTranslationStatus(card, "EN captions ready", "green", false);
+    window.setTimeout(() => clearCaptionTranslationStatus(card), 1600);
+    return true;
+  } catch (error) {
+    setCaptionTranslationStatus(card, captionTranslationErrorMessage(error), "red", false);
+    return false;
+  } finally {
+    delete card.dataset.captionTranslationBusy;
+    updateControlSurfaceForCard(card);
+  }
+}
+function mergeTranslatedCaptionMoment(nextMoment){
+  const rank = String(nextMoment?.rank || "");
+  if (!rank || !Array.isArray(window.CUTTED_DATA?.moments)) return;
+  const index = window.CUTTED_DATA.moments.findIndex(item => String(item.rank) === rank);
+  if (index < 0) return;
+  window.CUTTED_DATA.moments[index] = Object.assign({}, window.CUTTED_DATA.moments[index], nextMoment);
+}
+function captionTranslationErrorMessage(error){
+  const message = String(error?.message || error || "").trim();
+  if (!message) return "EN generation failed";
+  if (message.includes("OpenAI key")) return "Add OpenAI key for EN";
+  return message.length > 42 ? `${message.slice(0, 41)}...` : message;
+}
+function setCaptionTranslationStatus(card, label, tone, busy){
+  if (!card) return;
+  card.dataset.captionTranslationStatus = label;
+  card.dataset.captionTranslationTone = tone;
+  if (busy) card.dataset.captionTranslationBusy = "1";
+  else delete card.dataset.captionTranslationBusy;
+}
+function clearCaptionTranslationStatus(card){
+  if (!card || card.dataset.captionTranslationBusy === "1") return;
+  delete card.dataset.captionTranslationStatus;
+  delete card.dataset.captionTranslationTone;
+  updateControlSurfaceForCard(card);
 }
 function setControlSurfaceTrimMode(card, enabled){
   if (!card) return;

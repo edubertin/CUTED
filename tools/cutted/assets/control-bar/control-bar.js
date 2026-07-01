@@ -236,7 +236,12 @@
 
   function normalizeCaptionLanguageOptions(value) {
     const source = value && typeof value === "object" ? value : {};
-    return { "pt-BR": true, en: Boolean(source.en || source.english) };
+    return { "pt-BR": true, en: normalizeCaptionLanguageOption(source.en || source.english) };
+  }
+
+  function normalizeCaptionLanguageOption(value) {
+    if (value === "ready" || value === "generate" || value === "pending") return value;
+    return Boolean(value);
   }
 
   function normalizeCaptionStyle(value) {
@@ -579,7 +584,8 @@
       button.addEventListener("click", () => {
         if (isLocked() || button.disabled) return;
         state.captionLanguage = normalizeCaptionLanguage(button.dataset.cutedCaptionLanguage);
-        setCaptionStatus(state.captionLanguage === "en" ? "Caption EN" : "Legenda PT-BR");
+        const option = state.captionLanguageOptions[state.captionLanguage];
+        setCaptionStatus(state.captionLanguage === "en" && option === "generate" ? "Generating EN..." : state.captionLanguage === "en" ? "Caption EN" : "Legenda PT-BR");
         sync();
         callbacks.onCaptionLanguageChange?.({ captionLanguage: state.captionLanguage });
       });
@@ -849,11 +855,12 @@
     });
     elements.captionLanguageButtons.forEach((button) => {
       const language = normalizeCaptionLanguage(button.dataset.cutedCaptionLanguage);
-      const available = language === "pt-BR" || Boolean(state.captionLanguageOptions[language]);
+      const option = state.captionLanguageOptions[language];
+      const available = language === "pt-BR" || Boolean(option);
       button.disabled = !available;
       button.classList.toggle("is-active", language === state.captionLanguage);
       button.setAttribute("aria-pressed", String(language === state.captionLanguage));
-      button.title = available ? "" : "English captions unavailable for this import";
+      button.title = language === "en" && option === "generate" ? "Generate English captions for this clip" : available ? "" : "English captions unavailable for this import";
     });
     elements.captionSizeInput.value = String(Math.round(state.captionStyle.size));
     elements.captionWidthInput.value = String(Math.round(state.captionStyle.width));

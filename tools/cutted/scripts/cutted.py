@@ -520,6 +520,8 @@ IMPORT_JOBS: dict[str, ImportJob] = {}
 IMPORT_JOBS_LOCK = threading.Lock()
 RENDER_JOBS: dict[str, RenderJob] = {}
 RENDER_JOBS_LOCK = threading.Lock()
+CAPTION_TRACK_LOCKS: dict[str, threading.Lock] = {}
+CAPTION_TRACK_LOCKS_LOCK = threading.Lock()
 VISUAL_MAP_TASKS: set[str] = set()
 VISUAL_MAP_TASKS_LOCK = threading.Lock()
 YOLO_MODEL_CACHE: dict[str, object | None] = {}
@@ -621,7 +623,6 @@ def analyze(args: argparse.Namespace) -> None:
     emit_import_progress("suggestions", "Suggestions", "Generating clip suggestions...", 66, detail=f"{len(moments)} clips")
     emit_import_progress("previews", "Previews", "Rendering previews...", 72, step=0, steps=len(moments))
     rendered = render_outputs(source.render_source, out_dir, moments, ffmpeg, args.skip_render, emit_preview_import_progress)
-    rendered = apply_caption_language_tracks(rendered, args)
     emit_import_progress("publish", "Post AI", "Analyzing SEO and trends...", 93, detail="SEO and hashtags")
     rendered = apply_publish_intelligence(rendered, source.label, config, args, source.metadata)
     emit_import_progress("editor", "Editor", "Building editing workspace...", 94)
@@ -1075,6 +1076,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if path == "/api/render-jobs":
                 self.handle_render_job(base_dir)
                 return
+            if path == "/api/caption-tracks/translate":
+                self.handle_caption_track_translate(base_dir)
+                return
             if path == "/api/camera/analyze":
                 self.handle_camera_analyze(base_dir)
                 return
@@ -1240,6 +1244,15 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             try:
                 result = start_render_job(self, request_base_dir)
                 send_json_response(self, 200, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
+
+        def handle_caption_track_translate(self, request_base_dir: Path) -> None:
+            if self.reject_stale_render_server():
+                return
+            try:
+                result = caption_track_translation_from_request(self, request_base_dir)
+                send_json_response(self, 200 if result.get("ok") else 400, result)
             except Exception as error:
                 send_json_response(self, 400, {"ok": False, "error": str(error)})
 
@@ -10073,6 +10086,152 @@ def config_to_dict(config: CuttedConfig) -> dict[str, object]:
 CAPTION_LANGUAGE_DEFAULT = "pt-BR"
 CAPTION_LANGUAGE_ENGLISH = "en"
 CAPTION_TRANSLATION_MAX_BATCH_SEGMENTS = 70
+
+
+def caption_track_translation_from_request(
+    handler: http.server.BaseHTTPRequestHandler, base_dir: Path
+) -> dict[str, object]:
+    payload = read_json_body(handler)
+    gallery_dir = resolve_request_gallery_dir(base_dir, payload)
+    rank = int(payload.get("rank") or 0)
+    language = normalize_caption_language(payload.get("language") or payload.get("caption_language"))
+    if rank <= 0:
+        raise ValueError("Missing clip rank.")
+    if language != CAPTION_LANGUAGE_ENGLISH:
+        raise ValueError("Only English caption generation is supported.")
+    lock = caption_track_lock(gallery_dir, rank, language)
+    if not lock.acquire(blocking=False):
+        return {
+            "ok": False,
+            "status": "running",
+            "error": "English captions are already being generated for this clip.",
+        }
+    try:
+        return generate_gallery_caption_track(gallery_dir, rank, language)
+    finally:
+        lock.release()
+
+
+def caption_track_lock(gallery_dir: Path, rank: int, language: str) -> threading.Lock:
+    key = f"{gallery_dir.resolve()}::{rank}::{language}"
+    with CAPTION_TRACK_LOCKS_LOCK:
+        lock = CAPTION_TRACK_LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            CAPTION_TRACK_LOCKS[key] = lock
+        return lock
+
+
+def generate_gallery_caption_track(gallery_dir: Path, rank: int, language: str) -> dict[str, object]:
+    moments_path = gallery_dir / "moments.json"
+    data = read_gallery_moments_payload(moments_path)
+    moments = data["moments"]
+    row = gallery_moment_by_rank(moments, rank)
+    tracks = row.get("caption_tracks")
+    if isinstance(tracks, dict):
+        existing = tracks.get(language)
+        if caption_track_payload_ready(existing):
+            return {"ok": True, "rank": rank, "language": language, "track": existing, "moment": row, "cached": True}
+    moment = moment_from_payload(row)
+    if not moment.caption_segments:
+        raise ValueError("This clip has no Portuguese caption segments to translate.")
+    if not openai_api_key():
+        raise ValueError("OpenAI key is required to generate English captions.")
+    translated = translate_single_caption_moment_to_english(moment)
+    row["caption_tracks"] = caption_tracks_for_moment(moment, translated)
+    write_gallery_moments_payload(moments_path, data)
+    update_index_html_cuted_data(gallery_dir / "index.html", {"moments": moments})
+    return {
+        "ok": True,
+        "rank": rank,
+        "language": language,
+        "track": row["caption_tracks"][language],
+        "moment": row,
+        "cached": False,
+    }
+
+
+def read_gallery_moments_payload(path: Path) -> dict[str, object]:
+    require_file(path)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or not isinstance(data.get("moments"), list):
+        raise ValueError("Invalid moments.json.")
+    return data
+
+
+def write_gallery_moments_payload(path: Path, data: dict[str, object]) -> None:
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def gallery_moment_by_rank(moments: list[object], rank: int) -> dict[str, object]:
+    for item in moments:
+        if isinstance(item, dict) and int(item.get("rank") or 0) == rank:
+            return item
+    raise ValueError("Clip not found in project.")
+
+
+def caption_track_payload_ready(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    return str(value.get("status") or "").lower() == "ready" and isinstance(value.get("segments"), list)
+
+
+def update_index_html_cuted_data(path: Path, data: dict[str, object]) -> None:
+    require_file(path)
+    html_text = path.read_text(encoding="utf-8")
+    replacement = f"window.CUTTED_DATA = {json.dumps(data, ensure_ascii=False)}; window.CUTTED_SCRIPT ="
+    next_text, count = re.subn(
+        r"window\.CUTTED_DATA = .*?; window\.CUTTED_SCRIPT =",
+        replacement,
+        html_text,
+        count=1,
+        flags=re.DOTALL,
+    )
+    if count != 1:
+        raise ValueError("Could not update embedded project data.")
+    path.write_text(next_text, encoding="utf-8")
+
+
+def moment_from_payload(row: dict[str, object]) -> Moment:
+    return Moment(
+        int(row.get("rank") or 0),
+        float(row.get("start") or 0.0),
+        float(row.get("end") or 0.0),
+        float(row.get("peak") or row.get("start") or 0.0),
+        float(row.get("score") or 0.0),
+        str(row.get("title") or ""),
+        str(row.get("reason") or ""),
+        str(row.get("transcript") or ""),
+        str(row.get("peak_text") or ""),
+        clean_optional_text(row.get("clip_file"), 500) or None,
+        clean_optional_text(row.get("frame_file"), 500) or None,
+        segments_from_payload(row.get("caption_segments")),
+        clean_optional_text(row.get("waveform_file"), 500) or None,
+        publish_metadata=row.get("publish_metadata") if isinstance(row.get("publish_metadata"), dict) else None,
+        cover_candidates=tuple(str(item) for item in row.get("cover_candidates", []) if isinstance(item, str))
+        if isinstance(row.get("cover_candidates"), list) else (),
+        caption_tracks=row.get("caption_tracks") if isinstance(row.get("caption_tracks"), dict) else None,
+    )
+
+
+def segments_from_payload(value: object) -> tuple[Segment, ...]:
+    if not isinstance(value, list):
+        return ()
+    segments: list[Segment] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        segments.append(Segment(float(item.get("start") or 0.0), float(item.get("end") or 0.0), str(item.get("text") or "")))
+    return tuple(segments)
+
+
+def translate_single_caption_moment_to_english(moment: Moment) -> tuple[Segment, ...]:
+    payload = request_caption_translation_batch([moment])
+    translated = validated_english_caption_segments(payload, [moment])
+    segments = translated.get(moment.rank)
+    if not segments:
+        raise RuntimeError("Caption translation response missed this clip.")
+    return segments
 
 
 def normalize_caption_language(value: object) -> str:

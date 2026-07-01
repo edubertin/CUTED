@@ -2,12 +2,12 @@
 
 ## Goal
 
-Let CUTED prepare Portuguese and English caption tracks during import, then let
-the editor switch the visible and rendered Closed Caption language with one
-simple `PT-BR / EN` toggle.
+Let CUTED prepare Portuguese captions during import, then let the editor generate
+English captions on demand for a specific clip when the user chooses `EN` in the
+Closed Caption toggle.
 
-The feature should make bilingual caption output feel immediate in the editor
-without turning the import form into a language-configuration screen.
+The feature should keep import fast for Brazilian users while still offering a
+clear bilingual output path when English captions are actually needed.
 
 ## Context
 
@@ -18,9 +18,11 @@ international audiences when English captions are available.
 
 The current import flow already carries a `language` field into YouTube caption
 selection, hosted transcription, local transcription, and generated
-`caption_segments`. The recent language correction made new imports default to
-`pt`. This spec extends that direction by preparing a second caption track
-instead of asking the user to choose the caption language before import.
+`caption_segments`. New imports default to `pt`. The first version prepared a
+second English track during import, but real YouTube imports showed that this
+made long imports wait on multiple hosted translation calls after previews were
+already ready. This spec now moves English generation out of the import critical
+path.
 
 ## Product Decision
 
@@ -37,6 +39,8 @@ The toggle changes:
 - caption text shown in the browser preview;
 - caption text sent to the final render queue;
 - subtitle text burned into the final MP4.
+- when `EN` is selected for a clip that has no English track yet, the editor
+  generates only that clip's English captions and then switches to them.
 
 The toggle does not change:
 
@@ -60,8 +64,10 @@ a future spec explicitly separates publishing language.
 
 - Keep Project Home import defaulted to Portuguese.
 - During import, generate a primary `pt-BR` caption track.
-- During import, generate a secondary `en` caption track for each selected clip.
-- Store both tracks in `moments.json`.
+- During import, mark the secondary `en` caption track as not generated.
+- Generate a secondary `en` caption track only when the user selects `EN` for
+  that specific clip.
+- Store generated tracks in `moments.json` and refresh the embedded editor data.
 - Keep legacy `caption_segments` populated from the primary `pt-BR` track.
 - Add a compact `PT-BR / EN` segmented toggle in the Closed Caption controls.
 - Switching the toggle updates visible caption preview without reimporting.
@@ -100,18 +106,22 @@ For local files:
 
 ### English Track
 
-English captions are prepared after selected moments exist. The MVP should not
-translate the entire long-form source; it should translate only the selected
-clip caption segments.
+English captions are generated on demand after the selected moment exists and
+the editor is open. The MVP should not translate the entire long-form source and
+should not translate all selected clips during import. It should translate only
+the current clip's caption segments when the user requests `EN`.
 
 Preferred order:
 
-1. If an English YouTube caption track can be aligned safely to the same selected
-   moment windows, use it.
-2. Otherwise, translate the selected Portuguese caption segments to English.
-3. Keep the original segment timestamps.
-4. Require the translated track to preserve the same segment count and order.
-5. If translation fails, mark `en` as unavailable and keep import successful.
+1. If `caption_tracks.en.status = ready`, switch immediately.
+2. Otherwise, POST the clip rank and `gallery_path` to the local caption track
+   generation endpoint.
+3. Translate the selected Portuguese caption segments to English.
+4. Keep the original segment timestamps.
+5. Require the translated track to preserve the same segment count and order.
+6. Persist the generated track back into `moments.json` and the editor's
+   embedded `window.CUTTED_DATA`.
+7. If translation fails, keep `PT-BR` active and keep the project editable.
 
 The translated English text should be natural, concise, and suitable for burned
 short-form captions. It should not add explanations or change meaning.
@@ -204,9 +214,10 @@ caption language can be added without changing the track contract.
   Home.
 - Use a segmented control with two fixed choices: `PT-BR` and `EN`.
 - `PT-BR` is selected by default.
-- `EN` is disabled when the English track is not ready.
-- Disabled `EN` should explain the state with a short tooltip or status line:
-  `English captions were not generated for this import.`
+- `EN` is clickable when the clip has Portuguese caption segments.
+- If English is not ready yet, clicking `EN` shows a generation status and calls
+  the local API for that clip.
+- If English cannot be generated, keep `PT-BR` active and show a short error.
 - Switching language updates captions in preview immediately.
 - Switching language must not reset trim, camera, effects, overlays, or selected
   platforms.
@@ -244,41 +255,53 @@ caption language can be added without changing the track contract.
 - Add helpers to resolve the active caption segments from a queue row.
 - Keep `caption_segments` backwards compatible.
 
-### Step 2 - Import-Time EN Track
+### Step 2 - Import-Time Track Defaults
 
-- After selected moments have PT-BR caption segments, generate `en` tracks.
-- Use OpenAI translation when configured.
-- Return deterministic `unavailable` metadata when translation is not possible.
-- Write both tracks into `moments.json`.
+- After selected moments have PT-BR caption segments, write only the default
+  `pt-BR` ready track.
+- Write deterministic `en` metadata as `unavailable` / `not_generated`.
+- Do not call hosted translation during import.
 
 ### Step 3 - Editor Toggle
 
 - Add the `PT-BR / EN` toggle in Closed Caption controls.
 - Store active language in browser state.
 - Update preview caption text from `caption_tracks`.
-- Disable `EN` if the track status is not `ready`.
+- Enable `EN` when the clip can generate English from PT-BR segments.
 
-### Step 4 - Queue And Render
+### Step 4 - On-Demand EN Generation
+
+- Add `POST /api/caption-tracks/translate`.
+- Request body: `gallery_path`, `rank`, `language = en`.
+- Resolve the project folder through the existing local gallery path guard.
+- Translate only the requested clip.
+- Lock by project/rank/language so repeated clicks do not duplicate calls.
+- Persist `moments.json` and the embedded editor data in `index.html`.
+
+### Step 5 - Queue And Render
 
 - Include `caption_language` and `caption_tracks` in queue rows.
 - Resolve `caption_segments` from the selected language before final render.
 - Ensure final MP4 subtitles use the selected language.
 
-### Step 5 - QA
+### Step 6 - QA
 
 - Add tests for track contract generation.
-- Add tests for import metadata and translation fallback.
-- Add UI tests for the toggle being present and disabled/enabled correctly.
+- Add tests that import metadata does not trigger English translation.
+- Add tests for on-demand translation persistence.
+- Add UI tests for the toggle being present and enabled for generation.
 - Add render tests that `caption_language = en` burns English segments.
 - Run the standard Python suite and a browser smoke test.
 
 ## Acceptance Criteria
 
 - A new Portuguese import has `caption_tracks.pt-BR.status = ready`.
-- A new import with OpenAI configured has `caption_tracks.en.status = ready` for
-  selected clips when translation succeeds.
-- A new import without translation support still completes and records
-  `caption_tracks.en.status = unavailable`.
+- A new import does not call English translation before opening the editor.
+- A new import records `caption_tracks.en.status = unavailable` or equivalent
+  not-generated metadata.
+- Clicking `EN` on a clip with PT-BR segments generates only that clip's English
+  caption track.
+- Reloading the project keeps the generated English caption track.
 - `caption_segments` remains populated for backwards compatibility.
 - The Closed Caption panel shows a `PT-BR / EN` toggle.
 - `PT-BR` is selected by default.
@@ -294,21 +317,23 @@ caption language can be added without changing the track contract.
 
 | Area | Check | Expected Result |
 | --- | --- | --- |
-| AI import | Import Portuguese source with OpenAI configured | `moments.json` includes ready `pt-BR` and `en` caption tracks |
+| AI import | Import Portuguese source with OpenAI configured | Import opens with PT-BR ready and EN not generated |
 | AI import | Import without translation support | PT-BR captions work and EN is marked unavailable |
-| Closed Caption | Toggle from PT-BR to EN | Preview captions change language without resetting edits |
-| Closed Caption | EN unavailable | EN segment is disabled with a clear status |
+| Closed Caption | Click EN on a PT-BR clip | Only that clip generates EN, then preview changes language |
+| Closed Caption | EN generation fails | PT-BR stays active with a clear status |
 | Finalize | Render queue with EN selected | Final MP4 burns English captions |
 | Compatibility | Open older project without `caption_tracks` | Captions render from legacy `caption_segments` |
 
 ## Risks
 
-- Translation cost increases with clip count.
+- Translation cost increases only with clips where the user requests EN.
 - Translated captions may be longer than Portuguese captions and require careful
   wrapping.
 - AI translation must preserve segment count; otherwise timing can drift.
 - Old local server processes can make UI changes appear missing.
 - Browser state may preserve a stale active language if not scoped per project.
+- Updating both `moments.json` and embedded `index.html` must stay consistent
+  until the editor loads project data from JSON directly.
 
 ## Open Questions
 
@@ -320,9 +345,9 @@ caption language can be added without changing the track contract.
 
 ## Specialist Notes
 
-Product recommendation: prepare both tracks during import and keep PT-BR as the
-default. This gives users an international output path without adding import
-friction.
+Product recommendation: keep import PT-BR-first and generate EN only when the
+operator asks for it on a clip. This protects import speed and still gives users
+an international output path.
 
 UX recommendation: use a two-option segmented toggle in Closed Caption. Avoid a
 dropdown and avoid `Auto` in the MVP.
@@ -333,4 +358,3 @@ boundaries.
 
 QA recommendation: treat timing preservation and backwards compatibility as the
 highest-risk areas.
-
