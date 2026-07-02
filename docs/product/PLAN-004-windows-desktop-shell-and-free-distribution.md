@@ -97,6 +97,9 @@ Remaining before distribution:
 
 ### Phase 3 - Installer UX
 
+Status: installer build wrapper added; local machine still needs Inno Setup
+before compiling `CUTED-Setup-<version>.exe`.
+
 Update the Inno Setup installer and beta guide around the desktop app behavior.
 
 Acceptance:
@@ -106,6 +109,8 @@ Acceptance:
 - Uninstall preserves `Documents/CUTED Workspace`, `Videos/CUTED Renders`, and
   `%USERPROFILE%\.cuted`.
 - The guide explains Windows SmartScreen and WebView2 runtime expectations.
+- `packaging/build-installer.ps1` compiles the installer from the portable
+  build into `%LOCALAPPDATA%/cuted-build/installer` when Inno Setup is present.
 
 ### Phase 4 - Public Download Readiness
 
