@@ -67,6 +67,8 @@ Acceptance:
 
 ### Phase 2 - Packaged Desktop Runtime
 
+Status: started with packaged shell preflight.
+
 Build the current PyInstaller `onedir` package with pywebview included.
 
 Acceptance:
@@ -75,6 +77,8 @@ Acceptance:
 - A clean machine without Python can launch, import a short MP4, and render one
   final video.
 - Failure to initialize WebView2 produces a safe fallback or support message.
+- `cuted.exe desktop-shell-check --json` reports pywebview/edgechromium
+  readiness during package smoke tests.
 
 ### Phase 3 - Installer UX
 

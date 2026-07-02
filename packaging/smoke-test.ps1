@@ -29,6 +29,11 @@ Write-Host "Verificando o shim de re-execucao (-m) usado por imports e yt-dlp...
 $shimOutput = & $exe -m platform 2>&1 | Out-String
 Check "shim -m executa modulos python" ($shimOutput -match "Windows")
 
+Write-Host "Verificando dependencia da shell desktop..."
+$shellOutput = & $exe desktop-shell-check --json 2>&1 | Out-String
+$shellExit = $LASTEXITCODE
+Check "desktop shell pywebview disponivel" ($shellExit -eq 0 -and $shellOutput -match '"ok": true' -and $shellOutput -match '"renderer": "edgechromium"')
+
 $workspace = Join-Path $env:TEMP "cuted-smoke-workspace"
 if (Test-Path $workspace) { Remove-Item $workspace -Recurse -Force }
 $lock = Join-Path $env:LOCALAPPDATA "CUTED\cuted-launch.lock"
@@ -70,7 +75,7 @@ if ($failures.Count -gt 0) {
 Write-Host "SMOKE TEST AUTOMATICO OK." -ForegroundColor Green
 Write-Host ""
 Write-Host "Checklist manual obrigatorio antes de distribuir (maquina limpa, sem Python):"
-Write-Host " 1. Duplo clique em cuted.exe abre o navegador no workspace."
+Write-Host " 1. Duplo clique em cuted.exe abre a janela desktop do CUTED."
 Write-Host " 2. Importar um MP4 local com pasta de destino escolhida."
 Write-Host " 3. Rodar Smart Camera e conferir diagnostics.vision_engine == hybrid-yolo."
 Write-Host " 4. Renderizar um TikTok final com legenda e conferir o MP4 no destino."

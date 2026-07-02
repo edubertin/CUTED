@@ -1908,6 +1908,17 @@ class CuttedLaunchTests(unittest.TestCase):
         self.assertTrue(args.no_browser)
         self.assertEqual(args.workspace, Path("ignored"))
 
+    def test_desktop_shell_check_command_is_registered(self) -> None:
+        argv_backup = sys.argv
+        sys.argv = ["cutted.py", "desktop-shell-check", "--json"]
+        try:
+            args = CUTTED.parse_args()
+        finally:
+            sys.argv = argv_backup
+
+        self.assertEqual(args.command, "desktop-shell-check")
+        self.assertTrue(args.json)
+
 
 class CutedLauncherTests(unittest.TestCase):
     def test_normalized_argv_defaults_to_launch(self) -> None:
@@ -1950,6 +1961,14 @@ class CutedDesktopShellTests(unittest.TestCase):
 
         self.assertFalse(opened)
         self.assertTrue(any("pywebview is not installed" in message for message in messages))
+
+    def test_desktop_shell_status_reports_missing_webview(self) -> None:
+        with mock.patch.object(DESKTOP_SHELL, "load_webview", return_value=None):
+            status = DESKTOP_SHELL.desktop_shell_status(Path(tempfile.gettempdir()))
+
+        self.assertFalse(status["ok"])
+        self.assertEqual(status["backend"], "pywebview")
+        self.assertEqual(status["renderer"], "edgechromium")
 
 
 if __name__ == "__main__":

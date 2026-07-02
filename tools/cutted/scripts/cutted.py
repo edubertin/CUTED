@@ -224,7 +224,10 @@ from cuted_launch import (
     running_workspace_port as launch_running_workspace_port,
     workspace_index_is_empty_shell as launch_workspace_index_is_empty_shell,
 )
-from cuted_desktop_shell import open_desktop_shell as desktop_shell_open_desktop_shell
+from cuted_desktop_shell import (
+    desktop_shell_status as desktop_shell_desktop_shell_status,
+    open_desktop_shell as desktop_shell_open_desktop_shell,
+)
 from cuted_media_source import (
     bundled_node_path as media_bundled_node_path,
     caption_event_to_segment as media_caption_event_to_segment,
@@ -575,6 +578,8 @@ def parse_args() -> argparse.Namespace:
     launch.add_argument("--host", default="127.0.0.1")
     launch.add_argument("--desktop-shell", action="store_true")
     launch.add_argument("--no-browser", action="store_true")
+    desktop_shell_check = subparsers.add_parser("desktop-shell-check", help="Check desktop shell packaging readiness.")
+    desktop_shell_check.add_argument("--json", action="store_true")
     return parser.parse_args()
 
 
@@ -599,6 +604,9 @@ def main() -> int:
         return 0
     if args.command == "launch":
         launch_workspace(args)
+        return 0
+    if args.command == "desktop-shell-check":
+        check_desktop_shell(args)
         return 0
     raise RuntimeError(f"Unsupported command: {args.command}")
 
@@ -755,6 +763,18 @@ def launch_workspace(args: argparse.Namespace) -> None:
     raise SystemExit(1)
 
 
+def check_desktop_shell(args: argparse.Namespace) -> None:
+    status = desktop_shell_status()
+    if args.json:
+        print(json.dumps(status, ensure_ascii=False, indent=2))
+    elif status["ok"]:
+        print(f"[cutted] Desktop shell OK: {status['backend']} / {status['renderer']}")
+    else:
+        print(f"[cutted] Desktop shell unavailable: {status.get('reason', 'unknown error')}")
+    if not status["ok"]:
+        raise SystemExit(1)
+
+
 def open_existing_workspace(host: str, port: int, desktop_shell: bool, no_browser: bool) -> None:
     if desktop_shell and open_desktop_shell(host, port):
         return
@@ -858,6 +878,10 @@ def open_browser_later(host: str, port: int, delay: float) -> None:
 
 def open_desktop_shell(host: str, port: int) -> bool:
     return desktop_shell_open_desktop_shell(host, port, launch_data_dir(), append_launch_log)
+
+
+def desktop_shell_status() -> dict[str, str | bool]:
+    return desktop_shell_desktop_shell_status(launch_data_dir())
 
 
 def bootstrap_workspace_gallery(workspace: Path) -> None:

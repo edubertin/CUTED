@@ -23,6 +23,24 @@ def load_webview() -> ModuleType | None:
         return None
 
 
+def desktop_shell_status(data_dir: Path) -> dict[str, str | bool]:
+    webview = load_webview()
+    if webview is None:
+        return {
+            "ok": False,
+            "backend": "pywebview",
+            "renderer": "edgechromium",
+            "reason": "pywebview is not installed",
+        }
+    return {
+        "ok": True,
+        "backend": "pywebview",
+        "renderer": "edgechromium",
+        "version": str(getattr(webview, "__version__", "unknown")),
+        "storage_path": desktop_storage_path(data_dir),
+    }
+
+
 def open_desktop_shell(
     host: str,
     port: int,
