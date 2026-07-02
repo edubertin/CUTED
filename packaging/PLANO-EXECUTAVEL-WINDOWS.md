@@ -7,6 +7,11 @@ Relacionado: [SPEC-011 Local Beta Installer](../docs/product/SPEC-011-local-beta
 [ADR-0003](../docs/architecture/ADR-0003-local-hybrid-vision-engine.md),
 [SPEC-007](../docs/product/SPEC-007-openai-settings-and-cost-ledger.md)
 
+Atualizacao 2026-07-02: o app foi reposicionado como distribuicao gratuita.
+O caminho de instalador continua valido, mas a experiencia publica deve abrir
+uma janela desktop real via pywebview/WebView2, com navegador externo apenas
+como fallback de desenvolvimento/suporte. Roadmap: [PLAN-004](../docs/product/PLAN-004-windows-desktop-shell-and-free-distribution.md).
+
 ## 1. Objetivo
 
 Entregar o CUTED como um programa Windows que uma pessoa leiga consegue

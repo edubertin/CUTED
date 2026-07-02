@@ -13,7 +13,8 @@
 - Production status: not production; private/local beta path
 - Release status: Windows beta installer work is planned under `packaging/`
 - Open decisions:
-  - Whether the commercial Windows distribution should use Inno Setup first, MSIX/Microsoft Store later, or both.
+  - Whether the free public Windows distribution should use direct Inno Setup download first, MSIX/Microsoft Store later, or both.
+  - How much desktop-shell polish is required before the first public free download.
   - Whether YOLO/PyTorch ships in the private beta package or is replaced by a smaller ONNX route before wider sale.
   - When to split the current reference implementation into app/package boundaries.
   - How much local project state should move from browser `localStorage` into `project-state.json` before beta.

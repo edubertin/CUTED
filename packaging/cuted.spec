@@ -34,7 +34,7 @@ hiddenimports = [
     "webbrowser",
 ]
 
-for package in ("ultralytics", "torch", "cv2", "faster_whisper", "yt_dlp", "imageio_ffmpeg"):
+for package in ("ultralytics", "torch", "cv2", "faster_whisper", "yt_dlp", "imageio_ffmpeg", "webview"):
     pkg_datas, pkg_binaries, pkg_hidden = collect_all(package)
     datas += pkg_datas
     binaries += pkg_binaries

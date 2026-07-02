@@ -224,6 +224,7 @@ from cuted_launch import (
     running_workspace_port as launch_running_workspace_port,
     workspace_index_is_empty_shell as launch_workspace_index_is_empty_shell,
 )
+from cuted_desktop_shell import open_desktop_shell as desktop_shell_open_desktop_shell
 from cuted_media_source import (
     bundled_node_path as media_bundled_node_path,
     caption_event_to_segment as media_caption_event_to_segment,
@@ -572,6 +573,7 @@ def parse_args() -> argparse.Namespace:
     launch = subparsers.add_parser("launch", help="Open the CUTED workspace for local beta use.")
     launch.add_argument("--workspace", type=Path, default=None)
     launch.add_argument("--host", default="127.0.0.1")
+    launch.add_argument("--desktop-shell", action="store_true")
     launch.add_argument("--no-browser", action="store_true")
     return parser.parse_args()
 
@@ -739,14 +741,13 @@ def launch_workspace(args: argparse.Namespace) -> None:
     existing = running_workspace_port(args.host)
     if existing is not None:
         print(f"[cutted] CUTED ja esta aberto em http://{args.host}:{existing}/index.html (workspace da instancia atual mantido)")
-        if not args.no_browser:
-            open_browser_later(args.host, existing, 0.0)
+        open_existing_workspace(args.host, existing, args.desktop_shell, args.no_browser)
         return
     bootstrap_workspace_gallery(workspace)
     for _ in range(3):
         port = find_free_port(args.host)
         try:
-            start_workspace_server(workspace, args.host, port, args.no_browser)
+            start_workspace_server(workspace, args.host, port, args.no_browser, args.desktop_shell)
             return
         except OSError as error:
             append_launch_log(f"bind failed on port {port}: {error}")
@@ -754,7 +755,14 @@ def launch_workspace(args: argparse.Namespace) -> None:
     raise SystemExit(1)
 
 
-def start_workspace_server(workspace: Path, host: str, port: int, no_browser: bool) -> None:
+def open_existing_workspace(host: str, port: int, desktop_shell: bool, no_browser: bool) -> None:
+    if desktop_shell and open_desktop_shell(host, port):
+        return
+    if not no_browser:
+        open_browser_later(host, port, 0.0)
+
+
+def start_workspace_server(workspace: Path, host: str, port: int, no_browser: bool, desktop_shell: bool) -> None:
     handler = gallery_handler(workspace)
     server = http.server.ThreadingHTTPServer((host, port), handler)
     lock_path = launch_lock_path()
@@ -763,6 +771,9 @@ def start_workspace_server(workspace: Path, host: str, port: int, no_browser: bo
     append_launch_log(f"launch workspace={workspace} port={port}")
     print(f"[cutted] Serving {workspace}")
     print(f"[cutted] Open: http://{host}:{port}/index.html")
+    if desktop_shell:
+        serve_workspace_desktop_shell(server, host, port, no_browser)
+        return
     if not no_browser:
         open_browser_later(host, port, 0.5)
     try:
@@ -775,6 +786,38 @@ def start_workspace_server(workspace: Path, host: str, port: int, no_browser: bo
             lock_path.unlink()
         except OSError as error:
             append_launch_log(f"lock cleanup failed: {error}")
+
+
+def serve_workspace_desktop_shell(
+    server: http.server.ThreadingHTTPServer,
+    host: str,
+    port: int,
+    no_browser: bool,
+) -> None:
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+    try:
+        if open_desktop_shell(host, port):
+            return
+        if no_browser:
+            print("[cutted] Desktop shell indisponivel; execute sem --no-browser para usar o navegador como fallback.")
+            return
+        if not no_browser:
+            open_browser_later(host, port, 0.0)
+        server_thread.join()
+    except KeyboardInterrupt:
+        print("\n[cutted] Server stopped")
+    finally:
+        server.shutdown()
+        server.server_close()
+        cleanup_launch_lock()
+
+
+def cleanup_launch_lock() -> None:
+    try:
+        launch_lock_path().unlink()
+    except OSError as error:
+        append_launch_log(f"lock cleanup failed: {error}")
 
 
 def prepare_workspace_dir(value: Path | None) -> Path:
@@ -811,6 +854,10 @@ def find_free_port(host: str) -> int:
 
 def open_browser_later(host: str, port: int, delay: float) -> None:
     launch_open_browser_later(host, port, delay)
+
+
+def open_desktop_shell(host: str, port: int) -> bool:
+    return desktop_shell_open_desktop_shell(host, port, launch_data_dir(), append_launch_log)
 
 
 def bootstrap_workspace_gallery(workspace: Path) -> None:

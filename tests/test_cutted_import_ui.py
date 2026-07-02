@@ -13,6 +13,7 @@ from pathlib import Path
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "scripts" / "cutted.py"
 UI_ASSET_PATH = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "scripts" / "cuted_ui_assets.py"
+DESKTOP_SHELL_PATH = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "scripts" / "cuted_desktop_shell.py"
 SPEC = importlib.util.spec_from_file_location("cutted_import_ui_test_module", MODULE_PATH)
 if SPEC is None or SPEC.loader is None:
     raise RuntimeError("Unable to load cutted.py for import UI tests.")
@@ -27,6 +28,13 @@ if LAUNCHER_SPEC is None or LAUNCHER_SPEC.loader is None:
 LAUNCHER = importlib.util.module_from_spec(LAUNCHER_SPEC)
 sys.modules[LAUNCHER_SPEC.name] = LAUNCHER
 LAUNCHER_SPEC.loader.exec_module(LAUNCHER)
+
+DESKTOP_SPEC = importlib.util.spec_from_file_location("cuted_desktop_shell_test_module", DESKTOP_SHELL_PATH)
+if DESKTOP_SPEC is None or DESKTOP_SPEC.loader is None:
+    raise RuntimeError("Unable to load cuted_desktop_shell.py for launcher tests.")
+DESKTOP_SHELL = importlib.util.module_from_spec(DESKTOP_SPEC)
+sys.modules[DESKTOP_SPEC.name] = DESKTOP_SHELL
+DESKTOP_SPEC.loader.exec_module(DESKTOP_SHELL)
 
 
 def gallery_html() -> str:
@@ -1889,20 +1897,21 @@ class CuttedLaunchTests(unittest.TestCase):
 
     def test_launch_command_is_registered(self) -> None:
         argv_backup = sys.argv
-        sys.argv = ["cutted.py", "launch", "--no-browser", "--workspace", "ignored"]
+        sys.argv = ["cutted.py", "launch", "--desktop-shell", "--no-browser", "--workspace", "ignored"]
         try:
             args = CUTTED.parse_args()
         finally:
             sys.argv = argv_backup
 
         self.assertEqual(args.command, "launch")
+        self.assertTrue(args.desktop_shell)
         self.assertTrue(args.no_browser)
         self.assertEqual(args.workspace, Path("ignored"))
 
 
 class CutedLauncherTests(unittest.TestCase):
     def test_normalized_argv_defaults_to_launch(self) -> None:
-        self.assertEqual(LAUNCHER.normalized_argv(["cuted.exe"]), ["cuted.exe", "launch"])
+        self.assertEqual(LAUNCHER.normalized_argv(["cuted.exe"]), ["cuted.exe", "launch", "--desktop-shell"])
 
     def test_normalized_argv_strips_frozen_reentry_script(self) -> None:
         argv = ["cuted.exe", "C:\\app\\_internal\\tools\\cutted\\scripts\\CUTTED.PY", "analyze", "--out", "x"]
@@ -1928,6 +1937,19 @@ class CutedLauncherTests(unittest.TestCase):
 
         self.assertTrue(hasattr(module, "launch_workspace"))
         self.assertTrue(hasattr(module, "import_request_metadata"))
+
+
+class CutedDesktopShellTests(unittest.TestCase):
+    def test_desktop_shell_url_points_to_workspace_index(self) -> None:
+        self.assertEqual(DESKTOP_SHELL.desktop_shell_url("127.0.0.1", 8779), "http://127.0.0.1:8779/index.html")
+
+    def test_open_desktop_shell_returns_false_when_webview_is_missing(self) -> None:
+        messages: list[str] = []
+        with mock.patch.object(DESKTOP_SHELL, "load_webview", return_value=None):
+            opened = DESKTOP_SHELL.open_desktop_shell("127.0.0.1", 8779, Path(tempfile.gettempdir()), messages.append)
+
+        self.assertFalse(opened)
+        self.assertTrue(any("pywebview is not installed" in message for message in messages))
 
 
 if __name__ == "__main__":

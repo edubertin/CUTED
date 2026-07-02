@@ -29,11 +29,12 @@ class application workflow.
 20. [Dual Caption Language Tracks Spec](product/SPEC-017-dual-caption-language-tracks.md)
 21. [Local Desktop Repository Structure Plan](product/PLAN-002-local-desktop-repository-structure.md)
 22. [CUTED Engine Incremental Extraction ADR](architecture/ADR-0006-cuted-engine-incremental-extraction.md)
-23. [AI Director Visual Map Refactor](AI_DIRECTOR_VISUAL_MAP_REFACTOR.md)
-24. [AI Director Visual Map First ADR](architecture/ADR-0004-ai-director-visual-map-first.md)
-25. [Local Project Memory and Cleanup ADR](architecture/ADR-0005-local-project-memory-and-cleanup.md)
-26. [QA Regression Matrix](qa/REGRESSION_MATRIX.md)
-27. [Local Development Runbook](operations/LOCAL_DEV.md)
+23. [Windows Desktop Shell and Free Distribution Plan](product/PLAN-004-windows-desktop-shell-and-free-distribution.md)
+24. [AI Director Visual Map Refactor](AI_DIRECTOR_VISUAL_MAP_REFACTOR.md)
+25. [AI Director Visual Map First ADR](architecture/ADR-0004-ai-director-visual-map-first.md)
+26. [Local Project Memory and Cleanup ADR](architecture/ADR-0005-local-project-memory-and-cleanup.md)
+27. [QA Regression Matrix](qa/REGRESSION_MATRIX.md)
+28. [Local Development Runbook](operations/LOCAL_DEV.md)
 
 ## Current Source of Truth
 
