@@ -67,7 +67,8 @@ Acceptance:
 
 ### Phase 2 - Packaged Desktop Runtime
 
-Status: started with packaged shell preflight.
+Status: packaged build and automatic smoke passed on the dev machine on
+2026-07-02.
 
 Build the current PyInstaller `onedir` package with pywebview included.
 
@@ -79,6 +80,20 @@ Acceptance:
 - Failure to initialize WebView2 produces a safe fallback or support message.
 - `cuted.exe desktop-shell-check --json` reports pywebview/edgechromium
   readiness during package smoke tests.
+
+Dev-machine evidence:
+
+- `packaging/build.ps1` produced
+  `%LOCALAPPDATA%/cuted-build/dist/CUTED`.
+- `packaging/smoke-test.ps1` passed against the packaged app, including
+  FFmpeg, YOLO model, pywebview/edgechromium preflight, local API, and workspace
+  bootstrap.
+
+Remaining before distribution:
+
+- run the same smoke on a clean Windows machine without Python;
+- manually double-click `cuted.exe` and verify the WebView2 desktop window;
+- import one short MP4 and render one final video from the packaged app.
 
 ### Phase 3 - Installer UX
 

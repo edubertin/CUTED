@@ -6,6 +6,7 @@
 # falhar em vez de cair silenciosamente na wheel CUDA do PyPI.
 torch==2.12.0+cpu
 ultralytics==8.4.62
+lap==0.5.13
 opencv-python-headless==4.13.0.92
 yt-dlp==2026.3.17
 faster-whisper==1.2.1

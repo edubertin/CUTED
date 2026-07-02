@@ -13,14 +13,15 @@
 from PyInstaller.utils.hooks import collect_all
 from pathlib import Path
 
-REPO_ROOT = ".."
-SCRIPT_DIR = Path(REPO_ROOT) / "tools" / "cutted" / "scripts"
+SPEC_DIR = Path(SPECPATH).resolve()
+REPO_ROOT = SPEC_DIR.parent
+SCRIPT_DIR = REPO_ROOT / "tools" / "cutted" / "scripts"
 
 datas = [
-    (f"{REPO_ROOT}/tools/cutted/scripts/cutted.py", "tools/cutted/scripts"),
+    (str(REPO_ROOT / "tools" / "cutted" / "scripts" / "cutted.py"), "tools/cutted/scripts"),
     *[(str(path), "tools/cutted/scripts") for path in sorted(SCRIPT_DIR.glob("cuted_*.py"))],
-    (f"{REPO_ROOT}/assets/brand/cuted-logo-transparent.png", "assets/brand"),
-    (f"{REPO_ROOT}/assets/brand/cuted-logo-official.png", "assets/brand"),
+    (str(REPO_ROOT / "assets" / "brand" / "cuted-logo-transparent.png"), "assets/brand"),
+    (str(REPO_ROOT / "assets" / "brand" / "cuted-logo-official.png"), "assets/brand"),
 ]
 binaries = []
 # cutted.py e carregado em runtime via importlib, entao o PyInstaller nao
@@ -41,8 +42,8 @@ for package in ("ultralytics", "torch", "cv2", "faster_whisper", "yt_dlp", "imag
     hiddenimports += pkg_hidden
 
 a = Analysis(
-    ["cuted_launcher.py"],
-    pathex=[],
+    [str(SPEC_DIR / "cuted_launcher.py")],
+    pathex=[str(SPEC_DIR), str(REPO_ROOT)],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
