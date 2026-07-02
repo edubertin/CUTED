@@ -198,7 +198,8 @@ Fases 4–6 não tocam o código do app.
   precisa ser executado e iterado numa sessão dedicada.
 - Fase 5 (instalador): `installer.iss` pronto; compilar após a Fase 4 passar.
 - Fase 6 (guia): `guides/INSTALACAO-BETA.md` pronto, faltam os prints;
-  `diagnostics` e limpeza por job continuam pendentes.
+  `cuted.exe diagnostics` implementado em 2026-07-02; limpeza por job continua
+  pendente.
 
 ## Revisão QA (2026-06-10)
 

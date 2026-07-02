@@ -13,6 +13,7 @@ review workspace, data contracts, or render pipeline.
 | Server | Run `cutted.py launch` | Workspace gallery opens on a free local port; a second launch reuses the running instance |
 | Desktop shell | Run `cutted.py launch --desktop-shell` | Workspace opens in a WebView2 desktop window when available, with browser fallback when unavailable |
 | Desktop shell | Run `cuted.exe desktop-shell-check --json` in a packaged build | JSON reports `ok: true`, `backend: pywebview`, and `renderer: edgechromium` |
+| Support diagnostics | Run `cuted.exe diagnostics --json` | JSON reports app/tool readiness and does not include API keys, source media, transcripts, or raw provider payloads |
 | Navigation | Check workflow tabs | Labels are Importar, Editar, and Renderizar |
 | Header | Check legacy export action | Exportar selecionados is absent |
 | Brand | Header logo | Transparent official PNG appears without black rectangle |

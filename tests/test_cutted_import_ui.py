@@ -1919,6 +1919,60 @@ class CuttedLaunchTests(unittest.TestCase):
         self.assertEqual(args.command, "desktop-shell-check")
         self.assertTrue(args.json)
 
+    def test_diagnostics_command_is_registered(self) -> None:
+        argv_backup = sys.argv
+        sys.argv = ["cutted.py", "diagnostics", "--json"]
+        try:
+            args = CUTTED.parse_args()
+        finally:
+            sys.argv = argv_backup
+
+        self.assertEqual(args.command, "diagnostics")
+        self.assertTrue(args.json)
+
+    def test_openai_key_is_written_to_user_data_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_key = "s" + "k-" + "a" * 30
+            with mock.patch.dict(CUTTED.os.environ, {"CUTED_HOME": tmp}, clear=False):
+                CUTTED.write_openai_key(fake_key)
+
+            secret_path = Path(tmp) / ".env.cuted.local"
+            self.assertTrue(secret_path.exists())
+            self.assertEqual(secret_path.read_text(encoding="utf-8"), f"OPENAI_API_KEY={fake_key}\n")
+
+    def test_local_env_candidates_prefer_user_secret_before_legacy_repo_secret(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(CUTTED.os.environ, {"CUTED_HOME": tmp}, clear=False):
+                candidates = CUTTED.local_env_candidates()
+
+            self.assertEqual(candidates[0], Path(tmp) / ".env.cuted.local")
+            self.assertEqual(candidates[1], CUTTED.legacy_repo_secret_env_path())
+
+    def test_diagnostics_payload_is_sanitized(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_key = "s" + "k-" + "b" * 30
+            with mock.patch.dict(CUTTED.os.environ, {"CUTED_HOME": tmp, "OPENAI_API_KEY": fake_key}, clear=False):
+                payload = CUTTED.diagnostics_payload()
+
+            text = json.dumps(payload, ensure_ascii=False)
+            self.assertTrue(payload["openai"]["key_configured"])
+            self.assertFalse(payload["privacy"]["contains_api_key"])
+            self.assertNotIn(fake_key, text)
+            self.assertNotIn(tmp, text)
+
+    def test_diagnostics_command_does_not_load_secret_env_files(self) -> None:
+        argv_backup = sys.argv
+        sys.argv = ["cutted.py", "diagnostics", "--json"]
+        try:
+            with mock.patch.object(CUTTED, "load_local_env") as load_env:
+                with mock.patch.object(CUTTED, "write_diagnostics"):
+                    exit_code = CUTTED.main()
+        finally:
+            sys.argv = argv_backup
+
+        self.assertEqual(exit_code, 0)
+        load_env.assert_not_called()
+
 
 class CutedLauncherTests(unittest.TestCase):
     def test_normalized_argv_defaults_to_launch(self) -> None:

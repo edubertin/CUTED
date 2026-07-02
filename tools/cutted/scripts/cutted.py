@@ -8,6 +8,7 @@ import http.server
 import json
 import math
 import os
+import platform
 import re
 import shutil
 import socket
@@ -580,13 +581,17 @@ def parse_args() -> argparse.Namespace:
     launch.add_argument("--no-browser", action="store_true")
     desktop_shell_check = subparsers.add_parser("desktop-shell-check", help="Check desktop shell packaging readiness.")
     desktop_shell_check.add_argument("--json", action="store_true")
+    diagnostics = subparsers.add_parser("diagnostics", help="Write a safe local support diagnostics report.")
+    diagnostics.add_argument("--json", action="store_true")
+    diagnostics.add_argument("--out", type=Path, default=None)
     return parser.parse_args()
 
 
 def main() -> int:
     configure_stdio()
-    load_local_env()
     args = parse_args()
+    if args.command != "diagnostics":
+        load_local_env()
     if args.command == "analyze":
         analyze(args)
         return 0
@@ -607,6 +612,9 @@ def main() -> int:
         return 0
     if args.command == "desktop-shell-check":
         check_desktop_shell(args)
+        return 0
+    if args.command == "diagnostics":
+        write_diagnostics(args)
         return 0
     raise RuntimeError(f"Unsupported command: {args.command}")
 
@@ -773,6 +781,18 @@ def check_desktop_shell(args: argparse.Namespace) -> None:
         print(f"[cutted] Desktop shell unavailable: {status.get('reason', 'unknown error')}")
     if not status["ok"]:
         raise SystemExit(1)
+
+
+def write_diagnostics(args: argparse.Namespace) -> None:
+    payload = diagnostics_payload()
+    text = json.dumps(payload, ensure_ascii=False, indent=2)
+    if args.json or args.out is None:
+        print(text)
+    if args.out is not None:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(text + "\n", encoding="utf-8")
+        if not args.json:
+            print(f"[cutted] Diagnostics written to {args.out}")
 
 
 def open_existing_workspace(host: str, port: int, desktop_shell: bool, no_browser: bool) -> None:
@@ -6472,8 +6492,13 @@ def load_local_env() -> None:
 
 def local_env_candidates() -> list[Path]:
     script_dir = Path(__file__).resolve().parent
-    roots = [Path.cwd(), *script_dir.parents]
     candidates: list[Path] = []
+    user_secret = cuted_secret_env_path()
+    candidates.append(user_secret)
+    legacy_secret = legacy_repo_secret_env_path()
+    if legacy_secret not in candidates:
+        candidates.append(legacy_secret)
+    roots = [Path.cwd(), *script_dir.parents]
     for root in roots:
         for name in (".env.cuted.local", ".env.local", ".env"):
             path = root / name
@@ -6505,6 +6530,10 @@ def cuted_usage_path() -> Path:
 
 
 def cuted_secret_env_path() -> Path:
+    return cuted_data_dir() / ".env.cuted.local"
+
+
+def legacy_repo_secret_env_path() -> Path:
     return project_root() / ".env.cuted.local"
 
 
@@ -6586,6 +6615,7 @@ def write_openai_key(api_key: str) -> None:
     if len(key) < 20 or not key.startswith("sk-"):
         raise ValueError("Token OpenAI invalido.")
     path = cuted_secret_env_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"OPENAI_API_KEY={key}\n", encoding="utf-8")
 
 
@@ -6596,10 +6626,81 @@ def openai_settings_payload() -> dict[str, object]:
         "openai_model": openai_model(),
         "transcribe_model": openai_transcribe_model(),
         "key_configured": bool(key),
-        "secret_path": str(cuted_secret_env_path()),
-        "settings_path": str(cuted_settings_path()),
+        "secret_storage": "user-data-env-file",
+        "legacy_secret_configured": legacy_repo_secret_env_path().exists(),
+        "settings_storage": "user-data-json",
         "pricing": pricing_payload(),
     }
+
+
+def app_version() -> str:
+    candidates = [
+        Path(getattr(sys, "_MEIPASS", "")) / "VERSION" if getattr(sys, "_MEIPASS", "") else None,
+        Path(sys.executable).resolve().parent / "VERSION",
+        project_root() / "VERSION",
+    ]
+    for candidate in candidates:
+        if candidate is not None and candidate.exists():
+            try:
+                return candidate.read_text(encoding="utf-8").strip() or "unknown"
+            except OSError:
+                return "unknown"
+    return "dev"
+
+
+def diagnostics_payload() -> dict[str, object]:
+    shell_status = dict(desktop_shell_status())
+    shell_status.pop("storage_path", None)
+    return {
+        "app": {
+            "name": "CUTED",
+            "version": app_version(),
+            "packaged": bool(getattr(sys, "frozen", False)),
+        },
+        "runtime": {
+            "python": platform.python_version(),
+            "windows": platform.platform(),
+            "executable": Path(sys.executable).name,
+        },
+        "paths": {
+            "cuted_home_override": bool(os.environ.get("CUTED_HOME", "").strip()),
+            "data_dir_exists": cuted_data_dir().exists(),
+            "settings_exists": cuted_settings_path().exists(),
+            "usage_ledger_exists": cuted_usage_path().exists(),
+            "secret_storage": "user-data-env-file",
+            "secret_file_exists": cuted_secret_env_path().exists(),
+            "legacy_repo_secret_exists": legacy_repo_secret_env_path().exists(),
+            "default_workspace_exists": default_workspace_dir().exists(),
+        },
+        "openai": {
+            "provider": configured_ai_provider(),
+            "key_configured": openai_key_configured_without_reading_secret(),
+            "model": openai_model(),
+            "transcribe_model": openai_transcribe_model(),
+        },
+        "tools": {
+            "ffmpeg": tool_available(find_ffmpeg),
+            "ffprobe": tool_available(find_ffprobe),
+            "desktop_shell": shell_status,
+        },
+        "privacy": {
+            "contains_api_key": False,
+            "contains_source_media": False,
+            "contains_transcripts": False,
+            "contains_raw_provider_payloads": False,
+        },
+    }
+
+
+def tool_available(resolver: object) -> bool:
+    try:
+        return bool(resolver())
+    except (RuntimeError, OSError, subprocess.SubprocessError):
+        return False
+
+
+def openai_key_configured_without_reading_secret() -> bool:
+    return bool(openai_api_key()) or cuted_secret_env_path().exists() or legacy_repo_secret_env_path().exists()
 
 
 def pricing_payload() -> dict[str, object]:

@@ -94,6 +94,8 @@ Remaining before distribution:
 - run the same smoke on a clean Windows machine without Python;
 - manually double-click `cuted.exe` and verify the WebView2 desktop window;
 - import one short MP4 and render one final video from the packaged app.
+- configure an OpenAI key through the app settings and verify import/AI actions
+  without exposing the key in browser storage, diagnostics, or repo files.
 
 ### Phase 3 - Installer UX
 
@@ -133,6 +135,8 @@ Acceptance:
 - License notices bundled and visible.
 - Privacy/support page explains that processing is local and source videos stay
   on the user's machine unless the user chooses an AI/API feature.
+- Support diagnostics explain app/tool readiness without collecting API keys,
+  source media, full transcripts, or raw provider payloads.
 - Download page includes version, changelog, checksum, and known limitations.
 
 ### Phase 5 - Public GitHub Readiness

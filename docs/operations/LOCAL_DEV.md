@@ -73,7 +73,11 @@ python tools/cutted/scripts/cutted.py serve --dir "samples/cutted-o5kdfgnz-s0-ti
 
 ## AI Import Configuration
 
-Use `.env.local` for secrets and local provider settings. Do not commit it.
+Use the in-app settings panel for the OpenAI key whenever possible. New keys are
+stored under `%USERPROFILE%\.cuted\.env.cuted.local` and local provider settings
+under `%USERPROFILE%\.cuted\settings.json`. Do not commit secrets.
+
+For advanced development fallback, CUTED can still read ignored local env files:
 
 ```text
 OPENAI_API_KEY=

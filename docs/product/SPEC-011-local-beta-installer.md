@@ -248,6 +248,11 @@ It should collect safe metadata only:
 - no full transcripts by default;
 - no API keys or secrets.
 
+Implementation note: the first diagnostics version emits a sanitized JSON report
+with app/runtime/tool readiness, OpenAI key configured boolean, and privacy
+flags. It intentionally excludes source videos, transcripts, raw provider
+payloads, cookies, and key values.
+
 ### Step 9: Release Checklist
 
 Before sending to friends:
