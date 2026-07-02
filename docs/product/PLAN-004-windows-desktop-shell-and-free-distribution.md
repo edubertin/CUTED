@@ -97,8 +97,8 @@ Remaining before distribution:
 
 ### Phase 3 - Installer UX
 
-Status: installer build wrapper added; local machine still needs Inno Setup
-before compiling `CUTED-Setup-<version>.exe`.
+Status: installer compiled and silent install smoke passed on the dev machine on
+2026-07-02.
 
 Update the Inno Setup installer and beta guide around the desktop app behavior.
 
@@ -111,6 +111,17 @@ Acceptance:
 - The guide explains Windows SmartScreen and WebView2 runtime expectations.
 - `packaging/build-installer.ps1` compiles the installer from the portable
   build into `%LOCALAPPDATA%/cuted-build/installer` when Inno Setup is present.
+
+Dev-machine evidence:
+
+- Inno Setup 6.7.3 installed per-user through the official `JRSoftware.InnoSetup`
+  winget package.
+- `packaging/build-installer.ps1` produced
+  `%LOCALAPPDATA%/cuted-build/installer/CUTED-Setup-2026.07.02.exe`.
+- The installer ran silently with `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+  /CURRENTUSER`.
+- The installed app reported desktop shell readiness and served a temporary
+  workspace through the local API.
 
 ### Phase 4 - Public Download Readiness
 

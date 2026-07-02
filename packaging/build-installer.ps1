@@ -37,6 +37,7 @@ function Find-Iscc {
     $command = Get-Command "iscc.exe" -ErrorAction SilentlyContinue
     if ($command) { return $command.Source }
     $candidates = @(
+        "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
         "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
         "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
     )
