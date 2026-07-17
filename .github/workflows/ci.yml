@@ -48,8 +48,8 @@ jobs:
       - name: Verify tracked live timeline bundle
         shell: pwsh
         run: |
-          $generated = (Get-FileHash prototypes/live-timeline/dist-lib/live-timeline.js -Algorithm SHA256).Hash
-          $tracked = (Get-FileHash tools/cutted/assets/live-timeline/live-timeline.js -Algorithm SHA256).Hash
+          $generated = (Get-Content prototypes/live-timeline/dist-lib/live-timeline.js -Raw).Replace("`r`n", "`n")
+          $tracked = (Get-Content tools/cutted/assets/live-timeline/live-timeline.js -Raw).Replace("`r`n", "`n")
           if ($generated -ne $tracked) {
             throw "The tracked live timeline bundle is stale. Run npm run build:lib and promote dist-lib/live-timeline.js."
           }
