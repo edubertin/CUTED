@@ -1,0 +1,33 @@
+name: Recurso
+description: Sugira uma melhoria para o fluxo local do CUTED
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema
+      description: Qual trabalho de edicao esta dificil hoje?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposta
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Importacao
+        - Edicao
+        - Legendas
+        - Smart Camera
+        - Render
+        - Aplicativo Windows
+        - Documentacao
+    validations:
+      required: true

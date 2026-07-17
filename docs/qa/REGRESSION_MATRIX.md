@@ -11,6 +11,15 @@ review workspace, data contracts, or render pipeline.
 | --- | --- | --- |
 | Server | Start `cutted.py serve` | Gallery opens on local port |
 | Server | Run `cutted.py launch` | Workspace gallery opens on a free local port; a second launch reuses the running instance |
+| Local security | Open the gallery normally | Response creates an HttpOnly, SameSite=Strict local session cookie |
+| Local security | POST without the session cookie | Server rejects the request with HTTP 403 |
+| Local security | POST with external Origin or non-loopback Host | Server rejects the request with HTTP 403 |
+| Local security | POST with the local cookie, loopback Host, and matching Origin | Server accepts the normal application request |
+| Local security | GET a project file without a session | Server rejects the request with HTTP 403 |
+| Local security | GET any path with a non-loopback Host | Server rejects the request and does not issue a cookie |
+| Local security | Embed `</script>` in title/transcript metadata | Generated HTML escapes the sequence and does not create another script |
+| Local security | Start `serve` or `launch` with `0.0.0.0` | Command rejects the non-loopback bind address |
+| Local security | POST without `Origin` or with `Origin: null` | Server rejects the request with HTTP 403 |
 | Desktop shell | Run `cutted.py launch --desktop-shell` | Workspace opens in a WebView2 desktop window when available, with browser fallback when unavailable |
 | Desktop shell | Run `cuted.exe desktop-shell-check --json` in a packaged build | JSON reports `ok: true`, `backend: pywebview`, and `renderer: edgechromium` |
 | Support diagnostics | Run `cuted.exe diagnostics --json` | JSON reports app/tool readiness and does not include API keys, source media, transcripts, or raw provider payloads |
@@ -139,3 +148,4 @@ review workspace, data contracts, or render pipeline.
 - Run an audio-size guard test after transcription pipeline changes.
 - Check `git status` before commit because sample renders produce artifacts.
 - Do not commit generated media unless the task explicitly asks for fixtures.
+- Run the localhost Host/session/XSS integration tests before a public release.

@@ -12,6 +12,19 @@ Open:
 http://127.0.0.1:8779/
 ```
 
+The first page response creates a local HttpOnly session cookie. Mutating API
+requests require that cookie plus a loopback `Host` and a same-port loopback
+`Origin`. If a stale tab receives HTTP 403, close it and reopen CUTED through
+the launcher instead of bypassing the check.
+
+Project files and read APIs also require the session after the initial
+`index.html` navigation. Every HTTP method rejects non-loopback `Host` values
+to prevent DNS rebinding. Project data embedded in HTML is escaped for script
+context before it reaches the browser.
+
+`serve` and `launch` reject non-loopback bind addresses. Mutating requests
+without `Origin`, including `Origin: null`, are denied.
+
 ## When to Restart
 
 Restart the server after changing:

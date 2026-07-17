@@ -1,25 +1,33 @@
-# Licencas de Terceiros — CUTED Beta
+# Licencas De Terceiros - CUTED
 
-Esta pasta e redistribuida dentro do pacote (`licenses/`). Antes de cada
-release, conferir que os textos abaixo estao presentes e atualizados.
+Esta pasta e copiada para `licenses/` em todo build Windows. O CUTED e
+distribuido sob AGPL-3.0; componentes de terceiros continuam sujeitos as suas
+proprias licencas.
 
-## Obrigatorios no pacote
+## Componentes Principais
 
-| Componente | Licenca | Obrigacao |
+| Componente | Licenca | Evidencia no artefato |
 | --- | --- | --- |
-| FFmpeg (build gyan.dev release-essentials) | GPLv3 (inclui libx264/libx265) | Incluir texto da licenca + registrar versao exata (`ffmpeg/VERSION.txt`); fonte do build publicada por versao em gyan.dev/ffmpeg/builds. Invocado como processo separado (mere aggregation). |
-| Ultralytics + modelo YOLO | AGPL-3.0 | Aceito apenas no beta privado (decisao 2026-06-10). Migrar para ONNX/runtime permissivo antes de distribuicao comercial. |
-| PyTorch | BSD-3 | Incluir aviso de copyright. |
-| OpenCV | Apache-2.0 | Incluir aviso de copyright. |
-| faster-whisper / CTranslate2 | MIT | Incluir aviso de copyright. |
-| yt-dlp | Unlicense/Public domain | Sem obrigacao, manter referencia. |
-| numpy, pillow, imageio-ffmpeg | BSD/PIL/BSD | Incluir avisos. |
-| Python (CPython) | PSF-2.0 | Incluir aviso. |
+| FFmpeg release-essentials | GPLv3 | `ffmpeg/LICENSE.txt`, `VERSION.txt` e `SOURCE.txt` |
+| Ultralytics YOLO | AGPL-3.0 | licenca coletada do pacote Python |
+| PyTorch | BSD-3-Clause | licenca coletada do pacote Python |
+| OpenCV | Apache-2.0 | texto Apache e licenca coletada |
+| faster-whisper / CTranslate2 | MIT | licencas coletadas |
+| yt-dlp | Unlicense | licenca coletada |
+| NumPy, Pillow, imageio-ffmpeg | BSD/PIL/BSD | licencas coletadas |
+| CPython | PSF-2.0 | arquivos de licenca do runtime PyInstaller |
+| PixiJS | MIT | `PixiJS-MIT.txt` |
 
-## Pendencias
+`collect-third-party-licenses.py` varre o ambiente de build e copia arquivos
+`LICENSE`, `COPYING`, `NOTICE` e `AUTHORS`, alem de gerar `manifest.json`.
 
-- [ ] Baixar e versionar os textos integrais de cada licenca nesta pasta.
-- [ ] Registrar a versao exata do build FFmpeg usado em cada release.
-- [ ] Revisao juridica (licencas + patentes H.264/AAC) antes de venda.
+## Gate De Binario Publico
 
-Nota: este resumo e entendimento tecnico, nao aconselhamento juridico.
+Antes de publicar um instalador:
+
+1. revisar o diretorio `licenses/` gerado;
+2. anexar o fonte correspondente do FFmpeg ao mesmo release;
+3. registrar checksum do instalador e do fonte;
+4. repetir a revisao quando qualquer dependencia mudar.
+
+Este resumo e tecnico e nao substitui aconselhamento juridico.

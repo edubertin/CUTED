@@ -1,6 +1,6 @@
 # PLAN-004 - Windows Desktop Shell And Free Distribution
 
-Status: started
+Status: source-publication implementation in progress
 Date: 2026-07-02
 Related:
 - [SPEC-011 Local Beta Installer](SPEC-011-local-beta-installer.md)
@@ -49,7 +49,7 @@ This keeps the product local-first and avoids a rewrite while removing the
 
 ### Phase 1 - Desktop Shell Flag
 
-Status: started.
+Status: implemented.
 
 Add a `launch --desktop-shell` mode. In this mode CUTED starts the local server
 and opens a native desktop window through pywebview/WebView2. If pywebview or
@@ -127,6 +127,9 @@ Dev-machine evidence:
 
 ### Phase 4 - Public Download Readiness
 
+Status: gated. Do not publish a binary until clean-Windows, real-render,
+uninstall-preservation, licensing, and signing decisions pass.
+
 Prepare a public release path for a free app.
 
 Acceptance:
@@ -140,6 +143,9 @@ Acceptance:
 - Download page includes version, changelog, checksum, and known limitations.
 
 ### Phase 5 - Public GitHub Readiness
+
+Status: implementation in progress on 2026-07-17. The repository can become
+public independently from the Windows installer.
 
 Before changing repository visibility, audit the repo and history.
 
@@ -176,10 +182,10 @@ Clean-machine testing remains mandatory before sharing an installer.
 
 ### Security And Privacy
 
-Keep the server on `127.0.0.1`. Before public distribution, add or verify a
-session token for local API calls that can import, render, select folders, or
-open local paths. Diagnostics must not collect source videos, full transcripts,
-API keys, cookies, or private file contents.
+Keep the server on `127.0.0.1`. Mutating local API calls require an HttpOnly
+session cookie, loopback `Host`, and matching loopback `Origin`. Diagnostics
+must not collect source videos, full transcripts, API keys, cookies, or private
+file contents.
 
 ## Risks
 

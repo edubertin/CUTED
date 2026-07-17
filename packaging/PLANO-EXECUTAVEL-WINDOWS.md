@@ -271,3 +271,10 @@ Mapeadas nos slices A–E da SPEC-011, com critério de aceite por fase.
 - GPL "mere aggregation"/subprocess — gnu.org/licenses/old-licenses/gpl-2.0-faq
   (seções MereAggregation/GPLPlugins).
 - Inno Setup vs NSIS — advancedinstaller.com/choosing-the-right-windows-packaging-tool-as-developer.html.
+# Atualizacao De Distribuicao - 2026-07-17
+
+O CUTED sera gratuito e o codigo-fonte sera publico sob AGPL-3.0. As notas
+historicas abaixo sobre beta privado ou futura venda nao representam mais a
+decisao de distribuicao. O pacote completo com Ultralytics e compativel com a
+direcao AGPL, mas qualquer instalador publico ainda exige licencas coletadas,
+fonte correspondente do FFmpeg, teste em Windows limpo e decisao de assinatura.

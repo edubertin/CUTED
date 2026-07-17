@@ -3,13 +3,16 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import hmac
 import html
+import http.cookies
 import http.server
 import json
 import math
 import os
 import platform
 import re
+import secrets
 import shutil
 import socket
 import subprocess
@@ -735,6 +738,7 @@ def caption_selected(args: argparse.Namespace) -> None:
 
 
 def serve_gallery(args: argparse.Namespace) -> None:
+    require_local_bind_host(args.host)
     base_dir = args.dir.resolve()
     require_file(base_dir / "index.html")
     handler = gallery_handler(base_dir)
@@ -753,6 +757,7 @@ LAUNCH_PORT_RANGE = range(8779, 8800)
 
 
 def launch_workspace(args: argparse.Namespace) -> None:
+    require_local_bind_host(args.host)
     workspace = prepare_workspace_dir(args.workspace)
     existing = running_workspace_port(args.host)
     if existing is not None:
@@ -1163,12 +1168,94 @@ def iso_timestamp_from_epoch(value: float) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(max(0.0, value)))
 
 
-def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler]:
+LOCAL_SESSION_COOKIE = "cuted_session"
+LOCAL_REQUEST_HOSTS = {"127.0.0.1", "localhost", "::1"}
+LOCAL_SCRIPT_PATH = "tools/cutted/scripts/cutted.py"
+
+
+def local_request_host_allowed(value: str, port: int) -> bool:
+    try:
+        parsed = urllib.parse.urlsplit(f"//{value}")
+        hostname = (parsed.hostname or "").lower()
+        return hostname in LOCAL_REQUEST_HOSTS and parsed.port in {None, port}
+    except ValueError:
+        return False
+
+
+def local_request_origin_allowed(origin: str, port: int) -> bool:
+    if not origin:
+        return False
+    try:
+        parsed = urllib.parse.urlsplit(origin)
+        return parsed.scheme == "http" and parsed.hostname in LOCAL_REQUEST_HOSTS and parsed.port == port
+    except ValueError:
+        return False
+
+
+def local_session_cookie_matches(cookie_header: str, expected: str) -> bool:
+    try:
+        cookies = http.cookies.SimpleCookie()
+        cookies.load(cookie_header)
+        supplied = cookies.get(LOCAL_SESSION_COOKIE)
+        return supplied is not None and hmac.compare_digest(supplied.value, expected)
+    except (http.cookies.CookieError, TypeError):
+        return False
+
+
+def local_session_bootstrap_path(path: str) -> bool:
+    return path == "/" or path.endswith("/index.html")
+
+
+def require_local_bind_host(host: str) -> None:
+    if host.lower().strip("[]") not in LOCAL_REQUEST_HOSTS:
+        raise ValueError("CUTED only accepts 127.0.0.1, localhost, or ::1 as the local server host.")
+
+
+def gallery_handler(
+    base_dir: Path,
+    session_token: str | None = None,
+) -> type[http.server.SimpleHTTPRequestHandler]:
+    token = session_token or secrets.token_urlsafe(32)
+
     class CuttedGalleryHandler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args: object, **kwargs: object) -> None:
+            self.issue_local_session = False
             super().__init__(*args, directory=str(base_dir), **kwargs)
 
+        def end_headers(self) -> None:
+            if self.issue_local_session:
+                self.send_header(
+                    "Set-Cookie",
+                    f"{LOCAL_SESSION_COOKIE}={token}; HttpOnly; SameSite=Strict; Path=/",
+                )
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+            self.send_header("Content-Security-Policy", "frame-ancestors 'none'; base-uri 'none'")
+            super().end_headers()
+
+        def local_host_allowed(self) -> bool:
+            port = int(self.server.server_address[1])
+            return local_request_host_allowed(self.headers.get("Host", ""), port)
+
+        def local_session_allowed(self) -> bool:
+            port = int(self.server.server_address[1])
+            return (
+                self.local_host_allowed()
+                and local_request_origin_allowed(self.headers.get("Origin", ""), port)
+                and local_session_cookie_matches(self.headers.get("Cookie", ""), token)
+            )
+
+        def reject_local_request(self) -> None:
+            self.issue_local_session = False
+            send_json_response(self, 403, {"ok": False, "error": "Sessao local invalida. Reabra o CUTED."})
+
         def do_POST(self) -> None:
+            self.issue_local_session = False
+            if not self.local_session_allowed():
+                self.reject_local_request()
+                return
             path = urllib.parse.urlparse(self.path).path
             if path == "/api/finalize":
                 self.handle_finalize(base_dir)
@@ -1229,7 +1316,19 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
                 return
 
         def do_GET(self) -> None:
+            self.issue_local_session = False
             path = urllib.parse.urlparse(self.path).path
+            if not self.local_host_allowed():
+                self.reject_local_request()
+                return
+            if path == "/api/health":
+                send_json_response(self, 200, {"ok": True})
+                return
+            if local_session_bootstrap_path(path):
+                self.issue_local_session = True
+            elif not local_session_cookie_matches(self.headers.get("Cookie", ""), token):
+                self.reject_local_request()
+                return
             if path == "/api/finalize-results":
                 self.handle_finalize_results(base_dir)
                 return
@@ -1257,6 +1356,13 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if self.handle_range_request():
                 return
             super().do_GET()
+
+        def do_HEAD(self) -> None:
+            self.issue_local_session = False
+            if not self.local_session_allowed():
+                self.reject_local_request()
+                return
+            super().do_HEAD()
 
         def handle_range_request(self) -> bool:
             range_header = self.headers.get("Range")
@@ -6913,6 +7019,7 @@ def send_json_response(handler: http.server.BaseHTTPRequestHandler, status: int,
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-store")
     handler.end_headers()
     handler.wfile.write(body)
 
@@ -10365,6 +10472,17 @@ def write_gallery_moments_payload(path: Path, data: dict[str, object]) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def json_for_script(value: object) -> str:
+    text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return (
+        text.replace("&", "\\u0026")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
+
+
 def gallery_moment_by_rank(moments: list[object], rank: int) -> dict[str, object]:
     for item in moments:
         if isinstance(item, dict) and int(item.get("rank") or 0) == rank:
@@ -10381,7 +10499,7 @@ def caption_track_payload_ready(value: object) -> bool:
 def update_index_html_cuted_data(path: Path, data: dict[str, object]) -> None:
     require_file(path)
     html_text = path.read_text(encoding="utf-8")
-    replacement = f"window.CUTTED_DATA = {json.dumps(data, ensure_ascii=False)}; window.CUTTED_SCRIPT ="
+    replacement = f"window.CUTTED_DATA = {json_for_script(data)}; window.CUTTED_SCRIPT ="
     next_text, count = re.subn(
         r"window\.CUTTED_DATA = .*?; window\.CUTTED_SCRIPT =",
         replacement,
@@ -11258,6 +11376,7 @@ def page_html(
     live_timeline_assets: dict[str, str] | None = None,
     control_bar_assets: dict[str, str] | None = None,
 ) -> str:
+    safe_data = json_for_script(json.loads(data))
     live_timeline_css = live_timeline_assets_html(live_timeline_assets or {}, "css")
     live_timeline_js = live_timeline_assets_html(live_timeline_assets or {}, "js")
     control_bar_css = static_assets_html(control_bar_assets or {}, "css")
@@ -11455,7 +11574,7 @@ def page_html(
   <main>{cards}</main>
 {live_timeline_js}
 {control_bar_js}
-  <script>window.CUTTED_DATA = {data}; window.CUTTED_SCRIPT = {json.dumps(str(Path(__file__).resolve()))};</script>
+  <script>window.CUTTED_DATA = {safe_data}; window.CUTTED_SCRIPT = {json_for_script(LOCAL_SCRIPT_PATH)};</script>
   <script>{js()}</script>
 </body>
 </html>"""

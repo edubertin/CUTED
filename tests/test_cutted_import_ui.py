@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
+import http.client
 import inspect
 import json
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest import mock
@@ -45,7 +47,66 @@ def ui_asset_source() -> str:
     return UI_ASSET_PATH.read_text(encoding="utf-8")
 
 
+def local_http_request(
+    port: int,
+    method: str,
+    path: str,
+    headers: dict[str, str] | None = None,
+) -> tuple[int, dict[str, str]]:
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    connection.request(method, path, body=b"{}" if method == "POST" else None, headers=headers or {})
+    response = connection.getresponse()
+    response.read()
+    result = response.status, dict(response.getheaders())
+    connection.close()
+    return result
+
+
+def start_local_gallery_server(
+    base_dir: Path,
+) -> tuple[object, threading.Thread, int]:
+    server = CUTTED.http.server.ThreadingHTTPServer(
+        ("127.0.0.1", 0),
+        CUTTED.gallery_handler(base_dir, "known-token"),
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, thread, int(server.server_address[1])
+
+
+def stop_local_gallery_server(server: object, thread: threading.Thread) -> None:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+
+
+def local_gallery_fixture(base_dir: Path) -> None:
+    (base_dir / "index.html").write_text("<html>ok</html>", encoding="utf-8")
+    (base_dir / "moments.json").write_text('{"private":"local"}', encoding="utf-8")
+
+
+def bootstrap_local_session(port: int) -> str:
+    status, headers = local_http_request(port, "GET", "/index.html")
+    if status != 200:
+        raise AssertionError(f"Local gallery returned HTTP {status}.")
+    return headers["Set-Cookie"].split(";", 1)[0]
+
+
 class CuttedImportUiTests(unittest.TestCase):
+    def test_embedded_project_json_cannot_close_script_tag(self) -> None:
+        payload = {"moments": [{"title": "</script><script>window.attack=true</script>"}]}
+        rendered = CUTTED.page_html(
+            "Teste",
+            "",
+            json.dumps(payload, ensure_ascii=False),
+            "assets/brand/cuted-logo-transparent.png",
+        )
+
+        self.assertNotIn("</script><script>window.attack", rendered)
+        self.assertIn("\\u003c/script\\u003e", rendered)
+        self.assertNotIn(str(MODULE_PATH), rendered)
+        self.assertIn("tools/cutted/scripts/cutted.py", rendered)
+
     def test_import_form_has_no_desktop_button(self) -> None:
         html = gallery_html()
 
@@ -1848,6 +1909,99 @@ class CuttedImportUiTests(unittest.TestCase):
 
 
 class CuttedLaunchTests(unittest.TestCase):
+    def test_gallery_bootstrap_sets_hardened_local_session(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base_dir = Path(temp_dir)
+            local_gallery_fixture(base_dir)
+            server, thread, port = start_local_gallery_server(base_dir)
+            try:
+                status, headers = local_http_request(port, "GET", "/index.html")
+                self.assertEqual(status, 200)
+                self.assertIn("HttpOnly", headers["Set-Cookie"])
+                self.assertIn("SameSite=Strict", headers["Set-Cookie"])
+                self.assertEqual(local_http_request(port, "GET", "/api/health")[0], 200)
+            finally:
+                stop_local_gallery_server(server, thread)
+
+    def test_gallery_get_rejects_dns_rebinding_and_missing_session(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base_dir = Path(temp_dir)
+            local_gallery_fixture(base_dir)
+            server, thread, port = start_local_gallery_server(base_dir)
+            try:
+                self.assertEqual(local_http_request(port, "GET", "/moments.json")[0], 403)
+                status, headers = local_http_request(
+                    port, "GET", "/index.html", {"Host": "attacker.example"}
+                )
+                self.assertEqual(status, 403)
+                self.assertNotIn("Set-Cookie", headers)
+                cookie = bootstrap_local_session(port)
+                self.assertEqual(
+                    local_http_request(port, "GET", "/moments.json", {"Cookie": cookie})[0],
+                    200,
+                )
+            finally:
+                stop_local_gallery_server(server, thread)
+
+    def test_gallery_post_requires_local_session_and_origin(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base_dir = Path(temp_dir)
+            local_gallery_fixture(base_dir)
+            server, thread, port = start_local_gallery_server(base_dir)
+            try:
+                cookie = bootstrap_local_session(port)
+                self.assertEqual(local_http_request(port, "POST", "/api/unknown")[0], 403)
+                external_headers = {"Cookie": cookie, "Origin": "https://example.com"}
+                self.assertEqual(
+                    local_http_request(port, "POST", "/api/unknown", external_headers)[0],
+                    403,
+                )
+                null_headers = {"Cookie": cookie, "Origin": "null"}
+                self.assertEqual(
+                    local_http_request(port, "POST", "/api/unknown", null_headers)[0],
+                    403,
+                )
+                local_headers = {
+                    "Cookie": cookie,
+                    "Origin": f"http://127.0.0.1:{port}",
+                }
+                self.assertEqual(
+                    local_http_request(port, "POST", "/api/unknown", local_headers)[0],
+                    404,
+                )
+            finally:
+                stop_local_gallery_server(server, thread)
+
+    def test_local_session_cookie_requires_exact_token(self) -> None:
+        token = "session-token"
+
+        self.assertTrue(CUTTED.local_session_cookie_matches("other=x; cuted_session=session-token", token))
+        self.assertFalse(CUTTED.local_session_cookie_matches("cuted_session=wrong", token))
+        self.assertFalse(CUTTED.local_session_cookie_matches("", token))
+
+    def test_local_request_origin_accepts_only_same_loopback_port(self) -> None:
+        self.assertFalse(CUTTED.local_request_origin_allowed("", 8779))
+        self.assertTrue(CUTTED.local_request_origin_allowed("http://127.0.0.1:8779", 8779))
+        self.assertTrue(CUTTED.local_request_origin_allowed("http://localhost:8779", 8779))
+        self.assertFalse(CUTTED.local_request_origin_allowed("http://127.0.0.1:8780", 8779))
+        self.assertFalse(CUTTED.local_request_origin_allowed("https://example.com", 8779))
+        self.assertFalse(CUTTED.local_request_origin_allowed("null", 8779))
+
+    def test_local_request_host_requires_loopback_and_matching_port(self) -> None:
+        self.assertTrue(CUTTED.local_request_host_allowed("127.0.0.1:8779", 8779))
+        self.assertTrue(CUTTED.local_request_host_allowed("localhost:8779", 8779))
+        self.assertFalse(CUTTED.local_request_host_allowed("attacker.example:8779", 8779))
+        self.assertFalse(CUTTED.local_request_host_allowed("127.0.0.1:8780", 8779))
+
+    def test_local_server_bind_rejects_non_loopback_host(self) -> None:
+        for host in ("127.0.0.1", "localhost", "::1"):
+            CUTTED.require_local_bind_host(host)
+
+        with self.assertRaisesRegex(ValueError, "only accepts"):
+            CUTTED.require_local_bind_host("0.0.0.0")
+        with self.assertRaisesRegex(ValueError, "only accepts"):
+            CUTTED.require_local_bind_host("192.168.1.10")
+
     def test_default_workspace_dir_lives_under_documents(self) -> None:
         workspace = CUTTED.default_workspace_dir()
 

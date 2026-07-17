@@ -61,7 +61,7 @@ def running_workspace_port(
 
 def cuted_server_alive(host: str, port: int) -> bool:
     try:
-        with urllib.request.urlopen(f"http://{host}:{port}/api/settings/openai", timeout=1.5) as response:
+        with urllib.request.urlopen(f"http://{host}:{port}/api/health", timeout=1.5) as response:
             return response.status == 200
     except (OSError, http.client.HTTPException):
         return False

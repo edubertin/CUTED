@@ -36,11 +36,13 @@ class application workflow.
 27. [Local Project Memory and Cleanup ADR](architecture/ADR-0005-local-project-memory-and-cleanup.md)
 28. [QA Regression Matrix](qa/REGRESSION_MATRIX.md)
 29. [Local Development Runbook](operations/LOCAL_DEV.md)
+30. [Public Release Checklist](operations/PUBLIC_RELEASE_CHECKLIST.md)
+31. [Public Release Audit - 2026-07-17](operations/PUBLIC_RELEASE_AUDIT_2026-07-17.md)
 
 ## Current Source of Truth
 
-The product is still in prototype form. Today, the executable source of truth is
-split across:
+The product is a public source beta with a working local Windows shell. The
+current executable source of truth is split across:
 
 - `README.md`: short repository orientation.
 - `tools/cutted/SKILL.md`: workflow and feature behavior.

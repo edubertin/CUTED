@@ -64,4 +64,12 @@ $expected = Join-Path $OutputDir "CUTED-Setup-$AppVersion.exe"
 if (-not (Test-Path $expected)) {
     throw "ISCC terminou, mas nao encontrei $expected"
 }
+$checksum = (Get-FileHash -LiteralPath $expected -Algorithm SHA256).Hash
+$checksumFile = "$expected.sha256"
+[IO.File]::WriteAllText(
+    $checksumFile,
+    "$checksum  $([IO.Path]::GetFileName($expected))`n",
+    (New-Object System.Text.UTF8Encoding($false))
+)
 Write-Host "Instalador pronto: $expected"
+Write-Host "SHA-256: $checksumFile"

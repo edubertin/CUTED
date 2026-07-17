@@ -21,9 +21,14 @@ Check "cuted.exe existe" (Test-Path $exe)
 Check "ffmpeg.exe embarcado" (Test-Path (Join-Path $AppDir "ffmpeg\ffmpeg.exe"))
 Check "ffprobe.exe embarcado" (Test-Path (Join-Path $AppDir "ffmpeg\ffprobe.exe"))
 Check "modelo YOLO embarcado" (Test-Path (Join-Path $AppDir "models\yolo26n.pt"))
+Check "origem do modelo YOLO registrada" (Test-Path (Join-Path $AppDir "models\SOURCE.txt"))
 Check "cutted.py como data file" (Test-Path (Join-Path $AppDir "_internal\tools\cutted\scripts\cutted.py"))
 Check "logo da marca embarcado" (Test-Path (Join-Path $AppDir "_internal\assets\brand\cuted-logo-transparent.png"))
 Check "licencas presentes" (Test-Path (Join-Path $AppDir "licenses"))
+Check "licenca CUTED presente" (Test-Path (Join-Path $AppDir "licenses\CUTED-AGPL-3.0.txt"))
+Check "licenca PixiJS presente" (Test-Path (Join-Path $AppDir "licenses\PixiJS-MIT.txt"))
+Check "manifesto de licencas Python presente" (Test-Path (Join-Path $AppDir "licenses\python\manifest.json"))
+Check "fonte e hash do FFmpeg registrados" (Test-Path (Join-Path $AppDir "ffmpeg\SOURCE.txt"))
 
 Write-Host "Verificando o shim de re-execucao (-m) usado por imports e yt-dlp..."
 $shimOutput = & $exe -m platform 2>&1 | Out-String
@@ -52,10 +57,18 @@ try {
     Check "processo segue vivo" (-not $proc.HasExited)
     Check "lock file criado" (Test-Path $lock)
     $port = (Get-Content $lock -ErrorAction Stop).Trim()
-    $index = Invoke-WebRequest "http://127.0.0.1:$port/index.html" -UseBasicParsing -TimeoutSec 10
+    $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    $index = Invoke-WebRequest "http://127.0.0.1:$port/index.html" -WebSession $session -UseBasicParsing -TimeoutSec 10
     Check "galeria responde (HTTP 200)" ($index.StatusCode -eq 200)
-    $api = Invoke-WebRequest "http://127.0.0.1:$port/api/settings/openai" -UseBasicParsing -TimeoutSec 10
+    $api = Invoke-WebRequest "http://127.0.0.1:$port/api/settings/openai" -WebSession $session -UseBasicParsing -TimeoutSec 10
     Check "API local responde" ($api.StatusCode -eq 200)
+    try {
+        Invoke-WebRequest "http://127.0.0.1:$port/api/open-folder" -Method Post `
+            -ContentType "application/json" -Body '{"path":"."}' -UseBasicParsing -TimeoutSec 10 | Out-Null
+        Check "API mutavel exige sessao local" $false
+    } catch {
+        Check "API mutavel exige sessao local" ($_.Exception.Response.StatusCode.value__ -eq 403)
+    }
     Check "workspace index.html criado" (Test-Path (Join-Path $workspace "index.html"))
 } catch {
     Check "servidor local subiu" $false

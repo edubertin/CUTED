@@ -22,6 +22,8 @@ datas = [
     *[(str(path), "tools/cutted/scripts") for path in sorted(SCRIPT_DIR.glob("cuted_*.py"))],
     (str(REPO_ROOT / "assets" / "brand" / "cuted-logo-transparent.png"), "assets/brand"),
     (str(REPO_ROOT / "assets" / "brand" / "cuted-logo-official.png"), "assets/brand"),
+    (str(REPO_ROOT / "assets" / "brand" / "cuted-app-icon.png"), "assets/brand"),
+    (str(REPO_ROOT / "assets" / "brand" / "cuted-app-icon.ico"), "assets/brand"),
 ]
 binaries = []
 # cutted.py e carregado em runtime via importlib, entao o PyInstaller nao
@@ -77,7 +79,7 @@ exe = EXE(
     strip=False,
     upx=False,
     console=True,
-    icon=None,
+    icon=str(REPO_ROOT / "assets" / "brand" / "cuted-app-icon.ico"),
 )
 
 coll = COLLECT(
