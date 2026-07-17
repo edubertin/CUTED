@@ -4,7 +4,7 @@
 
 # +cpu garante a wheel do indice CPU; se a versao nao existir la, o build deve
 # falhar em vez de cair silenciosamente na wheel CUDA do PyPI.
-torch==2.12.0+cpu
+torch==2.12.1+cpu
 ultralytics==8.4.62
 lap==0.5.13
 opencv-python-headless==4.13.0.92
