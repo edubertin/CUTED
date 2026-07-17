@@ -35,7 +35,9 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: prototypes/live-timeline/package-lock.json
+          cache-dependency-path: |
+            prototypes/live-timeline/package-lock.json
+            apps/site/package-lock.json
 
       - name: Install live timeline dependencies
         working-directory: prototypes/live-timeline
@@ -53,3 +55,19 @@ jobs:
           if ($generated -ne $tracked) {
             throw "The tracked live timeline bundle is stale. Run npm run build:lib and promote dist-lib/live-timeline.js."
           }
+
+      - name: Install public site dependencies
+        working-directory: apps/site
+        run: npm ci
+
+      - name: Test public site
+        working-directory: apps/site
+        run: npm test
+
+      - name: Lint public site
+        working-directory: apps/site
+        run: npm run lint
+
+      - name: Audit public site dependencies
+        working-directory: apps/site
+        run: npm audit
