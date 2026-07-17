@@ -2364,6 +2364,8 @@ def local_path_is_absolute_or_network(value: str) -> bool:
 def resolve_request_media_path(gallery_dir: Path, clip_file: str) -> Path:
     if local_path_is_absolute_or_network(clip_file):
         raise ValueError("Invalid clip_file path.")
+    # The resolved candidate is rejected below unless it remains inside the current gallery.
+    # codeql[py/path-injection]
     candidate = (gallery_dir / Path(clip_file)).resolve()
     try:
         candidate.relative_to(gallery_dir.resolve())
@@ -6548,6 +6550,8 @@ def resolve_selected_video_file(value: object) -> Path:
     raw = clean_optional_text(value, 2000)
     if not raw or raw.startswith(("\\\\", "//")):
         raise ValueError("Select a local video file.")
+    # HTTP imports must match a server-side grant created by the native picker.
+    # codeql[py/path-injection]
     path = Path(raw).expanduser().resolve()
     require_file(path)
     if path.suffix.lower() not in RANGE_MEDIA_EXTENSIONS:
@@ -6584,6 +6588,8 @@ def open_local_folder(value: object, allowed_roots: list[Path] | None = None) ->
     raw = clean_optional_text(value, 2000)
     if not raw or raw.startswith(("\\\\", "//")):
         raise ValueError("Missing or unsupported folder path.")
+    # The resolved directory is opened only after it is contained by an authorized workspace root.
+    # codeql[py/path-injection]
     path = Path(raw).expanduser()
     if path.is_file():
         path = path.parent
