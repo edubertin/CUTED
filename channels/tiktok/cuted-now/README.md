@@ -10,7 +10,9 @@ render samples, and application code.
 - Handle: `@cutednow`
 - Display name: `CUTED Now`
 - Bio: `O agora em cortes rapidos. Feito com CUTED.`
-- Current status: profile preconfigured, no published videos yet.
+- Current status: active public channel with published CUTED-made clips.
+- Public case-study evidence observed on 2026-07-17: one clip exceeded 47,000
+  views. Treat this as a timestamped observation, not a live metric.
 
 ## Operating Rules
 

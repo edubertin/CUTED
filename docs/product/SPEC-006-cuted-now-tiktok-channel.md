@@ -40,7 +40,9 @@ https://www.tiktok.com/@cutednow
 - Display name: `CUTED Now`
 - Bio: `O agora em cortes rapidos. Feito com CUTED.`
 - Avatar: `assets/social/cuted-now/approved/avatar.png`
-- Published videos: none yet.
+- Published videos: active public catalog as of 2026-07-17.
+- Case-study evidence: one visible clip exceeded 47,000 views on that date;
+  this is a timestamped observation and not a live counter.
 
 ## Positioning
 
