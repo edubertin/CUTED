@@ -73,7 +73,7 @@ def platform_edit_from_row(
     if not isinstance(raw, dict):
         return {}
     result: dict[str, object] = {}
-    for key in ("camera", "camera_path", "effect", "overlay", "overlays", "bumpers", "director_plan"):
+    for key in ("camera", "camera_path", "effect", "overlay", "overlays", "bumpers", "director_plan", "caption_language", "captionLanguage"):
         if key in raw:
             result[key] = raw[key]
     return result

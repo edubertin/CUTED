@@ -5,16 +5,17 @@
 - Product: CUTED
 - Status: local-first Windows desktop beta in progress
 - Audience: creators and operators turning long-form videos into short-form clips
-- Business goal: ship a paid Windows product that runs heavy video processing on the user's computer instead of in a cloud web app
+- Business goal: ship a free, open-source Windows app that runs heavy video processing on the user's computer instead of in a cloud web app
 
 ## Current State
 
-- Active phase: local MVP moving from generated-gallery prototype toward a first-class local app shell
-- Production status: not production; private/local beta path
-- Release status: Windows beta installer work is planned under `packaging/`
+- Active phase: public source beta with a first-class local Windows app shell
+- Production status: source beta; public binary distribution remains gated
+- Release status: portable build and installer work live under `packaging/`
 - Open decisions:
-  - Whether the commercial Windows distribution should use Inno Setup first, MSIX/Microsoft Store later, or both.
-  - Whether YOLO/PyTorch ships in the private beta package or is replaced by a smaller ONNX route before wider sale.
+  - Whether the free public Windows distribution should use direct Inno Setup download first, MSIX/Microsoft Store later, or both.
+  - How much desktop-shell polish is required before the first public free download.
+  - Whether YOLO/PyTorch remains in the public package or is replaced by a smaller ONNX route.
   - When to split the current reference implementation into app/package boundaries.
   - How much local project state should move from browser `localStorage` into `project-state.json` before beta.
 
@@ -22,7 +23,7 @@
 
 CUTED is not planned as a hosted web/SaaS product. During development it can
 and should run as a local web app/browser UI because that keeps iteration fast.
-For users, the compiled product surface should be packaged and sold as a
+For users, the compiled product surface should be packaged and distributed as a
 Windows desktop app. The core reasons are large media files, heavy FFmpeg/render
 work, local vision processing, privacy, and avoiding early cloud infrastructure
 costs.
@@ -133,7 +134,7 @@ If `python` is not available on this Windows machine, use the bundled Codex Pyth
 - Generated outputs: keep generated media in `Documents/CUTED Workspace`, `Videos/CUTED Renders`, local archives, or ignored folders.
 - Repo samples: use only for dev evidence/fixtures; do not make repo `samples/` the default user workspace.
 - Destructive actions: project deletion, cache cleanup, build cleanup, and installer uninstall behavior require explicit confirmation and must preserve final renders by default.
-- Commercial release: review FFmpeg/GPL, Ultralytics/AGPL, H.264/AAC patent exposure, code signing, Microsoft Store/MSIX requirements, privacy disclosures, and support diagnostics before sale.
+- Public binary release: review FFmpeg/GPL source delivery, Ultralytics/AGPL, H.264/AAC patent exposure, code signing, Microsoft Store/MSIX requirements, privacy disclosures, and support diagnostics before distribution.
 
 ## Next Implementation Slice
 

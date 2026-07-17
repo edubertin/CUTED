@@ -7,6 +7,11 @@ Relacionado: [SPEC-011 Local Beta Installer](../docs/product/SPEC-011-local-beta
 [ADR-0003](../docs/architecture/ADR-0003-local-hybrid-vision-engine.md),
 [SPEC-007](../docs/product/SPEC-007-openai-settings-and-cost-ledger.md)
 
+Atualizacao 2026-07-02: o app foi reposicionado como distribuicao gratuita.
+O caminho de instalador continua valido, mas a experiencia publica deve abrir
+uma janela desktop real via pywebview/WebView2, com navegador externo apenas
+como fallback de desenvolvimento/suporte. Roadmap: [PLAN-004](../docs/product/PLAN-004-windows-desktop-shell-and-free-distribution.md).
+
 ## 1. Objetivo
 
 Entregar o CUTED como um programa Windows que uma pessoa leiga consegue
@@ -117,8 +122,9 @@ rota ONNX pós-beta):
 
 - O app empacotado não tem repositório, então `.env.local` deixa de existir
   como mecanismo. A fonte de configuração passa a ser o que a SPEC-007 já
-  definiu: `%USERPROFILE%\.cuted\settings.json` + chave OpenAI salva fora do
-  navegador, com `CUTED_HOME` como override.
+  definiu: `%USERPROFILE%\.cuted\settings.json` + chave OpenAI salva em
+  `%USERPROFILE%\.cuted\.env.cuted.local`, fora do repositório e do navegador,
+  com `CUTED_HOME` como override.
 - O instalador nunca grava segredos. A primeira execução abre o app
   funcionando sem chave (importação local + presets manuais); recursos de IA
   pedem a chave pela UI de settings existente.
@@ -221,9 +227,10 @@ Mapeadas nos slices A–E da SPEC-011, com critério de aceite por fase.
 
 ### Fase 5 — Hardening do beta (Slice E)
 
-- `cuted.exe diagnostics`; controle de limpeza por job (tamanho aproximado +
-  apagar caches/preview/source com confirmação); guia de instalação com
-  prints (SmartScreen incluso); doc de problemas conhecidos.
+- `cuted.exe diagnostics` foi implementado em 2026-07-02 com payload
+  sanitizado; controle de limpeza por job (tamanho aproximado + apagar
+  caches/preview/source com confirmação) continua pendente; guia de instalação
+  precisa dos prints finais (SmartScreen incluso); doc de problemas conhecidos.
 - Verificação simples de versão (arquivo `VERSION` + checagem manual ou
   endpoint estático) — sem auto-update no beta.
 
@@ -264,3 +271,10 @@ Mapeadas nos slices A–E da SPEC-011, com critério de aceite por fase.
 - GPL "mere aggregation"/subprocess — gnu.org/licenses/old-licenses/gpl-2.0-faq
   (seções MereAggregation/GPLPlugins).
 - Inno Setup vs NSIS — advancedinstaller.com/choosing-the-right-windows-packaging-tool-as-developer.html.
+# Atualizacao De Distribuicao - 2026-07-17
+
+O CUTED sera gratuito e o codigo-fonte sera publico sob AGPL-3.0. As notas
+historicas abaixo sobre beta privado ou futura venda nao representam mais a
+decisao de distribuicao. O pacote completo com Ultralytics e compativel com a
+direcao AGPL, mas qualquer instalador publico ainda exige licencas coletadas,
+fonte correspondente do FFmpeg, teste em Windows limpo e decisao de assinatura.

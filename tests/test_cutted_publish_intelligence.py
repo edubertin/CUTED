@@ -94,6 +94,21 @@ class PublishIntelligenceTests(unittest.TestCase):
         self.assertIn("#TrabalhoCriativo", metadata["hashtags"])
         self.assertEqual(metadata["trend_context"]["source"], "openai-web")
 
+    def test_openai_publish_prompt_requires_brazilian_portuguese(self) -> None:
+        prompt = CUTTED.publish_intelligence_system_prompt()
+        payload = CUTTED.publish_source_context_payload(
+            CUTTED.PublishSourceContext(
+                label="Podcast",
+                kind="youtube",
+                title="Podcast de IA",
+                user_context="",
+                source_url="",
+            )
+        )
+
+        self.assertIn("portugues brasileiro", prompt)
+        self.assertIn("Use este contexto", payload["priority"])
+
     def test_card_html_renders_publish_side_panels(self) -> None:
         [moment] = CUTTED.fallback_publish_intelligence([sample_moment()], "Podcast de IA", "local-fallback")
 

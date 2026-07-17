@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
+import http.client
+import inspect
 import json
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest import mock
@@ -12,6 +15,7 @@ from pathlib import Path
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "scripts" / "cutted.py"
 UI_ASSET_PATH = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "scripts" / "cuted_ui_assets.py"
+DESKTOP_SHELL_PATH = Path(__file__).resolve().parents[1] / "tools" / "cutted" / "scripts" / "cuted_desktop_shell.py"
 SPEC = importlib.util.spec_from_file_location("cutted_import_ui_test_module", MODULE_PATH)
 if SPEC is None or SPEC.loader is None:
     raise RuntimeError("Unable to load cutted.py for import UI tests.")
@@ -27,6 +31,13 @@ LAUNCHER = importlib.util.module_from_spec(LAUNCHER_SPEC)
 sys.modules[LAUNCHER_SPEC.name] = LAUNCHER
 LAUNCHER_SPEC.loader.exec_module(LAUNCHER)
 
+DESKTOP_SPEC = importlib.util.spec_from_file_location("cuted_desktop_shell_test_module", DESKTOP_SHELL_PATH)
+if DESKTOP_SPEC is None or DESKTOP_SPEC.loader is None:
+    raise RuntimeError("Unable to load cuted_desktop_shell.py for launcher tests.")
+DESKTOP_SHELL = importlib.util.module_from_spec(DESKTOP_SPEC)
+sys.modules[DESKTOP_SPEC.name] = DESKTOP_SHELL
+DESKTOP_SPEC.loader.exec_module(DESKTOP_SHELL)
+
 
 def gallery_html() -> str:
     return CUTTED.page_html("Teste", "", "{}", "assets/brand/cuted-logo-transparent.png")
@@ -36,7 +47,66 @@ def ui_asset_source() -> str:
     return UI_ASSET_PATH.read_text(encoding="utf-8")
 
 
+def local_http_request(
+    port: int,
+    method: str,
+    path: str,
+    headers: dict[str, str] | None = None,
+) -> tuple[int, dict[str, str]]:
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    connection.request(method, path, body=b"{}" if method == "POST" else None, headers=headers or {})
+    response = connection.getresponse()
+    response.read()
+    result = response.status, dict(response.getheaders())
+    connection.close()
+    return result
+
+
+def start_local_gallery_server(
+    base_dir: Path,
+) -> tuple[object, threading.Thread, int]:
+    server = CUTTED.http.server.ThreadingHTTPServer(
+        ("127.0.0.1", 0),
+        CUTTED.gallery_handler(base_dir, "known-token"),
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, thread, int(server.server_address[1])
+
+
+def stop_local_gallery_server(server: object, thread: threading.Thread) -> None:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+
+
+def local_gallery_fixture(base_dir: Path) -> None:
+    (base_dir / "index.html").write_text("<html>ok</html>", encoding="utf-8")
+    (base_dir / "moments.json").write_text('{"private":"local"}', encoding="utf-8")
+
+
+def bootstrap_local_session(port: int) -> str:
+    status, headers = local_http_request(port, "GET", "/index.html")
+    if status != 200:
+        raise AssertionError(f"Local gallery returned HTTP {status}.")
+    return headers["Set-Cookie"].split(";", 1)[0]
+
+
 class CuttedImportUiTests(unittest.TestCase):
+    def test_embedded_project_json_cannot_close_script_tag(self) -> None:
+        payload = {"moments": [{"title": "</script><script>window.attack=true</script>"}]}
+        rendered = CUTTED.page_html(
+            "Teste",
+            "",
+            json.dumps(payload, ensure_ascii=False),
+            "assets/brand/cuted-logo-transparent.png",
+        )
+
+        self.assertNotIn("</script><script>window.attack", rendered)
+        self.assertIn("\\u003c/script\\u003e", rendered)
+        self.assertNotIn(str(MODULE_PATH), rendered)
+        self.assertIn("tools/cutted/scripts/cutted.py", rendered)
+
     def test_import_form_has_no_desktop_button(self) -> None:
         html = gallery_html()
 
@@ -68,6 +138,12 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertNotIn("youtube_cookies_from_browser", html)
         self.assertNotIn("youtube_cookies_file", html)
 
+    def test_import_form_defaults_generated_content_to_portuguese(self) -> None:
+        html = gallery_html()
+
+        self.assertIn('name="language" type="hidden" value="pt"', html)
+        self.assertIn('const language = "pt";', ui_asset_source())
+
     def test_import_payload_excludes_youtube_cookie_fields(self) -> None:
         html = gallery_html()
 
@@ -79,6 +155,29 @@ class CuttedImportUiTests(unittest.TestCase):
         html = gallery_html()
 
         self.assertIn("window.location.assign(job.output_url)", html)
+
+    def test_project_home_import_recovery_uses_durable_local_storage(self) -> None:
+        source = ui_asset_source()
+
+        self.assertIn('const activeImportJobStorageKey = "cuted-active-import-job";', source)
+        self.assertIn("const activeImportJobMaxAgeMs = 6 * 60 * 60 * 1000;", source)
+        self.assertIn("return window.localStorage;", source)
+        self.assertIn("Date.now() - Number(data.updated_at || 0) > activeImportJobMaxAgeMs", source)
+        self.assertIn("saveActiveImportJob(job);", source)
+        self.assertNotIn("return window.sessionStorage;", source)
+        self.assertNotIn("Could not access sessionStorage for import recovery.", source)
+
+    def test_legacy_import_flow_tracks_active_job_for_recovery(self) -> None:
+        html = gallery_html()
+
+        self.assertIn("setupLegacyImportRecovery();", html)
+        self.assertIn("saveActiveImportJob(payload.job || {});", html)
+        self.assertIn("saveActiveImportJob(job);", html)
+        self.assertIn("clearActiveImportJob(jobId);", html)
+        self.assertIn("recoverActiveImportJob();", html)
+        self.assertIn("document.visibilityState === \"visible\"", html)
+        self.assertIn("active?.id === jobId && await importOutputIsReady(active.output_url)", html)
+        self.assertIn("Perdi o acompanhamento da importacao.", html)
 
     def test_editor_state_is_scoped_to_current_project(self) -> None:
         html = gallery_html()
@@ -187,6 +286,9 @@ class CuttedImportUiTests(unittest.TestCase):
 
     def test_closed_captions_can_render_in_preview(self) -> None:
         html = gallery_html()
+        control_bar_script = (
+            Path(__file__).resolve().parents[1] / "tools" / "cutted" / "assets" / "control-bar" / "control-bar.js"
+        ).read_text(encoding="utf-8")
 
         self.assertIn("data-preview-caption-layer", html)
         self.assertIn(".preview-caption-layer", html)
@@ -195,7 +297,15 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("function previewCaptionEventForCard", html)
         self.assertIn("syncPreviewCaptionsForOpenCards();", html)
         self.assertIn("syncPreviewCaptions(card, current);", html)
-        self.assertIn("caption_segments: moment.caption_segments || []", html)
+        self.assertIn("caption_language: captionLanguage", html)
+        self.assertIn("caption_tracks: captionTracks", html)
+        self.assertIn("caption_segments: captionSegments", html)
+        self.assertIn('data-cuted-caption-language="pt-BR"', control_bar_script)
+        self.assertIn("onCaptionLanguageChange: payload => setControlSurfaceCaptionLanguage(card, payload.captionLanguage)", html)
+        self.assertIn("/api/caption-tracks/translate", html)
+        self.assertIn("function captionTrackCanGenerate", html)
+        self.assertIn("Generating EN captions...", html)
+        self.assertIn("Generate English captions for this clip", control_bar_script)
         self.assertIn("onCaptionToggle: payload => setControlSurfaceCaptions(payload.captionsEnabled, payload.captionStyle)", html)
         self.assertIn("caption_style: captions.style", html)
         self.assertIn("captions_enabled: captions.enabled", html)
@@ -222,6 +332,253 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn(".preview-caption-layer[data-mode=animated] .preview-caption-side", html)
         self.assertIn("background:var(--preview-caption-bg,transparent)", html)
         self.assertIn("background:var(--preview-caption-highlight-bg", html)
+
+    def test_caption_language_tracks_are_serialized_and_resolved(self) -> None:
+        moment = CUTTED.Moment(
+            1,
+            0.0,
+            3.0,
+            1.0,
+            0.8,
+            "Titulo",
+            "Motivo",
+            "Transcricao",
+            "Pico",
+            "clips/clip-001.mp4",
+            "frames/clip-001.jpg",
+            (CUTTED.Segment(0.0, 1.5, "Fala em portugues."),),
+            caption_tracks={
+                "en": {
+                    "language": "en",
+                    "label": "EN",
+                    "status": "ready",
+                    "source": "openai_translation",
+                    "segments": [{"start": 0.0, "end": 1.5, "text": "English speech."}],
+                }
+            },
+        )
+
+        payload = CUTTED.moment_to_dict(moment)
+        row = CUTTED.row_with_selected_caption_track({**payload, "caption_language": "en"})
+
+        self.assertEqual(payload["caption_language_default"], "pt-BR")
+        self.assertEqual(payload["caption_tracks"]["pt-BR"]["status"], "ready")
+        self.assertEqual(payload["caption_tracks"]["en"]["status"], "ready")
+        self.assertEqual(row["caption_language"], "en")
+        self.assertEqual(row["caption_segments"][0]["text"], "English speech.")
+
+    def test_caption_track_generation_keeps_ptbr_when_english_unavailable(self) -> None:
+        moment = CUTTED.Moment(
+            1,
+            0.0,
+            2.0,
+            1.0,
+            0.7,
+            "Titulo",
+            "Motivo",
+            "Transcricao",
+            "Pico",
+            None,
+            None,
+            (CUTTED.Segment(0.0, 1.2, "Fala curta."),),
+        )
+        args = mock.Mock()
+        with mock.patch.object(CUTTED, "requested_ai_provider", return_value="local"):
+            [result] = CUTTED.apply_caption_language_tracks([moment], args)
+
+        payload = CUTTED.moment_to_dict(result)
+
+        self.assertEqual(payload["caption_tracks"]["pt-BR"]["segments"][0]["text"], "Fala curta.")
+        self.assertEqual(payload["caption_tracks"]["en"]["status"], "unavailable")
+
+    def test_import_analyze_does_not_prepare_english_captions_before_editor(self) -> None:
+        source = inspect.getsource(CUTTED.analyze)
+
+        self.assertNotIn("apply_caption_language_tracks", source)
+        self.assertIn("write_html(out_dir / \"index.html\", rendered, source.label)", source)
+
+    def test_caption_track_on_demand_generation_persists_project_files(self) -> None:
+        moment = CUTTED.Moment(
+            1,
+            0.0,
+            2.0,
+            1.0,
+            0.7,
+            "Titulo",
+            "Motivo",
+            "Transcricao",
+            "Pico",
+            "clips/clip-001.mp4",
+            "frames/clip-001.jpg",
+            (CUTTED.Segment(0.0, 1.2, "Fala curta."),),
+        )
+        translated_payload = {"clips": [{"rank": 1, "segments": [{"index": 0, "text": "Short speech."}]}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery_dir = Path(tmp)
+            moments = [CUTTED.moment_to_dict(moment)]
+            (gallery_dir / "moments.json").write_text(
+                json.dumps({"source": "Teste", "duration": 2.0, "config": {}, "moments": moments}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            (gallery_dir / "index.html").write_text(
+                CUTTED.page_html("Teste", "", json.dumps({"moments": moments}, ensure_ascii=False), "assets/brand/cuted-logo-transparent.png"),
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(CUTTED, "openai_api_key", return_value="key"), \
+                mock.patch.object(CUTTED, "request_caption_translation_batch", return_value=translated_payload) as request:
+                result = CUTTED.generate_gallery_caption_track(gallery_dir, 1, "en")
+
+            saved = json.loads((gallery_dir / "moments.json").read_text(encoding="utf-8"))
+            html = (gallery_dir / "index.html").read_text(encoding="utf-8")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(request.call_count, 1)
+        self.assertEqual(saved["moments"][0]["caption_tracks"]["en"]["status"], "ready")
+        self.assertEqual(saved["moments"][0]["caption_tracks"]["en"]["segments"][0]["text"], "Short speech.")
+        self.assertIn("Short speech.", html)
+
+    def test_caption_track_on_demand_generation_returns_cached_ready_track(self) -> None:
+        moment = CUTTED.Moment(
+            1,
+            0.0,
+            2.0,
+            1.0,
+            0.7,
+            "Titulo",
+            "Motivo",
+            "Transcricao",
+            "Pico",
+            None,
+            None,
+            (CUTTED.Segment(0.0, 1.2, "Fala curta."),),
+            caption_tracks={
+                "en": {
+                    "language": "en",
+                    "label": "EN",
+                    "status": "ready",
+                    "source": "openai_translation",
+                    "segments": [{"start": 0.0, "end": 1.2, "text": "Short speech."}],
+                }
+            },
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery_dir = Path(tmp)
+            moments = [CUTTED.moment_to_dict(moment)]
+            (gallery_dir / "moments.json").write_text(json.dumps({"moments": moments}), encoding="utf-8")
+            (gallery_dir / "index.html").write_text("window.CUTTED_DATA = {\"moments\": []}; window.CUTTED_SCRIPT = \"x\";", encoding="utf-8")
+
+            with mock.patch.object(CUTTED, "request_caption_translation_batch") as request:
+                result = CUTTED.generate_gallery_caption_track(gallery_dir, 1, "en")
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["cached"])
+        request.assert_not_called()
+
+    def test_caption_translation_batches_long_imports(self) -> None:
+        moments = [
+            CUTTED.Moment(
+                rank,
+                0.0,
+                10.0,
+                1.0,
+                0.7,
+                f"Titulo {rank}",
+                "Motivo",
+                "Transcricao",
+                "Pico",
+                None,
+                None,
+                tuple(CUTTED.Segment(float(index), float(index + 1), f"fala {rank}-{index}") for index in range(count)),
+            )
+            for rank, count in ((1, 21), (2, 55), (3, 51))
+        ]
+
+        batches = CUTTED.caption_translation_batches(moments)
+
+        self.assertEqual([[moment.rank for moment in batch] for batch in batches], [[1], [2], [3]])
+
+    def test_caption_translation_retries_missing_clips_from_partial_batch(self) -> None:
+        moments = [
+            CUTTED.Moment(
+                rank,
+                0.0,
+                3.0,
+                1.0,
+                0.7,
+                f"Titulo {rank}",
+                "Motivo",
+                "Transcricao",
+                "Pico",
+                None,
+                None,
+                (CUTTED.Segment(0.0, 1.0, f"fala {rank}"),),
+            )
+            for rank in (1, 2)
+        ]
+        payload = {
+            "clips": [
+                {
+                    "rank": 1,
+                    "segments": [{"index": 0, "text": "speech one"}],
+                }
+            ]
+        }
+        retry_payload = {
+            "clips": [
+                {
+                    "rank": 2,
+                    "segments": [{"index": 0, "text": "speech two"}],
+                }
+            ]
+        }
+
+        with mock.patch.object(CUTTED, "request_caption_translation_batch", side_effect=[payload, retry_payload]) as request:
+            translated = CUTTED.translate_caption_tracks_to_english(moments)
+
+        self.assertEqual(request.call_count, 2)
+        self.assertEqual(translated[1][0].text, "speech one")
+        self.assertEqual(translated[2][0].text, "speech two")
+
+    def test_caption_translation_keeps_ready_tracks_when_one_retry_still_fails(self) -> None:
+        moments = [
+            CUTTED.Moment(
+                rank,
+                0.0,
+                3.0,
+                1.0,
+                0.7,
+                f"Titulo {rank}",
+                "Motivo",
+                "Transcricao",
+                "Pico",
+                None,
+                None,
+                (CUTTED.Segment(0.0, 1.0, f"fala {rank}"),),
+            )
+            for rank in (1, 2)
+        ]
+        partial_payload = {
+            "clips": [
+                {
+                    "rank": 1,
+                    "segments": [{"index": 0, "text": "speech one"}],
+                }
+            ]
+        }
+        missing_payload = {"clips": []}
+        args = mock.Mock()
+
+        with mock.patch.object(CUTTED, "requested_ai_provider", return_value="openai"), \
+            mock.patch.object(CUTTED, "openai_api_key", return_value="key"), \
+            mock.patch.object(CUTTED, "request_caption_translation_batch", side_effect=[partial_payload, missing_payload]):
+            results = CUTTED.apply_caption_language_tracks(moments, args)
+
+        payloads = [CUTTED.moment_to_dict(moment) for moment in results]
+        self.assertEqual(payloads[0]["caption_tracks"]["en"]["status"], "ready")
+        self.assertEqual(payloads[0]["caption_tracks"]["en"]["segments"][0]["text"], "speech one")
+        self.assertEqual(payloads[1]["caption_tracks"]["en"]["status"], "unavailable")
+        self.assertEqual(payloads[1]["caption_tracks"]["pt-BR"]["status"], "ready")
 
     def test_preview_caption_text_repairs_portuguese_mojibake(self) -> None:
         html = gallery_html()
@@ -543,7 +900,12 @@ class CuttedImportUiTests(unittest.TestCase):
         source = ui_asset_source()
 
         self.assertIn(("Post AI", "Analyzing SEO and trends..."), stages)
-        self.assertIn('data-import-step="publish"', CUTTED.project_home_import_loading_html("assets/brand/cuted-logo-transparent.png"))
+        loading_html = CUTTED.project_home_import_loading_html("assets/brand/cuted-logo-transparent.png")
+        self.assertIn('data-import-step="publish"', loading_html)
+        self.assertIn('data-import-step="editor"', loading_html)
+        self.assertEqual(loading_html.count("data-import-step="), 8)
+        self.assertIn(".home-import-steps{display:grid;grid-template-columns:repeat(8,minmax(0,1fr))", source)
+        self.assertIn("@media(max-width:680px){.home-import-steps{grid-template-columns:repeat(4,minmax(0,1fr))}", source)
         self.assertIn(
             'const importStageOrder = ["prepare", "media", "audio", "analysis", "suggestions", "previews", "publish", "editor"];',
             source,
@@ -668,6 +1030,22 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertTrue(CUTTED.caption_cover_frame_enabled(type("Args", (), {"cover_frame_enabled": True})()))
         self.assertTrue(CUTTED.caption_cover_frame_enabled(type("Args", (), {"cover_frame": True})()))
         self.assertFalse(CUTTED.caption_cover_frame_enabled(type("Args", (), {})()))
+
+    def test_grain_effect_uses_bounded_render_rate_control(self) -> None:
+        args = CUTTED.mp4_output_args({"effect": {"key": "light-grain", "intensity": 65}})
+
+        self.assertEqual(args[args.index("-crf") + 1], CUTTED.FINAL_GRAIN_EFFECT_VIDEO_CRF)
+        self.assertIn("-maxrate", args)
+        self.assertEqual(args[args.index("-maxrate") + 1], CUTTED.FINAL_GRAIN_EFFECT_MAXRATE)
+        self.assertIn("-bufsize", args)
+        self.assertEqual(args[args.index("-bufsize") + 1], CUTTED.FINAL_GRAIN_EFFECT_BUFSIZE)
+
+    def test_normal_render_keeps_existing_crf_without_rate_cap(self) -> None:
+        args = CUTTED.mp4_output_args({"effect": {"key": "none", "intensity": 0}})
+
+        self.assertEqual(args[args.index("-crf") + 1], CUTTED.FINAL_VIDEO_CRF)
+        self.assertNotIn("-maxrate", args)
+        self.assertNotIn("-bufsize", args)
 
     def test_camera_analysis_fetch_has_timeout(self) -> None:
         html = gallery_html()
@@ -815,8 +1193,10 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("captions: normalizeCaptionSettings({", html)
         self.assertIn("const captions = normalizeCaptionSettings(edit.captions)", html)
         self.assertIn("captions_enabled: captions.enabled", html)
+        self.assertIn("caption_language: captionLanguage", html)
+        self.assertIn("caption_tracks: captionTracks", html)
         self.assertIn("caption_style: captions.style", html)
-        self.assertIn('animated_caption_windows: captions.style.mode === "animated" ? previewAnimatedCaptionTimeline(moment) : []', html)
+        self.assertIn('animated_caption_windows: captions.style.mode === "animated" ? previewAnimatedCaptionTimeline(captionMoment) : []', html)
         self.assertIn("captions_enabled: queue.some(item => item.captions_enabled !== false)", html)
         self.assertIn("captions_enabled: queue.caption_queue.some(item => item.captions_enabled !== false)", html)
 
@@ -1289,6 +1669,51 @@ class CuttedImportUiTests(unittest.TestCase):
 
             self.assertEqual(CUTTED.visual_map_source_path(source), video_path.resolve())
 
+    def test_source_metadata_records_video_quality(self) -> None:
+        probe = {
+            "streams": [{"codec_type": "video", "width": 1920, "height": 1080, "bit_rate": "4200000"}],
+            "format": {"bit_rate": "4500000"},
+        }
+
+        metadata = CUTTED.source_media_metadata("youtube", "Video", "https://media.example/video.mp4", probe, "best", None)
+
+        self.assertEqual(metadata["render_source_kind"], "remote-url")
+        self.assertEqual(metadata["video_width"], 1920)
+        self.assertEqual(metadata["video_height"], 1080)
+        self.assertEqual(metadata["video_bit_rate"], "4200000")
+        self.assertEqual(metadata["format_bit_rate"], "4500000")
+
+    def test_youtube_fallback_quality_rejects_low_resolution(self) -> None:
+        probe = {"streams": [{"codec_type": "video", "width": 640, "height": 360}]}
+
+        with self.assertRaisesRegex(RuntimeError, "qualidade suficiente"):
+            CUTTED.validate_youtube_fallback_quality(probe, "HTTP Error 403")
+
+    def test_youtube_fallback_format_requires_720p_or_higher(self) -> None:
+        self.assertIn("height>=720", CUTTED.YOUTUBE_STREAM_FALLBACK_FORMAT)
+        self.assertNotIn("/18/", CUTTED.YOUTUBE_STREAM_FALLBACK_FORMAT)
+
+    def test_prepare_youtube_source_removes_partial_source_after_quality_failure(self) -> None:
+        args = mock.Mock(youtube_url="https://www.youtube.com/watch?v=test", language="pt", youtube_captions=False)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp)
+
+            def fail_download(*_args: object) -> Path:
+                partial = out_dir / "_source" / "source.f137.mp4.part"
+                partial.write_bytes(b"partial")
+                raise RuntimeError("HTTP Error 403: Forbidden")
+
+            with mock.patch.object(CUTTED, "youtube_title", return_value="Video"), \
+                mock.patch.object(CUTTED, "download_youtube_audio", return_value=out_dir / "_source" / "audio.m4a"), \
+                mock.patch.object(CUTTED, "youtube_high_quality_format", return_value="best"), \
+                mock.patch.object(CUTTED, "download_youtube_render_source", side_effect=fail_download), \
+                mock.patch.object(CUTTED, "youtube_render_url", side_effect=RuntimeError("Requested format is not available")):
+                with self.assertRaisesRegex(RuntimeError, "arquivo local"):
+                    CUTTED.prepare_youtube_source(args, out_dir, "ffmpeg", None)
+
+            self.assertFalse((out_dir / "_source" / "source.f137.mp4.part").exists())
+
     def test_friendly_ytdlp_error_explains_antibot(self) -> None:
         message = CUTTED.friendly_ytdlp_error("Sign in to confirm you're not a bot")
 
@@ -1337,6 +1762,30 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertEqual(event["steps"], 4)
         self.assertEqual(event["detail"], "2 de 4 previews")
 
+    def test_import_progress_line_escapes_emoji_for_windows_charmap(self) -> None:
+        line = CUTTED.import_progress_line({
+            "stage": "media",
+            "label": "Media",
+            "message": "Ready",
+            "percent": 30,
+            "detail": "Alambique \U0001f37a",
+        })
+
+        line.encode("cp1252")
+        event = CUTTED.parse_import_progress_line(line)
+
+        self.assertIsNotNone(event)
+        self.assertEqual(event["detail"], "Alambique \U0001f37a")
+        self.assertIn("\\ud83c\\udf7a", line)
+
+    def test_import_subprocess_forces_utf8_stdio(self) -> None:
+        env = CUTTED.import_process_env()
+        source = inspect.getsource(CUTTED.start_import_job)
+
+        self.assertEqual(env["PYTHONIOENCODING"], "utf-8")
+        self.assertEqual(env["PYTHONUTF8"], "1")
+        self.assertIn("env=import_process_env()", source)
+
     def test_import_job_snapshot_prefers_real_progress_event(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             job = CUTTED.ImportJob(
@@ -1382,6 +1831,17 @@ class CuttedImportUiTests(unittest.TestCase):
 
         self.assertEqual(metadata["output_path"], "")
         self.assertEqual(metadata["preview_count"], 10)
+        self.assertEqual(metadata["language"], "pt")
+
+    def test_import_request_metadata_keeps_project_home_imports_in_portuguese(self) -> None:
+        original_provider = CUTTED.configured_ai_provider
+        CUTTED.configured_ai_provider = lambda: "local"
+        try:
+            metadata = CUTTED.import_request_metadata({"source_path": "video.mp4", "language": "en"})
+        finally:
+            CUTTED.configured_ai_provider = original_provider
+
+        self.assertEqual(metadata["language"], "pt")
 
     def test_next_import_output_dir_uses_projects_folder(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1389,6 +1849,51 @@ class CuttedImportUiTests(unittest.TestCase):
 
             self.assertEqual(output_dir.parent.name, CUTTED.PROJECTS_DIR_NAME)
             self.assertEqual(output_dir.parent.parent, Path(tmp))
+
+    def test_project_catalog_recent_reindexes_existing_workspace_projects(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "workspace"
+            project_dir = workspace / CUTTED.PROJECTS_DIR_NAME / "20260627-demo"
+            project_dir.mkdir(parents=True)
+            (project_dir / "index.html").write_text("<html>CUTED</html>", encoding="utf-8")
+            (project_dir / "moments.json").write_text(json.dumps({"moments": [{"rank": 1}]}), encoding="utf-8")
+            catalog_path = Path(tmp) / "projects.json"
+            original_path = CUTTED.project_catalog_path
+            CUTTED.project_catalog_path = lambda: catalog_path
+            try:
+                recent = CUTTED.project_catalog_recent(workspace)
+                catalog = CUTTED.read_project_catalog(catalog_path)
+            finally:
+                CUTTED.project_catalog_path = original_path
+
+        self.assertEqual(len(recent), 1)
+        self.assertEqual(recent[0]["title"], "20260627-demo")
+        self.assertEqual(recent[0]["clip_count"], 1)
+        self.assertEqual(len(catalog["projects"]), 1)
+
+    def test_project_catalog_reindex_respects_removed_recents(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "workspace"
+            project_dir = workspace / CUTTED.PROJECTS_DIR_NAME / "20260627-demo"
+            project_dir.mkdir(parents=True)
+            (project_dir / "index.html").write_text("<html>CUTED</html>", encoding="utf-8")
+            catalog_path = Path(tmp) / "projects.json"
+            removed_id = CUTTED.project_id_for_path(project_dir)
+            catalog_path.write_text(
+                json.dumps({"version": 1, "projects": [], "removed_project_ids": [removed_id]}),
+                encoding="utf-8",
+            )
+            original_path = CUTTED.project_catalog_path
+            CUTTED.project_catalog_path = lambda: catalog_path
+            try:
+                recent = CUTTED.project_catalog_recent(workspace)
+                catalog = CUTTED.read_project_catalog(catalog_path)
+            finally:
+                CUTTED.project_catalog_path = original_path
+
+        self.assertEqual(recent, [])
+        self.assertEqual(catalog["projects"], [])
+        self.assertIn(removed_id, catalog["removed_project_ids"])
 
     def test_render_export_dir_prefers_project_render_output_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1404,6 +1909,99 @@ class CuttedImportUiTests(unittest.TestCase):
 
 
 class CuttedLaunchTests(unittest.TestCase):
+    def test_gallery_bootstrap_sets_hardened_local_session(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base_dir = Path(temp_dir)
+            local_gallery_fixture(base_dir)
+            server, thread, port = start_local_gallery_server(base_dir)
+            try:
+                status, headers = local_http_request(port, "GET", "/index.html")
+                self.assertEqual(status, 200)
+                self.assertIn("HttpOnly", headers["Set-Cookie"])
+                self.assertIn("SameSite=Strict", headers["Set-Cookie"])
+                self.assertEqual(local_http_request(port, "GET", "/api/health")[0], 200)
+            finally:
+                stop_local_gallery_server(server, thread)
+
+    def test_gallery_get_rejects_dns_rebinding_and_missing_session(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base_dir = Path(temp_dir)
+            local_gallery_fixture(base_dir)
+            server, thread, port = start_local_gallery_server(base_dir)
+            try:
+                self.assertEqual(local_http_request(port, "GET", "/moments.json")[0], 403)
+                status, headers = local_http_request(
+                    port, "GET", "/index.html", {"Host": "attacker.example"}
+                )
+                self.assertEqual(status, 403)
+                self.assertNotIn("Set-Cookie", headers)
+                cookie = bootstrap_local_session(port)
+                self.assertEqual(
+                    local_http_request(port, "GET", "/moments.json", {"Cookie": cookie})[0],
+                    200,
+                )
+            finally:
+                stop_local_gallery_server(server, thread)
+
+    def test_gallery_post_requires_local_session_and_origin(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base_dir = Path(temp_dir)
+            local_gallery_fixture(base_dir)
+            server, thread, port = start_local_gallery_server(base_dir)
+            try:
+                cookie = bootstrap_local_session(port)
+                self.assertEqual(local_http_request(port, "POST", "/api/unknown")[0], 403)
+                external_headers = {"Cookie": cookie, "Origin": "https://example.com"}
+                self.assertEqual(
+                    local_http_request(port, "POST", "/api/unknown", external_headers)[0],
+                    403,
+                )
+                null_headers = {"Cookie": cookie, "Origin": "null"}
+                self.assertEqual(
+                    local_http_request(port, "POST", "/api/unknown", null_headers)[0],
+                    403,
+                )
+                local_headers = {
+                    "Cookie": cookie,
+                    "Origin": f"http://127.0.0.1:{port}",
+                }
+                self.assertEqual(
+                    local_http_request(port, "POST", "/api/unknown", local_headers)[0],
+                    404,
+                )
+            finally:
+                stop_local_gallery_server(server, thread)
+
+    def test_local_session_cookie_requires_exact_token(self) -> None:
+        token = "session-token"
+
+        self.assertTrue(CUTTED.local_session_cookie_matches("other=x; cuted_session=session-token", token))
+        self.assertFalse(CUTTED.local_session_cookie_matches("cuted_session=wrong", token))
+        self.assertFalse(CUTTED.local_session_cookie_matches("", token))
+
+    def test_local_request_origin_accepts_only_same_loopback_port(self) -> None:
+        self.assertFalse(CUTTED.local_request_origin_allowed("", 8779))
+        self.assertTrue(CUTTED.local_request_origin_allowed("http://127.0.0.1:8779", 8779))
+        self.assertTrue(CUTTED.local_request_origin_allowed("http://localhost:8779", 8779))
+        self.assertFalse(CUTTED.local_request_origin_allowed("http://127.0.0.1:8780", 8779))
+        self.assertFalse(CUTTED.local_request_origin_allowed("https://example.com", 8779))
+        self.assertFalse(CUTTED.local_request_origin_allowed("null", 8779))
+
+    def test_local_request_host_requires_loopback_and_matching_port(self) -> None:
+        self.assertTrue(CUTTED.local_request_host_allowed("127.0.0.1:8779", 8779))
+        self.assertTrue(CUTTED.local_request_host_allowed("localhost:8779", 8779))
+        self.assertFalse(CUTTED.local_request_host_allowed("attacker.example:8779", 8779))
+        self.assertFalse(CUTTED.local_request_host_allowed("127.0.0.1:8780", 8779))
+
+    def test_local_server_bind_rejects_non_loopback_host(self) -> None:
+        for host in ("127.0.0.1", "localhost", "::1"):
+            CUTTED.require_local_bind_host(host)
+
+        with self.assertRaisesRegex(ValueError, "only accepts"):
+            CUTTED.require_local_bind_host("0.0.0.0")
+        with self.assertRaisesRegex(ValueError, "only accepts"):
+            CUTTED.require_local_bind_host("192.168.1.10")
+
     def test_default_workspace_dir_lives_under_documents(self) -> None:
         workspace = CUTTED.default_workspace_dir()
 
@@ -1453,20 +2051,86 @@ class CuttedLaunchTests(unittest.TestCase):
 
     def test_launch_command_is_registered(self) -> None:
         argv_backup = sys.argv
-        sys.argv = ["cutted.py", "launch", "--no-browser", "--workspace", "ignored"]
+        sys.argv = ["cutted.py", "launch", "--desktop-shell", "--no-browser", "--workspace", "ignored"]
         try:
             args = CUTTED.parse_args()
         finally:
             sys.argv = argv_backup
 
         self.assertEqual(args.command, "launch")
+        self.assertTrue(args.desktop_shell)
         self.assertTrue(args.no_browser)
         self.assertEqual(args.workspace, Path("ignored"))
+
+    def test_desktop_shell_check_command_is_registered(self) -> None:
+        argv_backup = sys.argv
+        sys.argv = ["cutted.py", "desktop-shell-check", "--json"]
+        try:
+            args = CUTTED.parse_args()
+        finally:
+            sys.argv = argv_backup
+
+        self.assertEqual(args.command, "desktop-shell-check")
+        self.assertTrue(args.json)
+
+    def test_diagnostics_command_is_registered(self) -> None:
+        argv_backup = sys.argv
+        sys.argv = ["cutted.py", "diagnostics", "--json"]
+        try:
+            args = CUTTED.parse_args()
+        finally:
+            sys.argv = argv_backup
+
+        self.assertEqual(args.command, "diagnostics")
+        self.assertTrue(args.json)
+
+    def test_openai_key_is_written_to_user_data_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_key = "s" + "k-" + "a" * 30
+            with mock.patch.dict(CUTTED.os.environ, {"CUTED_HOME": tmp}, clear=False):
+                CUTTED.write_openai_key(fake_key)
+
+            secret_path = Path(tmp) / ".env.cuted.local"
+            self.assertTrue(secret_path.exists())
+            self.assertEqual(secret_path.read_text(encoding="utf-8"), f"OPENAI_API_KEY={fake_key}\n")
+
+    def test_local_env_candidates_prefer_user_secret_before_legacy_repo_secret(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(CUTTED.os.environ, {"CUTED_HOME": tmp}, clear=False):
+                candidates = CUTTED.local_env_candidates()
+
+            self.assertEqual(candidates[0], Path(tmp) / ".env.cuted.local")
+            self.assertEqual(candidates[1], CUTTED.legacy_repo_secret_env_path())
+
+    def test_diagnostics_payload_is_sanitized(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_key = "s" + "k-" + "b" * 30
+            with mock.patch.dict(CUTTED.os.environ, {"CUTED_HOME": tmp, "OPENAI_API_KEY": fake_key}, clear=False):
+                payload = CUTTED.diagnostics_payload()
+
+            text = json.dumps(payload, ensure_ascii=False)
+            self.assertTrue(payload["openai"]["key_configured"])
+            self.assertFalse(payload["privacy"]["contains_api_key"])
+            self.assertNotIn(fake_key, text)
+            self.assertNotIn(tmp, text)
+
+    def test_diagnostics_command_does_not_load_secret_env_files(self) -> None:
+        argv_backup = sys.argv
+        sys.argv = ["cutted.py", "diagnostics", "--json"]
+        try:
+            with mock.patch.object(CUTTED, "load_local_env") as load_env:
+                with mock.patch.object(CUTTED, "write_diagnostics"):
+                    exit_code = CUTTED.main()
+        finally:
+            sys.argv = argv_backup
+
+        self.assertEqual(exit_code, 0)
+        load_env.assert_not_called()
 
 
 class CutedLauncherTests(unittest.TestCase):
     def test_normalized_argv_defaults_to_launch(self) -> None:
-        self.assertEqual(LAUNCHER.normalized_argv(["cuted.exe"]), ["cuted.exe", "launch"])
+        self.assertEqual(LAUNCHER.normalized_argv(["cuted.exe"]), ["cuted.exe", "launch", "--desktop-shell"])
 
     def test_normalized_argv_strips_frozen_reentry_script(self) -> None:
         argv = ["cuted.exe", "C:\\app\\_internal\\tools\\cutted\\scripts\\CUTTED.PY", "analyze", "--out", "x"]
@@ -1492,6 +2156,27 @@ class CutedLauncherTests(unittest.TestCase):
 
         self.assertTrue(hasattr(module, "launch_workspace"))
         self.assertTrue(hasattr(module, "import_request_metadata"))
+
+
+class CutedDesktopShellTests(unittest.TestCase):
+    def test_desktop_shell_url_points_to_workspace_index(self) -> None:
+        self.assertEqual(DESKTOP_SHELL.desktop_shell_url("127.0.0.1", 8779), "http://127.0.0.1:8779/index.html")
+
+    def test_open_desktop_shell_returns_false_when_webview_is_missing(self) -> None:
+        messages: list[str] = []
+        with mock.patch.object(DESKTOP_SHELL, "load_webview", return_value=None):
+            opened = DESKTOP_SHELL.open_desktop_shell("127.0.0.1", 8779, Path(tempfile.gettempdir()), messages.append)
+
+        self.assertFalse(opened)
+        self.assertTrue(any("pywebview is not installed" in message for message in messages))
+
+    def test_desktop_shell_status_reports_missing_webview(self) -> None:
+        with mock.patch.object(DESKTOP_SHELL, "load_webview", return_value=None):
+            status = DESKTOP_SHELL.desktop_shell_status(Path(tempfile.gettempdir()))
+
+        self.assertFalse(status["ok"])
+        self.assertEqual(status["backend"], "pywebview")
+        self.assertEqual(status["renderer"], "edgechromium")
 
 
 if __name__ == "__main__":

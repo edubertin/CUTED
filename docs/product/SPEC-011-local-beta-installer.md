@@ -1,5 +1,10 @@
 # SPEC-011: Local Beta Installer
 
+Status update (2026-07-17): the desktop shell, portable build, installer and
+sanitized diagnostics described here were implemented. This document preserves
+the original beta requirements; current public distribution gates live in
+`docs/operations/PUBLIC_RELEASE_CHECKLIST.md`.
+
 ## Objective
 
 Ship CUTED Phase 1 as a complete local beta that non-technical friends can
@@ -247,6 +252,11 @@ It should collect safe metadata only:
 - no source videos;
 - no full transcripts by default;
 - no API keys or secrets.
+
+Implementation note: the first diagnostics version emits a sanitized JSON report
+with app/runtime/tool readiness, OpenAI key configured boolean, and privacy
+flags. It intentionally excludes source videos, transcripts, raw provider
+payloads, cookies, and key values.
 
 ### Step 9: Release Checklist
 

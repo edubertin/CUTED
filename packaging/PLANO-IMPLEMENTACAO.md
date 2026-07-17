@@ -198,7 +198,8 @@ Fases 4–6 não tocam o código do app.
   precisa ser executado e iterado numa sessão dedicada.
 - Fase 5 (instalador): `installer.iss` pronto; compilar após a Fase 4 passar.
 - Fase 6 (guia): `guides/INSTALACAO-BETA.md` pronto, faltam os prints;
-  `diagnostics` e limpeza por job continuam pendentes.
+  `cuted.exe diagnostics` implementado em 2026-07-02; limpeza por job continua
+  pendente.
 
 ## Revisão QA (2026-06-10)
 
@@ -219,3 +220,10 @@ regressão no fluxo dev; 38 testes verdes. Achados corrigidos na mesma sessão:
 
 Pendência consciente: o smoke automatizado não cobre import/render com vídeo
 real (checklist manual no `smoke-test.ps1`). Validar na sessão de build.
+# Atualizacao De Distribuicao - 2026-07-17
+
+Este plano preserva as decisoes historicas do beta privado. A decisao vigente
+e distribuir o CUTED gratuitamente, com codigo-fonte publico sob AGPL-3.0.
+Referencias abaixo a produto pago, venda ou restricao da AGPL ao beta privado
+estao superadas. O binario Windows continua bloqueado ate os gates de
+`docs/operations/PUBLIC_RELEASE_CHECKLIST.md` passarem.

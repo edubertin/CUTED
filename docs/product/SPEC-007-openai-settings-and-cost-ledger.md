@@ -24,12 +24,14 @@ committing credentials.
 
 ## Local Files
 
-- Secret key: `.env.cuted.local` at the repository root.
+- Secret key: `%USERPROFILE%\.cuted\.env.cuted.local`.
 - User settings: `%USERPROFILE%\.cuted\settings.json`.
 - Usage ledger: `%USERPROFILE%\.cuted\usage-ledger.json`.
 
-`.env.cuted.local` is covered by the existing `.env.*.local` gitignore rule.
-The UI never writes the token to `localStorage`.
+`CUTED_HOME` may override the `%USERPROFILE%\.cuted` data directory for tests or
+advanced local debugging. The legacy repository `.env.cuted.local` remains a
+read fallback for development compatibility, but new saves from the app write to
+the user data directory. The UI never writes the token to `localStorage`.
 
 ## API Endpoints
 
@@ -53,7 +55,8 @@ The OpenAI dashboard remains the source of truth for actual billing.
 ## Acceptance Criteria
 
 - A user can paste and save an OpenAI token from the app.
-- The saved token is not visible in page HTML, localStorage, or API responses.
+- The saved token is not visible in page HTML, localStorage, diagnostics, or API
+  responses.
 - A user can test the connection without starting an import.
 - Imports can use the saved OpenAI settings.
 - The settings panel shows local estimated total and latest usage event.

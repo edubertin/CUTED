@@ -70,15 +70,30 @@ def source_media_metadata(
     is_remote = render_source.startswith(("http://", "https://"))
     path = Path(render_source) if not is_remote else None
     is_local = bool(path and path.exists())
+    video = media_video_probe(probe)
     return {
         "kind": kind,
         "label": label,
         "render_source_kind": "local-file" if is_local else "remote-url",
         "render_source_file": path.name if path and is_local else "",
+        "video_width": video.get("width"),
+        "video_height": video.get("height"),
+        "video_bit_rate": video.get("bit_rate"),
+        "format_bit_rate": probe.get("format", {}).get("bit_rate") if isinstance(probe.get("format"), dict) else None,
         "format_selector": format_selector or "",
         "download_error": download_error or "",
         "probe": probe,
     }
+
+
+def media_video_probe(probe: dict[str, object]) -> dict[str, object]:
+    streams = probe.get("streams")
+    if not isinstance(streams, list):
+        return {}
+    for stream in streams:
+        if isinstance(stream, dict) and stream.get("codec_type") == "video":
+            return stream
+    return {}
 
 
 def write_source_metadata(out_dir: Path, metadata: dict[str, object] | None) -> None:
@@ -168,9 +183,18 @@ def download_youtube_render_source(url: str, temp_dir: Path, ffmpeg: str, format
     ]
     result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode != 0:
+        cleanup_youtube_partial_sources(temp_dir)
         message = friendly_ytdlp_error(result.stderr or result.stdout or "yt-dlp high quality download failed")
         raise RuntimeError(message)
     return resolved_youtube_render_file(temp_dir, media_extensions)
+
+
+def cleanup_youtube_partial_sources(temp_dir: Path) -> None:
+    if not temp_dir.exists():
+        return
+    for path in temp_dir.glob("source.*.part"):
+        if path.is_file():
+            path.unlink(missing_ok=True)
 
 
 def resolved_youtube_render_file(temp_dir: Path, media_extensions: set[str]) -> Path:

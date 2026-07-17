@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "CUTED aspect-ratio preset identifier, not a credential"
+regexTarget = "match"
+regexes = ['''vertical_9_16''']

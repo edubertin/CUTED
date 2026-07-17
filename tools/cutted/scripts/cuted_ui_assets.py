@@ -64,7 +64,7 @@ def project_home_compact_import_css() -> str:
 .home-import-progress strong{position:relative;z-index:1;display:grid;place-items:center;height:100%;padding:0 18px;color:var(--color-text);font-size:13px;text-align:center;text-shadow:0 1px 8px rgba(0,0,0,.6)}
 .home-import-loading small{color:var(--color-text-muted);font-size:12px;text-transform:uppercase}
 .home-import-detail{min-height:18px;margin:-4px 0 0;color:rgba(231,231,232,.7);font-size:12px;text-align:center}
-.home-import-steps{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;width:100%;margin:2px 0 0;padding:0;list-style:none}
+.home-import-steps{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;width:100%;margin:2px 0 0;padding:0;list-style:none}
 .home-import-steps li{display:grid;justify-items:center;gap:6px;min-width:0;color:rgba(231,231,232,.48);font-size:10px;font-weight:800;text-transform:uppercase}
 .home-import-steps li span{display:block;width:10px;height:10px;border:1px solid rgba(231,231,232,.18);border-radius:999px;background:rgba(231,231,232,.08);box-shadow:inset 0 1px rgba(255,255,255,.12)}
 .home-import-steps li[data-state=done]{color:rgba(175,207,42,.86)}.home-import-steps li[data-state=done] span{border-color:rgba(175,207,42,.62);background:var(--color-brand-green);box-shadow:0 0 14px rgba(175,207,42,.3)}
@@ -185,12 +185,13 @@ function hideImportLoading(){
   delete document.body.dataset.importing;
 }
 const activeImportJobStorageKey = "cuted-active-import-job";
+const activeImportJobMaxAgeMs = 6 * 60 * 60 * 1000;
 let activeImportPollJobId = "";
 function importJobStorage(){
   try {
-    return window.sessionStorage;
+    return window.localStorage;
   } catch (error) {
-    console.warn("Could not access sessionStorage for import recovery.", error);
+    console.warn("Could not access localStorage for import recovery.", error);
     return null;
   }
 }
@@ -201,6 +202,7 @@ function saveActiveImportJob(job){
   storage.setItem(activeImportJobStorageKey, JSON.stringify({
     id: job.id,
     output_url: job.output_url || "",
+    output_dir: job.output_dir || "",
     updated_at: Date.now()
   }));
 }
@@ -209,7 +211,12 @@ function storedActiveImportJob(){
   if (!storage) return null;
   try {
     const data = JSON.parse(storage.getItem(activeImportJobStorageKey) || "null");
-    return data && data.id ? data : null;
+    if (!data || !data.id) return null;
+    if (Date.now() - Number(data.updated_at || 0) > activeImportJobMaxAgeMs) {
+      storage.removeItem(activeImportJobStorageKey);
+      return null;
+    }
+    return data;
   } catch (error) {
     storage.removeItem(activeImportJobStorageKey);
     return null;
@@ -298,6 +305,7 @@ async function pollImport(jobId, button, options = {}){
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error(data.error || "Job not found.");
     const job = data.job || {};
+    saveActiveImportJob(job);
     setStatus(`${job.message || "Processing..."} (${job.status || "running"})`);
     updateImportLoading(job);
     if (job.status === "ready") {
@@ -465,7 +473,7 @@ async function transcribeContextAudio(form, blob, seconds, maxLevel){
   const sizeKb = Math.max(1, Math.round(blob.size / 1024));
   setContextAudioState(form, "transcribing", `Transcribing ${seconds.toFixed(1)}s / ${sizeKb} KB, peak input ${contextAudioLevelPercent(maxLevel)}%...`);
   try {
-    const language = "auto";
+    const language = "pt";
     const response = await fetch(`/api/ai-context/audio?language=${encodeURIComponent(language)}`, {
       method: "POST",
       headers: { "Content-Type": blob.type || "audio/webm" },
@@ -1091,10 +1099,13 @@ function normalizePlatformEdit(edit, fallback){
   const pathSource = Object.prototype.hasOwnProperty.call(source, "camera_path") ? source.camera_path : base.camera_path;
   const captionSource = Object.prototype.hasOwnProperty.call(source, "captions") ? source.captions : null;
   const captionBase = Object.prototype.hasOwnProperty.call(base, "captions") ? base.captions : null;
+  const captionLanguageSource = Object.prototype.hasOwnProperty.call(source, "captionLanguage") ? source.captionLanguage : source.caption_language;
+  const captionLanguageBase = Object.prototype.hasOwnProperty.call(base, "captionLanguage") ? base.captionLanguage : base.caption_language;
   return {
     camera: normalizeCamera(source.camera || base.camera || defaultCamera()),
     camera_path: normalizeCameraPath(pathSource),
     captions: normalizeCaptionSettings(captionSource, captionBase),
+    captionLanguage: normalizeCaptionLanguage(captionLanguageSource || captionLanguageBase || defaultCaptionLanguage()),
     director_plan: normalizeDirectorPlan(source.director_plan || base.director_plan),
     effect: normalizeEffect(source.effect || base.effect || defaultEffect()),
     overlay: overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
@@ -1122,6 +1133,64 @@ function setPlatformEditForRank(rank, platform, patch){
 }
 function defaultCaptionSettings(){
   return { enabled: captionEnabled(), style: captionStyle() };
+}
+function defaultCaptionLanguage(){
+  return "pt-BR";
+}
+function normalizeCaptionLanguage(value){
+  const text = String(value || "").trim().toLowerCase().replace("_", "-");
+  if (["en", "eng", "english", "ingles"].includes(text)) return "en";
+  return "pt-BR";
+}
+function normalizeCaptionTracks(value, fallbackSegments = []){
+  const source = value && typeof value === "object" ? value : {};
+  const tracks = {};
+  ["pt-BR", "en"].forEach(language => {
+    const aliases = language === "pt-BR" ? ["pt-BR", "pt", "pt_br", "pt-BR".toLowerCase()] : ["en", "eng", "english"];
+    const raw = aliases.map(key => source[key]).find(item => item && typeof item === "object");
+    if (raw) {
+      tracks[language] = Object.assign({}, raw, {
+        language,
+        label: raw.label || (language === "pt-BR" ? "PT-BR" : "EN"),
+        status: raw.status || (Array.isArray(raw.segments) && raw.segments.length ? "ready" : "unavailable"),
+        segments: Array.isArray(raw.segments) ? raw.segments : []
+      });
+    }
+  });
+  if (!tracks["pt-BR"]) {
+    tracks["pt-BR"] = {
+      language: "pt-BR",
+      label: "PT-BR",
+      status: "ready",
+      source: "legacy_caption_segments",
+      segments: Array.isArray(fallbackSegments) ? fallbackSegments : []
+    };
+  }
+  if (!tracks.en) {
+    tracks.en = { language: "en", label: "EN", status: "unavailable", source: "not_generated", segments: [] };
+  }
+  return tracks;
+}
+function captionTrackForMoment(moment, language){
+  const tracks = normalizeCaptionTracks(moment?.caption_tracks, moment?.caption_segments || []);
+  return tracks[normalizeCaptionLanguage(language)] || tracks["pt-BR"];
+}
+function captionTrackAvailable(moment, language){
+  const track = captionTrackForMoment(moment, language);
+  return Boolean(track && track.status === "ready" && Array.isArray(track.segments) && track.segments.length);
+}
+function captionTrackCanGenerate(moment, language){
+  if (normalizeCaptionLanguage(language) !== "en") return false;
+  if (captionTrackAvailable(moment, "en")) return false;
+  return captionSegmentsForMoment(moment, "pt-BR").length > 0;
+}
+function captionSegmentsForMoment(moment, language){
+  const track = captionTrackForMoment(moment, language);
+  if (track?.status === "ready" && Array.isArray(track.segments)) return track.segments;
+  return Array.isArray(moment?.caption_segments) ? moment.caption_segments : [];
+}
+function captionLanguageOptionsForMoment(moment){
+  return { "pt-BR": true, en: captionTrackAvailable(moment, "en") ? "ready" : captionTrackCanGenerate(moment, "en") ? "generate" : false };
 }
 function normalizeCaptionSettings(value, fallback = null){
   const source = value && typeof value === "object" ? value : {};
@@ -2383,11 +2452,14 @@ function controlSurfaceStateForCard(card){
   const platforms = uniquePlatforms(current.platforms);
   const busy = controlSurfaceBusy(card);
   const trim = trimValues(card);
+  const moment = previewMomentForCard(card);
   return {
     aiStatus: busy ? "loading" : controlSurfaceAiStatus(card),
     aspectRatio: controlSurfaceAspectRatio(platform),
     bumpers: bumpersForRank(rank, platform),
     busy,
+    captionLanguage: edit.captionLanguage,
+    captionLanguageOptions: captionLanguageOptionsForMoment(moment),
     captionMode: edit.captions.style.mode,
     captionsEnabled: edit.captions.enabled,
     captionStyle: edit.captions.style,
@@ -2415,6 +2487,7 @@ function controlSurfaceCallbacksForCard(card){
     onBumperClick: payload => openControlSurfaceBumperInput(card, payload.slot),
     onBumperRemove: payload => removeBumperForRank(card.dataset.rank, payload.slot),
     onCaptionToggle: payload => setControlSurfaceCaptions(payload.captionsEnabled, payload.captionStyle),
+    onCaptionLanguageChange: payload => setControlSurfaceCaptionLanguage(card, payload.captionLanguage),
     onCaptionStyleChange: payload => setControlSurfaceCaptions(payload.captionsEnabled, payload.captionStyle),
     onDiscardClick: () => discardControlSurfaceCard(card),
     onEffectStyleChange: payload => setEffectForRank(card.dataset.rank, { key: appEffectKeyFromControlSurface(payload.effectStyle) }),
@@ -2442,6 +2515,15 @@ function controlSurfaceStatus(card){
   const platform = activePlatformForRank(card.dataset.rank);
   const platforms = uniquePlatforms(current.platforms);
   if (card.dataset.bumperStatus) return { kind: "error", label: card.dataset.bumperStatus, tone: "red" };
+  if (card.dataset.captionTranslationStatus) {
+    return {
+      kind: "caption",
+      label: card.dataset.captionTranslationStatus,
+      progress: card.dataset.captionTranslationBusy === "1" ? 62 : null,
+      persistent: card.dataset.captionTranslationBusy === "1",
+      tone: card.dataset.captionTranslationTone || "blue"
+    };
+  }
   if (current.status === "discarded") return { kind: "discarded", label: "CUT DISCARDED", persistent: true, tone: "red" };
   if (card.dataset.aiApplying === "1") return { kind: "ai", label: "IA ajustando keyframes...", progress: 58, persistent: true, tone: "blue" };
   if (controlSurfaceMapping(card)) return { kind: "mapping", label: "Projeto sendo mapeado...", progress: 28, persistent: true, tone: "blue" };
@@ -2508,6 +2590,83 @@ function setControlSurfaceCaptions(enabled, style = null){
   renderCaptionQueue();
   renderFinalStage();
   document.querySelectorAll(".card[open]").forEach(updateControlSurfaceForCard);
+}
+async function setControlSurfaceCaptionLanguage(cardOrLanguage, maybeLanguage = null){
+  const cards = maybeLanguage === null ? Array.from(document.querySelectorAll(".card[open]")) : [cardOrLanguage].filter(Boolean);
+  const nextLanguage = normalizeCaptionLanguage(maybeLanguage === null ? cardOrLanguage : maybeLanguage);
+  for (const card of cards) {
+    const moment = previewMomentForCard(card);
+    if (nextLanguage === "en" && !captionTrackAvailable(moment, "en")) {
+      const ready = await ensureEnglishCaptionTrackForCard(card);
+      if (!ready) {
+        updateControlSurfaceForCard(card);
+        continue;
+      }
+    }
+    const rank = card.dataset.rank;
+    const platform = activePlatformForRank(rank);
+    setPlatformEditForRank(rank, platform, { captionLanguage: nextLanguage });
+    syncPreviewCaptions(card);
+    updateControlSurfaceForCard(card);
+  }
+  renderCaptionQueue();
+  renderFinalStage();
+}
+async function ensureEnglishCaptionTrackForCard(card){
+  const moment = previewMomentForCard(card);
+  if (captionTrackAvailable(moment, "en")) return true;
+  if (!captionTrackCanGenerate(moment, "en")) {
+    setCaptionTranslationStatus(card, "EN unavailable", "red", false);
+    return false;
+  }
+  if (card.dataset.captionTranslationBusy === "1") return false;
+  setCaptionTranslationStatus(card, "Generating EN captions...", "blue", true);
+  updateControlSurfaceForCard(card);
+  try {
+    const response = await fetch("/api/caption-tracks/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gallery_path: currentGalleryPath(), rank: Number(card.dataset.rank || 0), language: "en" })
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "Could not generate English captions.");
+    mergeTranslatedCaptionMoment(payload.moment || { rank: card.dataset.rank, caption_tracks: { en: payload.track } });
+    setCaptionTranslationStatus(card, "EN captions ready", "green", false);
+    window.setTimeout(() => clearCaptionTranslationStatus(card), 1600);
+    return true;
+  } catch (error) {
+    setCaptionTranslationStatus(card, captionTranslationErrorMessage(error), "red", false);
+    return false;
+  } finally {
+    delete card.dataset.captionTranslationBusy;
+    updateControlSurfaceForCard(card);
+  }
+}
+function mergeTranslatedCaptionMoment(nextMoment){
+  const rank = String(nextMoment?.rank || "");
+  if (!rank || !Array.isArray(window.CUTTED_DATA?.moments)) return;
+  const index = window.CUTTED_DATA.moments.findIndex(item => String(item.rank) === rank);
+  if (index < 0) return;
+  window.CUTTED_DATA.moments[index] = Object.assign({}, window.CUTTED_DATA.moments[index], nextMoment);
+}
+function captionTranslationErrorMessage(error){
+  const message = String(error?.message || error || "").trim();
+  if (!message) return "EN generation failed";
+  if (message.includes("OpenAI key")) return "Add OpenAI key for EN";
+  return message.length > 42 ? `${message.slice(0, 41)}...` : message;
+}
+function setCaptionTranslationStatus(card, label, tone, busy){
+  if (!card) return;
+  card.dataset.captionTranslationStatus = label;
+  card.dataset.captionTranslationTone = tone;
+  if (busy) card.dataset.captionTranslationBusy = "1";
+  else delete card.dataset.captionTranslationBusy;
+}
+function clearCaptionTranslationStatus(card){
+  if (!card || card.dataset.captionTranslationBusy === "1") return;
+  delete card.dataset.captionTranslationStatus;
+  delete card.dataset.captionTranslationTone;
+  updateControlSurfaceForCard(card);
 }
 function setControlSurfaceTrimMode(card, enabled){
   if (!card) return;
@@ -4807,6 +4966,8 @@ function adjustedMoment(moment){
   const platforms = Array.isArray(current.platforms) ? current.platforms : [];
   const adjustedDuration = Number((moment.end - trimEnd - moment.start - trimStart).toFixed(3));
   const edit = platformEditForRank(moment.rank);
+  const captionLanguage = normalizeCaptionLanguage(edit.captionLanguage);
+  const captionTracks = normalizeCaptionTracks(moment.caption_tracks, moment.caption_segments || []);
   const sourceDuration = sourceDurationForMoment(moment);
   return Object.assign({}, moment, {
     status: current.status || null,
@@ -4820,6 +4981,9 @@ function adjustedMoment(moment){
     camera_path: exportCameraPathForEdit(edit, sourceDuration, trimStart, adjustedDuration),
     director_plan: edit.director_plan,
     camera_motion_ms: current.cameraMotionMs,
+    caption_language: captionLanguage,
+    caption_tracks: captionTracks,
+    caption_segments: captionSegmentsForMoment(Object.assign({}, moment, { caption_tracks: captionTracks }), captionLanguage),
     effect: effectForRank(moment.rank),
     overlay: primaryOverlayForRank(moment.rank),
     overlays: overlayLayersForRank(moment.rank),
@@ -4838,6 +5002,7 @@ function resolutionEditForPlatform(rank, platform, sourceDuration, trimStart, du
     camera_path: exportCameraPathForEdit(edit, sourceDuration, trimStart, duration),
     director_plan: edit.director_plan,
     camera_motion_ms: cardState(String(rank)).cameraMotionMs,
+    caption_language: normalizeCaptionLanguage(edit.captionLanguage),
     effect: edit.effect,
     overlay: edit.overlays.find(layer => layer.kind !== "image") || defaultOverlay(),
     overlays: edit.overlays,
@@ -4873,6 +5038,10 @@ function buildExportData(){
     const cameraPath = exportCameraPathForEdit(edit, sourceDurationForMoment(moment), moment.trim_start_seconds, moment.adjusted_duration);
     const resolutionKey = resolutionPresetForPlatform(platform);
     const captions = normalizeCaptionSettings(edit.captions);
+    const captionLanguage = normalizeCaptionLanguage(edit.captionLanguage);
+    const captionTracks = normalizeCaptionTracks(moment.caption_tracks, moment.caption_segments || []);
+    const captionSegments = captionSegmentsForMoment(Object.assign({}, moment, { caption_tracks: captionTracks }), captionLanguage);
+    const captionMoment = Object.assign({}, moment, { caption_segments: captionSegments });
     return {
       rank: moment.rank,
       platform,
@@ -4897,13 +5066,15 @@ function buildExportData(){
       overlays,
       bumpers: edit.bumpers,
       captions_enabled: captions.enabled,
+      caption_language: captionLanguage,
+      caption_tracks: captionTracks,
       caption_style: captions.style,
-      animated_caption_windows: captions.style.mode === "animated" ? previewAnimatedCaptionTimeline(moment) : [],
+      animated_caption_windows: captions.style.mode === "animated" ? previewAnimatedCaptionTimeline(captionMoment) : [],
       clip_file: moment.clip_file,
       title: moment.title,
       peak_text: moment.peak_text,
       transcript: moment.transcript,
-      caption_segments: moment.caption_segments || []
+      caption_segments: captionSegments
     };
   }));
   return data;
@@ -5804,6 +5975,73 @@ function setupImportKeyBanner(){
   banner.querySelector("[data-import-key-open]")?.addEventListener("click", () => openSettingsPanel());
   refreshImportKeyBanner();
 }
+const activeImportJobStorageKey = "cuted-active-import-job";
+const activeImportJobMaxAgeMs = 6 * 60 * 60 * 1000;
+let activeImportPollJobId = "";
+function importJobStorage(){
+  try {
+    return window.localStorage;
+  } catch (error) {
+    console.warn("Nao consegui acessar o localStorage para recuperar importacao:", error);
+    return null;
+  }
+}
+function saveActiveImportJob(job){
+  if (!job?.id) return;
+  const storage = importJobStorage();
+  if (!storage) return;
+  storage.setItem(activeImportJobStorageKey, JSON.stringify({
+    id: job.id,
+    output_url: job.output_url || "",
+    output_dir: job.output_dir || "",
+    updated_at: Date.now()
+  }));
+}
+function storedActiveImportJob(){
+  const storage = importJobStorage();
+  if (!storage) return null;
+  try {
+    const data = JSON.parse(storage.getItem(activeImportJobStorageKey) || "null");
+    if (!data || !data.id) return null;
+    if (Date.now() - Number(data.updated_at || 0) > activeImportJobMaxAgeMs) {
+      storage.removeItem(activeImportJobStorageKey);
+      return null;
+    }
+    return data;
+  } catch (error) {
+    storage.removeItem(activeImportJobStorageKey);
+    return null;
+  }
+}
+function clearActiveImportJob(jobId){
+  const storage = importJobStorage();
+  if (!storage) return;
+  const active = storedActiveImportJob();
+  if (!jobId || !active || active.id === jobId) storage.removeItem(activeImportJobStorageKey);
+}
+async function importOutputIsReady(outputUrl){
+  if (!outputUrl) return false;
+  try {
+    const response = await fetch(outputUrl, { cache: "no-store" });
+    return response.ok;
+  } catch (error) {
+    return false;
+  }
+}
+function recoverActiveImportJob(){
+  const active = storedActiveImportJob();
+  if (!active?.id || activeImportPollJobId === active.id) return;
+  const status = document.querySelector("[data-import-status]");
+  if (status) status.textContent = "Retomando acompanhamento da importacao...";
+  pollImportJob(active.id, document.querySelector("[data-import-form] button[type=submit]"));
+}
+function setupLegacyImportRecovery(){
+  recoverActiveImportJob();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") recoverActiveImportJob();
+  });
+  window.addEventListener("focus", recoverActiveImportJob);
+}
 async function startImportJob(form){
   const status = document.querySelector("[data-import-status]");
   const result = document.querySelector("[data-import-result]");
@@ -5831,6 +6069,7 @@ async function startImportJob(form){
     const payload = await response.json();
     if (!response.ok || !payload.ok) throw new Error(payload.error || "Falha ao importar.");
     if (status) status.textContent = payload.job?.message || "Importacao iniciada.";
+    saveActiveImportJob(payload.job || {});
     pollImportJob(payload.job.id, button);
   } catch (error) {
     if (button) button.disabled = false;
@@ -5841,27 +6080,42 @@ async function startImportJob(form){
 async function pollImportJob(jobId, button){
   const status = document.querySelector("[data-import-status]");
   const result = document.querySelector("[data-import-result]");
+  activeImportPollJobId = jobId;
   try {
     const response = await fetch(`/api/import-jobs/${encodeURIComponent(jobId)}`);
     const payload = await response.json();
     if (!response.ok || !payload.ok) throw new Error(payload.error || "Job nao encontrado.");
     const job = payload.job || {};
+    saveActiveImportJob(job);
     if (status) status.textContent = `${job.message || "Processando..."} (${job.status || "running"})`;
     if (job.status === "ready") {
+      activeImportPollJobId = "";
+      clearActiveImportJob(jobId);
       if (button) button.disabled = false;
       if (result) result.innerHTML = `<a href="${escapeAttr(job.output_url)}">Abrir projeto importado</a>`;
       if (job.output_url) window.location.assign(job.output_url);
       return;
     }
     if (job.status === "failed" || job.status === "cancelled") {
+      activeImportPollJobId = "";
+      clearActiveImportJob(jobId);
       if (button) button.disabled = false;
       if (result) result.innerHTML = `<code>${escapeHtml(job.stderr || job.message || "Importacao encerrada.")}</code>`;
       return;
     }
     window.setTimeout(() => pollImportJob(jobId, button), 1200);
   } catch (error) {
+    activeImportPollJobId = "";
+    const active = storedActiveImportJob();
+    if (active?.id === jobId && await importOutputIsReady(active.output_url)) {
+      clearActiveImportJob(jobId);
+      if (button) button.disabled = false;
+      if (result) result.innerHTML = `<a href="${escapeAttr(active.output_url)}">Abrir projeto importado</a>`;
+      window.location.assign(active.output_url);
+      return;
+    }
     if (button) button.disabled = false;
-    if (status) status.textContent = "Nao consegui acompanhar a importacao.";
+    if (status) status.textContent = "Perdi o acompanhamento da importacao. Vou tentar retomar quando a aba voltar.";
     if (result) result.innerHTML = `<code>${escapeHtml(error.message || String(error))}</code>`;
   }
 }
@@ -7125,6 +7379,7 @@ setupWorkspaceExitModal();
 touchCurrentProject().catch(error => console.warn("CUTED project was not added to recents", error));
 setupImportPathButtons();
 setupImportKeyBanner();
+setupLegacyImportRecovery();
 document.querySelector("[data-empty-import]")?.addEventListener("click", () => applyTab("import"));
 document.querySelector("[data-import-form]")?.addEventListener("submit", event => {
   event.preventDefault();

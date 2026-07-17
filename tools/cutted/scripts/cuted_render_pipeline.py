@@ -35,6 +35,7 @@ def apply_bumpers_to_output(
     media_has_audio_fn: MediaHasAudioFn,
     resolve_media_path: ResolveMediaPathFn,
     final_video_crf: str,
+    rate_control_args_fn: OutputArgsFn | None = None,
 ) -> dict[str, object]:
     bumpers = normalize_bumpers_from_row(row)
     if not bumpers:
@@ -53,16 +54,16 @@ def apply_bumpers_to_output(
         intro = resolve_bumper_asset_path(base_dir, bumpers["intro"], resolve_media_path)
         intro_duration = bumper_duration(bumpers["intro"], intro, ffmpeg)
         intro_segment = work_dir / "intro.mp4"
-        normalize_bumper_segment(intro, intro_segment, intro_duration, preset, ffmpeg, row, fmt_time, ffmpeg_codec_thread_args, media_has_audio_fn, run_ffmpeg_command, final_video_crf)
+        normalize_bumper_segment(intro, intro_segment, intro_duration, preset, ffmpeg, row, fmt_time, ffmpeg_codec_thread_args, media_has_audio_fn, run_ffmpeg_command, final_video_crf, rate_control_args_fn)
         segments.append(intro_segment)
     core_segment = work_dir / "core.mp4"
-    normalize_bumper_segment(core_source, core_segment, base_duration, preset, ffmpeg, row, fmt_time, ffmpeg_codec_thread_args, media_has_audio_fn, run_ffmpeg_command, final_video_crf)
+    normalize_bumper_segment(core_source, core_segment, base_duration, preset, ffmpeg, row, fmt_time, ffmpeg_codec_thread_args, media_has_audio_fn, run_ffmpeg_command, final_video_crf, rate_control_args_fn)
     segments.append(core_segment)
     if "outro" in bumpers:
         outro = resolve_bumper_asset_path(base_dir, bumpers["outro"], resolve_media_path)
         outro_duration = bumper_duration(bumpers["outro"], outro, ffmpeg)
         outro_segment = work_dir / "outro.mp4"
-        normalize_bumper_segment(outro, outro_segment, outro_duration, preset, ffmpeg, row, fmt_time, ffmpeg_codec_thread_args, media_has_audio_fn, run_ffmpeg_command, final_video_crf)
+        normalize_bumper_segment(outro, outro_segment, outro_duration, preset, ffmpeg, row, fmt_time, ffmpeg_codec_thread_args, media_has_audio_fn, run_ffmpeg_command, final_video_crf, rate_control_args_fn)
         segments.append(outro_segment)
     concat_path = work_dir / "concat.txt"
     concat_path.write_text("".join(concat_file_entry(path) for path in segments), encoding="utf-8")
@@ -93,6 +94,7 @@ def normalize_bumper_segment(
     media_has_audio_fn: MediaHasAudioFn,
     run_ffmpeg_command: RunFfmpegFn,
     final_video_crf: str,
+    rate_control_args_fn: OutputArgsFn | None = None,
 ) -> None:
     safe_duration = max(float(duration or 0.0), 0.1)
     video_filter_arg = ",".join([
@@ -119,6 +121,7 @@ def normalize_bumper_segment(
         "-pix_fmt", "yuv420p",
         "-r", "30",
         "-crf", final_video_crf,
+        *((rate_control_args_fn(row) if rate_control_args_fn else [])),
         "-c:a", "aac",
         "-b:a", "192k",
         "-ar", "44100",
@@ -264,8 +267,23 @@ def effect_filter(row: dict[str, object]) -> str:
     return ""
 
 
-def video_crf(row: dict[str, object], final_video_crf: str, final_effect_video_crf: str) -> str:
-    return final_effect_video_crf if effect_from_row(row)["key"] != "none" else final_video_crf
+GRAIN_EFFECT_KEYS = {"light-grain", "old-film", "vhs", "bw-old"}
+
+
+def video_crf(
+    row: dict[str, object], final_video_crf: str, final_effect_video_crf: str,
+    final_grain_effect_video_crf: str = "",
+) -> str:
+    effect_key = effect_from_row(row)["key"]
+    if effect_key in GRAIN_EFFECT_KEYS and final_grain_effect_video_crf:
+        return final_grain_effect_video_crf
+    return final_effect_video_crf if effect_key != "none" else final_video_crf
+
+
+def video_rate_control_args(row: dict[str, object], maxrate: str, bufsize: str) -> list[str]:
+    if effect_from_row(row)["key"] not in GRAIN_EFFECT_KEYS:
+        return []
+    return ["-maxrate", maxrate, "-bufsize", bufsize]
 
 
 def visible_effect_intensity(intensity: float) -> float:

@@ -2,6 +2,8 @@
   const DEFAULT_STATE = {
     aiStatus: "idle",
     captionMode: "off",
+    captionLanguage: "pt-BR",
+    captionLanguageOptions: { "pt-BR": true, en: false },
     captionsEnabled: false,
     captionMenuOpen: false,
     captionPaletteOpen: null,
@@ -140,6 +142,7 @@
       onAiStatusChange: options.onAiStatusChange || nested.onAiStatusChange,
       onApproveClick: options.onApproveClick || nested.onApproveClick,
       onCaptionToggle: options.onCaptionToggle || nested.onCaptionToggle,
+      onCaptionLanguageChange: options.onCaptionLanguageChange || nested.onCaptionLanguageChange,
       onCaptionStyleChange: options.onCaptionStyleChange || nested.onCaptionStyleChange,
       onDiscardClick: options.onDiscardClick || nested.onDiscardClick,
       onEffectClick: options.onEffectClick || nested.onEffectClick,
@@ -172,12 +175,16 @@
     const effectStyle = ["clean", "vhs", "film", "grain"].includes(state.effectStyle) ? state.effectStyle : "clean";
     const aiStatus = ["idle", "loading", "active"].includes(state.aiStatus) ? state.aiStatus : "idle";
     const captionMode = normalizeCaptionMode(state.captionMode || state.captionStyle?.mode || (state.captionsEnabled ? "on" : "off"));
+    const captionLanguageOptions = normalizeCaptionLanguageOptions(state.captionLanguageOptions);
+    const captionLanguage = captionLanguageOptions[normalizeCaptionLanguage(state.captionLanguage)] ? normalizeCaptionLanguage(state.captionLanguage) : "pt-BR";
 
     return {
       aiStatus,
       busy: Boolean(state.busy),
       captionMode,
       captionsEnabled: captionMode !== "off",
+      captionLanguage,
+      captionLanguageOptions,
       captionMenuOpen: Boolean(state.captionMenuOpen),
       captionPaletteOpen: captionPickerKind(state.captionPaletteOpen),
       captionStyle: normalizeCaptionStyle({ ...state.captionStyle, mode: captionMode }),
@@ -220,6 +227,21 @@
       title: String(input.title || "").trim(),
       summary: String(input.summary || "").trim()
     };
+  }
+
+  function normalizeCaptionLanguage(value) {
+    const text = String(value || "").trim().toLowerCase().replace("_", "-");
+    return ["en", "eng", "english", "ingles"].includes(text) ? "en" : "pt-BR";
+  }
+
+  function normalizeCaptionLanguageOptions(value) {
+    const source = value && typeof value === "object" ? value : {};
+    return { "pt-BR": true, en: normalizeCaptionLanguageOption(source.en || source.english) };
+  }
+
+  function normalizeCaptionLanguageOption(value) {
+    if (value === "ready" || value === "generate" || value === "pending") return value;
+    return Boolean(value);
   }
 
   function normalizeCaptionStyle(value) {
@@ -282,6 +304,7 @@
       approveButton: container.querySelector("[data-cuted-control='approve']"),
       captionButton: container.querySelector("[data-cuted-control='caption']"),
       captionMenu: container.querySelector("[data-cuted-caption-menu]"),
+      captionLanguageButtons: Array.from(container.querySelectorAll("[data-cuted-caption-language]")),
       captionToggle: container.querySelector("[data-cuted-caption-toggle]"),
       captionModeButtons: Array.from(container.querySelectorAll("[data-cuted-caption-mode]")),
       captionOkButton: container.querySelector("[data-cuted-caption-ok]"),
@@ -348,7 +371,12 @@
       emitStateChange(container, callbacks, subscribers, state);
     };
     const emitCaptionChange = () => {
-      const payload = { captionMode: state.captionMode, captionsEnabled: state.captionsEnabled, captionStyle: { ...state.captionStyle, mode: state.captionMode } };
+      const payload = {
+        captionMode: state.captionMode,
+        captionsEnabled: state.captionsEnabled,
+        captionLanguage: state.captionLanguage,
+        captionStyle: { ...state.captionStyle, mode: state.captionMode }
+      };
       callbacks.onCaptionToggle?.(payload);
       callbacks.onCaptionStyleChange?.(payload);
     };
@@ -551,6 +579,16 @@
       setCaptionStatus(captionModeLabel(mode), mode === "off" ? "neutral" : "blue");
       sync();
       emitCaptionChange();
+    });
+    elements.captionLanguageButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        if (isLocked() || button.disabled) return;
+        state.captionLanguage = normalizeCaptionLanguage(button.dataset.cutedCaptionLanguage);
+        const option = state.captionLanguageOptions[state.captionLanguage];
+        setCaptionStatus(state.captionLanguage === "en" && option === "generate" ? "Generating EN..." : state.captionLanguage === "en" ? "Caption EN" : "Legenda PT-BR");
+        sync();
+        callbacks.onCaptionLanguageChange?.({ captionLanguage: state.captionLanguage });
+      });
     });
     elements.captionOkButton.addEventListener("click", () => {
       if (isLocked()) return;
@@ -814,6 +852,15 @@
     elements.captionModeButtons.forEach((button) => {
       button.classList.toggle("is-active", button.dataset.cutedCaptionMode === state.captionMode);
       button.setAttribute("aria-pressed", String(button.dataset.cutedCaptionMode === state.captionMode));
+    });
+    elements.captionLanguageButtons.forEach((button) => {
+      const language = normalizeCaptionLanguage(button.dataset.cutedCaptionLanguage);
+      const option = state.captionLanguageOptions[language];
+      const available = language === "pt-BR" || Boolean(option);
+      button.disabled = !available;
+      button.classList.toggle("is-active", language === state.captionLanguage);
+      button.setAttribute("aria-pressed", String(language === state.captionLanguage));
+      button.title = language === "en" && option === "generate" ? "Generate English captions for this clip" : available ? "" : "English captions unavailable for this import";
     });
     elements.captionSizeInput.value = String(Math.round(state.captionStyle.size));
     elements.captionWidthInput.value = String(Math.round(state.captionStyle.width));
@@ -1091,6 +1138,10 @@
           ${renderCaptionStepper("size", "FONT", 72)}
           ${renderCaptionStepper("width", "WIDTH", 28)}
           ${renderCaptionStepper("bottom", "ALTURA", 16)}
+        </div>
+        <div class="cuted-caption-language-switch" role="group" aria-label="Idioma da legenda">
+          <button type="button" data-cuted-caption-language="pt-BR">PT-BR</button>
+          <button type="button" data-cuted-caption-language="en">EN</button>
         </div>
         <div class="cuted-caption-color-grid">
           ${renderCaptionColorPicker("text", "A", "#ffffff")}

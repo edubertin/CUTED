@@ -3,12 +3,16 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import hmac
 import html
+import http.cookies
 import http.server
 import json
 import math
 import os
+import platform
 import re
+import secrets
 import shutil
 import socket
 import subprocess
@@ -196,6 +200,7 @@ from cuted_render_pipeline import (
     text_overlay_from_raw as render_pipeline_text_overlay_from_raw,
     timed_overlay_enable as render_pipeline_timed_overlay_enable,
     video_crf as render_pipeline_video_crf,
+    video_rate_control_args as render_pipeline_video_rate_control_args,
     visible_effect_intensity as render_pipeline_visible_effect_intensity,
 )
 from cuted_project_catalog import (
@@ -223,9 +228,14 @@ from cuted_launch import (
     running_workspace_port as launch_running_workspace_port,
     workspace_index_is_empty_shell as launch_workspace_index_is_empty_shell,
 )
+from cuted_desktop_shell import (
+    desktop_shell_status as desktop_shell_desktop_shell_status,
+    open_desktop_shell as desktop_shell_open_desktop_shell,
+)
 from cuted_media_source import (
     bundled_node_path as media_bundled_node_path,
     caption_event_to_segment as media_caption_event_to_segment,
+    cleanup_youtube_partial_sources as media_cleanup_youtube_partial_sources,
     cleanup_sources as media_cleanup_sources,
     download_youtube_audio as media_download_youtube_audio,
     download_youtube_render_source as media_download_youtube_render_source,
@@ -295,13 +305,17 @@ YOUTUBE_HIGH_QUALITY_FORMAT = (
     "bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]/"
     "b[height<=1080]/best"
 )
-YOUTUBE_STREAM_FALLBACK_FORMAT = "b[height<=1080]/b[height<=720]/18/b[height<=480]/best"
+YOUTUBE_MIN_FALLBACK_HEIGHT = 720
+YOUTUBE_STREAM_FALLBACK_FORMAT = "b[height>=720][height<=1080]/b[height>=720]/best[height>=720]"
 IMPORT_PROGRESS_PREFIX = "CUTED_IMPORT_EVENT "
 PREVIEW_VIDEO_CRF = "20"
 PREVIEW_DRAFT_VIDEO_CRF = "28"
 LOCAL_IMPORT_MAX_INITIAL_CLIPS = 4
 FINAL_VIDEO_CRF = "20"
 FINAL_EFFECT_VIDEO_CRF = "19"
+FINAL_GRAIN_EFFECT_VIDEO_CRF = "24"
+FINAL_GRAIN_EFFECT_MAXRATE = "12M"
+FINAL_GRAIN_EFFECT_BUFSIZE = "24M"
 MANUAL_ALTERNATE_HOLD_SECONDS = 3.5
 MANUAL_ALTERNATE_MOVE_SECONDS = 1.2
 CAMERA_ANALYSIS_VERSION = "auto-face-v31"
@@ -514,6 +528,8 @@ IMPORT_JOBS: dict[str, ImportJob] = {}
 IMPORT_JOBS_LOCK = threading.Lock()
 RENDER_JOBS: dict[str, RenderJob] = {}
 RENDER_JOBS_LOCK = threading.Lock()
+CAPTION_TRACK_LOCKS: dict[str, threading.Lock] = {}
+CAPTION_TRACK_LOCKS_LOCK = threading.Lock()
 VISUAL_MAP_TASKS: set[str] = set()
 VISUAL_MAP_TASKS_LOCK = threading.Lock()
 YOLO_MODEL_CACHE: dict[str, object | None] = {}
@@ -564,13 +580,21 @@ def parse_args() -> argparse.Namespace:
     launch = subparsers.add_parser("launch", help="Open the CUTED workspace for local beta use.")
     launch.add_argument("--workspace", type=Path, default=None)
     launch.add_argument("--host", default="127.0.0.1")
+    launch.add_argument("--desktop-shell", action="store_true")
     launch.add_argument("--no-browser", action="store_true")
+    desktop_shell_check = subparsers.add_parser("desktop-shell-check", help="Check desktop shell packaging readiness.")
+    desktop_shell_check.add_argument("--json", action="store_true")
+    diagnostics = subparsers.add_parser("diagnostics", help="Write a safe local support diagnostics report.")
+    diagnostics.add_argument("--json", action="store_true")
+    diagnostics.add_argument("--out", type=Path, default=None)
     return parser.parse_args()
 
 
 def main() -> int:
-    load_local_env()
+    configure_stdio()
     args = parse_args()
+    if args.command != "diagnostics":
+        load_local_env()
     if args.command == "analyze":
         analyze(args)
         return 0
@@ -588,6 +612,12 @@ def main() -> int:
         return 0
     if args.command == "launch":
         launch_workspace(args)
+        return 0
+    if args.command == "desktop-shell-check":
+        check_desktop_shell(args)
+        return 0
+    if args.command == "diagnostics":
+        write_diagnostics(args)
         return 0
     raise RuntimeError(f"Unsupported command: {args.command}")
 
@@ -658,7 +688,21 @@ def emit_import_progress(
         payload["steps"] = max(0, int(steps))
     if detail:
         payload["detail"] = detail
-    print(f"{IMPORT_PROGRESS_PREFIX}{json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}", flush=True)
+    print(import_progress_line(payload), flush=True)
+
+
+def import_progress_line(payload: dict[str, object]) -> str:
+    return f"{IMPORT_PROGRESS_PREFIX}{json.dumps(payload, ensure_ascii=True, separators=(',', ':'))}"
+
+
+def configure_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (OSError, ValueError):
+                continue
 
 
 def render_selected(args: argparse.Namespace) -> None:
@@ -694,6 +738,7 @@ def caption_selected(args: argparse.Namespace) -> None:
 
 
 def serve_gallery(args: argparse.Namespace) -> None:
+    require_local_bind_host(args.host)
     base_dir = args.dir.resolve()
     require_file(base_dir / "index.html")
     handler = gallery_handler(base_dir)
@@ -712,18 +757,18 @@ LAUNCH_PORT_RANGE = range(8779, 8800)
 
 
 def launch_workspace(args: argparse.Namespace) -> None:
+    require_local_bind_host(args.host)
     workspace = prepare_workspace_dir(args.workspace)
     existing = running_workspace_port(args.host)
     if existing is not None:
         print(f"[cutted] CUTED ja esta aberto em http://{args.host}:{existing}/index.html (workspace da instancia atual mantido)")
-        if not args.no_browser:
-            open_browser_later(args.host, existing, 0.0)
+        open_existing_workspace(args.host, existing, args.desktop_shell, args.no_browser)
         return
     bootstrap_workspace_gallery(workspace)
     for _ in range(3):
         port = find_free_port(args.host)
         try:
-            start_workspace_server(workspace, args.host, port, args.no_browser)
+            start_workspace_server(workspace, args.host, port, args.no_browser, args.desktop_shell)
             return
         except OSError as error:
             append_launch_log(f"bind failed on port {port}: {error}")
@@ -731,7 +776,38 @@ def launch_workspace(args: argparse.Namespace) -> None:
     raise SystemExit(1)
 
 
-def start_workspace_server(workspace: Path, host: str, port: int, no_browser: bool) -> None:
+def check_desktop_shell(args: argparse.Namespace) -> None:
+    status = desktop_shell_status()
+    if args.json:
+        print(json.dumps(status, ensure_ascii=False, indent=2))
+    elif status["ok"]:
+        print(f"[cutted] Desktop shell OK: {status['backend']} / {status['renderer']}")
+    else:
+        print(f"[cutted] Desktop shell unavailable: {status.get('reason', 'unknown error')}")
+    if not status["ok"]:
+        raise SystemExit(1)
+
+
+def write_diagnostics(args: argparse.Namespace) -> None:
+    payload = diagnostics_payload()
+    text = json.dumps(payload, ensure_ascii=False, indent=2)
+    if args.json or args.out is None:
+        print(text)
+    if args.out is not None:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(text + "\n", encoding="utf-8")
+        if not args.json:
+            print(f"[cutted] Diagnostics written to {args.out}")
+
+
+def open_existing_workspace(host: str, port: int, desktop_shell: bool, no_browser: bool) -> None:
+    if desktop_shell and open_desktop_shell(host, port):
+        return
+    if not no_browser:
+        open_browser_later(host, port, 0.0)
+
+
+def start_workspace_server(workspace: Path, host: str, port: int, no_browser: bool, desktop_shell: bool) -> None:
     handler = gallery_handler(workspace)
     server = http.server.ThreadingHTTPServer((host, port), handler)
     lock_path = launch_lock_path()
@@ -740,6 +816,9 @@ def start_workspace_server(workspace: Path, host: str, port: int, no_browser: bo
     append_launch_log(f"launch workspace={workspace} port={port}")
     print(f"[cutted] Serving {workspace}")
     print(f"[cutted] Open: http://{host}:{port}/index.html")
+    if desktop_shell:
+        serve_workspace_desktop_shell(server, host, port, no_browser)
+        return
     if not no_browser:
         open_browser_later(host, port, 0.5)
     try:
@@ -752,6 +831,38 @@ def start_workspace_server(workspace: Path, host: str, port: int, no_browser: bo
             lock_path.unlink()
         except OSError as error:
             append_launch_log(f"lock cleanup failed: {error}")
+
+
+def serve_workspace_desktop_shell(
+    server: http.server.ThreadingHTTPServer,
+    host: str,
+    port: int,
+    no_browser: bool,
+) -> None:
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+    try:
+        if open_desktop_shell(host, port):
+            return
+        if no_browser:
+            print("[cutted] Desktop shell indisponivel; execute sem --no-browser para usar o navegador como fallback.")
+            return
+        if not no_browser:
+            open_browser_later(host, port, 0.0)
+        server_thread.join()
+    except KeyboardInterrupt:
+        print("\n[cutted] Server stopped")
+    finally:
+        server.shutdown()
+        server.server_close()
+        cleanup_launch_lock()
+
+
+def cleanup_launch_lock() -> None:
+    try:
+        launch_lock_path().unlink()
+    except OSError as error:
+        append_launch_log(f"lock cleanup failed: {error}")
 
 
 def prepare_workspace_dir(value: Path | None) -> Path:
@@ -790,6 +901,14 @@ def open_browser_later(host: str, port: int, delay: float) -> None:
     launch_open_browser_later(host, port, delay)
 
 
+def open_desktop_shell(host: str, port: int) -> bool:
+    return desktop_shell_open_desktop_shell(host, port, launch_data_dir(), append_launch_log)
+
+
+def desktop_shell_status() -> dict[str, str | bool]:
+    return desktop_shell_desktop_shell_status(launch_data_dir())
+
+
 def bootstrap_workspace_gallery(workspace: Path) -> None:
     index_path = workspace / "index.html"
     if index_path.exists() and not workspace_index_is_empty_shell(index_path):
@@ -822,7 +941,13 @@ def read_project_catalog(path: Path | None = None) -> dict[str, object]:
     projects = data.get("projects")
     if not isinstance(projects, list):
         projects = []
-    return {"version": PROJECT_CATALOG_VERSION, "projects": [item for item in projects if isinstance(item, dict)]}
+    removed = data.get("removed_project_ids")
+    removed_ids = [clean_project_id(item) for item in removed] if isinstance(removed, list) else []
+    return {
+        "version": PROJECT_CATALOG_VERSION,
+        "projects": [item for item in projects if isinstance(item, dict)],
+        "removed_project_ids": [item for item in removed_ids if item],
+    }
 
 
 def write_project_catalog(catalog: dict[str, object], path: Path | None = None) -> None:
@@ -830,7 +955,13 @@ def write_project_catalog(catalog: dict[str, object], path: Path | None = None) 
     catalog_path.parent.mkdir(parents=True, exist_ok=True)
     rows = catalog.get("projects") if isinstance(catalog, dict) else []
     projects = rows if isinstance(rows, list) else []
-    payload = {"version": PROJECT_CATALOG_VERSION, "projects": projects[:200]}
+    removed = catalog.get("removed_project_ids") if isinstance(catalog, dict) else []
+    removed_ids = [clean_project_id(item) for item in removed] if isinstance(removed, list) else []
+    payload = {
+        "version": PROJECT_CATALOG_VERSION,
+        "projects": projects[:200],
+        "removed_project_ids": [item for item in removed_ids if item][:500],
+    }
     temp_path = catalog_path.with_suffix(".tmp")
     temp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     temp_path.replace(catalog_path)
@@ -840,6 +971,11 @@ def project_catalog_recent(workspace: Path, limit: int = PROJECT_CATALOG_LIMIT) 
     catalog = read_project_catalog()
     projects = catalog.get("projects")
     source_rows = projects if isinstance(projects, list) else []
+    if not source_rows and not project_catalog_removed_ids(catalog):
+        source_rows = discover_workspace_project_catalog(workspace)
+        if source_rows:
+            catalog["projects"] = source_rows
+            write_project_catalog(catalog)
     rows = []
     kept_projects = []
     for row in source_rows:
@@ -855,6 +991,37 @@ def project_catalog_recent(workspace: Path, limit: int = PROJECT_CATALOG_LIMIT) 
         write_project_catalog(catalog)
     rows.sort(key=lambda row: str(row.get("last_opened_at") or row.get("updated_at") or ""), reverse=True)
     return rows[:limit]
+
+
+def project_catalog_removed_ids(catalog: dict[str, object]) -> set[str]:
+    removed = catalog.get("removed_project_ids") if isinstance(catalog, dict) else []
+    values = removed if isinstance(removed, list) else []
+    return {clean_project_id(item) for item in values if clean_project_id(item)}
+
+
+def discover_workspace_project_catalog(workspace: Path) -> list[dict[str, object]]:
+    projects_root = workspace / PROJECTS_DIR_NAME
+    if not projects_root.is_dir():
+        return []
+    try:
+        candidates = [path for path in projects_root.iterdir() if path.is_dir()]
+    except OSError:
+        return []
+    rows = []
+    for project_dir in sorted(candidates, key=project_dir_mtime, reverse=True):
+        if not valid_recent_project_dir(project_dir, workspace):
+            continue
+        entry = project_entry_from_gallery(project_dir, workspace)
+        timestamp = iso_timestamp_from_epoch(project_dir_mtime(project_dir))
+        rows.append({**entry, "updated_at": timestamp, "last_opened_at": timestamp})
+    return rows
+
+
+def project_dir_mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
 
 
 def project_home_entry(row: dict[str, object], workspace: Path) -> dict[str, object]:
@@ -899,6 +1066,9 @@ def upsert_project_catalog_entry(entry: dict[str, object], path: Path | None = N
     ]
     filtered.insert(0, {**entry, "id": project_id, "path": project_path})
     catalog["projects"] = filtered
+    removed_ids = project_catalog_removed_ids(catalog)
+    if project_id in removed_ids:
+        catalog["removed_project_ids"] = sorted(removed_ids - {project_id})
     write_project_catalog(catalog, path)
 
 
@@ -916,6 +1086,8 @@ def delete_project_from_catalog(project_id: str, workspace: Path, delete_files: 
         delete_method = delete_project_dir(project_dir)
         deleted = True
     catalog["projects"] = [row for row in rows if not (isinstance(row, dict) and clean_project_id(row.get("id")) == project_id)]
+    if not delete_files:
+        catalog["removed_project_ids"] = sorted(project_catalog_removed_ids(catalog) | {clean_project_id(project_id)})
     write_project_catalog(catalog)
     return {"ok": True, "deleted_files": deleted, "delete_method": delete_method, "projects": project_catalog_recent(workspace)}
 
@@ -992,12 +1164,98 @@ def iso_timestamp() -> str:
     return catalog_iso_timestamp()
 
 
-def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler]:
+def iso_timestamp_from_epoch(value: float) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(max(0.0, value)))
+
+
+LOCAL_SESSION_COOKIE = "cuted_session"
+LOCAL_REQUEST_HOSTS = {"127.0.0.1", "localhost", "::1"}
+LOCAL_SCRIPT_PATH = "tools/cutted/scripts/cutted.py"
+
+
+def local_request_host_allowed(value: str, port: int) -> bool:
+    try:
+        parsed = urllib.parse.urlsplit(f"//{value}")
+        hostname = (parsed.hostname or "").lower()
+        return hostname in LOCAL_REQUEST_HOSTS and parsed.port in {None, port}
+    except ValueError:
+        return False
+
+
+def local_request_origin_allowed(origin: str, port: int) -> bool:
+    if not origin:
+        return False
+    try:
+        parsed = urllib.parse.urlsplit(origin)
+        return parsed.scheme == "http" and parsed.hostname in LOCAL_REQUEST_HOSTS and parsed.port == port
+    except ValueError:
+        return False
+
+
+def local_session_cookie_matches(cookie_header: str, expected: str) -> bool:
+    try:
+        cookies = http.cookies.SimpleCookie()
+        cookies.load(cookie_header)
+        supplied = cookies.get(LOCAL_SESSION_COOKIE)
+        return supplied is not None and hmac.compare_digest(supplied.value, expected)
+    except (http.cookies.CookieError, TypeError):
+        return False
+
+
+def local_session_bootstrap_path(path: str) -> bool:
+    return path == "/" or path.endswith("/index.html")
+
+
+def require_local_bind_host(host: str) -> None:
+    if host.lower().strip("[]") not in LOCAL_REQUEST_HOSTS:
+        raise ValueError("CUTED only accepts 127.0.0.1, localhost, or ::1 as the local server host.")
+
+
+def gallery_handler(
+    base_dir: Path,
+    session_token: str | None = None,
+) -> type[http.server.SimpleHTTPRequestHandler]:
+    token = session_token or secrets.token_urlsafe(32)
+
     class CuttedGalleryHandler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args: object, **kwargs: object) -> None:
+            self.issue_local_session = False
             super().__init__(*args, directory=str(base_dir), **kwargs)
 
+        def end_headers(self) -> None:
+            if self.issue_local_session:
+                self.send_header(
+                    "Set-Cookie",
+                    f"{LOCAL_SESSION_COOKIE}={token}; HttpOnly; SameSite=Strict; Path=/",
+                )
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+            self.send_header("Content-Security-Policy", "frame-ancestors 'none'; base-uri 'none'")
+            super().end_headers()
+
+        def local_host_allowed(self) -> bool:
+            port = int(self.server.server_address[1])
+            return local_request_host_allowed(self.headers.get("Host", ""), port)
+
+        def local_session_allowed(self) -> bool:
+            port = int(self.server.server_address[1])
+            return (
+                self.local_host_allowed()
+                and local_request_origin_allowed(self.headers.get("Origin", ""), port)
+                and local_session_cookie_matches(self.headers.get("Cookie", ""), token)
+            )
+
+        def reject_local_request(self) -> None:
+            self.issue_local_session = False
+            send_json_response(self, 403, {"ok": False, "error": "Sessao local invalida. Reabra o CUTED."})
+
         def do_POST(self) -> None:
+            self.issue_local_session = False
+            if not self.local_session_allowed():
+                self.reject_local_request()
+                return
             path = urllib.parse.urlparse(self.path).path
             if path == "/api/finalize":
                 self.handle_finalize(base_dir)
@@ -1010,6 +1268,9 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
                 return
             if path == "/api/render-jobs":
                 self.handle_render_job(base_dir)
+                return
+            if path == "/api/caption-tracks/translate":
+                self.handle_caption_track_translate(base_dir)
                 return
             if path == "/api/camera/analyze":
                 self.handle_camera_analyze(base_dir)
@@ -1055,7 +1316,19 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
                 return
 
         def do_GET(self) -> None:
+            self.issue_local_session = False
             path = urllib.parse.urlparse(self.path).path
+            if not self.local_host_allowed():
+                self.reject_local_request()
+                return
+            if path == "/api/health":
+                send_json_response(self, 200, {"ok": True})
+                return
+            if local_session_bootstrap_path(path):
+                self.issue_local_session = True
+            elif not local_session_cookie_matches(self.headers.get("Cookie", ""), token):
+                self.reject_local_request()
+                return
             if path == "/api/finalize-results":
                 self.handle_finalize_results(base_dir)
                 return
@@ -1083,6 +1356,13 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             if self.handle_range_request():
                 return
             super().do_GET()
+
+        def do_HEAD(self) -> None:
+            self.issue_local_session = False
+            if not self.local_session_allowed():
+                self.reject_local_request()
+                return
+            super().do_HEAD()
 
         def handle_range_request(self) -> bool:
             range_header = self.headers.get("Range")
@@ -1176,6 +1456,15 @@ def gallery_handler(base_dir: Path) -> type[http.server.SimpleHTTPRequestHandler
             try:
                 result = start_render_job(self, request_base_dir)
                 send_json_response(self, 200, result)
+            except Exception as error:
+                send_json_response(self, 400, {"ok": False, "error": str(error)})
+
+        def handle_caption_track_translate(self, request_base_dir: Path) -> None:
+            if self.reject_stale_render_server():
+                return
+            try:
+                result = caption_track_translation_from_request(self, request_base_dir)
+                send_json_response(self, 200 if result.get("ok") else 400, result)
             except Exception as error:
                 send_json_response(self, 400, {"ok": False, "error": str(error)})
 
@@ -5756,7 +6045,7 @@ def import_request_metadata(payload: dict[str, object]) -> dict[str, object]:
         "source_path": source_path,
         "output_path": output_path,
         "preview_count": clamp_int(payload.get("preview_count"), 1, 10, 10),
-        "language": clean_optional_text(payload.get("language"), 24) or "pt",
+        "language": import_request_language(payload.get("language")),
         "preset": clean_preset(payload.get("preset")),
         "duration_profile": clean_duration_profile(payload.get("duration_profile")),
         "context_prompt": clean_optional_text(payload.get("context_prompt"), 5000),
@@ -5764,6 +6053,13 @@ def import_request_metadata(payload: dict[str, object]) -> dict[str, object]:
         "ai_provider": ai_provider,
         "mode": "openai_import" if ai_provider == "openai" else "local_fallback",
     }
+
+
+def import_request_language(value: object) -> str:
+    raw = clean_optional_text(value, 24).lower()
+    if raw in {"pt", "pt-br", "pt_br", "portuguese", "portugues", "portugues-br"}:
+        return "pt"
+    return "pt"
 
 
 def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
@@ -5779,7 +6075,15 @@ def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path
     command = import_command(out_dir, source_url, source_path, metadata)
     job_id = uuid.uuid4().hex[:12]
     output_url = import_output_url(base_dir, out_dir)
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=import_process_env(),
+    )
     source_kind = "youtube" if source_url else "local"
     job = ImportJob(
         job_id,
@@ -5918,6 +6222,13 @@ def import_command(
     if not metadata["render_previews"]:
         command.append("--skip-render")
     return command
+
+
+def import_process_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    env.setdefault("PYTHONUTF8", "1")
+    return env
 
 
 def import_preview_count(source_url: str, metadata: dict[str, object]) -> int:
@@ -6287,8 +6598,13 @@ def load_local_env() -> None:
 
 def local_env_candidates() -> list[Path]:
     script_dir = Path(__file__).resolve().parent
-    roots = [Path.cwd(), *script_dir.parents]
     candidates: list[Path] = []
+    user_secret = cuted_secret_env_path()
+    candidates.append(user_secret)
+    legacy_secret = legacy_repo_secret_env_path()
+    if legacy_secret not in candidates:
+        candidates.append(legacy_secret)
+    roots = [Path.cwd(), *script_dir.parents]
     for root in roots:
         for name in (".env.cuted.local", ".env.local", ".env"):
             path = root / name
@@ -6320,6 +6636,10 @@ def cuted_usage_path() -> Path:
 
 
 def cuted_secret_env_path() -> Path:
+    return cuted_data_dir() / ".env.cuted.local"
+
+
+def legacy_repo_secret_env_path() -> Path:
     return project_root() / ".env.cuted.local"
 
 
@@ -6401,6 +6721,7 @@ def write_openai_key(api_key: str) -> None:
     if len(key) < 20 or not key.startswith("sk-"):
         raise ValueError("Token OpenAI invalido.")
     path = cuted_secret_env_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"OPENAI_API_KEY={key}\n", encoding="utf-8")
 
 
@@ -6411,10 +6732,81 @@ def openai_settings_payload() -> dict[str, object]:
         "openai_model": openai_model(),
         "transcribe_model": openai_transcribe_model(),
         "key_configured": bool(key),
-        "secret_path": str(cuted_secret_env_path()),
-        "settings_path": str(cuted_settings_path()),
+        "secret_storage": "user-data-env-file",
+        "legacy_secret_configured": legacy_repo_secret_env_path().exists(),
+        "settings_storage": "user-data-json",
         "pricing": pricing_payload(),
     }
+
+
+def app_version() -> str:
+    candidates = [
+        Path(getattr(sys, "_MEIPASS", "")) / "VERSION" if getattr(sys, "_MEIPASS", "") else None,
+        Path(sys.executable).resolve().parent / "VERSION",
+        project_root() / "VERSION",
+    ]
+    for candidate in candidates:
+        if candidate is not None and candidate.exists():
+            try:
+                return candidate.read_text(encoding="utf-8").strip() or "unknown"
+            except OSError:
+                return "unknown"
+    return "dev"
+
+
+def diagnostics_payload() -> dict[str, object]:
+    shell_status = dict(desktop_shell_status())
+    shell_status.pop("storage_path", None)
+    return {
+        "app": {
+            "name": "CUTED",
+            "version": app_version(),
+            "packaged": bool(getattr(sys, "frozen", False)),
+        },
+        "runtime": {
+            "python": platform.python_version(),
+            "windows": platform.platform(),
+            "executable": Path(sys.executable).name,
+        },
+        "paths": {
+            "cuted_home_override": bool(os.environ.get("CUTED_HOME", "").strip()),
+            "data_dir_exists": cuted_data_dir().exists(),
+            "settings_exists": cuted_settings_path().exists(),
+            "usage_ledger_exists": cuted_usage_path().exists(),
+            "secret_storage": "user-data-env-file",
+            "secret_file_exists": cuted_secret_env_path().exists(),
+            "legacy_repo_secret_exists": legacy_repo_secret_env_path().exists(),
+            "default_workspace_exists": default_workspace_dir().exists(),
+        },
+        "openai": {
+            "provider": configured_ai_provider(),
+            "key_configured": openai_key_configured_without_reading_secret(),
+            "model": openai_model(),
+            "transcribe_model": openai_transcribe_model(),
+        },
+        "tools": {
+            "ffmpeg": tool_available(find_ffmpeg),
+            "ffprobe": tool_available(find_ffprobe),
+            "desktop_shell": shell_status,
+        },
+        "privacy": {
+            "contains_api_key": False,
+            "contains_source_media": False,
+            "contains_transcripts": False,
+            "contains_raw_provider_payloads": False,
+        },
+    }
+
+
+def tool_available(resolver: object) -> bool:
+    try:
+        return bool(resolver())
+    except (RuntimeError, OSError, subprocess.SubprocessError):
+        return False
+
+
+def openai_key_configured_without_reading_secret() -> bool:
+    return bool(openai_api_key()) or cuted_secret_env_path().exists() or legacy_repo_secret_env_path().exists()
 
 
 def pricing_payload() -> dict[str, object]:
@@ -6627,6 +7019,7 @@ def send_json_response(handler: http.server.BaseHTTPRequestHandler, status: int,
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-store")
     handler.end_headers()
     handler.wfile.write(body)
 
@@ -6784,6 +7177,7 @@ def caption_selected_rows(
     captioned: list[dict[str, object]] = []
     captions_enabled = bool(getattr(args, "captions_enabled", True))
     for row in rows:
+        row = row_with_selected_caption_track(row)
         platform = str(row.get("platform") or "")
         if platform not in PLATFORM_PRESETS:
             continue
@@ -6806,6 +7200,33 @@ def caption_selected_rows(
             result["cover_frame_duration"] = round(float(result.get("final_duration") or caption_duration(row)) + COVER_FRAME_TAIL_SECONDS, 3)
         captioned.append(result)
     return captioned
+
+
+def row_with_selected_caption_track(row: dict[str, object]) -> dict[str, object]:
+    language = normalize_caption_language(row.get("caption_language") or row.get("captionLanguage"))
+    segments = caption_segments_for_row_language(row, language)
+    if language != CAPTION_LANGUAGE_DEFAULT and not segments:
+        language = CAPTION_LANGUAGE_DEFAULT
+        segments = caption_segments_for_row_language(row, language)
+    result = {**row, "caption_language": language}
+    if segments:
+        result["caption_segments"] = segments
+    return result
+
+
+def caption_segments_for_row_language(row: dict[str, object], language: str) -> list[dict[str, object]]:
+    tracks = row.get("caption_tracks")
+    if isinstance(tracks, dict):
+        raw_track = tracks.get(language)
+        if raw_track is None and language == CAPTION_LANGUAGE_DEFAULT:
+            raw_track = tracks.get("pt")
+        if isinstance(raw_track, dict):
+            status = str(raw_track.get("status") or "").strip().lower()
+            segments = raw_track.get("segments")
+            if status == "ready" and isinstance(segments, list):
+                return [segment for segment in segments if isinstance(segment, dict)]
+    fallback = row.get("caption_segments")
+    return [segment for segment in fallback if isinstance(segment, dict)] if isinstance(fallback, list) else []
 
 
 def caption_cover_frame_enabled(args: argparse.Namespace) -> bool:
@@ -7402,7 +7823,8 @@ def apply_bumpers_to_output(
         ffmpeg_codec_thread_args,
         media_has_audio,
         resolve_media_path,
-        FINAL_VIDEO_CRF,
+        video_crf(row),
+        video_rate_control_args,
     )
 
 
@@ -7410,7 +7832,18 @@ def normalize_bumper_segment(
     source: Path, output: Path, duration: float, preset: PlatformPreset, ffmpeg: str, row: dict[str, object]
 ) -> None:
     render_pipeline_normalize_bumper_segment(
-        source, output, duration, preset, ffmpeg, row, fmt_time, ffmpeg_codec_thread_args, media_has_audio, run_ffmpeg_command, FINAL_VIDEO_CRF
+        source,
+        output,
+        duration,
+        preset,
+        ffmpeg,
+        row,
+        fmt_time,
+        ffmpeg_codec_thread_args,
+        media_has_audio,
+        run_ffmpeg_command,
+        video_crf(row),
+        video_rate_control_args,
     )
 
 
@@ -7820,6 +8253,7 @@ def mp4_output_args(row: dict[str, object]) -> list[str]:
         "-pix_fmt", "yuv420p",
         "-r", "30",
         "-crf", video_crf(row),
+        *video_rate_control_args(row),
         "-c:a", "aac",
         "-b:a", "192k",
         "-ar", "44100",
@@ -8255,7 +8689,11 @@ def effect_filter(row: dict[str, object]) -> str:
 
 
 def video_crf(row: dict[str, object]) -> str:
-    return render_pipeline_video_crf(row, FINAL_VIDEO_CRF, FINAL_EFFECT_VIDEO_CRF)
+    return render_pipeline_video_crf(row, FINAL_VIDEO_CRF, FINAL_EFFECT_VIDEO_CRF, FINAL_GRAIN_EFFECT_VIDEO_CRF)
+
+
+def video_rate_control_args(row: dict[str, object]) -> list[str]:
+    return render_pipeline_video_rate_control_args(row, FINAL_GRAIN_EFFECT_MAXRATE, FINAL_GRAIN_EFFECT_BUFSIZE)
 
 
 def visible_effect_intensity(intensity: float) -> float:
@@ -8414,11 +8852,61 @@ def prepare_youtube_source(args: argparse.Namespace, out_dir: Path, ffmpeg: str,
         probe = probe_media_metadata(render_source_path, ffprobe)
     except (RuntimeError, subprocess.SubprocessError, OSError) as exc:
         download_error = str(exc)
-        render_source = youtube_render_url(url)
+        cleanup_youtube_partial_sources(temp_dir)
+        try:
+            render_source = youtube_render_url(url)
+        except RuntimeError as fallback_exc:
+            raise RuntimeError(youtube_quality_fallback_error(download_error, str(fallback_exc))) from fallback_exc
         probe = probe_media_metadata(render_source, ffprobe)
+        validate_youtube_fallback_quality(probe, download_error)
     metadata = source_media_metadata("youtube", label, render_source, probe, format_selector, download_error)
     cleanup = (transcribe_source,) if isinstance(transcribe_source, Path) else ()
     return SourceMedia(render_source, transcribe_source, label, cleanup, metadata)
+
+
+def validate_youtube_fallback_quality(probe: dict[str, object], download_error: str) -> None:
+    height = probed_video_height(probe)
+    if height is None:
+        return
+    if height < YOUTUBE_MIN_FALLBACK_HEIGHT:
+        raise RuntimeError(
+            youtube_quality_fallback_error(
+                download_error,
+                f"Fallback YouTube resolveu apenas {height}p.",
+            )
+        )
+
+
+def probed_video_height(probe: dict[str, object]) -> int | None:
+    streams = probe.get("streams")
+    if not isinstance(streams, list):
+        return None
+    for stream in streams:
+        if not isinstance(stream, dict) or stream.get("codec_type") != "video":
+            continue
+        try:
+            return int(stream.get("height") or 0) or None
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def youtube_quality_fallback_error(download_error: str, fallback_error: str) -> str:
+    detail = first_safe_error_line(download_error or fallback_error)
+    return (
+        "Nao consegui importar este YouTube com qualidade suficiente para cortes verticais. "
+        f"O download local em alta falhou e o fallback remoto nao chegou a {YOUTUBE_MIN_FALLBACK_HEIGHT}p. "
+        "Baixe o video em MP4 com boa qualidade e importe como arquivo local no CUTED."
+        + (f" Detalhe: {detail}" if detail else "")
+    )
+
+
+def first_safe_error_line(message: str) -> str:
+    for line in str(message or "").splitlines():
+        clean = line.strip()
+        if clean:
+            return clean[:220]
+    return ""
 
 
 def require_file(path: Path) -> None:
@@ -8450,6 +8938,10 @@ def source_media_metadata(
 
 def write_source_metadata(out_dir: Path, metadata: dict[str, object] | None) -> None:
     media_write_source_metadata(out_dir, metadata)
+
+
+def cleanup_youtube_partial_sources(temp_dir: Path) -> None:
+    media_cleanup_youtube_partial_sources(temp_dir)
 
 
 def yt_dlp_command() -> list[str]:
@@ -8926,6 +9418,7 @@ def openai_select_candidates(args: argparse.Namespace, candidates: list[Moment],
         "ou insight especifico. Evite filler generico, repeticao, sobreposicao e trechos que dependem de "
         "contexto externo demais. Evite escolher mais de um corte do mesmo cluster_id, exceto se forem "
         "momentos claramente diferentes. Use o contexto editorial do usuario para desempatar. "
+        "Escreva title e reason sempre em portugues brasileiro, preservando o sentido do transcript. "
         "Responda apenas no JSON estruturado solicitado."
     )
     user = json.dumps(
@@ -8957,7 +9450,7 @@ def openai_selected_moments(payload: dict[str, object], candidates: list[Moment]
             continue
         title = clean_optional_text(row.get("title"), 80) or candidate.title
         reason_text = clean_optional_text(row.get("reason"), 160) or candidate.reason
-        selected.append(Moment(0, candidate.start, candidate.end, candidate.peak, candidate.score, title, reason_text, candidate.transcript, candidate.peak_text, candidate.clip_file, candidate.frame_file, candidate.caption_segments))
+        selected.append(replace(candidate, rank=0, title=title, reason=reason_text))
         if len(selected) >= requested:
             break
     if not selected:
@@ -9172,9 +9665,7 @@ def overlap_ratio(left: Moment, right: Moment) -> float:
 
 
 def with_rank(moment: Moment, rank: int) -> Moment:
-    return Moment(rank, moment.start, moment.end, moment.peak, moment.score, moment.title, moment.reason,
-                  moment.transcript, moment.peak_text, moment.clip_file, moment.frame_file, moment.caption_segments,
-                  moment.waveform_file)
+    return replace(moment, rank=rank)
 
 
 def render_outputs(
@@ -9206,13 +9697,15 @@ def render_one(video: Path | str, clips_dir: Path, frames_dir: Path, waveforms_d
         extract_frame(video, frame_path, moment.peak, ffmpeg)
         cover_candidates = extract_cover_candidates(video, frames_dir, stem, frame_path, moment, ffmpeg)
     else:
-        return Moment(moment.rank, moment.start, moment.end, moment.peak, moment.score, moment.title, moment.reason,
-                      moment.transcript, moment.peak_text, None, None, moment.caption_segments, None)
+        return replace(moment, clip_file=None, frame_file=None, waveform_file=None, cover_candidates=())
     waveform_file = write_audio_waveform_file(clip_path, waveform_path, ffmpeg)
-    return Moment(moment.rank, moment.start, moment.end, moment.peak, moment.score, moment.title, moment.reason,
-                  moment.transcript, moment.peak_text, rel(clip_path, clips_dir.parent), rel(frame_path, frames_dir.parent),
-                  moment.caption_segments, rel(waveform_path, waveforms_dir.parent) if waveform_file else None,
-                  None, tuple(rel(path, frames_dir.parent) for path in cover_candidates))
+    return replace(
+        moment,
+        clip_file=rel(clip_path, clips_dir.parent),
+        frame_file=rel(frame_path, frames_dir.parent),
+        waveform_file=rel(waveform_path, waveforms_dir.parent) if waveform_file else None,
+        cover_candidates=tuple(rel(path, frames_dir.parent) for path in cover_candidates),
+    )
 
 
 def extract_cover_candidates(
@@ -9379,6 +9872,7 @@ def openai_publish_intelligence(
 def publish_intelligence_system_prompt() -> str:
     return (
         "Voce e o estrategista de publicacao do CUTED para clips curtos. "
+        "Todo texto gerado para hook, title, description, trend_context.summary e reason deve ser em portugues brasileiro. "
         "Use no maximo uma busca web para entender SEO e tendencias atuais. "
         "O titulo original do video ou nome do arquivo e contexto, nao copy final. "
         "Reescreva tudo em portugues natural do Brasil, com acentuacao, pontuacao "
@@ -9447,8 +9941,8 @@ def publish_source_context_payload(context: PublishSourceContext) -> dict[str, o
         "user_context": context.user_context,
         "source_url": context.source_url,
         "priority": (
-            "Use this origin context to identify people, topic and event. "
-            "Do not copy it as the clip title unless the clip transcript supports it."
+            "Use este contexto de origem para identificar pessoas, tema e evento. "
+            "Nao copie como titulo do corte se o transcript do corte nao sustentar."
         ),
     }
 
@@ -9898,6 +10392,419 @@ def config_to_dict(config: CuttedConfig) -> dict[str, object]:
     }
 
 
+CAPTION_LANGUAGE_DEFAULT = "pt-BR"
+CAPTION_LANGUAGE_ENGLISH = "en"
+CAPTION_TRANSLATION_MAX_BATCH_SEGMENTS = 70
+
+
+def caption_track_translation_from_request(
+    handler: http.server.BaseHTTPRequestHandler, base_dir: Path
+) -> dict[str, object]:
+    payload = read_json_body(handler)
+    gallery_dir = resolve_request_gallery_dir(base_dir, payload)
+    rank = int(payload.get("rank") or 0)
+    language = normalize_caption_language(payload.get("language") or payload.get("caption_language"))
+    if rank <= 0:
+        raise ValueError("Missing clip rank.")
+    if language != CAPTION_LANGUAGE_ENGLISH:
+        raise ValueError("Only English caption generation is supported.")
+    lock = caption_track_lock(gallery_dir, rank, language)
+    if not lock.acquire(blocking=False):
+        return {
+            "ok": False,
+            "status": "running",
+            "error": "English captions are already being generated for this clip.",
+        }
+    try:
+        return generate_gallery_caption_track(gallery_dir, rank, language)
+    finally:
+        lock.release()
+
+
+def caption_track_lock(gallery_dir: Path, rank: int, language: str) -> threading.Lock:
+    key = f"{gallery_dir.resolve()}::{rank}::{language}"
+    with CAPTION_TRACK_LOCKS_LOCK:
+        lock = CAPTION_TRACK_LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            CAPTION_TRACK_LOCKS[key] = lock
+        return lock
+
+
+def generate_gallery_caption_track(gallery_dir: Path, rank: int, language: str) -> dict[str, object]:
+    moments_path = gallery_dir / "moments.json"
+    data = read_gallery_moments_payload(moments_path)
+    moments = data["moments"]
+    row = gallery_moment_by_rank(moments, rank)
+    tracks = row.get("caption_tracks")
+    if isinstance(tracks, dict):
+        existing = tracks.get(language)
+        if caption_track_payload_ready(existing):
+            return {"ok": True, "rank": rank, "language": language, "track": existing, "moment": row, "cached": True}
+    moment = moment_from_payload(row)
+    if not moment.caption_segments:
+        raise ValueError("This clip has no Portuguese caption segments to translate.")
+    if not openai_api_key():
+        raise ValueError("OpenAI key is required to generate English captions.")
+    translated = translate_single_caption_moment_to_english(moment)
+    row["caption_tracks"] = caption_tracks_for_moment(moment, translated)
+    write_gallery_moments_payload(moments_path, data)
+    update_index_html_cuted_data(gallery_dir / "index.html", {"moments": moments})
+    return {
+        "ok": True,
+        "rank": rank,
+        "language": language,
+        "track": row["caption_tracks"][language],
+        "moment": row,
+        "cached": False,
+    }
+
+
+def read_gallery_moments_payload(path: Path) -> dict[str, object]:
+    require_file(path)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or not isinstance(data.get("moments"), list):
+        raise ValueError("Invalid moments.json.")
+    return data
+
+
+def write_gallery_moments_payload(path: Path, data: dict[str, object]) -> None:
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def json_for_script(value: object) -> str:
+    text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return (
+        text.replace("&", "\\u0026")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
+
+
+def gallery_moment_by_rank(moments: list[object], rank: int) -> dict[str, object]:
+    for item in moments:
+        if isinstance(item, dict) and int(item.get("rank") or 0) == rank:
+            return item
+    raise ValueError("Clip not found in project.")
+
+
+def caption_track_payload_ready(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    return str(value.get("status") or "").lower() == "ready" and isinstance(value.get("segments"), list)
+
+
+def update_index_html_cuted_data(path: Path, data: dict[str, object]) -> None:
+    require_file(path)
+    html_text = path.read_text(encoding="utf-8")
+    replacement = f"window.CUTTED_DATA = {json_for_script(data)}; window.CUTTED_SCRIPT ="
+    next_text, count = re.subn(
+        r"window\.CUTTED_DATA = .*?; window\.CUTTED_SCRIPT =",
+        replacement,
+        html_text,
+        count=1,
+        flags=re.DOTALL,
+    )
+    if count != 1:
+        raise ValueError("Could not update embedded project data.")
+    path.write_text(next_text, encoding="utf-8")
+
+
+def moment_from_payload(row: dict[str, object]) -> Moment:
+    return Moment(
+        int(row.get("rank") or 0),
+        float(row.get("start") or 0.0),
+        float(row.get("end") or 0.0),
+        float(row.get("peak") or row.get("start") or 0.0),
+        float(row.get("score") or 0.0),
+        str(row.get("title") or ""),
+        str(row.get("reason") or ""),
+        str(row.get("transcript") or ""),
+        str(row.get("peak_text") or ""),
+        clean_optional_text(row.get("clip_file"), 500) or None,
+        clean_optional_text(row.get("frame_file"), 500) or None,
+        segments_from_payload(row.get("caption_segments")),
+        clean_optional_text(row.get("waveform_file"), 500) or None,
+        publish_metadata=row.get("publish_metadata") if isinstance(row.get("publish_metadata"), dict) else None,
+        cover_candidates=tuple(str(item) for item in row.get("cover_candidates", []) if isinstance(item, str))
+        if isinstance(row.get("cover_candidates"), list) else (),
+        caption_tracks=row.get("caption_tracks") if isinstance(row.get("caption_tracks"), dict) else None,
+    )
+
+
+def segments_from_payload(value: object) -> tuple[Segment, ...]:
+    if not isinstance(value, list):
+        return ()
+    segments: list[Segment] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        segments.append(Segment(float(item.get("start") or 0.0), float(item.get("end") or 0.0), str(item.get("text") or "")))
+    return tuple(segments)
+
+
+def translate_single_caption_moment_to_english(moment: Moment) -> tuple[Segment, ...]:
+    payload = request_caption_translation_batch([moment])
+    translated = validated_english_caption_segments(payload, [moment])
+    segments = translated.get(moment.rank)
+    if not segments:
+        raise RuntimeError("Caption translation response missed this clip.")
+    return segments
+
+
+def normalize_caption_language(value: object) -> str:
+    text = str(value or "").strip().lower().replace("_", "-")
+    if text in {"en", "eng", "english", "ingles"}:
+        return CAPTION_LANGUAGE_ENGLISH
+    return CAPTION_LANGUAGE_DEFAULT
+
+
+def apply_caption_language_tracks(moments: list[Moment], args: argparse.Namespace) -> list[Moment]:
+    english_segments: dict[int, tuple[Segment, ...]] = {}
+    english_error = ""
+    if should_translate_caption_tracks(args, moments):
+        try:
+            english_segments = translate_caption_tracks_to_english(moments)
+        except (RuntimeError, OSError, ValueError, KeyError, json.JSONDecodeError) as error:
+            english_error = str(error)
+            print(f"Warning: could not prepare English caption track: {error}", file=sys.stderr)
+    return [
+        replace(moment, caption_tracks=caption_tracks_for_moment(moment, english_segments.get(moment.rank), english_error))
+        for moment in moments
+    ]
+
+
+def should_translate_caption_tracks(args: argparse.Namespace, moments: list[Moment]) -> bool:
+    if requested_ai_provider(args) == "local":
+        return False
+    return bool(openai_api_key() and any(moment.caption_segments for moment in moments))
+
+
+def translate_caption_tracks_to_english(moments: list[Moment]) -> dict[int, tuple[Segment, ...]]:
+    translated: dict[int, tuple[Segment, ...]] = {}
+    for batch in caption_translation_batches(moments):
+        if not batch:
+            continue
+        translated.update(translate_caption_batch_with_retries(batch))
+    return translated
+
+
+def translate_caption_batch_with_retries(moments: list[Moment]) -> dict[int, tuple[Segment, ...]]:
+    try:
+        payload = request_caption_translation_batch(moments)
+        translated = validated_english_caption_segments(payload, moments)
+    except (RuntimeError, OSError, ValueError, KeyError, json.JSONDecodeError) as error:
+        print(f"Warning: caption translation batch failed; retrying clips individually: {error}", file=sys.stderr)
+        return translate_caption_moments_individually(moments)
+    missing = caption_translation_missing_ranks(moments, translated)
+    if missing:
+        retry_moments = [moment for moment in moments if moment.rank in missing]
+        translated.update(translate_caption_moments_individually(retry_moments))
+    return translated
+
+
+def translate_caption_moments_individually(moments: list[Moment]) -> dict[int, tuple[Segment, ...]]:
+    translated: dict[int, tuple[Segment, ...]] = {}
+    for moment in moments:
+        try:
+            payload = request_caption_translation_batch([moment])
+            item_segments = validated_english_caption_segments(payload, [moment])
+        except (RuntimeError, OSError, ValueError, KeyError, json.JSONDecodeError) as error:
+            print(f"Warning: could not translate caption track for clip {moment.rank}: {error}", file=sys.stderr)
+            continue
+        if moment.rank in item_segments:
+            translated[moment.rank] = item_segments[moment.rank]
+        else:
+            print(f"Warning: caption translation response missed clip {moment.rank}.", file=sys.stderr)
+    return translated
+
+
+def caption_translation_missing_ranks(
+    moments: list[Moment], translated: dict[int, tuple[Segment, ...]]
+) -> list[int]:
+    return [moment.rank for moment in moments if moment.caption_segments and moment.rank not in translated]
+
+
+def caption_translation_batches(
+    moments: list[Moment], max_segments: int = CAPTION_TRANSLATION_MAX_BATCH_SEGMENTS
+) -> list[list[Moment]]:
+    batches: list[list[Moment]] = []
+    current: list[Moment] = []
+    current_segments = 0
+    for moment in moments:
+        segment_count = len(moment.caption_segments)
+        if segment_count <= 0:
+            continue
+        if current and current_segments + segment_count > max_segments:
+            batches.append(current)
+            current = []
+            current_segments = 0
+        current.append(moment)
+        current_segments += segment_count
+    if current:
+        batches.append(current)
+    return batches
+
+
+def request_caption_translation_batch(moments: list[Moment]) -> dict[str, object]:
+    rows = [caption_translation_row(moment) for moment in moments if moment.caption_segments]
+    return openai_structured_response(
+        "You translate video subtitles from Brazilian Portuguese to natural English.",
+        json.dumps(
+            {
+                "instructions": [
+                    "Translate only the caption text.",
+                    "Keep the same clip ranks, segment indexes, order, and number of segments.",
+                    "Use concise spoken English suitable for burned-in social captions.",
+                    "Do not add timestamps, notes, markdown, hashtags, or explanations.",
+                ],
+                "clips": rows,
+            },
+            ensure_ascii=False,
+        ),
+        "cuted_caption_translation",
+        caption_translation_schema(),
+        operation="caption_translation",
+    )
+
+
+def caption_translation_row(moment: Moment) -> dict[str, object]:
+    return {
+        "rank": moment.rank,
+        "segments": [
+            {"index": index, "text": segment.text}
+            for index, segment in enumerate(moment.caption_segments)
+        ],
+    }
+
+
+def caption_translation_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["clips"],
+        "properties": {
+            "clips": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["rank", "segments"],
+                    "properties": {
+                        "rank": {"type": "integer"},
+                        "segments": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": ["index", "text"],
+                                "properties": {
+                                    "index": {"type": "integer"},
+                                    "text": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                },
+            }
+        },
+    }
+
+
+def validated_english_caption_segments(payload: dict[str, object], moments: list[Moment]) -> dict[int, tuple[Segment, ...]]:
+    source = {moment.rank: moment.caption_segments for moment in moments if moment.caption_segments}
+    translated: dict[int, tuple[Segment, ...]] = {}
+    rows = payload.get("clips")
+    if not isinstance(rows, list):
+        raise RuntimeError("Caption translation response did not include clips.")
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        rank = int(row.get("rank", 0))
+        source_segments = source.get(rank)
+        raw_segments = row.get("segments")
+        if not source_segments or not isinstance(raw_segments, list) or len(raw_segments) != len(source_segments):
+            continue
+        by_index: dict[int, str] = {}
+        for item in raw_segments:
+            if not isinstance(item, dict):
+                continue
+            index = int(item.get("index", -1))
+            if 0 <= index < len(source_segments):
+                by_index[index] = clean_caption_translation_text(item.get("text"))
+        if len(by_index) != len(source_segments):
+            continue
+        translated[rank] = tuple(
+            Segment(segment.start, segment.end, by_index.get(index) or segment.text)
+            for index, segment in enumerate(source_segments)
+        )
+    return translated
+
+
+def clean_caption_translation_text(value: object) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    return text.strip(" -")
+
+
+def caption_tracks_for_moment(
+    moment: Moment, english_segments: tuple[Segment, ...] | None = None, english_error: str = ""
+) -> dict[str, object]:
+    tracks = normalized_existing_caption_tracks(moment)
+    tracks[CAPTION_LANGUAGE_DEFAULT] = caption_track_payload(
+        CAPTION_LANGUAGE_DEFAULT,
+        "PT-BR",
+        "ready",
+        "transcript",
+        moment.caption_segments,
+    )
+    if english_segments:
+        tracks[CAPTION_LANGUAGE_ENGLISH] = caption_track_payload(
+            CAPTION_LANGUAGE_ENGLISH,
+            "EN",
+            "ready",
+            "openai_translation",
+            english_segments,
+        )
+    elif CAPTION_LANGUAGE_ENGLISH not in tracks:
+        tracks[CAPTION_LANGUAGE_ENGLISH] = caption_track_payload(
+            CAPTION_LANGUAGE_ENGLISH,
+            "EN",
+            "unavailable",
+            "not_generated",
+            (),
+            english_error or "English captions were not generated for this import.",
+        )
+    return tracks
+
+
+def normalized_existing_caption_tracks(moment: Moment) -> dict[str, object]:
+    if not isinstance(moment.caption_tracks, dict):
+        return {}
+    tracks: dict[str, object] = {}
+    for key, value in moment.caption_tracks.items():
+        language = normalize_caption_language(key)
+        if isinstance(value, dict):
+            tracks[language] = value
+    return tracks
+
+
+def caption_track_payload(
+    language: str, label: str, status: str, source: str, segments: tuple[Segment, ...], error: str = ""
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "language": language,
+        "label": label,
+        "status": status,
+        "source": source,
+        "segments": [segment_to_dict(segment) for segment in segments],
+    }
+    if error:
+        payload["error"] = error
+    return payload
+
+
 def moment_to_dict(moment: Moment) -> dict[str, object]:
     return {
         "rank": moment.rank, "start": moment.start, "end": moment.end, "peak": moment.peak, "score": moment.score,
@@ -9906,6 +10813,8 @@ def moment_to_dict(moment: Moment) -> dict[str, object]:
         "waveform_file": moment.waveform_file,
         "publish_metadata": moment.publish_metadata or {},
         "cover_candidates": list(moment.cover_candidates),
+        "caption_language_default": CAPTION_LANGUAGE_DEFAULT,
+        "caption_tracks": caption_tracks_for_moment(moment),
         "caption_segments": [segment_to_dict(item) for item in moment.caption_segments],
     }
 
@@ -10061,7 +10970,7 @@ def project_import_form_html() -> str:
             </div>
           </section>
         </div>
-        <input name="language" type="hidden" value="en">
+        <input name="language" type="hidden" value="pt">
         <input name="preset" type="hidden" value="tiktok">
         <section class="ai-context-box" aria-label="AI briefing" data-ai-context-box>
           <div class="ai-context-head">
@@ -10467,6 +11376,7 @@ def page_html(
     live_timeline_assets: dict[str, str] | None = None,
     control_bar_assets: dict[str, str] | None = None,
 ) -> str:
+    safe_data = json_for_script(json.loads(data))
     live_timeline_css = live_timeline_assets_html(live_timeline_assets or {}, "css")
     live_timeline_js = live_timeline_assets_html(live_timeline_assets or {}, "js")
     control_bar_css = static_assets_html(control_bar_assets or {}, "css")
@@ -10664,7 +11574,7 @@ def page_html(
   <main>{cards}</main>
 {live_timeline_js}
 {control_bar_js}
-  <script>window.CUTTED_DATA = {data}; window.CUTTED_SCRIPT = {json.dumps(str(Path(__file__).resolve()))};</script>
+  <script>window.CUTTED_DATA = {safe_data}; window.CUTTED_SCRIPT = {json_for_script(LOCAL_SCRIPT_PATH)};</script>
   <script>{js()}</script>
 </body>
 </html>"""

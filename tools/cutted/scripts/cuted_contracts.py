@@ -28,6 +28,7 @@ class Moment:
     waveform_file: str | None = None
     publish_metadata: dict[str, object] | None = None
     cover_candidates: tuple[str, ...] = ()
+    caption_tracks: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)

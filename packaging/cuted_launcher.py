@@ -34,7 +34,7 @@ def normalized_argv(argv: list[str]) -> list[str]:
     if len(result) > 1 and result[1].lower().endswith("cutted.py"):
         result.pop(1)
     if len(result) == 1:
-        result.append("launch")
+        result.extend(["launch", "--desktop-shell"])
     return result
 
 

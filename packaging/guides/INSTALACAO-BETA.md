@@ -18,8 +18,12 @@ leva uns 10 minutos. Qualquer problema, fala direto com o Eduardo.
 
 ## 2. Abrir o CUTED
 
-- O CUTED abre uma janela preta (o motor) e, em seguida, o seu navegador com o
-  programa. **Não feche a janela preta** enquanto estiver usando.
+- O CUTED abre como um app desktop do Windows. Por baixo, ele continua usando um
+  motor local no seu computador, mas voce nao precisa abrir terminal nem copiar
+  enderecos `localhost`.
+- Se a janela desktop nao abrir, o CUTED pode cair para o navegador como modo de
+  suporte. Nesse caso, mantenha a janela de apoio aberta enquanto estiver
+  usando.
 - Para abrir de novo depois: Menu Iniciar → CUTED.
 
 ## 3. Configurar sua chave OpenAI (uma vez só)
@@ -36,7 +40,8 @@ momentos do vídeo. Para isso você precisa de uma chave **sua**:
 
 **Importante:** o uso da IA consome créditos da SUA chave (centavos por vídeo,
 em geral). A própria engrenagem mostra uma estimativa de quanto você já gastou.
-A chave fica salva só no seu computador.
+A chave fica salva só no seu computador, na pasta local do CUTED, e nao vai para
+o projeto, navegador, render final ou GitHub.
 
 ## 4. Criar seus primeiros cortes
 
@@ -61,10 +66,17 @@ A chave fica salva só no seu computador.
 
 ## 6. Deu problema?
 
-1. Feche a janela preta e abra o CUTED de novo (resolve a maioria dos casos).
+1. Feche o CUTED e abra de novo pelo Menu Iniciar (resolve a maioria dos casos).
 2. Se continuar, mande para o Eduardo:
    - o que você estava fazendo;
    - print da tela;
-   - o arquivo de log em `%LOCALAPPDATA%\CUTED\logs\cuted-launch.log`.
+   - o arquivo de diagnostico gerado por:
+
+```powershell
+cuted.exe diagnostics --out "%USERPROFILE%\Desktop\cuted-diagnostics.json"
+```
+
+O diagnostico nao inclui sua chave OpenAI, videos, transcricoes completas ou
+payloads crus da IA.
 
 Obrigado por testar! Cada vídeo que você criar ajuda a melhorar o CUTED. 💙

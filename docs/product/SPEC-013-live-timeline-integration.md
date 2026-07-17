@@ -12,7 +12,7 @@ Substituir a timeline compacta atual do preview por uma timeline viva, visualmen
 - Converter `camera_path`, trim, playhead, waveform e futuros effects verdes por adapter.
 - Integrar primeiro acima do video, onde hoje existe `data-preview-camera-timeline`.
 - Mostrar uma timeline leve em cada linha da aba Editar, para que `#01`, `#02`, `#03` sejam percebidos como linhas editaveis.
-- Montar a timeline Pixi/GSAP viva apenas no card aberto, mantendo os cards fechados baratos.
+- Montar a timeline Pixi viva apenas no card aberto, mantendo os cards fechados baratos.
 
 ## Fora De Escopo Inicial
 
@@ -131,7 +131,7 @@ Enquanto isso nao renderiza no video final, a camada verde pode existir como UI 
 - A timeline nova trabalha melhor em tempo absoluto do clip; a timeline compacta atual trabalha muito em janela ajustada pelo trim.
 - O CUTED atual gera HTML/JS a partir de Python, entao o bundle precisa ser tratado como asset estatico.
 - Cards multiplos exigem lifecycle claro: montar no card ativo e destruir quando necessario.
-- Pixi/GSAP aumentam o custo visual; em lista grande, o componente deve ser lazy.
+- Pixi aumenta o custo visual; em lista grande, o componente deve ser lazy.
 - O bundle da timeline aumenta o HTML gerado por assets externos. O fallback legado deve continuar funcionando.
 
 ## Aceite

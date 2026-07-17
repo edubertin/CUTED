@@ -28,6 +28,8 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayName=CUTED
+UninstallDisplayIcon={app}\cuted.exe
+SetupIconFile={#AppDir}\_internal\assets\brand\cuted-app-icon.ico
 CloseApplications=yes
 
 [Languages]

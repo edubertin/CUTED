@@ -1,59 +1,154 @@
-# CUTED
+<p align="center">
+  <img src="assets/brand/cuted-logo-transparent.png" alt="CUTED" width="620">
+</p>
 
-CUTED is an early AI-assisted video clipping workspace.
+<p align="center">
+  Editor local para transformar videos longos em cortes prontos para redes sociais.
+</p>
 
-This repository currently stores generated samples, review pages, rendered clips,
-caption artifacts, and brand assets used to validate the product workflow before
-the main application code is organized here.
+<p align="center">
+  <a href="https://github.com/edubertin/CUTED/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/edubertin/CUTED/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/edubertin/CUTED/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/edubertin/CUTED/actions/workflows/codeql.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="Licenca AGPL-3.0" src="https://img.shields.io/badge/licen%C3%A7a-AGPL--3.0-9bc53d"></a>
+  <img alt="Windows" src="https://img.shields.io/badge/plataforma-Windows-11a2cf">
+</p>
 
-## Current Contents
+![CUTED em uma timeline de edicao](docs/images/cuted-social-preview.png)
 
-- `assets/brand/`: brand images for channel/profile use.
-- `assets/social/`: social channel assets, including approved CUTED Now TikTok
-  profile and overlay files.
-- `channels/`: social channel operations, content backlogs, publishing
-  experiments, and metrics logs.
-- `samples/`: lightweight development fixtures and QA metadata. Generated
-  videos, rendered clips, temporary imports, and final media outputs should live
-  in the local CUTED workspace or local archive, not in Git.
-- `tools/cutted/`: versioned copy of the local CUTED skill used to generate
-  galleries, serve the local finalize API, and render captioned outputs.
-- `docs/`: product, architecture, QA, and local operations documentation for
-  the current MVP and planned app migration.
+## Interface
 
-## Documentation
+| Projetos locais | Editor |
+| --- | --- |
+| ![Tela inicial do CUTED sem dados pessoais](docs/images/cuted-project-home.png) | ![Editor do CUTED com video sintetico](docs/images/cuted-editor.png) |
 
-Start with [`docs/README.md`](docs/README.md) for the project documentation
-index.
+As capturas usam um workspace vazio e um video sintetico criado para a
+documentacao. Nenhuma midia ou projeto de usuario foi incluido.
 
-## Local Gallery Server
+## O Que E
 
-Use the CUTED server when testing the interactive final render flow:
+CUTED e um aplicativo Windows local-first para encontrar bons momentos em
+videos longos, preparar variacoes para diferentes plataformas e renderizar os
+arquivos finais no proprio computador.
+
+O projeto combina um motor Python, FFmpeg, uma interface local e recursos
+opcionais de IA. Nao existe conta CUTED, banco de dados hospedado ou upload
+automatico da sua biblioteca de videos.
+
+## Recursos
+
+- Importacao de videos locais e links do YouTube para uso autorizado.
+- Sugestoes de cortes com duracao e limites de frase mais naturais.
+- Timeline, trim, camera, efeitos, textos, imagens e bumpers por plataforma.
+- Legendas em portugues e traducao para ingles sob demanda.
+- Smart Camera local com OpenCV e Ultralytics YOLO.
+- Render para TikTok, Shorts, Instagram, Facebook e YouTube.
+- Projetos locais recuperaveis e fila de render em background.
+- Diagnostico sanitizado para suporte, sem chaves ou conteudo de videos.
+
+## Privacidade
+
+Videos, previews, transcricoes e renders ficam no computador do usuario. Os
+recursos que usam OpenAI sao opcionais e usam uma chave configurada pelo
+proprio usuario. Quando esses recursos sao acionados, somente o material
+necessario para aquela operacao e enviado a API escolhida.
+
+Leia [PRIVACY.md](PRIVACY.md) para entender dados locais, integracoes opcionais,
+retencao e diagnosticos.
+
+## Estado Do Projeto
+
+O codigo-fonte esta em beta publico. O build portatil e o instalador Inno Setup
+funcionam no ambiente de desenvolvimento, mas o instalador publico ainda
+depende de validacao em uma maquina Windows limpa e de uma decisao de
+assinatura digital.
+
+Nao baixe executaveis enviados por terceiros. Releases oficiais, quando
+disponiveis, aparecerao somente na pagina
+[Releases](https://github.com/edubertin/CUTED/releases).
+
+## Executar Pelo Codigo
+
+Requisitos:
+
+- Windows 10 ou 11;
+- Python 3.12;
+- FFmpeg e FFprobe;
+- Node.js 24 para construir a timeline;
+- chave OpenAI somente para recursos que usam a API.
 
 ```powershell
-python tools/cutted/scripts/cutted.py serve --dir "samples/<sample-folder>" --port 8779
+python -m pip install -r packaging/requirements-build.txt
+python tools/cutted/scripts/cutted.py launch
 ```
 
-The static `index.html` still works for review, but `Finalizar videos` requires
-the local server because the browser cannot run FFmpeg by itself.
+O ambiente de desenvolvimento abre a interface em `127.0.0.1`. Esse servidor
+aceita operacoes mutaveis apenas com a sessao local criada pelo proprio CUTED.
 
-## Current Stage
+## Testes
 
-Prototype with a local render loop. The current focus is validating the
-end-to-end clipping, per-video camera reframing, effects, calls-to-action,
-captions, and final video review workflow before extracting a fuller application
-structure.
+```powershell
+python -m unittest discover -s tests -p "test_*.py"
+python -m py_compile tools/cutted/scripts/cutted.py
+cd prototypes/live-timeline
+npm ci
+npm run build:lib
+```
 
-The current camera MVP uses local FFmpeg crop/scale presets plus an optional
-OpenCV Auto camera pass that writes face-based `camera_path` keyframes. OpenCV
-itself does not add API cost; future cost would come only from optional cloud
-APIs or paid model hosting if automatic face/speaker detection moves outside
-the local machine.
+Os mesmos checks principais rodam no GitHub Actions em Windows.
 
-## Media Artifact Policy
+## Build Windows
 
-CUTED generated media is intentionally local-first. Do not commit imported
-videos, preview clips, captioned renders, final smoke renders, or workspace
-source media to this repository. Keep reusable code, docs, manifests, fixtures,
-and small QA metadata in Git; keep generated video outputs under the CUTED
-workspace or an external archive.
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging/build.ps1
+powershell -ExecutionPolicy Bypass -File packaging/smoke-test.ps1 `
+  -AppDir "$env:LOCALAPPDATA\cuted-build\dist\CUTED"
+powershell -ExecutionPolicy Bypass -File packaging/build-installer.ps1
+```
+
+Os artefatos sao gerados fora do repositorio, em
+`%LOCALAPPDATA%\cuted-build`. Consulte
+[packaging/PLANO-EXECUTAVEL-WINDOWS.md](packaging/PLANO-EXECUTAVEL-WINDOWS.md)
+antes de distribuir um instalador.
+
+## Arquitetura
+
+```text
+cuted.exe / Python
+  -> servidor local em 127.0.0.1
+  -> interface WebView2
+  -> projetos em Documents/CUTED Workspace
+  -> FFmpeg e visao local
+  -> renders em Videos/CUTED Renders
+  -> OpenAI opcional, com chave do usuario
+```
+
+O motor de referencia ainda vive em `tools/cutted/`. A separacao futura em
+aplicativo desktop e pacotes esta documentada, mas nao e requisito para usar o
+beta atual.
+
+## Documentacao
+
+- [Visao de produto](docs/product/PRD.md)
+- [Indice tecnico](docs/README.md)
+- [Contratos de dados](docs/architecture/DATA_CONTRACTS.md)
+- [Pipeline de render](docs/architecture/RENDER_PIPELINE.md)
+- [Matriz de regressao](docs/qa/REGRESSION_MATRIX.md)
+- [Desenvolvimento local](docs/operations/LOCAL_DEV.md)
+- [Checklist de release publico](docs/operations/PUBLIC_RELEASE_CHECKLIST.md)
+- [Auditoria de publicacao de 2026-07-17](docs/operations/PUBLIC_RELEASE_AUDIT_2026-07-17.md)
+
+## Contribuir E Reportar Problemas
+
+Leia [CONTRIBUTING.md](CONTRIBUTING.md) antes de abrir um pull request. Bugs
+podem ser relatados em Issues sem anexar videos, transcricoes, chaves, caminhos
+privados ou payloads crus. Vulnerabilidades devem seguir [SECURITY.md](SECURITY.md).
+
+## Licenca
+
+O codigo do CUTED e distribuido sob
+[GNU Affero General Public License v3.0 only](LICENSE). Essa escolha acompanha o uso
+de Ultralytics YOLO no build atual. Dependencias e obrigacoes adicionais estao
+em [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+O escopo de copyright esta em [COPYRIGHT.md](COPYRIGHT.md). Assets visuais usam
+`CC-BY-SA-4.0`; direitos de marca permanecem separados em [BRAND.md](BRAND.md).
