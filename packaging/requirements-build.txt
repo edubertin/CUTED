@@ -13,6 +13,6 @@ faster-whisper==1.2.1
 imageio-ffmpeg==0.6.0
 numpy==2.3.5
 pillow==12.2.0
-pywebview==5.4
+pywebview==6.2.1
 
 pyinstaller>=6.10,<7
