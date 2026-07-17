@@ -589,6 +589,13 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertIn("replacePreviewCaptionMojibakeSequences", html)
         self.assertIn("return repairPreviewCaptionEncoding(text)", html)
 
+    def test_caption_cleanup_handles_long_whitespace_before_punctuation(self) -> None:
+        repeated = " " * 100_000
+
+        for punctuation in ",.;:!?":
+            self.assertEqual(CUTTED.clean_caption_text(f"inicio{repeated}{punctuation} fim"), f"inicio{punctuation} fim")
+        self.assertEqual(CUTTED.clean_caption_text(f"inicio{repeated}fim"), "inicio fim")
+
     def test_animated_caption_text_uses_social_display_style(self) -> None:
         raw = ">> Mas, Tati Cariani falou com IA; Porque isso."
         numeric = "Eu ganhei 10.000 e paguei 4.299,00 em 3.2 segundos com 80% pronto."
@@ -1612,11 +1619,6 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertTrue(motion)
         self.assertLessEqual(max(CUTTED.camera_path_gaps(CUTTED.merge_camera_path_frames(frames, motion, 30.0), 30.0)), CUTTED.AI_DIRECTOR_MAX_STILL_SECONDS)
 
-    def test_clean_output_path_keeps_empty_value(self) -> None:
-        self.assertEqual(CUTTED.clean_output_path(""), "")
-        self.assertEqual(CUTTED.clean_output_path(None), "")
-        self.assertEqual(CUTTED.clean_output_path('  "C:\\videos"  '), str(Path("C:\\videos")))
-
     def test_import_command_uses_plain_experimental_youtube_url(self) -> None:
         metadata = {
             "preview_count": 3,
@@ -1833,6 +1835,32 @@ class CuttedImportUiTests(unittest.TestCase):
         self.assertEqual(metadata["preview_count"], 10)
         self.assertEqual(metadata["language"], "pt")
 
+    def test_local_import_requires_a_video_granted_by_the_native_picker(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            video = Path(tmp) / "selected.mp4"
+            other = Path(tmp) / "other.mp4"
+            video.write_bytes(b"video")
+            other.write_bytes(b"other")
+            with mock.patch.object(CUTTED, "configured_ai_provider", return_value="local"):
+                metadata = CUTTED.import_request_metadata(
+                    {"source_path": str(video)},
+                    {video.resolve()},
+                )
+                with self.assertRaisesRegex(ValueError, "file picker"):
+                    CUTTED.import_request_metadata({"source_path": str(other)}, {video.resolve()})
+
+        self.assertEqual(metadata["source_path"], str(video.resolve()))
+
+    def test_selected_video_rejects_non_video_and_network_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            text_file = Path(tmp) / "notes.txt"
+            text_file.write_text("not video", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "MP4"):
+                CUTTED.resolve_selected_video_file(text_file)
+            with self.assertRaisesRegex(ValueError, "local video"):
+                CUTTED.resolve_selected_video_file(r"\\server\share\video.mp4")
+
     def test_import_request_metadata_keeps_project_home_imports_in_portuguese(self) -> None:
         original_provider = CUTTED.configured_ai_provider
         CUTTED.configured_ai_provider = lambda: "local"
@@ -1849,6 +1877,35 @@ class CuttedImportUiTests(unittest.TestCase):
 
             self.assertEqual(output_dir.parent.name, CUTTED.PROJECTS_DIR_NAME)
             self.assertEqual(output_dir.parent.parent, Path(tmp))
+
+    def test_request_media_path_rejects_escape_and_absolute_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gallery = Path(tmp) / "gallery"
+            gallery.mkdir()
+            clip = gallery / "clip.mp4"
+            clip.write_bytes(b"video")
+
+            self.assertEqual(CUTTED.resolve_request_media_path(gallery, "clip.mp4"), clip.resolve())
+            for value in ("../outside.mp4", str(clip.resolve()), r"\\server\share\clip.mp4"):
+                with self.assertRaisesRegex(ValueError, "Invalid clip_file path"):
+                    CUTTED.resolve_request_media_path(gallery, value)
+
+    def test_open_local_folder_is_limited_to_authorized_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "workspace"
+            allowed = root / "projects" / "demo"
+            outside = Path(tmp) / "outside"
+            allowed.mkdir(parents=True)
+            outside.mkdir()
+            with mock.patch.object(CUTTED.os, "startfile", create=True) as opener:
+                resolved = CUTTED.open_local_folder(allowed, [root])
+
+            self.assertEqual(resolved, allowed.resolve())
+            opener.assert_called_once_with(str(allowed.resolve()))
+            with self.assertRaisesRegex(ValueError, "outside"):
+                CUTTED.open_local_folder(outside, [root])
+            with self.assertRaisesRegex(ValueError, "unsupported"):
+                CUTTED.open_local_folder(r"\\server\share", [root])
 
     def test_project_catalog_recent_reindexes_existing_workspace_projects(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2106,7 +2163,8 @@ class CuttedLaunchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             fake_key = "s" + "k-" + "b" * 30
             with mock.patch.dict(CUTTED.os.environ, {"CUTED_HOME": tmp, "OPENAI_API_KEY": fake_key}, clear=False):
-                payload = CUTTED.diagnostics_payload()
+                with mock.patch.object(CUTTED, "openai_api_key", side_effect=AssertionError("secret value read")):
+                    payload = CUTTED.diagnostics_payload()
 
             text = json.dumps(payload, ensure_ascii=False)
             self.assertTrue(payload["openai"]["key_configured"])

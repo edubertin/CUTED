@@ -44,3 +44,12 @@ jobs:
       - name: Build live timeline library
         working-directory: prototypes/live-timeline
         run: npm run build:lib
+
+      - name: Verify tracked live timeline bundle
+        shell: pwsh
+        run: |
+          $generated = (Get-FileHash prototypes/live-timeline/dist-lib/live-timeline.js -Algorithm SHA256).Hash
+          $tracked = (Get-FileHash tools/cutted/assets/live-timeline/live-timeline.js -Algorithm SHA256).Hash
+          if ($generated -ne $tracked) {
+            throw "The tracked live timeline bundle is stale. Run npm run build:lib and promote dist-lib/live-timeline.js."
+          }

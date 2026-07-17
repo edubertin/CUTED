@@ -25,7 +25,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from dataclasses import dataclass, field, replace
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from types import SimpleNamespace
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -1216,6 +1216,8 @@ def gallery_handler(
     session_token: str | None = None,
 ) -> type[http.server.SimpleHTTPRequestHandler]:
     token = session_token or secrets.token_urlsafe(32)
+    selected_video_paths: set[Path] = set()
+    selected_folder_paths: set[Path] = set()
 
     class CuttedGalleryHandler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args: object, **kwargs: object) -> None:
@@ -1285,7 +1287,7 @@ def gallery_handler(
                 self.handle_select_video_file()
                 return
             if path == "/api/open-folder":
-                self.handle_open_folder()
+                self.handle_open_folder(base_dir)
                 return
             if path == "/api/projects/touch":
                 self.handle_project_touch(base_dir)
@@ -1425,7 +1427,7 @@ def gallery_handler(
 
         def handle_import_job(self, request_base_dir: Path) -> None:
             try:
-                result = start_import_job(self, request_base_dir)
+                result = start_import_job(self, request_base_dir, selected_video_paths)
                 send_json_response(self, 200, result)
             except Exception as error:
                 send_json_response(self, 400, {"ok": False, "error": str(error)})
@@ -1552,22 +1554,24 @@ def gallery_handler(
 
         def handle_select_folder(self) -> None:
             try:
-                path = select_folder_path()
-                send_json_response(self, 200, {"ok": True, "path": path})
+                path = resolve_selected_directory(select_folder_path())
+                selected_folder_paths.add(path)
+                send_json_response(self, 200, {"ok": True, "path": str(path)})
             except Exception as error:
                 send_json_response(self, 500, {"ok": False, "error": str(error)})
 
         def handle_select_video_file(self) -> None:
             try:
-                path = select_video_file_path()
-                send_json_response(self, 200, {"ok": True, "path": path})
+                path = resolve_selected_video_file(select_video_file_path())
+                selected_video_paths.add(path)
+                send_json_response(self, 200, {"ok": True, "path": str(path)})
             except Exception as error:
                 send_json_response(self, 500, {"ok": False, "error": str(error)})
 
-        def handle_open_folder(self) -> None:
+        def handle_open_folder(self, request_base_dir: Path) -> None:
             try:
                 payload = read_json_body(self)
-                path = open_local_folder(payload.get("path"))
+                path = open_local_folder(payload.get("path"), [request_base_dir, *selected_folder_paths])
                 send_json_response(self, 200, {"ok": True, "path": str(path)})
             except Exception as error:
                 send_json_response(self, 400, {"ok": False, "error": str(error)})
@@ -2351,8 +2355,16 @@ def optional_camera_float(value: object) -> float | None:
         return None
 
 
+def local_path_is_absolute_or_network(value: str) -> bool:
+    raw = value.strip()
+    windows_path = PureWindowsPath(raw)
+    return raw.startswith(("\\\\", "//")) or Path(raw).is_absolute() or windows_path.is_absolute()
+
+
 def resolve_request_media_path(gallery_dir: Path, clip_file: str) -> Path:
-    candidate = resolve_media_path(gallery_dir, clip_file).resolve()
+    if local_path_is_absolute_or_network(clip_file):
+        raise ValueError("Invalid clip_file path.")
+    candidate = (gallery_dir / Path(clip_file)).resolve()
     try:
         candidate.relative_to(gallery_dir.resolve())
     except ValueError as error:
@@ -6031,19 +6043,23 @@ def unique_export_path(path: Path) -> Path:
     return path.with_name(f"{stem}-{uuid.uuid4().hex[:8]}{suffix}")
 
 
-def import_request_metadata(payload: dict[str, object]) -> dict[str, object]:
+def import_request_metadata(
+    payload: dict[str, object],
+    selected_video_paths: set[Path] | None = None,
+) -> dict[str, object]:
     source_url = str(payload.get("source_url") or "").strip()
     source_path = str(payload.get("source_path") or "").strip()
     if not source_url and not source_path:
         raise ValueError("Provide a link or a local file to import.")
-    output_path = clean_output_path(payload.get("output_path"))
+    if source_path and selected_video_paths is not None:
+        source_path = str(require_selected_video_path(source_path, selected_video_paths))
     ai_provider = configured_ai_provider()
     if ai_provider == "openai" and not openai_api_key():
         raise ValueError("Add your OpenAI key in Settings before importing with AI.")
     return {
         "source_url": source_url,
         "source_path": source_path,
-        "output_path": output_path,
+        "output_path": "",
         "preview_count": clamp_int(payload.get("preview_count"), 1, 10, 10),
         "language": import_request_language(payload.get("language")),
         "preset": clean_preset(payload.get("preset")),
@@ -6062,9 +6078,13 @@ def import_request_language(value: object) -> str:
     return "pt"
 
 
-def start_import_job(handler: http.server.BaseHTTPRequestHandler, base_dir: Path) -> dict[str, object]:
+def start_import_job(
+    handler: http.server.BaseHTTPRequestHandler,
+    base_dir: Path,
+    selected_video_paths: set[Path] | None = None,
+) -> dict[str, object]:
     payload = read_json_body(handler)
-    metadata = import_request_metadata(payload)
+    metadata = import_request_metadata(payload, selected_video_paths)
     source_url = str(metadata["source_url"])
     source_path = str(metadata["source_path"])
     out_dir = next_import_output_dir(base_dir, source_url or source_path)
@@ -6209,8 +6229,7 @@ def import_command(
     if source_url:
         command.extend(["--youtube-url", source_url])
     else:
-        local_source = Path(source_path).expanduser().resolve()
-        require_file(local_source)
+        local_source = resolve_selected_video_file(source_path)
         command.append(str(local_source))
     preview_count = import_preview_count(source_url, metadata)
     command.extend(["--out", str(out_dir), "--clips", str(preview_count), "--preset", str(metadata["preset"])])
@@ -6460,13 +6479,6 @@ def clean_duration_profile(value: object) -> str:
     return profile if profile in DURATION_PROFILES else "medium"
 
 
-def clean_output_path(value: object) -> str:
-    raw = str(value or "").strip().strip('"')
-    if not raw:
-        return ""
-    return str(Path(raw).expanduser())
-
-
 def duration_profile_args(profile: str) -> list[str]:
     min_duration, target_duration, max_duration = DURATION_PROFILES[profile]
     return [
@@ -6532,16 +6544,52 @@ def select_video_file_path() -> str:
     return selected
 
 
-def open_local_folder(value: object) -> Path:
+def resolve_selected_video_file(value: object) -> Path:
     raw = clean_optional_text(value, 2000)
-    if not raw:
-        raise ValueError("Missing folder path.")
+    if not raw or raw.startswith(("\\\\", "//")):
+        raise ValueError("Select a local video file.")
+    path = Path(raw).expanduser().resolve()
+    require_file(path)
+    if path.suffix.lower() not in RANGE_MEDIA_EXTENSIONS:
+        raise ValueError("Select an MP4, MOV, M4V, or WebM video.")
+    return path
+
+
+def require_selected_video_path(value: object, selected_video_paths: set[Path]) -> Path:
+    path = resolve_selected_video_file(value)
+    if path not in selected_video_paths:
+        raise ValueError("Select the local video using the CUTED file picker.")
+    return path
+
+
+def resolve_selected_directory(value: object) -> Path:
+    raw = clean_optional_text(value, 2000)
+    if not raw or raw.startswith(("\\\\", "//")):
+        raise ValueError("Select a local folder.")
+    path = Path(raw).expanduser().resolve()
+    if not path.exists() or not path.is_dir():
+        raise ValueError("Folder not found.")
+    return path
+
+
+def path_is_within(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def open_local_folder(value: object, allowed_roots: list[Path] | None = None) -> Path:
+    raw = clean_optional_text(value, 2000)
+    if not raw or raw.startswith(("\\\\", "//")):
+        raise ValueError("Missing or unsupported folder path.")
     path = Path(raw).expanduser()
     if path.is_file():
         path = path.parent
-    if not path.exists() or not path.is_dir():
-        raise ValueError("Folder not found.")
-    resolved = path.resolve()
+    resolved = resolve_selected_directory(path)
+    if allowed_roots is not None and not any(path_is_within(resolved, root) for root in allowed_roots):
+        raise ValueError("Folder is outside the current CUTED workspace.")
     if sys.platform.startswith("win"):
         os.startfile(str(resolved))  # type: ignore[attr-defined]
     elif sys.platform == "darwin":
@@ -6806,7 +6854,7 @@ def tool_available(resolver: object) -> bool:
 
 
 def openai_key_configured_without_reading_secret() -> bool:
-    return bool(openai_api_key()) or cuted_secret_env_path().exists() or legacy_repo_secret_env_path().exists()
+    return "OPENAI_API_KEY" in os.environ or cuted_secret_env_path().exists() or legacy_repo_secret_env_path().exists()
 
 
 def pricing_payload() -> dict[str, object]:
