@@ -38,6 +38,7 @@ class application workflow.
 29. [Local Development Runbook](operations/LOCAL_DEV.md)
 30. [Public Release Checklist](operations/PUBLIC_RELEASE_CHECKLIST.md)
 31. [Public Release Audit - 2026-07-17](operations/PUBLIC_RELEASE_AUDIT_2026-07-17.md)
+32. [Public Site And Windows Download Spec](product/SPEC-018-public-site-and-download.md)
 
 ## Current Source of Truth
 
