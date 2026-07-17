@@ -170,8 +170,9 @@ const playheadTrail: PlayheadTrace[] = [];
 
 export async function createLiveTimeline(container: HTMLElement, options: LiveTimelineOptions = {}): Promise<LiveTimelineController> {
   activeCallbacks = options.callbacks ?? {};
-  container.innerHTML = liveTimelineMarkup(options.logoUrl ?? "", options.showVolume ?? true);
+  container.innerHTML = liveTimelineMarkup(options.showVolume ?? true);
   elements = readElements(container);
+  applyLogoUrl(elements, options.logoUrl);
   state = createInitialState(options);
   resetRuntimeEffects();
 
@@ -237,13 +238,16 @@ export async function createLiveTimeline(container: HTMLElement, options: LiveTi
     },
     update(nextOptions) {
       activeCallbacks = nextOptions.callbacks ?? activeCallbacks;
+      if (nextOptions.logoUrl !== undefined) {
+        applyLogoUrl(elements, nextOptions.logoUrl);
+      }
       applyOptionsToState(state, nextOptions);
       renderTimeline();
     }
   };
 }
 
-function liveTimelineMarkup(logoUrl: string, showVolume: boolean): string {
+function liveTimelineMarkup(showVolume: boolean): string {
   return `<div class="timeline-shell" id="timeline-shell">
     <div class="timeline-canvas" id="timeline-canvas"></div>
     <button class="playhead-control" id="playhead-control" type="button" aria-label="Tocar preview">
@@ -254,11 +258,11 @@ function liveTimelineMarkup(logoUrl: string, showVolume: boolean): string {
       <button id="mute-button" type="button" aria-label="Mutar">VOL</button>
     </div>
     <button class="trim-handle trim-handle--start" id="start-handle" type="button" aria-label="Cortar inicio">
-      <img id="start-logo" alt="" src="${escapeAttribute(logoUrl)}" />
+      <img id="start-logo" alt="" />
       <span class="trim-blade trim-blade--start" aria-hidden="true"></span>
     </button>
     <button class="trim-handle trim-handle--end" id="end-handle" type="button" aria-label="Cortar fim">
-      <img id="end-logo" alt="" src="${escapeAttribute(logoUrl)}" />
+      <img id="end-logo" alt="" />
       <span class="trim-blade trim-blade--end" aria-hidden="true"></span>
     </button>
     <aside class="keyframe-popover" id="keyframe-popover" aria-label="Inspector do keyframe" hidden>
@@ -401,8 +405,14 @@ function optionalElement<T extends HTMLElement>(root: ParentNode, id: string, ct
   return element instanceof ctor ? element : null;
 }
 
-function escapeAttribute(value: string): string {
-  return value.replaceAll("&", "&amp;").replaceAll("\"", "&quot;").replaceAll("<", "&lt;");
+function applyLogoUrl(targets: TimelineElements, logoUrl: string | undefined): void {
+  for (const logo of [targets.startLogo, targets.endLogo]) {
+    if (logoUrl) {
+      logo.src = logoUrl;
+    } else {
+      logo.removeAttribute("src");
+    }
+  }
 }
 
 function createKeyframe(

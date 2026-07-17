@@ -118,7 +118,7 @@ def clean_caption_text(text: str) -> str:
     clean = normalize_caption_symbols(text)
     clean = re.sub(r"(^|\s)(>{1,3}|-{1,2})\s*", " ", clean)
     clean = re.sub(r"\s+", " ", clean)
-    clean = re.sub(r"\s+([,.;:!?])", r"\1", clean)
+    clean = re.sub(r" ([,.;:!?])", r"\1", clean)
     clean = re.sub(r"(\d)([.,:])\s+(?=\d)", r"\1\2", clean)
     clean = re.sub(r"([,.;:!?])([^\s,.;:!?])", space_after_caption_punctuation, clean)
     clean = re.sub(r"^(nÃ©\??|aham|uhum|hum|entÃ£o|mas)\s+", "", clean, flags=re.IGNORECASE)

@@ -352,14 +352,14 @@ class CuttedCameraRuleTests(unittest.TestCase):
         self.assertNotIn("data-preview-volume-zero", html)
         self.assertNotIn("data-preview-volume-value", html)
 
-        live_timeline_js = (
-            MODULE_PATH.parent.parent / "assets" / "live-timeline" / "live-timeline.js"
+        live_timeline_source = (
+            MODULE_PATH.parents[3] / "prototypes" / "live-timeline" / "src" / "liveTimeline.ts"
         ).read_text(encoding="utf-8")
-        self.assertIn("d=a?t-o-8:t+8", live_timeline_js)
-        self.assertIn("S=a?t-3:t+3", live_timeline_js)
-        self.assertIn("E=a?d+o:d", live_timeline_js)
-        self.assertIn("s.circle(e,t,n.selected?4.1:3)", live_timeline_js)
-        self.assertNotIn("t-o*.5-9", live_timeline_js)
+        self.assertIn('const height = isCamera ? 52 : 44;', live_timeline_source)
+        self.assertIn('const width = isCamera ? 13 : 11;', live_timeline_source)
+        self.assertIn('const haloPad = visual.selected ? 12 : visual.hovered ? 10 : 8;', live_timeline_source)
+        self.assertIn('visual.selected ? 3.4 : 2.4', live_timeline_source)
+        self.assertNotIn('y - height * 0.5 - 9, visual.selected ? 4.1 : 3', live_timeline_source)
 
     def test_speech_overlay_is_available_and_renders_as_bubble(self) -> None:
         layer = CUTTED.overlay_layer_from_raw({
