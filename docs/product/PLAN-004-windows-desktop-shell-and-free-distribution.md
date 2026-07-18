@@ -129,7 +129,10 @@ Dev-machine evidence:
 
 Status: first unsigned beta published on 2026-07-17 after explicit owner
 approval. Remaining clean-Windows, real-render, uninstall-preservation,
-licensing, and signing evidence must be reevaluated before a stable release.
+and signing evidence must be reevaluated before a stable release. The missing
+FFmpeg/GPL version, hash, license, and corresponding-source evidence is an
+active obligation for the current beta and must be regularized now rather than
+deferred to a stable release.
 
 Prepare a public release path for a free app.
 

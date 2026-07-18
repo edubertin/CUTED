@@ -136,7 +136,7 @@ If `python` is not available on this Windows machine, use the bundled Codex Pyth
 - Generated outputs: keep generated media in `Documents/CUTED Workspace`, `Videos/CUTED Renders`, local archives, or ignored folders.
 - Repo samples: use only for dev evidence/fixtures; do not make repo `samples/` the default user workspace.
 - Destructive actions: project deletion, cache cleanup, build cleanup, and installer uninstall behavior require explicit confirmation and must preserve final renders by default.
-- Public binary releases: the first unsigned beta is published with its limitations disclosed. Reassess FFmpeg/GPL source delivery, Ultralytics/AGPL, H.264/AAC patent exposure, code signing, Microsoft Store/MSIX requirements, privacy disclosures, and support diagnostics before each later release.
+- Public binary releases: the first unsigned beta is published with its limitations disclosed. Its FFmpeg/GPL version, hash, license, and corresponding-source evidence is still an active compliance gap and must be regularized for the current distribution. Reassess Ultralytics/AGPL, H.264/AAC patent exposure, code signing, Microsoft Store/MSIX requirements, privacy disclosures, support diagnostics, and all dependency obligations before each later release.
 
 ## Next Implementation Slice
 
