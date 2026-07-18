@@ -12,6 +12,12 @@ Current approved avatar:
 assets/social/cuted-now/approved/avatar.png
 ```
 
+Current approved Windows download announcement:
+
+```text
+assets/social/cuted-now/approved/cuted-windows-download-instagram-1080x1350.png
+```
+
 ## Drafts
 
 Use `drafts/` for contact sheets, experimental variants, and rejected visual

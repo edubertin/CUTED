@@ -15,3 +15,4 @@ These files are approved for the current TikTok channel setup.
 | `frame-market-1080x1920.png` | Market topic overlay frame |
 | `frame-platform-watch-1080x1920.png` | Platform Watch overlay frame |
 | `frame-cuted-lab-1080x1920.png` | CUTED Lab overlay frame |
+| `cuted-windows-download-instagram-1080x1350.png` | Instagram feed announcement for the public Windows beta |

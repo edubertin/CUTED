@@ -57,13 +57,19 @@ retencao e diagnosticos.
 
 ## Estado Do Projeto
 
-O codigo-fonte esta em beta publico. O build portatil e o instalador Inno Setup
-funcionam no ambiente de desenvolvimento, mas o instalador publico ainda
-depende de validacao em uma maquina Windows limpa e de uma decisao de
-assinatura digital.
+O codigo-fonte, o site e o primeiro instalador Windows estao em beta publico.
+A pagina oficial esta em
+[cuted-app.edubertin.chatgpt.site](https://cuted-app.edubertin.chatgpt.site/).
+A prerelease oficial atual e
+[CUTED 2026.07.17 Beta 1](https://github.com/edubertin/CUTED/releases/tag/v2026.07.17-beta.1),
+distribuida gratuitamente pelo GitHub Releases com instalador e checksum.
 
-Nao baixe executaveis enviados por terceiros. Releases oficiais, quando
-disponiveis, aparecerao somente na pagina
+O instalador ainda nao possui assinatura digital. Por isso, o Windows pode
+exibir um aviso do SmartScreen. Essa limitacao e conhecida e nao deve ser
+confundida com uma release estavel ou certificada.
+
+Nao baixe executaveis enviados por terceiros. Releases oficiais aparecem
+somente na pagina
 [Releases](https://github.com/edubertin/CUTED/releases).
 
 ## Executar Pelo Codigo
