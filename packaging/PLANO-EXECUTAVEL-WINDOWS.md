@@ -276,6 +276,7 @@ Mapeadas nos slices A–E da SPEC-011, com critério de aceite por fase.
 O CUTED e gratuito e o codigo-fonte e publico sob AGPL-3.0. As notas historicas
 abaixo sobre beta privado ou futura venda nao representam mais a decisao de
 distribuicao. A primeira beta unsigned foi autorizada e publicada em
-2026-07-17. Para releases futuras, o pacote completo com Ultralytics continua
-exigindo licencas coletadas, fonte correspondente do FFmpeg, teste em Windows
-limpo e uma nova revisao da decisao de assinatura.
+2026-07-17. Essa autorizacao nao dispensa obrigacoes aplicaveis a beta atual:
+a evidencia de versao, hash, licenca e fonte correspondente do FFmpeg/GPL
+permanece aberta e deve ser regularizada. Teste em Windows limpo e uma nova
+revisao da decisao de assinatura continuam obrigatorios para releases futuras.

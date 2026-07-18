@@ -69,3 +69,8 @@ These were the open gates at audit time. The owner subsequently accepted the
 remaining unsigned-beta limitations and authorized the first prerelease. They
 remain hardening requirements for later stable releases unless separately
 closed with new evidence.
+
+Owner approval does not waive third-party license obligations. The missing
+FFmpeg/GPL corresponding-source evidence applies to the currently published
+beta and remains an active distribution-compliance risk that must be resolved,
+not deferred to a later release.

@@ -1,6 +1,6 @@
 # SPEC-018: Public Site And Windows Download
 
-Status: implemented with known deviations
+Status: partially implemented; public beta live with known deviations
 Date: 2026-07-17
 Owner: CUTED
 Language: Portuguese (Brazil)
@@ -501,27 +501,41 @@ continuing the planned ONNX path instead of a full PyTorch distribution.
 
 ## 12. Binary Release Gate
 
-The public beta publication was authorized after the owner confirmed a
-successful physical installer run. The implementation task still verifies the
-following items before activating the public link:
+The list below was the original pre-activation gate. The public beta was later
+authorized by the owner after a successful physical installer run, but not
+every item received evidence before the link was activated. Owner acceptance
+records the publication decision; it does not convert skipped checks into
+verified checks or waive third-party license obligations.
+
+Verified before publication:
 
 - approved commit on `main` and green CI;
 - secret scanning and source audit remain clean;
 - portable and installer smoke pass;
-- clean Windows machine without Python passes;
-- physical WebView2 launch passes;
-- local import, Smart Camera, captions, and a real final render pass;
-- upgrade and uninstall preserve workspace, settings, and renders;
 - installer remains below the GitHub asset limit;
 - SHA-256 is calculated and independently verified;
 - Python and bundled dependency licenses are present;
-- exact FFmpeg version, hash, license, and corresponding source are recorded;
-- Ultralytics/AGPL notices match the distributed package;
 - code-signing decision is recorded;
-- SmartScreen/Defender behavior is tested and documented;
 - support guide, known limitations, privacy, and sanitized diagnostics are
   ready;
 - release is prepared as draft and every asset is verified before publication.
+
+Owner-confirmed but not independently evidenced in this repository:
+
+- physical installer and desktop-shell launch.
+
+Pending or waived for the first publication decision:
+
+- clean Windows machine without Python;
+- local import, Smart Camera, captions, and a real final render;
+- upgrade and uninstall preservation;
+- SmartScreen/Defender behavior test;
+- complete verification that Ultralytics/AGPL notices match the distributed
+  package.
+
+Active compliance gap for the current beta, not a waivable stability gate:
+
+- exact FFmpeg version, hash, license, and corresponding-source evidence.
 
 ## 13. Accessibility And Responsive QA
 
@@ -728,4 +742,12 @@ Known implementation deviations:
 - withdrawing or replacing the prerelease therefore requires a coordinated
   site update and redeployment;
 - dynamic GitHub release discovery remains a future hardening task, not a
-  property of the first published site.
+  property of the first published site;
+- the published footer includes GitHub and contact but omits the required
+  Releases, Privacy, Security, License, and Brand links;
+- generated font declarations in the public HTML expose absolute local build
+  paths under `C:/BertinLab/...`; no secret is present, but this violates the
+  private-path acceptance rule and must be removed in a future site build;
+- the original acceptance criteria for complete release-gate verification,
+  fail-closed withdrawal, footer reachability, and absence of private paths are
+  therefore not fully satisfied.

@@ -2,6 +2,8 @@
 
 Status: first public beta published on 2026-07-17. Unchecked items remain
 follow-up hardening work and must be reevaluated before a stable release.
+The unchecked FFmpeg source and license item also represents an active
+compliance gap for the current beta; publication approval did not waive it.
 
 ## Repository
 
@@ -42,3 +44,7 @@ A primeira beta foi publicada por autorizacao explicita do proprietario apos o
 teste fisico do instalador. Os itens manuais ainda abertos nao invalidam essa
 decisao historica, mas devem ser tratados como gates antes de uma release
 estavel ou de uma nova distribuicao com garantias ampliadas.
+
+A obrigacao de licenciamento e fonte correspondente nao e um gate opcional de
+estabilidade. Ela se aplica a distribuicao atual e permanece pendente de
+evidencia ou correcao.

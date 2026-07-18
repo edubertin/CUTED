@@ -37,6 +37,9 @@ versioned release asset and does not host or proxy the installer.
 ## Known Limitations
 
 - The installer is not digitally signed and Windows may show SmartScreen.
+- FFmpeg/GPL version, hash, license, and corresponding-source evidence is not
+  yet recorded for the published beta. This is an active distribution-
+  compliance risk; owner approval does not waive the obligation.
 - Clean-machine, full render, Smart Camera, upgrade, and uninstall-preservation
   checks remain required hardening evidence before a stable release.
 - Future releases must repeat licensing, checksum, dependency, installer, and
@@ -50,3 +53,6 @@ If the binary must be withdrawn, remove or unpublish the GitHub Release asset
 and immediately update and redeploy the public site to disable the fixed CTA.
 Dynamic fail-closed release discovery is documented for future hardening but
 is not present in the first published site.
+
+If the licensing evidence cannot be completed promptly, withdrawing the binary
+must be evaluated instead of carrying the gap into another release.
