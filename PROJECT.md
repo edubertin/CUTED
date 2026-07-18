@@ -3,21 +3,22 @@
 ## Identity
 
 - Product: CUTED
-- Status: local-first Windows desktop beta in progress
+- Status: local-first Windows desktop public beta
 - Audience: creators and operators turning long-form videos into short-form clips
 - Business goal: ship a free, open-source Windows app that runs heavy video processing on the user's computer instead of in a cloud web app
 
 ## Current State
 
-- Active phase: public source beta with a first-class local Windows app shell
-- Production status: source beta; public binary distribution remains gated
-- Release status: portable build and installer work live under `packaging/`
+- Active phase: public Windows beta with a first-class local desktop shell and public product site
+- Production status: source and unsigned Windows installer are public as a prerelease
+- Release status: `v2026.07.17-beta.1` is published through GitHub Releases; build and installer tooling live under `packaging/`
 - Open decisions:
-  - Whether the free public Windows distribution should use direct Inno Setup download first, MSIX/Microsoft Store later, or both.
-  - How much desktop-shell polish is required before the first public free download.
+  - When code signing should be added to reduce SmartScreen friction.
+  - Whether a future stable distribution should add MSIX/Microsoft Store alongside the direct Inno Setup download.
+  - How much desktop-shell polish is required before the first stable release.
   - Whether YOLO/PyTorch remains in the public package or is replaced by a smaller ONNX route.
   - When to split the current reference implementation into app/package boundaries.
-  - How much local project state should move from browser `localStorage` into `project-state.json` before beta.
+  - How much local project state should move from browser `localStorage` into `project-state.json` before a stable release.
 
 ## Product Direction
 
@@ -58,7 +59,7 @@ Future Microsoft distribution should be treated as a Windows packaging/release p
 - Packaging: PyInstaller/Inno Setup plan under `packaging/`
 - CI: GitHub Actions on Windows
 - Database: none in production cloud; local JSON/project files are the working data store
-- Hosting: none for product runtime; repo is GitHub only
+- Hosting: no hosted product runtime; the presentation/download site runs on OpenAI Sites and binaries remain on GitHub Releases
 - Observability: local logs and planned diagnostics bundle
 
 ## Repository Map
@@ -71,6 +72,7 @@ Future Microsoft distribution should be treated as a Windows packaging/release p
 - `prototypes/`: UI/runtime spikes that inform the local app shell.
 - `assets/brand/`: source brand assets.
 - `assets/social/`: versioned social/channel assets.
+- `apps/site/`: public presentation and download page; it does not host the CUTED runtime.
 - `channels/`: editorial/channel operations for CUTED Now; may later move to `content/`.
 - `tests/`: Python regression tests for the current reference implementation.
 - `samples/`: local development fixtures/evidence only; generated videos must not be committed.
@@ -134,7 +136,7 @@ If `python` is not available on this Windows machine, use the bundled Codex Pyth
 - Generated outputs: keep generated media in `Documents/CUTED Workspace`, `Videos/CUTED Renders`, local archives, or ignored folders.
 - Repo samples: use only for dev evidence/fixtures; do not make repo `samples/` the default user workspace.
 - Destructive actions: project deletion, cache cleanup, build cleanup, and installer uninstall behavior require explicit confirmation and must preserve final renders by default.
-- Public binary release: review FFmpeg/GPL source delivery, Ultralytics/AGPL, H.264/AAC patent exposure, code signing, Microsoft Store/MSIX requirements, privacy disclosures, and support diagnostics before distribution.
+- Public binary releases: the first unsigned beta is published with its limitations disclosed. Reassess FFmpeg/GPL source delivery, Ultralytics/AGPL, H.264/AAC patent exposure, code signing, Microsoft Store/MSIX requirements, privacy disclosures, and support diagnostics before each later release.
 
 ## Next Implementation Slice
 

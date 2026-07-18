@@ -1,6 +1,6 @@
 # PLAN-004 - Windows Desktop Shell And Free Distribution
 
-Status: source-publication implementation in progress
+Status: implemented; first unsigned public beta published on 2026-07-17
 Date: 2026-07-02
 Related:
 - [SPEC-011 Local Beta Installer](SPEC-011-local-beta-installer.md)
@@ -127,8 +127,9 @@ Dev-machine evidence:
 
 ### Phase 4 - Public Download Readiness
 
-Status: gated. Do not publish a binary until clean-Windows, real-render,
-uninstall-preservation, licensing, and signing decisions pass.
+Status: first unsigned beta published on 2026-07-17 after explicit owner
+approval. Remaining clean-Windows, real-render, uninstall-preservation,
+licensing, and signing evidence must be reevaluated before a stable release.
 
 Prepare a public release path for a free app.
 
@@ -144,8 +145,8 @@ Acceptance:
 
 ### Phase 5 - Public GitHub Readiness
 
-Status: implementation in progress on 2026-07-17. The repository can become
-public independently from the Windows installer.
+Status: implemented on 2026-07-17. The repository, public site, and prerelease
+are live; GitHub Releases remains the only binary authority.
 
 Before changing repository visibility, audit the repo and history.
 

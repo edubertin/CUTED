@@ -6,6 +6,26 @@ The CUTED source repository is approved to proceed through pull request, CI,
 merge and public visibility. Windows binaries are not approved for public
 release yet.
 
+## Post-Audit Publication Decision
+
+This decision records the audit state before the owner completed the physical
+installer validation. Later on 2026-07-17, the owner confirmed the tested
+Windows build and explicitly approved the first unsigned public beta. The
+decision is captured in `SPEC-018` and supersedes only the binary-publication
+gate above; the evidence and open risks in this audit remain historically
+accurate.
+
+The resulting public state is:
+
+- repository and source are public;
+- PR #35 is merged into `main` with CI, CodeQL, and Gitleaks passing;
+- prerelease `v2026.07.17-beta.1` is published with `CUTED-Setup.exe` and its
+  SHA-256 sidecar;
+- the public site points to the versioned GitHub Release;
+- the installer is intentionally unsigned and may trigger SmartScreen.
+
+See [Release Evidence - 2026.07.17 Beta 1](RELEASE-2026.07.17-BETA.1.md).
+
 ## Source Repository Evidence
 
 - Gitleaks 8.30.1 scanned 198 commits with zero findings.
@@ -45,5 +65,7 @@ release yet.
 - code-signing decision and SmartScreen/Defender test;
 - final installer support metadata and public download page.
 
-The local installer is evidence only. It must not be attached to a GitHub
-Release until these gates pass.
+These were the open gates at audit time. The owner subsequently accepted the
+remaining unsigned-beta limitations and authorized the first prerelease. They
+remain hardening requirements for later stable releases unless separately
+closed with new evidence.

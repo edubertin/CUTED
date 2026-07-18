@@ -1,6 +1,6 @@
 # Plano: CUTED como Executável Windows (Beta Local)
 
-Status: proposto
+Status: implementado; primeira beta publica unsigned em 2026-07-17
 Data: 2026-06-10
 Relacionado: [SPEC-011 Local Beta Installer](../docs/product/SPEC-011-local-beta-installer.md),
 [ADR-0001](../docs/architecture/ADR-0001-skill-to-app-migration.md),
@@ -273,8 +273,9 @@ Mapeadas nos slices A–E da SPEC-011, com critério de aceite por fase.
 - Inno Setup vs NSIS — advancedinstaller.com/choosing-the-right-windows-packaging-tool-as-developer.html.
 # Atualizacao De Distribuicao - 2026-07-17
 
-O CUTED sera gratuito e o codigo-fonte sera publico sob AGPL-3.0. As notas
-historicas abaixo sobre beta privado ou futura venda nao representam mais a
-decisao de distribuicao. O pacote completo com Ultralytics e compativel com a
-direcao AGPL, mas qualquer instalador publico ainda exige licencas coletadas,
-fonte correspondente do FFmpeg, teste em Windows limpo e decisao de assinatura.
+O CUTED e gratuito e o codigo-fonte e publico sob AGPL-3.0. As notas historicas
+abaixo sobre beta privado ou futura venda nao representam mais a decisao de
+distribuicao. A primeira beta unsigned foi autorizada e publicada em
+2026-07-17. Para releases futuras, o pacote completo com Ultralytics continua
+exigindo licencas coletadas, fonte correspondente do FFmpeg, teste em Windows
+limpo e uma nova revisao da decisao de assinatura.

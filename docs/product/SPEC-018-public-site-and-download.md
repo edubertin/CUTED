@@ -1,6 +1,6 @@
 # SPEC-018: Public Site And Windows Download
 
-Status: accepted and in implementation
+Status: implemented with known deviations
 Date: 2026-07-17
 Owner: CUTED
 Language: Portuguese (Brazil)
@@ -415,8 +415,8 @@ The site is a presentation and release-discovery surface only. It does not add
 authentication, a hosted database, video upload, cloud render, payments, or
 project persistence.
 
-The OpenAI Sites project must be created only during the approved
-implementation phase. The repository currently has no `.openai/hosting.json`.
+The OpenAI Sites project was created during the approved implementation phase.
+Its `.openai/hosting.json` is stored under `apps/site/`.
 
 ## 11. Download Architecture
 
@@ -491,7 +491,8 @@ tag `v2026.07.17-beta.1` and the invariant installer and checksum asset names.
 ### 11.4 GitHub Limits
 
 GitHub requires each release asset to be under 2 GiB. The latest local CUTED
-installer evidence is approximately 295 MiB, so it fits this technical limit.
+installer is 343,927,844 bytes, approximately 328 MiB, so it fits this
+technical limit.
 This size result does not approve public distribution by itself.
 
 If a future build exceeds 2 GiB, do not split the installer for end users and
@@ -700,6 +701,31 @@ Download:
 
 ## 20. Recommended Next Step
 
-Implement and validate Slices A-E as one coordinated publication: source and CI
-first, then the versioned GitHub prerelease, followed by the OpenAI Sites
-deployment and a final public-link smoke test.
+Maintain the public beta as a coordinated release surface: keep the source,
+GitHub prerelease, checksum, public site, support copy, and known limitations in
+sync. Before the next binary, rerun the installer, licensing, clean-machine,
+render, uninstall-preservation, and download-link checks.
+
+## 21. Implementation Record
+
+Implemented on 2026-07-17:
+
+- public site: `https://cuted-app.edubertin.chatgpt.site/`;
+- repository: `https://github.com/edubertin/CUTED`;
+- merge: PR #35, `codex/public-site-release` into `main`;
+- release: `v2026.07.17-beta.1`;
+- binary authority: versioned GitHub Release assets;
+- published assets: `CUTED-Setup.exe` and `CUTED-Setup.exe.sha256`;
+- distribution state: free unsigned Windows prerelease with SmartScreen
+  limitation disclosed.
+
+Known implementation deviations:
+
+- the site uses explicit versioned URLs for `v2026.07.17-beta.1` in
+  `apps/site/app/page.tsx` instead of the normalized dynamic release endpoint;
+- installer and checksum names are protected by site tests, but release
+  withdrawal does not fail closed automatically;
+- withdrawing or replacing the prerelease therefore requires a coordinated
+  site update and redeployment;
+- dynamic GitHub release discovery remains a future hardening task, not a
+  property of the first published site.

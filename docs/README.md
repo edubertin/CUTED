@@ -39,11 +39,14 @@ class application workflow.
 30. [Public Release Checklist](operations/PUBLIC_RELEASE_CHECKLIST.md)
 31. [Public Release Audit - 2026-07-17](operations/PUBLIC_RELEASE_AUDIT_2026-07-17.md)
 32. [Public Site And Windows Download Spec](product/SPEC-018-public-site-and-download.md)
+33. [Release Evidence - 2026.07.17 Beta 1](operations/RELEASE-2026.07.17-BETA.1.md)
 
 ## Current Source of Truth
 
-The product is a public source beta with a working local Windows shell. The
-current executable source of truth is split across:
+The product is a public source and Windows installer beta with a working local
+desktop shell. The first public prerelease is `v2026.07.17-beta.1`, and the
+public product site is live. The current executable source of truth is split
+across:
 
 - `README.md`: short repository orientation.
 - `tools/cutted/SKILL.md`: workflow and feature behavior.
