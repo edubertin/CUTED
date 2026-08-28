@@ -10,7 +10,7 @@
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
-    "pixi.js": "^8.14.3"
+    "pixi.js": "^8.20.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",
